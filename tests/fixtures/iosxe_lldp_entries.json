@@ -1,0 +1,18 @@
+{
+  "Cisco-IOS-XE-lldp-oper:lldp-entries": {
+    "lldp-entry": [
+      {
+        "device-id": "fw-edge-01",
+        "local-interface": "TenGigabitEthernet1/0/47",
+        "connecting-interface": "ethernet1/2",
+        "ttl": 108
+      },
+      {
+        "device-id": "core-sw-02.example.net",
+        "local-interface": "TenGigabitEthernet1/0/48",
+        "connecting-interface": "TenGigabitEthernet1/0/48",
+        "ttl": 92
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+show system info
+
+<response status="success"><result><system>
+  <hostname>fw-edge-01</hostname>
+  <ip-address>192.0.2.10</ip-address>
+  <public-ip-address>unknown</public-ip-address>
+  <netmask>255.255.255.0</netmask>
+  <default-gateway>192.0.2.1</default-gateway>
+  <mac-address>00:00:5e:00:53:10</mac-address>
+  <time>Sun Aug 23 14:05:12 2026</time>
+  <uptime>63 days, 2:33:56</uptime>
+  <devicename>fw-edge-01</devicename>
+  <family>5200</family>
+  <model>PA-5250</model>
+  <serial>013201000001</serial>
+  <sw-version>11.1.4-h7</sw-version>
+  <global-protect-client-package-version>0.0.0</global-protect-client-package-version>
+  <app-version>8934-9236</app-version>
+  <app-release-date>2026/08/10 18:02:11 PDT</app-release-date>
+  <av-version>5124-5648</av-version>
+  <av-release-date>2026/08/21 06:11:03 PDT</av-release-date>
+  <threat-version>8934-9236</threat-version>
+  <threat-release-date>2026/08/10 18:02:11 PDT</threat-release-date>
+  <wildfire-version>1032894-1036512</wildfire-version>
+  <wildfire-release-date>2026/08/23 09:44:51 PDT</wildfire-release-date>
+  <url-filtering-version>20260823.20142</url-filtering-version>
+  <multi-vsys>off</multi-vsys>
+  <operational-mode>normal</operational-mode>
+</system></result></response>
+
+

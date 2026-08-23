@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install tooling
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check .
+
+      # Enforce the README's read-only guarantee: the transports must stay
+      # GET-only / config-free. compileall and the stdlib test battery never
+      # import the transports, so without this grep a write verb would merge
+      # with green CI. Keep this pattern identical to the one in README.md.
+      - name: Read-only guard
+        run: |
+          matches=$(grep -rniE 'send_config|config_mode|\.(patch|post|put|delete|request)\(' jobs/ || true)
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo "ERROR: write-verb pattern found in jobs/ — the read-only guarantee is broken."
+            exit 1
+          fi
+
+      - name: Format check
+        run: ruff format --check .
+
+      # Byte-compile everything as an import smoke test. Nautobot (and netmiko/
+      # requests) cannot be imported in CI — the worker env provides them — so
+      # compileall catches syntax errors without executing imports.
+      - name: Compile check
+        run: python -m compileall -q .
+
+      # The pure test battery: exercises diffcore/envelope/panos_xml/registry
+      # and the _normalize_*/_parse_* functions against fixtures. Stdlib only.
+      # -t . imports test modules as the tests package so the battery's
+      # relative _loader import resolves.
+      - name: Unit tests
+        run: python -m unittest discover -s tests -t . -v

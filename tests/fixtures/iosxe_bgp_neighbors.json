@@ -1,0 +1,30 @@
+{
+  "Cisco-IOS-XE-bgp-oper:neighbors": {
+    "neighbor": [
+      {
+        "afi-safi": "ipv4-unicast",
+        "vrf-name": "default",
+        "neighbor-id": "203.0.113.9",
+        "as": 64512,
+        "description": "upstream isp-a",
+        "session-state": "fsm-established",
+        "up-time": "5w2d",
+        "installed-prefixes": 187,
+        "connection": {
+          "state": "established",
+          "total-established": 2,
+          "total-dropped": 1
+        }
+      },
+      {
+        "afi-safi": "ipv4-unicast",
+        "neighbor-id": "10.0.0.2",
+        "as": "65010",
+        "description": "lab peer, never came up",
+        "session-state": "fsm-idle",
+        "up-time": "00:00:00",
+        "installed-prefixes": 0
+      }
+    ]
+  }
+}

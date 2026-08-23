@@ -1,0 +1,44 @@
+{
+  "Cisco-IOS-XE-arp-oper:arp-data": {
+    "arp-vrf": [
+      {
+        "vrf": "default",
+        "arp-entry": [
+          {
+            "address": "192.0.2.1",
+            "interface": "Vlan925",
+            "type": "arp-arpa",
+            "mode": "arp-mode-dynamic",
+            "hardware": "00:00:5e:00:53:01",
+            "time": "2026-08-23T14:02:11+00:00"
+          },
+          {
+            "address": "10.10.9.2",
+            "interface": "Vlan925",
+            "type": "arp-arpa",
+            "mode": "arp-mode-dynamic",
+            "hardware": "00:00:5e:00:53:02",
+            "time": "2026-08-23T13:58:40+00:00"
+          },
+          {
+            "interface": "Vlan10",
+            "type": "arp-arpa",
+            "mode": "arp-mode-incomplete",
+            "hardware": "00:00:5e:00:53:99"
+          }
+        ]
+      },
+      {
+        "vrf": "mgmt",
+        "arp-entry": {
+          "address": "10.255.0.1",
+          "interface": "GigabitEthernet0/0",
+          "type": "arp-arpa",
+          "mode": "arp-mode-dynamic",
+          "hardware": "00:00:5e:00:53:03",
+          "time": "2026-08-23T13:12:09+00:00"
+        }
+      }
+    ]
+  }
+}

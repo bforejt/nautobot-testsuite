@@ -1,0 +1,42 @@
+{
+  "Cisco-IOS-XE-ospf-oper:ospf-oper-data": {
+    "ospfv2-instance": [
+      {
+        "instance-id": 10,
+        "vrf-name": "default",
+        "ospfv2-area": [
+          {
+            "area-id": 0,
+            "ospfv2-interface": [
+              {
+                "name": "Vlan925",
+                "state": "ospf-iface-state-bdr",
+                "ospfv2-neighbor": [
+                  {
+                    "nbr-id": "10.10.255.3",
+                    "address": "10.10.9.2",
+                    "state": "ospf-nbr-full"
+                  },
+                  {
+                    "nbr-id": "10.10.255.4",
+                    "address": "10.10.9.3",
+                    "state": "ospf-nbr-two-way"
+                  }
+                ]
+              },
+              {
+                "name": "TenGigabitEthernet1/0/1",
+                "state": "ospf-iface-state-point-to-point",
+                "ospfv2-neighbor": {
+                  "nbr-id": "10.10.255.2",
+                  "address": "10.0.0.2",
+                  "state": "ospf-nbr-full"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

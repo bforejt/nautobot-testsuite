@@ -1,0 +1,50 @@
+{
+  "Cisco-IOS-XE-fib-oper:fib-oper-data": {
+    "fib-ni-entry": [
+      {
+        "instance-name": "default",
+        "af": "fib-af-ipv4",
+        "num-pfx": 3,
+        "fib-entries": [
+          {
+            "ip-addr": "0.0.0.0/0",
+            "fib-nexthop-entries": {
+              "nh-addr": "192.0.2.1",
+              "ifname": "Vlan925"
+            }
+          },
+          {
+            "ip-addr": "10.10.0.0/16",
+            "fib-nexthop-entries": [
+              {
+                "nh-addr": "10.0.0.6",
+                "ifname": "TenGigabitEthernet1/0/2"
+              },
+              {
+                "nh-addr": "10.0.0.2",
+                "ifname": "TenGigabitEthernet1/0/1"
+              }
+            ]
+          },
+          {
+            "ip-addr": "192.0.2.0/30",
+            "fib-nexthop-entries": {
+              "ifname": "Vlan925"
+            }
+          }
+        ]
+      },
+      {
+        "instance-name": "mgmt",
+        "af": "fib-af-ipv4",
+        "num-pfx": 1,
+        "fib-entries": {
+          "ip-addr": "10.255.0.0/24",
+          "fib-nexthop-entries": {
+            "ifname": "GigabitEthernet0/0"
+          }
+        }
+      }
+    ]
+  }
+}

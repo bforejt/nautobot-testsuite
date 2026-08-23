@@ -1,0 +1,32 @@
+show high-availability state
+
+<response status="success"><result>
+  <enabled>yes</enabled>
+  <group>
+    <mode>Active-Passive</mode>
+    <local-info>
+      <url-compat>Match</url-compat>
+      <app-version>8934-9236</app-version>
+      <gpclient-version>Not Installed</gpclient-version>
+      <build-rel>11.1.4-h7</build-rel>
+      <ha1-ipaddr>10.255.1.1/30</ha1-ipaddr>
+      <mgmt-ip>192.0.2.11/24</mgmt-ip>
+      <priority>100</priority>
+      <state>active</state>
+      <state-duration>544632</state-duration>
+      <preemptive>no</preemptive>
+    </local-info>
+    <peer-info>
+      <conn-status>up</conn-status>
+      <mgmt-ip>192.0.2.12/24</mgmt-ip>
+      <priority>110</priority>
+      <state>passive</state>
+      <state-duration>544601</state-duration>
+    </peer-info>
+    <link-monitoring><enabled>yes</enabled></link-monitoring>
+    <running-sync>synchronized</running-sync>
+    <running-sync-enabled>yes</running-sync-enabled>
+  </group>
+</result></response>
+
+

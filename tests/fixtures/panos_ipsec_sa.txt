@@ -1,0 +1,13 @@
+show vpn ipsec-sa
+
+<response status="success"><result>
+  <entries>
+    <entry><name>tun-partner-east</name><id>3</id><gwid>1</gwid><inner-if>tunnel.10</inner-if><outer-if>ethernet1/1</outer-if><localip>203.0.113.10</localip><peerip>198.51.100.44</peerip><i-spi>c9a1b2d3</i-spi><o-spi>4f5e6d7c</o-spi><proto>ESP</proto><mode>tunl</mode><dh>19</dh><enc>aes-256-gcm</enc><hash>sha256</hash><life>3600</life><kb>0</kb></entry>
+    <entry><name>tun-partner-east</name><id>7</id><gwid>1</gwid><inner-if>tunnel.10</inner-if><outer-if>ethernet1/1</outer-if><localip>203.0.113.10</localip><peerip>198.51.100.44</peerip><i-spi>0a1b2c3d</i-spi><o-spi>9e8f7a6b</o-spi><proto>ESP</proto><mode>tunl</mode><dh>19</dh><enc>aes-256-gcm</enc><hash>sha256</hash><life>3600</life><kb>0</kb></entry>
+    <entry><name>tun-partner-west</name><id>4</id><gwid>2</gwid><inner-if>tunnel.11</inner-if><outer-if>ethernet1/1</outer-if><localip>203.0.113.10</localip><peerip>198.51.100.77</peerip><i-spi>11223344</i-spi><o-spi>55667788</o-spi><proto>ESP</proto><mode>tunl</mode><dh>19</dh><enc>aes-256-gcm</enc><hash>sha256</hash><life>3600</life><kb>0</kb></entry>
+  </entries>
+  <ntun>2</ntun>
+  <total>3</total>
+</result></response>
+
+

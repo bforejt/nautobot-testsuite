@@ -1,0 +1,17 @@
+# Dev tooling configuration ONLY — this file must never grow a [project] /
+# dependencies section. The repo is delivered to Nautobot via the Git
+# Repositories datasource, which syncs source files and CANNOT install
+# packages: every import in jobs/ must already exist in the worker
+# environment (nautobot core, requests, netmiko — the latter two present
+# wherever Golden Config / Device Onboarding are installed). Anything new a
+# check needs has to be either stdlib or already on the workers.
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# UP031: %-formatting is the deliberate house style throughout the jobs
+# package (nautobot-upgrades convention); keep the rest of UP active.
+ignore = ["UP031"]

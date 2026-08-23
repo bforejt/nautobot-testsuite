@@ -1,0 +1,5 @@
+show session all filter from-zone trust to-zone untrust count yes
+
+<response status="success"><result><member>Number of sessions that match filter: 1842</member></result></response>
+
+

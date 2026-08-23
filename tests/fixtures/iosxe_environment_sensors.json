@@ -1,0 +1,27 @@
+{
+  "Cisco-IOS-XE-environment-oper:environment-sensors": {
+    "environment-sensor": [
+      {
+        "name": "Temp: Coretemp",
+        "location": "Switch 1 R0",
+        "state": "Normal",
+        "current-reading": 43,
+        "sensor-units": "Celsius"
+      },
+      {
+        "name": "Temp: OutletTemp",
+        "location": "Switch 1 R0",
+        "state": "Normal",
+        "current-reading": 51,
+        "sensor-units": "Celsius"
+      },
+      {
+        "name": "P0 Vout",
+        "location": "Switch 1 P0",
+        "state": "Normal",
+        "current-reading": 12000,
+        "sensor-units": "mV"
+      }
+    ]
+  }
+}

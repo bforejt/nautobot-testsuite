@@ -1,0 +1,24 @@
+{
+  "Cisco-IOS-XE-cdp-oper:cdp-neighbor-details": {
+    "cdp-neighbor-detail": [
+      {
+        "device-id": "core-sw-02.example.net",
+        "local-intf-name": "TenGigabitEthernet1/0/48",
+        "port-id": "TenGigabitEthernet1/0/48",
+        "capability": "Router Switch IGMP",
+        "platform": "cisco C9500-48Y4C",
+        "ip-address": "10.10.255.2",
+        "up-time": "6 weeks"
+      },
+      {
+        "device-id": "ap-lab-01",
+        "local-intf-name": "GigabitEthernet1/0/12",
+        "port-id": "GigabitEthernet0",
+        "capabilities": "Trans-Bridge Source-Route-Bridge IGMP",
+        "platform": "cisco AIR-AP2802I-B-K9",
+        "ip-address": "10.20.30.7",
+        "up-time": "3 days"
+      }
+    ]
+  }
+}

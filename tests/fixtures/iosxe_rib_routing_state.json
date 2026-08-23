@@ -1,0 +1,144 @@
+{
+  "ietf-routing:routing-state": {
+    "routing-instance": [
+      {
+        "name": "default",
+        "router-id": "10.10.255.1",
+        "ribs": {
+          "rib": [
+            {
+              "name": "ipv4-default",
+              "address-family": "ietf-ipv4-unicast-routing:ipv4-unicast",
+              "routes": {
+                "route": [
+                  {
+                    "destination-prefix": "0.0.0.0/0",
+                    "route-preference": 1,
+                    "source-protocol": "ietf-routing:static",
+                    "active": [null],
+                    "last-updated": "2026-08-20T11:02:33+00:00",
+                    "next-hop": {
+                      "next-hop-address": "192.0.2.1",
+                      "outgoing-interface": "Vlan925"
+                    }
+                  },
+                  {
+                    "destination-prefix": "0.0.0.0/0",
+                    "route-preference": 200,
+                    "source-protocol": "ietf-bgp:bgp",
+                    "last-updated": "2026-08-20T11:05:10+00:00",
+                    "next-hop": {
+                      "next-hop-address": "203.0.113.9"
+                    }
+                  },
+                  {
+                    "destination-prefix": "172.16.5.0/24",
+                    "route-preference": 250,
+                    "source-protocol": "ietf-routing:static",
+                    "last-updated": "2026-08-19T22:41:07+00:00",
+                    "next-hop": {
+                      "next-hop-address": "10.0.0.10",
+                      "outgoing-interface": "TenGigabitEthernet1/0/3"
+                    }
+                  },
+                  {
+                    "destination-prefix": "172.16.5.0/24",
+                    "route-preference": 110,
+                    "source-protocol": "ietf-ospf:ospfv2",
+                    "active": [null],
+                    "last-updated": "2026-08-19T22:41:07+00:00",
+                    "next-hop": {
+                      "next-hop-address": "10.0.0.2",
+                      "outgoing-interface": "TenGigabitEthernet1/0/1"
+                    }
+                  },
+                  {
+                    "destination-prefix": "10.10.0.0/16",
+                    "route-preference": 110,
+                    "source-protocol": "ietf-ospf:ospfv2",
+                    "active": [null],
+                    "last-updated": "2026-08-19T22:41:09+00:00",
+                    "next-hop": {
+                      "next-hop-list": {
+                        "next-hop": [
+                          {
+                            "next-hop-address": "10.0.0.6",
+                            "outgoing-interface": "TenGigabitEthernet1/0/2"
+                          },
+                          {
+                            "next-hop-address": "10.0.0.2",
+                            "outgoing-interface": "TenGigabitEthernet1/0/1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "destination-prefix": "192.0.2.0/30",
+                    "route-preference": 0,
+                    "source-protocol": "ietf-routing:direct",
+                    "active": [null],
+                    "last-updated": "2026-07-11T03:14:02+00:00",
+                    "next-hop": {
+                      "outgoing-interface": "Vlan925"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ipv6-default",
+              "address-family": "ietf-ipv6-unicast-routing:ipv6-unicast",
+              "routes": {
+                "route": {
+                  "destination-prefix": "2001:db8:100::/64",
+                  "route-preference": 110,
+                  "source-protocol": "ietf-ospf:ospfv2",
+                  "active": [null],
+                  "last-updated": "2026-08-19T22:41:15+00:00",
+                  "next-hop": {
+                    "next-hop-address": "fe80::1",
+                    "outgoing-interface": "Vlan925"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "mgmt",
+        "ribs": {
+          "rib": {
+            "name": "ipv4-mgmt",
+            "address-family": "ietf-ipv4-unicast-routing:ipv4-unicast",
+            "routes": {
+              "route": [
+                {
+                  "destination-prefix": "0.0.0.0/0",
+                  "route-preference": 1,
+                  "source-protocol": "ietf-routing:static",
+                  "active": [null],
+                  "last-updated": "2026-07-11T03:14:05+00:00",
+                  "next-hop": {
+                    "next-hop-address": "10.255.0.1"
+                  }
+                },
+                {
+                  "destination-prefix": "10.255.0.0/24",
+                  "route-preference": 0,
+                  "source-protocol": "ietf-routing:direct",
+                  "active": [null],
+                  "last-updated": "2026-07-11T03:14:05+00:00",
+                  "next-hop": {
+                    "outgoing-interface": "GigabitEthernet0/0"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

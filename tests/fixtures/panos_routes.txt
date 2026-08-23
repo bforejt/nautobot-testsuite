@@ -1,0 +1,66 @@
+show routing route
+
+<response status="success"><result>
+  <flags>flags: A:active, ?:loose, C:connect, H:host, S:static, ~:internal, R:rip, O:ospf, B:bgp, Oi:ospf intra-area, Oo:ospf inter-area, O1:ospf ext-type-1, O2:ospf ext-type-2, E:ecmp, M:multicast</flags>
+  <entry>
+    <virtual-router>default</virtual-router>
+    <destination>0.0.0.0/0</destination>
+    <nexthop>203.0.113.1</nexthop>
+    <metric>10</metric>
+    <flags>A S  </flags>
+    <age/>
+    <interface>ethernet1/1</interface>
+    <route-table>unicast</route-table>
+  </entry>
+  <entry>
+    <virtual-router>default</virtual-router>
+    <destination>10.20.0.0/16</destination>
+    <nexthop>10.10.9.1</nexthop>
+    <metric>30</metric>
+    <flags>A O2 E </flags>
+    <age>544632</age>
+    <interface>ethernet1/2</interface>
+    <route-table>unicast</route-table>
+  </entry>
+  <entry>
+    <virtual-router>default</virtual-router>
+    <destination>10.20.0.0/16</destination>
+    <nexthop>10.10.9.5</nexthop>
+    <metric>30</metric>
+    <flags>A O2 E </flags>
+    <age>544632</age>
+    <interface>ethernet1/3</interface>
+    <route-table>unicast</route-table>
+  </entry>
+  <entry>
+    <virtual-router>default</virtual-router>
+    <destination>203.0.113.0/28</destination>
+    <nexthop>203.0.113.10</nexthop>
+    <metric>0</metric>
+    <flags>A C  </flags>
+    <age/>
+    <interface>ethernet1/1</interface>
+    <route-table>unicast</route-table>
+  </entry>
+  <entry>
+    <virtual-router>default</virtual-router>
+    <destination>203.0.113.10/32</destination>
+    <nexthop>0.0.0.0</nexthop>
+    <metric>0</metric>
+    <flags>A H  </flags>
+    <age/>
+    <route-table>unicast</route-table>
+  </entry>
+  <entry>
+    <virtual-router>b2b-vr</virtual-router>
+    <destination>172.31.0.0/16</destination>
+    <nexthop>10.99.0.2</nexthop>
+    <metric>20</metric>
+    <flags>A B  </flags>
+    <age>120334</age>
+    <interface>tunnel.10</interface>
+    <route-table>unicast</route-table>
+  </entry>
+</result></response>
+
+

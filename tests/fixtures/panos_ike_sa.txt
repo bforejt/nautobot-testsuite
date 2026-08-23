@@ -1,0 +1,30 @@
+show vpn ike-sa
+
+<response status="success"><result>
+  <entry>
+    <name>gw-partner-east</name>
+    <id>1</id>
+    <gwid>1</gwid>
+    <role>Initiator</role>
+    <mode>IKEv2</mode>
+    <peer-address>198.51.100.44</peer-address>
+    <local-address>203.0.113.10</local-address>
+    <algorithm>ENCR:AES-CBC-256 PRF:SHA256 DH:19</algorithm>
+    <created>Aug.23 04:11:20</created>
+    <expires>Aug.23 12:11:20</expires>
+  </entry>
+  <entry>
+    <name>gw-partner-west</name>
+    <id>2</id>
+    <gwid>2</gwid>
+    <role>Responder</role>
+    <mode>IKEv2</mode>
+    <peer-address>198.51.100.77</peer-address>
+    <local-address>203.0.113.10</local-address>
+    <algorithm>ENCR:AES-CBC-256 PRF:SHA256 DH:19</algorithm>
+    <created>Aug.23 06:40:02</created>
+    <expires>Aug.23 14:40:02</expires>
+  </entry>
+</result></response>
+
+

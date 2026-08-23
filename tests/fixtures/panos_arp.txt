@@ -1,0 +1,15 @@
+show arp all
+
+<response status="success"><result>
+  <max>132000</max>
+  <total>3</total>
+  <timeout>1800</timeout>
+  <dp>s3dp1</dp>
+  <entries>
+    <entry><status>  c  </status><ip>203.0.113.1</ip><mac>00:00:5e:00:53:fe</mac><ttl>1795</ttl><interface>ethernet1/1</interface><port>ethernet1/1</port></entry>
+    <entry><status>  e  </status><ip>10.10.9.1</ip><mac>00:00:5e:00:53:11</mac><ttl>12</ttl><interface>ethernet1/2</interface><port>ethernet1/2</port></entry>
+    <entry><status>  i  </status><ip>172.16.50.9</ip><mac>(incomplete)</mac><ttl>1</ttl><interface>ethernet1/2.100</interface><port>ethernet1/2.100</port></entry>
+  </entries>
+</result></response>
+
+

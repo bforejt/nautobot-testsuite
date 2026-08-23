@@ -1,0 +1,43 @@
+show session info
+
+<response status="success"><result>
+  <num-max>1900000</num-max>
+  <num-active>48213</num-active>
+  <num-mcast>0</num-mcast>
+  <num-udp>17777</num-udp>
+  <num-icmp>103</num-icmp>
+  <num-gtpc>0</num-gtpc>
+  <num-gtpu-active>0</num-gtpu-active>
+  <num-tcp>30290</num-tcp>
+  <num-sctp-assoc>0</num-sctp-assoc>
+  <num-sctp-sess>0</num-sctp-sess>
+  <num-predict>43</num-predict>
+  <num-installed>2039871</num-installed>
+  <cps>412</cps>
+  <pps>184382</pps>
+  <kbps>1512034</kbps>
+  <dis-def>90</dis-def>
+  <dis-sctp>30</dis-sctp>
+  <dis-tcp>90</dis-tcp>
+  <dis-udp>60</dis-udp>
+  <icmp-unreachable-rate>200</icmp-unreachable-rate>
+  <tcp-reject-siw-thresh>4</tcp-reject-siw-thresh>
+  <tmo-5gcdelete>15</tmo-5gcdelete>
+  <tmo-cp>30</tmo-cp>
+  <tmo-def>30</tmo-def>
+  <tmo-icmp>6</tmo-icmp>
+  <tmo-tcp>3600</tmo-tcp>
+  <tmo-tcphalfclosed>120</tmo-tcphalfclosed>
+  <tmo-tcphandshake>10</tmo-tcphandshake>
+  <tmo-tcpinit>5</tmo-tcpinit>
+  <tmo-tcptimewait>15</tmo-tcptimewait>
+  <tmo-udp>30</tmo-udp>
+  <vardata-rate>10485760</vardata-rate>
+  <age-accel-thresh>80</age-accel-thresh>
+  <age-accel-tsf>2</age-accel-tsf>
+  <age-scan-ssf>8</age-scan-ssf>
+  <age-scan-thresh>80</age-scan-thresh>
+  <age-scan-tmo>10</age-scan-tmo>
+</result></response>
+
+

@@ -1,0 +1,42 @@
+request license info
+
+<response status="success"><result><licenses>
+  <entry>
+    <feature>Threat Prevention</feature>
+    <description>Threat Prevention</description>
+    <serial>013201000001</serial>
+    <issued>May 01, 2025</issued>
+    <expires>April 30, 2027</expires>
+    <expired>no</expired>
+    <authcode/>
+  </entry>
+  <entry>
+    <feature>PAN-DB URL Filtering</feature>
+    <description>Palo Alto Networks URL Filtering License</description>
+    <serial>013201000001</serial>
+    <issued>May 01, 2025</issued>
+    <expires>April 30, 2027</expires>
+    <expired>no</expired>
+    <authcode/>
+  </entry>
+  <entry>
+    <feature>WildFire License</feature>
+    <description>WildFire signature feed, integrated WildFire logs, WildFire API</description>
+    <serial>013201000001</serial>
+    <issued>May 01, 2025</issued>
+    <expires>May 01, 2026</expires>
+    <expired>yes</expired>
+    <authcode/>
+  </entry>
+  <entry>
+    <feature>Premium</feature>
+    <description>24 x 7 phone support; advanced replacement hardware service</description>
+    <serial>013201000001</serial>
+    <issued>May 01, 2025</issued>
+    <expires>April 30, 2027</expires>
+    <expired>no</expired>
+    <authcode/>
+  </entry>
+</licenses></result></response>
+
+

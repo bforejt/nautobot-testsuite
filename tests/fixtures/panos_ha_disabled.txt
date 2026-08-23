@@ -1,0 +1,5 @@
+show high-availability state
+
+<response status="success"><result><enabled>no</enabled></result></response>
+
+

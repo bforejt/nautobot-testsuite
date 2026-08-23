@@ -1,0 +1,32 @@
+{
+  "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+    "device-hardware": {
+      "device-inventory": [
+        {
+          "hw-type": "hw-type-chassis",
+          "hw-dev-index": 1,
+          "version": "V02",
+          "part-number": "C9500-48Y4C",
+          "serial-number": "FCW0000A0AA",
+          "hw-description": "Cisco Catalyst 9500 Series Switch"
+        }
+      ],
+      "device-system-data": {
+        "combined-power-capacity": 0,
+        "current-time": "2026-08-23T21:04:12+00:00",
+        "boot-time": "2026-07-11T03:12:44+00:00",
+        "software-version": "Cisco IOS XE Software, Version 17.12.04",
+        "rommon-version": "17.10.1r"
+      },
+      "device-alarm": [
+        {
+          "alarm-id": 1058,
+          "alarm-instance": 1,
+          "alarm-category": "alarm-minor",
+          "alarm-time": "2026-08-01T09:30:00+00:00",
+          "alarm-description": "Te1/0/5: Link down"
+        }
+      ]
+    }
+  }
+}

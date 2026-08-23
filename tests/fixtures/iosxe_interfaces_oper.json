@@ -1,0 +1,37 @@
+{
+  "Cisco-IOS-XE-interfaces-oper:interfaces": {
+    "interface": [
+      {
+        "name": "Vlan925",
+        "description": "transit to fw-edge-01",
+        "admin-status": "if-state-up",
+        "oper-status": "if-oper-state-ready",
+        "vrf": "",
+        "ipv4": "10.10.9.1"
+      },
+      {
+        "name": "TenGigabitEthernet1/0/1",
+        "description": "core-sw-02 Te1/0/1",
+        "admin-status": "if-state-up",
+        "oper-status": "if-oper-state-ready",
+        "vrf": "",
+        "ipv4": "10.0.0.1"
+      },
+      {
+        "name": "TenGigabitEthernet1/0/5",
+        "description": "",
+        "admin-status": "if-state-down",
+        "oper-status": "if-oper-state-no-pass",
+        "vrf": ""
+      },
+      {
+        "name": "GigabitEthernet0/0",
+        "description": "oob mgmt",
+        "admin-status": "if-state-up",
+        "oper-status": "if-oper-state-ready",
+        "vrf": "mgmt",
+        "ipv4": "10.255.0.5"
+      }
+    ]
+  }
+}

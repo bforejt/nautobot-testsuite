@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local test bench (never committed; sister-repo convention)
+.bench/
+
+# Working-file droppings at the repo root (the sister repo's committed-junk wart)
+/*.csv
+/*.log
+/*.rtf
