@@ -31,11 +31,15 @@ class _FakeCtx:
         return True
 
 
-def _matrix_outputs(zones, interfaces, per_pair_output):
+_EMPTY_RESULT = '<response status="success"><result/></response>'
+
+
+def _matrix_outputs(zones, interfaces, per_pair_output, unfiltered_output=_EMPTY_RESULT):
     """Canned _FakeCtx outputs for a full matrix sweep (intra-zone included)."""
     outputs = {
         "show interface all": interfaces,
         "show session info": _loader.fixture_text("panos_session_info.txt"),
+        "show session all filter count yes": unfiltered_output,
     }
     for src in zones:
         for dst in zones:
@@ -69,19 +73,42 @@ class TestSessionMatrix(unittest.TestCase):
         # reconcile with the active-session total.
         self.assertIn("%s>%s" % (a, a), result["normalized"])
 
-    def test_zero_match_pairs_read_as_zero_and_sanity_flags_shortfall(self):
+    def test_zero_match_pairs_read_as_zero_without_false_alarm(self):
         # Field regression: every pair empty (<result/>) must be a measured 0,
-        # not unparseable — and a matrix totalling far below `show session
-        # info`'s active count records a sanity warning instead of passing
-        # silently.
+        # not unparseable. With the unfiltered filter-count ALSO at zero, the
+        # matrix agrees with its own engine — no missing-traffic warning even
+        # though num-active is large; the num-active gap is an informational
+        # note (predict/mcast/closing sessions are not filter-enumerable).
         interfaces = _loader.fixture_text("panos_interfaces.txt")
         zones = checks._parse_zones(interfaces)
-        empty = '<response status="success"><result/></response>'
-        result = checks._collect_session_matrix(_FakeCtx(_matrix_outputs(zones, interfaces, empty)))
+        result = checks._collect_session_matrix(
+            _FakeCtx(_matrix_outputs(zones, interfaces, _EMPTY_RESULT))
+        )
         self.assertEqual(result["raw"]["unparsed_pairs"], [])
         self.assertTrue(all(count == 0 for count in result["normalized"].values()))
         self.assertEqual(result["raw"]["matrix_total"], 0)
-        self.assertEqual(result["raw"]["active_at_sweep"], 48213)
+        self.assertEqual(result["raw"]["filterable_at_sweep"], 0)
+        self.assertEqual(result["raw"]["session_info_at_sweep"]["active"], 48213)
+        self.assertNotIn("sanity_warning", result["raw"])
+        self.assertIn("not missing traffic", result["raw"]["note_active_vs_filterable"])
+
+    def test_matrix_far_below_unfiltered_count_warns_missing_traffic(self):
+        # The same filter engine reports far more sessions than the swept
+        # pairs sum to: pairs are genuinely missing (zones absent, multi-vsys).
+        interfaces = _loader.fixture_text("panos_interfaces.txt")
+        zones = checks._parse_zones(interfaces)
+        good = (
+            '<response status="success"><result><member>'
+            "Number of sessions that match filter: 12</member></result></response>"
+        )
+        unfiltered = (
+            '<response status="success"><result><member>'
+            "Number of sessions that match filter: 12000</member></result></response>"
+        )
+        result = checks._collect_session_matrix(
+            _FakeCtx(_matrix_outputs(zones, interfaces, good, unfiltered))
+        )
+        self.assertEqual(result["raw"]["filterable_at_sweep"], 12000)
         self.assertIn("missing traffic", result["raw"]["sanity_warning"])
 
 

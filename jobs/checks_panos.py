@@ -265,33 +265,105 @@ def _collect_session_matrix(ctx):
     return {"raw": raw, "normalized": normalized}
 
 
-def _sanity_check_matrix(ctx, raw, normalized):
-    """Reconcile the sweep against `show session info` — a silent-breakage tripwire.
+_INFO_COUNTER_LEAVES = (
+    ("active", "num-active"),
+    ("tcp", "num-tcp"),
+    ("udp", "num-udp"),
+    ("icmp", "num-icmp"),
+    ("predict", "num-predict"),
+    ("mcast", "num-mcast"),
+    ("bcast", "num-bcast"),
+    ("installed", "num-installed"),
+)
 
-    The pair counts should sum to roughly the active-session total (timing
-    drift aside). A matrix totalling far below a busy firewall's active count
-    means the sweep itself is broken (bad filter syntax, zones missed), which
-    per-pair parsing cannot see. Best-effort: never fails the check.
+
+def _session_info_counters(cli_output):
+    """Extended counters out of 'show session info', present ones only."""
+    result = result_of(extract_xml(cli_output))
+    if result is None:
+        raise PanosParseError("no <result> in 'show session info' output")
+    counters = {}
+    for name, leaf in _INFO_COUNTER_LEAVES:
+        value = to_int(text(result, leaf))
+        if value is not None:
+            counters[name] = value
+    return counters
+
+
+def _sanity_check_matrix(ctx, raw, normalized):
+    """Reconcile the sweep — a silent-breakage tripwire. Best-effort, never fails.
+
+    Two baselines, because they answer different questions:
+
+    * ``show session all filter count yes`` (no other filter) is the SAME
+      filter engine unfiltered — apples to apples. The matrix summing well
+      below it means pairs are genuinely missing from the sweep (zones absent,
+      multi-vsys scoping).
+    * ``show session info`` num-active counts sessions the filter engine never
+      enumerates (predict/ALG pinholes, multicast/broadcast, closing states),
+      so a gap against it alone is normal on a busy box — recorded as an
+      informational note, not a warning (field finding: 5.9k matrix vs 12.7k
+      num-active with a complete matrix).
     """
     matrix_total = sum(count for count in normalized.values() if isinstance(count, int))
     raw["matrix_total"] = matrix_total
+
+    filterable = None
     try:
-        command = "show session info"
+        command = "show session all filter count yes"
         output = ctx.run_ssh(command)
-        active = _normalize_session_info(output).get("active")
+        raw[command] = output
+        filterable = _parse_session_count(output)
     except Exception as exc:
-        raw["active_at_sweep"] = "unavailable: %s" % (exc,)
-        return
-    raw["active_at_sweep"] = active
-    if isinstance(active, int) and active >= 100 and matrix_total * 2 < active:
+        raw["filterable_at_sweep"] = "unavailable: %s" % (exc,)
+    if filterable is not None:
+        raw["filterable_at_sweep"] = filterable
+
+    counters = {}
+    try:
+        info_output = ctx.run_ssh("show session info")
+        counters = _session_info_counters(info_output)
+        raw["session_info_at_sweep"] = counters
+    except Exception as exc:
+        raw["session_info_at_sweep"] = "unavailable: %s" % (exc,)
+    active = counters.get("active")
+
+    if isinstance(filterable, int) and filterable >= 100 and matrix_total * 5 < filterable * 4:
+        # >20% below the same engine's unfiltered count: pairs are missing.
         message = (
-            "session matrix totals %d but the firewall reports %d active sessions — "
-            "the sweep is missing traffic (zone list incomplete, filter syntax, or "
-            "multi-vsys); treat the matrix as suspect" % (matrix_total, active)
+            "session matrix totals %d but the unfiltered session count is %d — the "
+            "sweep is missing traffic (zones absent from the sweep, or multi-vsys "
+            "scoping); check raw zones/zones_excluded; treat the matrix as suspect"
+            % (matrix_total, filterable)
         )
         raw["sanity_warning"] = message
         if ctx.logger is not None:
             ctx.logger.warning("%s: %s", ctx.device_name, message)
+    elif (
+        filterable is None
+        and isinstance(active, int)
+        and active >= 100
+        and (matrix_total * 2 < active)
+    ):
+        # Fallback heuristic when the unfiltered count could not be read.
+        message = (
+            "session matrix totals %d but the firewall reports %d active sessions "
+            "(unfiltered filter-count unavailable) — possibly missing traffic; "
+            "treat the matrix as suspect" % (matrix_total, active)
+        )
+        raw["sanity_warning"] = message
+        if ctx.logger is not None:
+            ctx.logger.warning("%s: %s", ctx.device_name, message)
+
+    if isinstance(filterable, int) and isinstance(active, int) and active > filterable:
+        gap = active - filterable
+        if gap * 5 > active:
+            raw["note_active_vs_filterable"] = (
+                "num-active %d exceeds the filter engine's %d by %d — predict, "
+                "multicast/broadcast, and closing-state sessions are counted by "
+                "session info but not enumerable by filters; this gap is normal, "
+                "not missing traffic" % (active, filterable, gap)
+            )
 
 
 # --- panos_routes ------------------------------------------------------------
