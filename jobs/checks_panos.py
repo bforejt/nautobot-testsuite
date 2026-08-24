@@ -1594,3 +1594,224 @@ register(
         tags=("platform",),
     )
 )
+
+
+# --- platform-readiness cluster (approved: the reborn blueprint gates) --------
+
+
+def _collect_jobs(ctx):
+    """Commit/job state: unfinished jobs are the 'management answers but policy
+    never got programmed' failure — normalized carries only NON-finished jobs
+    (a churning history of finished commits must not diff); history counts
+    ride in context."""
+    command = "show jobs all"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("show jobs all rejected on this release — verify via shakedown")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    normalized = {}
+    total = 0
+    not_ok = 0
+    for entry in result.findall(".//entry") if result is not None else []:
+        total += 1
+        status = (text(entry, "status") or "").upper()
+        job_result = (text(entry, "result") or "").upper()
+        if job_result and job_result not in ("OK", "PEND"):
+            not_ok += 1
+        if status and status != "FIN":
+            job_id = entry.get("id") or text(entry, "id") or str(total)
+            value = {"status": status}
+            job_type = text(entry, "type")
+            if job_type is not None:
+                value["type"] = job_type
+            normalized["job|%s" % (job_id,)] = value
+    return {
+        "raw": raw,
+        "normalized": normalized,
+        "context": {"jobs_total": total, "jobs_not_ok": not_ok},
+    }
+
+
+def _collect_chassis_ready(ctx):
+    command = "show chassis-ready"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("show chassis-ready rejected on this platform")
+    blob = output or ""
+    try:
+        result = result_of(extract_xml(output))
+        if result is not None:
+            blob = "".join(result.itertext())
+    except PanosParseError:
+        pass
+    if re.search(r"\byes\b", blob, re.IGNORECASE):
+        ready = "yes"
+    elif re.search(r"\bno\b", blob, re.IGNORECASE):
+        ready = "no"
+    else:
+        return {"raw": raw, "normalized": {}}
+    return {"raw": raw, "normalized": {"ready": ready}}
+
+
+_DF_LINE = re.compile(
+    r"^(\S+)\s+[\d.]+[KMGTP]?\s+[\d.]+[KMGTP]?\s+[\d.]+[KMGTP]?\s+(\d+)%\s+(\S+)\s*$"
+)
+
+
+def _parse_disk_space(cli_output):
+    """df-style listing -> {mount: use_pct}. Flat numerics for tolerance mode:
+    slow growth is normal; a jump toward full silently blocks commits, log
+    writing, and content installs."""
+    normalized = {}
+    for line in (cli_output or "").splitlines():
+        match = _DF_LINE.match(line.strip())
+        if match:
+            _dev, pct, mount = match.groups()
+            normalized[mount] = int(pct)
+    return normalized
+
+
+def _collect_disk_space(ctx):
+    command = "show system disk-space"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("show system disk-space rejected on this release")
+    return {"raw": raw, "normalized": _parse_disk_space(output)}
+
+
+_PANORAMA_SERVER = re.compile(r"Panorama Server\s*(\S*)\s*:\s*(\S+)", re.IGNORECASE)
+_PANORAMA_CONNECTED = re.compile(r"Connected\s*:\s*(yes|no)", re.IGNORECASE)
+
+
+def _parse_panorama(cli_output):
+    """'show panorama-status' text -> {'panorama|<ip-or-index>': {'connected': yes/no}}."""
+    blob = cli_output or ""
+    servers = [match.group(2) for match in _PANORAMA_SERVER.finditer(blob)]
+    states = [match.group(1).lower() for match in _PANORAMA_CONNECTED.finditer(blob)]
+    normalized = {}
+    for index, state in enumerate(states):
+        label = servers[index] if index < len(servers) else str(index + 1)
+        normalized["panorama|%s" % (label,)] = {"connected": state}
+    return normalized
+
+
+def _collect_panorama(ctx):
+    command = "show panorama-status"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("show panorama-status rejected (Panorama not configured?)")
+    return {"raw": raw, "normalized": _parse_panorama(output)}
+
+
+def _collect_environmentals(ctx):
+    """Hardware thermal/fan/PSU ALARM states (readings are jitter — raw only).
+    Skips on VM platforms, which report no sensors — the pre-side PA-5250 is
+    where hardware death and mid-change brownouts announce themselves first."""
+    command = "show system environmentals"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("no environmental sensors (VM platform or command unsupported)")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    normalized = {}
+    for entry in result.iter("entry") if result is not None else []:
+        description = text(entry, "description")
+        alarm = text(entry, "alarm")
+        if description and alarm is not None:
+            normalized["env|%s" % (description,)] = {"alarm": alarm}
+    if not normalized:
+        raise SkipCheck("no environmental sensors reported (VM platform)")
+    return {"raw": raw, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="panos_jobs",
+        platform="panos",
+        description="Unfinished commit/config jobs (history counts in context)",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A commit or config job is pending/stuck — the device answers, but policy "
+            "may not actually be programmed into the dataplane."
+        ),
+        collector=_collect_jobs,
+        tags=("system",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_chassis_ready",
+        platform="panos",
+        description="Dataplane readiness (show chassis-ready)",
+        tier=1,
+        compare={"mode": "equality_scalar"},
+        miss_meaning=(
+            "The dataplane is not ready — the post-boot window where management "
+            "answers but traffic blackholes."
+        ),
+        collector=_collect_chassis_ready,
+        tags=("system",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_disk_space",
+        platform="panos",
+        description="Filesystem use percentages within tolerance",
+        tier=3,
+        compare={"mode": "tolerance", "band": {"abs": 10}},
+        miss_meaning=(
+            "A partition filled significantly — full disks silently block commits, "
+            "log writing, and content installs."
+        ),
+        collector=_collect_disk_space,
+        tags=("system",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_panorama",
+        platform="panos",
+        description="Panorama connectivity per configured server",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=("Panorama disconnected — config pushes and log forwarding break silently."),
+        collector=_collect_panorama,
+        tags=("system",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_environmentals",
+        platform="panos",
+        description="Hardware environmental ALARM states (not-present on VM platforms)",
+        tier=3,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A thermal/fan/power alarm raised — hardware death and mid-change "
+            "brownouts announce themselves here first."
+        ),
+        collector=_collect_environmentals,
+        tags=("platform",),
+    )
+)

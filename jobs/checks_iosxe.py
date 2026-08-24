@@ -1167,3 +1167,110 @@ register(
         tags=("platform",),
     )
 )
+
+
+# --- iosxe_errdisable + iosxe_port_channels (approved TAC-lens additions) -----
+
+_ERRDISABLE_LINE = re.compile(r"^(\S+\d\S*)\s+(?:.*?\s+)?err-?disabled?\s+(\S+)\s*$", re.IGNORECASE)
+
+
+def _parse_errdisable(cli_output):
+    """'show interfaces status err-disabled' -> {iface: {"reason": ...}}.
+
+    Healthy output is empty (header only) — an ADDED key between captures is a
+    port knocked into errdisable during the work, which reads as merely
+    'down' everywhere else while carrying the reason here."""
+    normalized = {}
+    for line in (cli_output or "").splitlines():
+        match = _ERRDISABLE_LINE.match(line.strip())
+        if match and "/" in match.group(1):
+            normalized[match.group(1)] = {"reason": match.group(2)}
+    return normalized
+
+
+def _collect_errdisable(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    command = "show interfaces status err-disabled"
+    output = ctx.run_ssh(command)
+    lowered = (output or "").lower()
+    if "invalid input" in lowered or "incomplete command" in lowered:
+        raise SkipCheck("err-disabled status form rejected on this platform")
+    return {"raw": {command: output}, "normalized": _parse_errdisable(output)}
+
+
+_PO_LINE = re.compile(r"^\d+\s+(Po\d+)\(([\w-]*)\)\s+(\S+)\s*(.*)$")
+_PO_MEMBER = re.compile(r"([A-Za-z]{2}[A-Za-z]*[\d/\.]+)\(([\w-]+)\)")
+
+
+def _parse_etherchannel(cli_output):
+    """'show etherchannel summary' -> {Po: {flags, protocol, members{port: flags}}}.
+
+    Member flags are the silent-capacity signal: (P) bundled is healthy;
+    (s) suspended / (D) down / (w) waiting members quietly halve a bundle
+    without downing the port-channel. Wrapped member lines attach to the
+    most recent port-channel row."""
+    normalized = {}
+    current = None
+    for line in (cli_output or "").splitlines():
+        match = _PO_LINE.match(line.strip())
+        if match:
+            po, flags, protocol, member_text = match.groups()
+            current = po
+            normalized[po] = {"flags": flags, "protocol": protocol, "members": {}}
+            for member, member_flags in _PO_MEMBER.findall(member_text):
+                normalized[po]["members"][member] = member_flags
+            continue
+        if current is not None and line.startswith((" ", "\t")):
+            for member, member_flags in _PO_MEMBER.findall(line):
+                normalized[current]["members"][member] = member_flags
+    return normalized
+
+
+def _collect_port_channels(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    command = "show etherchannel summary"
+    output = ctx.run_ssh(command)
+    lowered = (output or "").lower()
+    if "invalid input" in lowered or "incomplete command" in lowered:
+        raise SkipCheck("etherchannel summary rejected on this platform")
+    normalized = _parse_etherchannel(output)
+    if not normalized:
+        raise SkipCheck("no port-channels configured")
+    return {"raw": {command: output}, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="iosxe_errdisable",
+        platform="iosxe",
+        description="Ports in err-disabled state with the triggering reason",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A port was knocked into err-disable during the work — it reads as merely "
+            "'down' everywhere else; the reason here says why (security violation, "
+            "link-flap, UDLD...)."
+        ),
+        collector=_collect_errdisable,
+        tags=("interfaces",),
+    )
+)
+
+register(
+    CheckDef(
+        id="iosxe_port_channels",
+        platform="iosxe",
+        description="Port-channel bundles with per-member LACP flags",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A bundle's membership or a member's flags changed — a suspended or "
+            "standalone member quietly halves capacity without downing the "
+            "port-channel."
+        ),
+        collector=_collect_port_channels,
+        tags=("interfaces",),
+    )
+)

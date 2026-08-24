@@ -843,6 +843,11 @@ class TestRegistrations(unittest.TestCase):
         "panos_rule_hit_counts",
         "panos_ospf_neighbors",
         "panos_crash_files",
+        "panos_jobs",
+        "panos_chassis_ready",
+        "panos_disk_space",
+        "panos_panorama",
+        "panos_environmentals",
     }
 
     def test_all_registered_once(self):
@@ -1010,6 +1015,62 @@ class TestOspfAndCrashFiles(unittest.TestCase):
         result = checks._collect_crash_files(ctx, now=now)
         self.assertEqual(list(result["normalized"]), ["core.fresh"])
         self.assertEqual(result["context"]["older_files_ignored"], 1)
+
+
+class TestReadinessCluster(unittest.TestCase):
+    def test_jobs_only_unfinished_normalize(self):
+        output = (
+            '<response status="success"><result>'
+            '<entry id="12"><type>Commit</type><status>FIN</status><result>OK</result></entry>'
+            '<entry id="13"><type>Commit</type><status>ACT</status><result>PEND</result></entry>'
+            '<entry id="11"><type>Downld</type><status>FIN</status><result>FAIL</result></entry>'
+            "</result></response>"
+        )
+        result = checks._collect_jobs(_FakeCtx({"show jobs all": output}))
+        self.assertEqual(list(result["normalized"]), ["job|13"])
+        self.assertEqual(result["normalized"]["job|13"]["status"], "ACT")
+        self.assertEqual(result["context"]["jobs_total"], 3)
+        self.assertEqual(result["context"]["jobs_not_ok"], 1)
+
+    def test_chassis_ready_yes_no_unknown(self):
+        yes = '<response status="success"><result>yes</result></response>'
+        ctx = _FakeCtx({"show chassis-ready": yes})
+        self.assertEqual(checks._collect_chassis_ready(ctx)["normalized"], {"ready": "yes"})
+        unknown = _FakeCtx({"show chassis-ready": _EMPTY_RESULT})
+        self.assertEqual(checks._collect_chassis_ready(unknown)["normalized"], {})
+
+    def test_disk_space_parse(self):
+        output = (
+            "Filesystem      Size  Used Avail Use% Mounted on\n"
+            "/dev/root       7.0G  4.2G  2.5G  63% /\n"
+            "/dev/sda8        21G   16G  4.2G  80% /opt/panlogs\n"
+        )
+        self.assertEqual(checks._parse_disk_space(output), {"/": 63, "/opt/panlogs": 80})
+
+    def test_panorama_parse_pairs(self):
+        output = (
+            "Panorama Server 1 : 10.0.9.5\n    Connected : yes\n"
+            "Panorama Server 2 : 10.0.9.6\n    Connected : no\n"
+        )
+        self.assertEqual(
+            checks._parse_panorama(output),
+            {
+                "panorama|10.0.9.5": {"connected": "yes"},
+                "panorama|10.0.9.6": {"connected": "no"},
+            },
+        )
+
+    def test_environmentals_alarm_states_and_vm_skip(self):
+        output = (
+            '<response status="success"><result><thermal><Slot1>'
+            "<entry><description>Temperature @ CPU</description><alarm>False</alarm>"
+            "<DegreesC>52.1</DegreesC></entry>"
+            "</Slot1></thermal></result></response>"
+        )
+        result = checks._collect_environmentals(_FakeCtx({"show system environmentals": output}))
+        self.assertEqual(result["normalized"], {"env|Temperature @ CPU": {"alarm": "False"}})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_environmentals(_FakeCtx({"show system environmentals": _EMPTY_RESULT}))
 
 
 if __name__ == "__main__":

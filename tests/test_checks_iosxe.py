@@ -500,6 +500,8 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_routing_config",
         "iosxe_optics",
         "iosxe_crash_files",
+        "iosxe_errdisable",
+        "iosxe_port_channels",
     }
 
     def test_all_registered_once(self):
@@ -586,6 +588,31 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(list(recent), ["system-report_1_20260822.tar.gz"])
         self.assertEqual(recent["system-report_1_20260822.tar.gz"]["modified"], "2026-08-22")
         self.assertEqual(older, 1)
+
+
+class TestErrdisableAndPortChannels(unittest.TestCase):
+    def test_errdisable_parse_and_healthy_empty(self):
+        output = (
+            "Port      Name               Status       Reason\n"
+            "Te1/0/5   server-cab-3       err-disabled psecure-violation\n"
+        )
+        self.assertEqual(
+            checks._parse_errdisable(output), {"Te1/0/5": {"reason": "psecure-violation"}}
+        )
+        self.assertEqual(checks._parse_errdisable("Port  Name  Status  Reason\n"), {})
+
+    def test_etherchannel_parse_with_wrapped_members(self):
+        output = (
+            "Group  Port-channel  Protocol    Ports\n"
+            "------+-------------+-----------+----------------------------------\n"
+            "1      Po1(SU)         LACP      Te1/0/47(P) Te1/0/48(P)\n"
+            "2      Po2(SD)         LACP      Te2/0/1(s)\n"
+            "                                 Te2/0/2(D)\n"
+        )
+        normalized = checks._parse_etherchannel(output)
+        self.assertEqual(normalized["Po1"]["flags"], "SU")
+        self.assertEqual(normalized["Po1"]["members"]["Te1/0/48"], "P")
+        self.assertEqual(normalized["Po2"]["members"], {"Te2/0/1": "s", "Te2/0/2": "D"})
 
 
 if __name__ == "__main__":

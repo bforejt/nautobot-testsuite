@@ -114,6 +114,13 @@ the humans reading the report.
 | `panos_crash_files` | panos | 1 | Core/crash files within the recency window |
 | `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
 | `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window |
+| `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason |
+| `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
+| `panos_jobs` | panos | 1 | Unfinished commit/config jobs (history counts in context) |
+| `panos_chassis_ready` | panos | 1 | Dataplane readiness (show chassis-ready) |
+| `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
+| `panos_panorama` | panos | 1 | Panorama connectivity per configured server |
+| `panos_environmentals` | panos | 3 | Hardware environmental ALARM states (not-present on VM) |
 
 ## Always-everything capture
 

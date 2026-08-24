@@ -305,6 +305,44 @@ SEMANTICS = {
         "captures means a management or dataplane process crashed during the change "
         "window. Empty is the healthy state."
     ),
+    "panos_jobs": (
+        "Unfinished commit/config jobs keyed 'job|<id>' with status/type; finished-"
+        "job history stays in context counts (jobs_total, jobs_not_ok) so churning "
+        "history never diffs. Any key present means policy programming may be "
+        "incomplete — the device answers, but the dataplane may not reflect config."
+    ),
+    "panos_chassis_ready": (
+        "Dataplane readiness ('ready': yes/no). 'no' is the post-boot window where "
+        "management answers but traffic blackholes — on a freshly booted replacement "
+        "this must read yes before any traffic conclusion is drawn."
+    ),
+    "panos_disk_space": (
+        "Filesystem use percentages keyed by mount point. Slow growth is normal "
+        "(tolerance band); a jump toward full silently blocks commits, log writing, "
+        "and content installs."
+    ),
+    "panos_panorama": (
+        "Panorama connectivity keyed 'panorama|<server>' with connected yes/no. A "
+        "disconnect breaks config pushes AND log forwarding, silently."
+    ),
+    "panos_environmentals": (
+        "Hardware environmental ALARM states keyed 'env|<sensor description>' — "
+        "alarm flags only; temperatures/RPM readings are jitter and stay in raw. "
+        "Not-present on VM platforms (no sensors). On the hardware side, thermal/"
+        "fan/PSU alarms precede hardware death and mid-change brownouts."
+    ),
+    "iosxe_errdisable": (
+        "Ports currently err-disabled, keyed by interface, with the triggering "
+        "reason. Healthy is EMPTY — an added key means a port was disabled by the "
+        "platform during the work (security violation, link-flap, UDLD...) and "
+        "reads as merely 'down' in the interface check."
+    ),
+    "iosxe_port_channels": (
+        "Port-channel bundles keyed 'PoN' with bundle flags, protocol, and per-"
+        "member flags. Member flag decode: P bundled (healthy), s suspended, D "
+        "down, w waiting, H hot-standby — a suspended member quietly halves bundle "
+        "capacity without downing the port-channel."
+    ),
     "panos_rule_hit_counts": (
         "Security and NAT rules keyed '<rulebase>|<rule-name>' with cumulative hit "
         "counts and last-hit timestamps (vsys1). Two signals in one: the rule-NAME "
