@@ -665,6 +665,158 @@ class TestLicenses(unittest.TestCase):
         )
 
 
+class TestLoggingStatus(unittest.TestCase):
+    def test_rejected_command_skips(self):
+        ctx = _FakeCtx({"show logging-status": "Invalid syntax."})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_logging_status(ctx)
+
+    def test_xml_entries_counted_into_context(self):
+        output = (
+            '<response status="success"><result>'
+            "<entry><name>log-collector-1</name></entry>"
+            "<entry><name>log-collector-2</name></entry>"
+            "</result></response>"
+        )
+        ctx = _FakeCtx({"show logging-status": output})
+        result = checks._collect_logging_status(ctx)
+        self.assertEqual(result["raw"]["show logging-status"], output)
+        self.assertEqual(result["context"]["destination_entries"], 2)
+        self.assertEqual(result["normalized"], {})
+
+    def test_non_xml_output_keeps_raw_without_entry_count(self):
+        # Shape unverified on 11.2: a non-XML reply still records raw for the
+        # shakedown to refine against — never a failed read.
+        output = "Log forwarding agent is active.\n"
+        ctx = _FakeCtx({"show logging-status": output})
+        result = checks._collect_logging_status(ctx)
+        self.assertEqual(result["raw"]["show logging-status"], output)
+        self.assertNotIn("destination_entries", result["context"])
+        self.assertEqual(result["normalized"], {})
+
+    def test_oversized_output_is_capped_in_raw(self):
+        output = "x" * (checks._RAW_OUTPUT_CAP + 5000)
+        ctx = _FakeCtx({"show logging-status": output})
+        result = checks._collect_logging_status(ctx)
+        self.assertIn("truncated 5000 chars", result["raw"]["show logging-status"])
+
+
+class TestUrlCloud(unittest.TestCase):
+    def test_rejected_command_skips_unlicensed(self):
+        ctx = _FakeCtx({"show url-cloud status": "Unknown command: url-cloud"})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_url_cloud(ctx)
+
+    def test_connected_in_xml_text(self):
+        output = (
+            '<response status="success"><result>'
+            "PAN-DB cloud connection: connected"
+            "</result></response>"
+        )
+        ctx = _FakeCtx({"show url-cloud status": output})
+        result = checks._collect_url_cloud(ctx)
+        self.assertEqual(result["normalized"], {"cloud": {"value": "connected"}})
+
+    def test_not_connected_wins_over_its_connected_substring(self):
+        # "not connected" contains "connected" — the negative must win.
+        ctx = _FakeCtx({"show url-cloud status": "Cloud connection status: Not Connected\n"})
+        result = checks._collect_url_cloud(ctx)
+        self.assertEqual(result["normalized"], {"cloud": {"value": "not-connected"}})
+
+    def test_disconnected_reads_as_not_connected(self):
+        ctx = _FakeCtx({"show url-cloud status": "Status: Disconnected"})
+        result = checks._collect_url_cloud(ctx)
+        self.assertEqual(result["normalized"], {"cloud": {"value": "not-connected"}})
+
+    def test_unknown_shape_keeps_raw_with_empty_normalized(self):
+        output = "URL cloud telemetry unavailable"
+        ctx = _FakeCtx({"show url-cloud status": output})
+        result = checks._collect_url_cloud(ctx)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["raw"]["show url-cloud status"], output)
+
+
+class TestNtp(unittest.TestCase):
+    def test_rejected_command_skips(self):
+        ctx = _FakeCtx({"show ntp": "Invalid syntax."})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_ntp(ctx)
+
+    def test_synched_leaf(self):
+        output = (
+            '<response status="success"><result><synched>10.0.0.1</synched></result></response>'
+        )
+        ctx = _FakeCtx({"show ntp": output})
+        result = checks._collect_ntp(ctx)
+        self.assertEqual(result["normalized"], {"synched": {"value": "10.0.0.1"}})
+
+    def test_sync_spelling_variant(self):
+        output = '<response status="success"><result><sync>yes</sync></result></response>'
+        ctx = _FakeCtx({"show ntp": output})
+        result = checks._collect_ntp(ctx)
+        self.assertEqual(result["normalized"], {"synched": {"value": "yes"}})
+
+    def test_nested_synched_leaf(self):
+        output = (
+            '<response status="success"><result><ntp-servers>'
+            "<synched>LOCAL</synched>"
+            "</ntp-servers></result></response>"
+        )
+        ctx = _FakeCtx({"show ntp": output})
+        result = checks._collect_ntp(ctx)
+        self.assertEqual(result["normalized"], {"synched": {"value": "LOCAL"}})
+
+    def test_unknown_shape_keeps_raw_with_empty_normalized(self):
+        output = '<response status="success"><result><clock>ok</clock></result></response>'
+        ctx = _FakeCtx({"show ntp": output})
+        result = checks._collect_ntp(ctx)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["raw"]["show ntp"], output)
+
+
+class TestPendingChanges(unittest.TestCase):
+    def test_rejected_command_skips(self):
+        ctx = _FakeCtx({"check pending-changes": "Unknown command: check"})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_pending_changes(ctx)
+
+    def test_xml_yes(self):
+        output = '<response status="success"><result>yes</result></response>'
+        ctx = _FakeCtx({"check pending-changes": output})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {"pending": "yes"})
+
+    def test_xml_no(self):
+        output = '<response status="success"><result>no</result></response>'
+        ctx = _FakeCtx({"check pending-changes": output})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {"pending": "no"})
+
+    def test_plain_text_yes(self):
+        ctx = _FakeCtx({"check pending-changes": "Yes\n"})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {"pending": "yes"})
+
+    def test_plain_text_no(self):
+        ctx = _FakeCtx({"check pending-changes": "No\n"})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {"pending": "no"})
+
+    def test_yes_wins_when_both_words_present(self):
+        ctx = _FakeCtx({"check pending-changes": "yes (no pending commit locks)"})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {"pending": "yes"})
+
+    def test_no_never_matches_inside_another_word(self):
+        # "Nothing" starts with "no" — word-anchoring must keep it from
+        # fabricating a "no" answer; unknown shape keeps raw, normalized {}.
+        output = "Nothing to report"
+        ctx = _FakeCtx({"check pending-changes": output})
+        result = checks._collect_pending_changes(ctx)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["raw"]["check pending-changes"], output)
+
+
 class TestRegistrations(unittest.TestCase):
     EXPECTED_IDS = {
         "panos_system_info",
@@ -681,6 +833,14 @@ class TestRegistrations(unittest.TestCase):
         "panos_bgp_peers",
         "panos_globalprotect",
         "panos_dhcp",
+        "panos_logging_status",
+        "panos_url_cloud",
+        "panos_ntp",
+        "panos_pending_changes",
+        "panos_pbf",
+        "panos_drop_counters",
+        "panos_nat_pools",
+        "panos_rule_hit_counts",
     }
 
     def test_all_registered_once(self):
@@ -719,6 +879,79 @@ class TestRegistrations(unittest.TestCase):
         self.assertIn("filterable_at_sweep", context)
         self.assertIn("session_info_at_sweep", context)
         self.assertEqual(context["zones"], zones)
+
+
+class TestTierBChecks(unittest.TestCase):
+    def test_pbf_entries_and_empty_skip(self):
+        output = (
+            '<response status="success"><result><entry name="pbf-voip">'
+            "<action>forward</action><egress-if>ethernet1/5</egress-if>"
+            "</entry></result></response>"
+        )
+        result = checks._collect_pbf(_FakeCtx({"show pbf rule all": output}))
+        self.assertEqual(
+            result["normalized"]["pbf|pbf-voip"], {"action": "forward", "egress": "ethernet1/5"}
+        )
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_pbf(_FakeCtx({"show pbf rule all": _EMPTY_RESULT}))
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_pbf(_FakeCtx({"show pbf rule all": "Invalid syntax."}))
+
+    def test_drop_counters_top_by_value(self):
+        entries = "".join(
+            "<entry><name>ctr%d</name><value>%d</value></entry>" % (i, i * 10) for i in range(50)
+        )
+        output = '<response status="success"><result>%s</result></response>' % (entries,)
+        ctx = _FakeCtx({"show counter global filter severity drop": output})
+        result = checks._collect_drop_counters(ctx)
+        self.assertEqual(len(result["normalized"]), 40)  # top-40 cap
+        self.assertIn("ctr49", result["normalized"])  # biggest kept
+        self.assertNotIn("ctr0", result["normalized"])  # smallest dropped
+        self.assertEqual(result["context"]["counter_count"], 50)
+
+    def test_nat_pools_raw_first_and_skip_when_all_rejected(self):
+        pool = '<response status="success"><result><entry/></result></response>'
+        outputs = {
+            "show running ippool": pool,
+            "show running global-ippool": "Invalid syntax.",
+        }
+        result = checks._collect_nat_pools(_FakeCtx(outputs))
+        self.assertEqual(result["context"]["entries"]["show running ippool"], 1)
+        self.assertEqual(result["normalized"], {})
+        rejected = {command: "Invalid syntax." for command in outputs}
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_nat_pools(_FakeCtx(rejected))
+
+    def test_rule_hit_counts_fallback_form_and_parse(self):
+        hit = (
+            '<response status="success"><result><entry name="allow-web">'
+            "<hit-count>120345</hit-count><last-hit-timestamp>2026/08/24 10:00:01"
+            "</last-hit-timestamp></entry></result></response>"
+        )
+        outputs = {
+            "show rule-hit-count vsys vsys1 rule-base security rules all": "Invalid syntax.",
+            "show running rule-use hit-count vsys vsys1 rule-base security rules all": hit,
+            "show running rule-use hit-count vsys vsys1 rule-base nat rules all": _EMPTY_RESULT,
+        }
+        ctx = _FakeCtx(outputs)
+        result = checks._collect_rule_hit_counts(ctx)
+        self.assertEqual(
+            result["normalized"]["security|allow-web"],
+            {"hit_count": 120345, "last_hit": "2026/08/24 10:00:01"},
+        )
+        # Once the fallback form is accepted, the primary form is not retried
+        # for the second rulebase.
+        self.assertNotIn("show rule-hit-count vsys vsys1 rule-base nat rules all", ctx.commands)
+        both_rejected = {
+            form % (rulebase,): "Invalid syntax."
+            for rulebase in ("security", "nat")
+            for form in (
+                "show rule-hit-count vsys vsys1 rule-base %s rules all",
+                "show running rule-use hit-count vsys vsys1 rule-base %s rules all",
+            )
+        }
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_rule_hit_counts(_FakeCtx(both_rejected))
 
 
 if __name__ == "__main__":

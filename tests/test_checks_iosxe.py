@@ -328,6 +328,160 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         )
 
 
+class TestSyslogErrorParser(unittest.TestCase):
+    def test_counts_severity_three_and_worse_only(self):
+        text = _loader.fixture_text("iosxe_show_logging.txt")
+        # %SYS-5-CONFIG_I and %LINEPROTO-5-UPDOWN are sev 5: never counted.
+        self.assertEqual(
+            checks._parse_syslog_errors(text),
+            {
+                "sev3|%LINK-3-UPDOWN": {"count": 2},
+                "sev3|%OSPF-3-DBEXIST": {"count": 1},
+            },
+        )
+
+    def test_empty(self):
+        self.assertEqual(checks._parse_syslog_errors(""), {})
+        self.assertEqual(checks._parse_syslog_errors(None), {})
+
+
+class TestSvlNormalizer(unittest.TestCase):
+    PAYLOAD = {
+        "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data": {
+            "location": [
+                {
+                    "fru": "fru-rp",
+                    "slot": 0,
+                    "bay": 0,
+                    "chassis": 1,
+                    "node": 0,
+                    "svl-link-info": [
+                        {
+                            "link-num": 1,
+                            "svl-link-member-port": [
+                                {
+                                    "port-name": "FortyGigabitEthernet1/1/1",
+                                    "bundled": "true",
+                                    "is-control-port": True,
+                                    "lmp-tx": 120,
+                                    "lmp-rx": 118,
+                                },
+                                {
+                                    "port-name": "FortyGigabitEthernet1/1/2",
+                                    "bundled": "true",
+                                    "is-control-port": False,
+                                    # RESTCONF may string-ify numbers.
+                                    "lmp-tx": "88",
+                                    "lmp-rx": 91,
+                                },
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "fru": "fru-rp",
+                    "slot": 0,
+                    "bay": 0,
+                    "chassis": 2,
+                    "node": 0,
+                    # Bare-dict shape for both the link and its member port.
+                    "svl-link-info": {
+                        "link-num": 1,
+                        "svl-link-member-port": {
+                            "port-name": "FortyGigabitEthernet2/1/1",
+                            "bundled": "false",
+                            "sdp-tx": 5,
+                        },
+                    },
+                },
+            ]
+        }
+    }
+
+    def test_membership_bundled_and_counters(self):
+        normalized, context = checks._normalize_svl(self.PAYLOAD)
+        self.assertEqual(
+            normalized,
+            {
+                "svl-link|1/1": {
+                    "member_ports": [
+                        "FortyGigabitEthernet1/1/1",
+                        "FortyGigabitEthernet1/1/2",
+                    ],
+                    "bundled": True,
+                },
+                "svl-link|2/1": {
+                    "member_ports": ["FortyGigabitEthernet2/1/1"],
+                    "bundled": False,
+                },
+            },
+        )
+        # Numeric leaves sum per link; identity/flag leaves are not counters.
+        self.assertEqual(
+            context,
+            {
+                "counters|1/1": {"lmp-tx": 208, "lmp-rx": 209},
+                "counters|2/1": {"sdp-tx": 5},
+            },
+        )
+
+    def test_locations_without_recognizable_link_fields(self):
+        # A drifted release spelling the link identity differently: the walk
+        # found locations but recognized nothing — empty view, not garbage.
+        payload = {
+            "switch-cp-svl-oper-data": {
+                "location": [{"chassis": 1, "svl-link-info": [{"weird-num": 9}]}]
+            }
+        }
+        self.assertEqual(checks._normalize_svl(payload), ({}, {}))
+
+    def test_empty(self):
+        self.assertEqual(checks._normalize_svl({}), ({}, {}))
+        self.assertEqual(checks._normalize_svl(None), ({}, {}))
+
+
+class TestNtpNormalizer(unittest.TestCase):
+    def test_status_leaves(self):
+        payload = {
+            "Cisco-IOS-XE-ntp-oper:ntp-oper-data": {
+                "ntp-status-info": {
+                    "sys-status": "clock is synchronized",
+                    # RESTCONF may string-ify numbers.
+                    "sys-stratum": "3",
+                    "sys-refid": "203.0.113.10",
+                    # Jitter leaves must never leak into normalized.
+                    "sys-offset": 0.42,
+                    "sys-root-dispersion": 12.1,
+                }
+            }
+        }
+        self.assertEqual(
+            checks._normalize_ntp(payload),
+            {
+                "synchronized": "clock is synchronized",
+                "stratum": 3,
+                "server": "203.0.113.10",
+            },
+        )
+
+    def test_server_falls_back_to_selected_association(self):
+        payload = {
+            "ntp-oper-data": {
+                "ntp-status-info": {
+                    "ntp-associations": [
+                        {"assoc-id": 1, "status": "candidate", "refid": "10.0.0.9"},
+                        {"assoc-id": 2, "status": "sys-peer", "refid": "203.0.113.10"},
+                    ]
+                }
+            }
+        }
+        self.assertEqual(checks._normalize_ntp(payload), {"server": "203.0.113.10"})
+
+    def test_missing_leaves_emit_nothing(self):
+        self.assertEqual(checks._normalize_ntp({}), {})
+        self.assertEqual(checks._normalize_ntp({"Cisco-IOS-XE-ntp-oper:ntp-oper-data": {}}), {})
+
+
 class TestRegistrations(unittest.TestCase):
     EXPECTED_IDS = {
         "iosxe_routes_rib",
@@ -340,6 +494,9 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_interfaces",
         "iosxe_platform_health",
         "iosxe_dhcp",
+        "iosxe_syslog_errors",
+        "iosxe_svl_health",
+        "iosxe_ntp",
     }
 
     def test_all_registered_once(self):

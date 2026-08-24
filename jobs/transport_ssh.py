@@ -22,13 +22,14 @@ from . import constants as C
 # to ALLOWED_EXACT (or a full-command prefix like "test security-policy-match ")
 # — never a bare verb. "request license info" is a pure display command
 # despite the verb (verified against PA KB); no other "request" form is
-# permitted.
+# permitted. "check pending-changes" is likewise a pure read (candidate-config
+# status display); the bare "check " prefix stays banned.
 ALLOWED_PREFIXES = {
     "paloalto_panos": ("show ",),
     "cisco_xe": ("show ",),
 }
 ALLOWED_EXACT = {
-    "paloalto_panos": ("request license info",),
+    "paloalto_panos": ("request license info", "check pending-changes"),
     "cisco_xe": (),
 }
 # Session-scoped presentation settings sent once after connect. Safe: they

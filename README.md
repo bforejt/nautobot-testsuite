@@ -99,6 +99,17 @@ the humans reading the report.
 | `panos_globalprotect` | panos | 3 | GlobalProtect user count (not-present when GP is unused) |
 | `panos_dhcp` | panos | 3 | DHCP server lease overview (not-present when DHCP is unused) |
 | `iosxe_dhcp` | iosxe | 3 | DHCP server/relay configuration (not-present when unused) |
+| `iosxe_syslog_errors` | iosxe | 3 | Error-and-worse syslog event counts from the logging buffer |
+| `iosxe_svl_health` | iosxe | 3 | StackWise Virtual link membership and bundled state |
+| `iosxe_ntp` | iosxe | 3 | NTP synchronization state |
+| `panos_logging_status` | panos | 3 | Log forwarding status — is telemetry actually flowing |
+| `panos_url_cloud` | panos | 3 | URL-filtering cloud connectivity |
+| `panos_ntp` | panos | 3 | NTP synchronization state |
+| `panos_pending_changes` | panos | 1 | Uncommitted candidate-config changes present |
+| `panos_pbf` | panos | 1 | Policy-based forwarding rules (not-present when PBF is unused) |
+| `panos_drop_counters` | panos | 3 | Global drop-counter profile (informational canary) |
+| `panos_nat_pools` | panos | 3 | NAT pool tables, raw-first (utilization is load-dependent) |
+| `panos_rule_hit_counts` | panos | 2 | Security/NAT rule names with hit counts and last-hit times |
 
 ## Always-everything capture
 

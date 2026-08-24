@@ -212,6 +212,72 @@ SEMANTICS = {
         "exists — always asked by doctrine. Per-interface helper addresses live in "
         "interface config, not here."
     ),
+    "iosxe_syslog_errors": (
+        "Counts of error-and-worse syslog events (severity 0-3) from the finite "
+        "logging buffer, keyed 'sev<N>|%FACILITY-N-MNEMONIC'. Informational: counts "
+        "always drift; what an analyst reads is NOVELTY — event types present after a "
+        "change that were absent before. The recent raw tail rides in the raw bundle."
+    ),
+    "iosxe_svl_health": (
+        "StackWise Virtual link membership keyed 'svl-link|<chassis>/<link>': member "
+        "ports and bundled state. LMP/SDP counters live in context (compare as deltas, "
+        "never absolutes). Not-present on non-SVL systems. A degraded SVL multiplies "
+        "every other risk during a change window."
+    ),
+    "iosxe_ntp": (
+        "NTP synchronization scalars (synchronized state, stratum, selected server) "
+        "when the device exposes them. Offsets and dispersion are jitter — raw only. "
+        "If sync changed, timestamps in every other capture and in device logs are "
+        "suspect."
+    ),
+    "panos_logging_status": (
+        "Log-forwarding status, raw-first (shape refined against real output): is "
+        "telemetry actually flowing to Panorama/syslog collectors. A SIEM ingestion "
+        "gap discovered weeks later is the classic day-2 failure of firewall "
+        "replacements — this check exists to catch it on day 0."
+    ),
+    "panos_url_cloud": (
+        "URL-filtering cloud connectivity ('connected' / 'not-connected' when "
+        "derivable). Not-present when URL filtering is unlicensed. User internet can "
+        "break with perfect routing if the management plane cannot reach the cloud."
+    ),
+    "panos_ntp": (
+        "NTP synchronization state, best-effort. If time sync changed, timestamps in "
+        "every capture and log become suspect."
+    ),
+    "panos_pending_changes": (
+        "Whether uncommitted candidate-config changes exist ('pending': yes/no). "
+        "Pending changes at capture time mean config-derived state may not reflect "
+        "what is running — or someone left work half-finished on the box."
+    ),
+    "panos_pbf": (
+        "Policy-based forwarding rules keyed 'pbf|<rule>' with action/egress when "
+        "derivable. PBF steers traffic AROUND the routing tables the other checks "
+        "diff — changes here are invisible everywhere else. Not-present when PBF is "
+        "unused."
+    ),
+    "panos_drop_counters": (
+        "Top global drop counters by value, keyed by counter name. Values are "
+        "cumulative since boot (a fresh VM counts from ITS boot) — informational by "
+        "design; the analyst reads novelty: drop counters present after a change that "
+        "were absent before (flow_fwd_l3_noroute = routing hole, flow_no_arp = "
+        "unresolved adjacency, policy-deny spikes = rulebase mismatch). Full table in "
+        "raw."
+    ),
+    "panos_nat_pools": (
+        "NAT pool tables (ippool / global-ippool), raw-first: utilization is load-"
+        "dependent, so exhaustion appears under load, not at cutover time. The DIPP "
+        "oversubscription setting differing between hardware and VM platforms is a "
+        "real finding to look for in the raw tables."
+    ),
+    "panos_rule_hit_counts": (
+        "Security and NAT rules keyed '<rulebase>|<rule-name>' with cumulative hit "
+        "counts and last-hit timestamps (vsys1). Two signals in one: the rule-NAME "
+        "set is the config-parity check (a mistranslated rulebase is the biggest "
+        "replacement risk), and last-hit recency shows which rules actually carry "
+        "traffic. Counts reset on a replacement device — compare activity, not "
+        "absolutes."
+    ),
 }
 
 

@@ -1084,3 +1084,360 @@ register(
         tags=("services",),
     )
 )
+
+
+# --- day-0 hygiene checks (shakedown-pending shapes) --------------------------
+# Telemetry, cloud connectivity, time sync, and commit hygiene. Output shapes
+# below are UNVERIFIED on real 11.2 — raw is captured faithfully (capped) and
+# normalization is best-effort; the shakedown advisory ("parsed but empty")
+# drives refinement against real output. Collect first, normalize later.
+
+
+def _collect_logging_status(ctx):
+    """'show logging-status' captured raw; destination entries counted best-effort.
+
+    A SIEM ingestion gap found weeks later is the classic day-2 failure of a
+    firewall replacement — this check exists to catch it on day 0.
+    """
+    command = "show logging-status"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("command rejected on this release — verify via shakedown")
+    context = {}
+    try:
+        root = extract_xml(output)
+    except PanosParseError:
+        root = None
+    if root is not None:
+        context["destination_entries"] = len(root.findall(".//entry"))
+    return {"raw": raw, "normalized": {}, "context": context}
+
+
+def _collect_url_cloud(ctx):
+    """'show url-cloud status' -> connected / not-connected, from a text scan.
+
+    The negative phrasings must be tested FIRST: "not connected" and
+    "disconnected" both contain the substring "connected".
+    """
+    command = "show url-cloud status"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("URL filtering unlicensed (command rejected) — verify via shakedown")
+    lowered = (output or "").lower()
+    if "not connected" in lowered or "disconnected" in lowered:
+        normalized = {"cloud": {"value": "not-connected"}}
+    elif "connected" in lowered:
+        normalized = {"cloud": {"value": "connected"}}
+    else:
+        normalized = {}
+    return {"raw": raw, "normalized": normalized}
+
+
+def _collect_ntp(ctx):
+    """'show ntp' -> the synched leaf when one is found; raw kept regardless.
+
+    Releases spell the leaf differently ('synched', 'sync', or nested under a
+    server block) — each spelling is tried; none found leaves normalized empty.
+    """
+    command = "show ntp"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("command rejected on this release — verify via shakedown")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    synched = None
+    if result is not None:
+        for path in ("synched", "sync", ".//synched"):
+            synched = text(result, path)
+            if synched is not None:
+                break
+    normalized = {"synched": {"value": synched}} if synched is not None else {}
+    return {"raw": raw, "normalized": normalized}
+
+
+# Word-anchored so "no" never matches inside "nothing"/"not"; yes wins when
+# both words appear ("yes (no pending commit locks)").
+_PENDING_YES = re.compile(r"\byes\b", re.IGNORECASE)
+_PENDING_NO = re.compile(r"\bno\b", re.IGNORECASE)
+
+
+def _collect_pending_changes(ctx):
+    """'check pending-changes' -> {"pending": "yes"/"no"} from a yes/no reply.
+
+    The reply is boolean-ish across shapes (XML <result>yes</result> or plain
+    text); the word is searched in the result's text when XML parses, else in
+    the raw output. Neither word found -> normalized {} with raw kept.
+    """
+    command = "check pending-changes"  # exact string allowlisted; pure status display
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("command rejected on this release — verify via shakedown")
+    blob = output or ""
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    if result is not None:
+        blob = "".join(result.itertext())
+    if _PENDING_YES.search(blob):
+        normalized = {"pending": "yes"}
+    elif _PENDING_NO.search(blob):
+        normalized = {"pending": "no"}
+    else:
+        normalized = {}
+    return {"raw": raw, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="panos_logging_status",
+        platform="panos",
+        description="Log forwarding status — is telemetry actually flowing",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_logging_status,
+        tags=("logging",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_url_cloud",
+        platform="panos",
+        description="URL-filtering cloud connectivity",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_url_cloud,
+        tags=("services",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_ntp",
+        platform="panos",
+        description="NTP synchronization state",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_ntp,
+        tags=("system",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_pending_changes",
+        platform="panos",
+        description="Uncommitted candidate-config changes present",
+        tier=1,
+        compare={"mode": "equality_scalar"},
+        miss_meaning=(
+            "Uncommitted changes at capture time — config-derived state may not reflect "
+            "what is actually running (or someone left work half-finished on the box)."
+        ),
+        collector=_collect_pending_changes,
+        tags=("system",),
+    )
+)
+
+
+# --- approved Tier-B checks (shakedown-pending shapes) ------------------------
+# PBF, drop counters, NAT pools, rule hit counts — approved for always-on
+# capture. Command forms flagged unverified since the original research; every
+# collector is defensive (rejected -> not-present with reason) and raw-first,
+# with normalization refined against real 11.2 output via the shakedown loop.
+
+
+def _collect_pbf(ctx):
+    command = "show pbf rule all"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("PBF command rejected on this release — verify via shakedown")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    normalized = {}
+    for entry in result.findall(".//entry") if result is not None else []:
+        name = entry.get("name") or text(entry, "name") or text(entry, "rule-name")
+        if not name:
+            continue
+        value = {}
+        action = text(entry, "action")
+        if action is not None:
+            value["action"] = action
+        egress = text(entry, "egress-if") or text(entry, "interface")
+        if egress is not None:
+            value["egress"] = egress
+        normalized["pbf|%s" % (name,)] = value
+    if not normalized:
+        # Presence enumeration: empty or non-XML reply IS the answer.
+        raise SkipCheck("no PBF rules configured")
+    return {"raw": raw, "normalized": normalized}
+
+
+def _collect_drop_counters(ctx):
+    command = "show counter global filter severity drop"
+    output = ctx.run_ssh(command, timeout=C.SSH_BIG_READ_TIMEOUT)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("drop-counter command rejected on this release — verify via shakedown")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    counters = {}
+    for entry in result.findall(".//entry") if result is not None else []:
+        name = text(entry, "name") or entry.get("name")
+        value = to_int(text(entry, "value"))
+        if name and value is not None:
+            counters[name] = value
+    # Values are cumulative-since-boot — informational by design (a fresh VM's
+    # counts are since ITS boot). The analyst reads novelty: drop counters that
+    # exist post but not pre, or wildly different profiles.
+    top = sorted(counters.items(), key=lambda item: -item[1])[:40]
+    normalized = {name: {"value": value} for name, value in top}
+    context = {"counter_count": len(counters)}
+    return {"raw": raw, "normalized": normalized, "context": context}
+
+
+def _collect_nat_pools(ctx):
+    commands = ("show running ippool", "show running global-ippool")
+    raw = {}
+    rejected = 0
+    entry_counts = {}
+    for command in commands:
+        output = ctx.run_ssh(command)
+        _record_raw(raw, command, output)
+        if _cli_rejected(output):
+            rejected += 1
+            continue
+        try:
+            result = result_of(extract_xml(output))
+        except PanosParseError:
+            result = None
+        entry_counts[command] = len(result.findall(".//entry")) if result is not None else 0
+    if rejected == len(commands):
+        raise SkipCheck("NAT pool commands rejected on this release — verify via shakedown")
+    # Raw-first by design: the pool tables' shape is unverified; utilization
+    # is load-dependent (exhaustion appears under load, not at 2 a.m.), so
+    # the verbatim tables plus entry counts are the v1 deliverable.
+    return {"raw": raw, "normalized": {}, "context": {"entries": entry_counts}}
+
+
+def _collect_rule_hit_counts(ctx):
+    forms = (
+        "show rule-hit-count vsys vsys1 rule-base %s rules all",
+        "show running rule-use hit-count vsys vsys1 rule-base %s rules all",
+    )
+    raw = {}
+    normalized = {}
+    accepted_form = None
+    for rulebase in ("security", "nat"):
+        for form in forms:
+            if accepted_form is not None and form != accepted_form:
+                continue
+            command = form % (rulebase,)
+            output = ctx.run_ssh(command, timeout=C.SSH_BIG_READ_TIMEOUT)
+            _record_raw(raw, command, output)
+            if _cli_rejected(output):
+                continue
+            accepted_form = form
+            try:
+                result = result_of(extract_xml(output))
+            except PanosParseError:
+                result = None
+            for entry in result.findall(".//entry") if result is not None else []:
+                name = entry.get("name") or text(entry, "rule-name") or text(entry, "name")
+                if not name:
+                    continue
+                value = {}
+                hits = to_int(text(entry, "hit-count") or text(entry, "rule-hit-count"))
+                if hits is not None:
+                    value["hit_count"] = hits
+                last_hit = text(entry, "last-hit-timestamp") or text(entry, "last-hit")
+                if last_hit is not None:
+                    value["last_hit"] = last_hit
+                normalized["%s|%s" % (rulebase, name)] = value
+            break
+    if accepted_form is None:
+        raise SkipCheck(
+            "rule-hit-count forms rejected on this release — awaiting field-verified syntax"
+        )
+    return {"raw": raw, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="panos_pbf",
+        platform="panos",
+        description="Policy-based forwarding rules (not-present when PBF is unused)",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A policy-based forwarding rule changed — PBF steers traffic around the "
+            "routing tables the other checks diff, so changes here are invisible "
+            "everywhere else."
+        ),
+        collector=_collect_pbf,
+        tags=("routing",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_drop_counters",
+        platform="panos",
+        description="Global drop-counter profile (informational canary)",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_drop_counters,
+        tags=("sessions",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_nat_pools",
+        platform="panos",
+        description="NAT pool tables, raw-first (utilization is load-dependent)",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_nat_pools,
+        tags=("services",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_rule_hit_counts",
+        platform="panos",
+        description="Security/NAT rule names with hit counts and last-hit times",
+        tier=2,
+        compare={"mode": "info_only"},
+        miss_meaning=(
+            "A rule vanished from the rulebase, or a previously-active rule stopped "
+            "hitting — the single biggest replacement risk is a mistranslated rulebase."
+        ),
+        collector=_collect_rule_hit_counts,
+        tags=("policy",),
+    )
+)

@@ -683,3 +683,265 @@ register(
         tags=("services",),
     )
 )
+
+
+# --- iosxe_syslog_errors (informational) --------------------------------------
+# The finite logging buffer reduced to counts of error-and-worse events
+# (%FACILITY-N-MNEMONIC, severity 0..3). What an analyst reads across captures
+# is NOVELTY — an event type the baseline never logged. Severity 4+ (warnings,
+# config notices) is deliberately not counted.
+
+# IOS syslog tag %FACILITY-SEVERITY-MNEMONIC; only severities 0..3 match.
+_SYSLOG_ERROR = re.compile(r"%([A-Z0-9_]+)-([0-3])-([A-Z0-9_]+)")
+
+# The buffer is bounded, but raw artifacts should stay small: keep the tail,
+# where the newest (most relevant) events live. Counting runs on full output.
+_SYSLOG_RAW_TAIL_CHARS = 20000
+
+
+def _parse_syslog_errors(text):
+    """'sev<N>|%FAC-N-MNEMONIC' -> {'count': n} for severity<=3 events in the buffer."""
+    counts = {}
+    for facility, severity, mnemonic in _SYSLOG_ERROR.findall(text or ""):
+        key = "sev%s|%%%s-%s-%s" % (severity, facility, severity, mnemonic)
+        counts.setdefault(key, {"count": 0})["count"] += 1
+    return counts
+
+
+def _collect_syslog_errors(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    output = ctx.run_ssh("show logging")
+    normalized = _parse_syslog_errors(output)
+    context = {
+        "error_events_total": sum(entry["count"] for entry in normalized.values()),
+        "distinct_event_types": len(normalized),
+    }
+    raw = {"show logging": (output or "")[-_SYSLOG_RAW_TAIL_CHARS:]}
+    return {"raw": raw, "normalized": normalized, "context": context}
+
+
+register(
+    CheckDef(
+        id="iosxe_syslog_errors",
+        platform="iosxe",
+        description="Error-and-worse syslog event counts from the logging buffer",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_syslog_errors,
+        tags=("platform", "logs"),
+    )
+)
+
+
+# --- iosxe_svl_health (always-on optional feature) ----------------------------
+# The StackWise Virtual link is the virtual-switch backbone: every packet
+# crossing chassis rides it. The 17.12.1 model nests location (keys fru/slot/
+# bay/chassis/node) -> svl-link-info -> member-port lists, but leaf spellings
+# drift across releases, so the walk recognizes members by shape rather than
+# trusting one spelling; when it finds locations but no recognizable link
+# fields it returns an empty view and the shakedown advisory drives refinement
+# against the live payload.
+
+_SVL_PATH = "/data/Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data"
+
+# Leaf-name candidates, most-likely spelling first.
+_SVL_LINK_NUM_LEAVES = ("link-num", "svl-link-num", "link-number")
+_SVL_PORT_LEAVES = ("port-name", "if-name", "port", "name")
+_SVL_BUNDLED_LEAVES = ("bundled", "is-bundled", "link-bundled")
+
+# Identity and state leaves are never counters.
+_SVL_NON_COUNTERS = frozenset(
+    _SVL_LINK_NUM_LEAVES + _SVL_BUNDLED_LEAVES + ("fru", "slot", "bay", "chassis", "node")
+)
+
+
+def _first_leaf(entry, names):
+    """First present-and-non-None leaf by candidate name; None when none exist."""
+    for name in names:
+        value = entry.get(name)
+        if value is not None:
+            return value
+    return None
+
+
+def _svl_bool(value):
+    """Coerce a drift-prone bundled/state leaf to True/False; None when unreadable."""
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("true", "yes", "1", "up", "ready"):
+        return True
+    if text in ("false", "no", "0", "down"):
+        return False
+    return None
+
+
+def _svl_counters(node, counters):
+    """Sum every numeric leaf under node into counters by leaf name, recursively.
+
+    Which leaves are LMP/SDP counters varies by release; deltas are the
+    analyst's job, so everything numeric is kept (bools and identities are not
+    counters).
+    """
+    if isinstance(node, dict):
+        for name, value in node.items():
+            if isinstance(value, (dict, list)):
+                _svl_counters(value, counters)
+                continue
+            if isinstance(value, bool) or name in _SVL_NON_COUNTERS:
+                continue
+            number = _to_int(value)
+            if number is not None:
+                counters[name] = counters.get(name, 0) + number
+    elif isinstance(node, list):
+        for item in node:
+            _svl_counters(item, counters)
+
+
+def _normalize_svl(payload):
+    """('svl-link|<chassis>/<link-num>' view, 'counters|<link>' context) as a pair.
+
+    Membership and bundled state are the comparable facts; every numeric leaf
+    under a link sums into context — counters are informational, never
+    equality-compared.
+    """
+    container = _container(payload, "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data")
+    container = container if isinstance(container, dict) else {}
+    normalized = {}
+    context = {}
+    for location in _aslist(container.get("location")):
+        if not isinstance(location, dict):
+            continue
+        chassis = _first_leaf(location, ("chassis", "node", "slot"))
+        chassis = chassis if chassis is not None else "unknown"
+        for link in _aslist(location.get("svl-link-info")):
+            if not isinstance(link, dict):
+                continue
+            link_num = _first_leaf(link, _SVL_LINK_NUM_LEAVES)
+            if link_num is None:
+                continue
+            link_id = "%s/%s" % (chassis, link_num)
+            ports = []
+            bundled_states = []
+            for value in link.values():
+                # Member-port list names drift; recognize members by shape.
+                for member in _aslist(value):
+                    if not isinstance(member, dict):
+                        continue
+                    port = _first_leaf(member, _SVL_PORT_LEAVES)
+                    if port is not None:
+                        ports.append(str(port))
+                    bundled = _svl_bool(_first_leaf(member, _SVL_BUNDLED_LEAVES))
+                    if bundled is not None:
+                        bundled_states.append(bundled)
+            entry = {}
+            if ports:
+                entry["member_ports"] = sorted(set(ports))
+            if bundled_states:
+                entry["bundled"] = all(bundled_states)
+            normalized["svl-link|%s" % (link_id,)] = entry
+            counters = {}
+            _svl_counters(link, counters)
+            if counters:
+                context["counters|%s" % (link_id,)] = counters
+    return normalized, context
+
+
+def _collect_svl_health(ctx):
+    payload = ctx.get(_SVL_PATH, ok_404=True)
+    container = _container(payload, "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data")
+    if not container:
+        raise SkipCheck("no StackWise Virtual data (not an SVL system)")
+    normalized, context = _normalize_svl(payload)
+    return {"raw": {"switch-cp-svl-oper": payload}, "normalized": normalized, "context": context}
+
+
+register(
+    CheckDef(
+        id="iosxe_svl_health",
+        platform="iosxe",
+        description="StackWise Virtual links: member ports and bundled state per chassis/link.",
+        tier=3,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "An SVL link's membership or bundled state changed — the virtual-switch "
+            "backbone degraded, which multiplies every other risk during a change."
+        ),
+        collector=_collect_svl_health,
+        tags=("platform", "svl"),
+    )
+)
+
+
+# --- iosxe_ntp (always-on) ----------------------------------------------------
+# Time sync is the trust anchor for every timestamp this framework records.
+# ntp-status-info leaf spellings drift across releases; emit only what is
+# findable — an empty view is honest and the shakedown advisory drives
+# refinement. Offset/delay/dispersion are jitter: raw only.
+
+_NTP_PATH = "/data/Cisco-IOS-XE-ntp-oper:ntp-oper-data"
+
+_NTP_SYNC_LEAVES = ("sys-status", "clock-state", "assoc-status", "status")
+_NTP_STRATUM_LEAVES = ("sys-stratum", "stratum")
+_NTP_REFID_LEAVES = ("sys-refid", "refid", "server")
+
+
+def _ntp_selected_refid(status):
+    """The selected (syspeer) association's refid/address, when one is marked."""
+    for value in status.values():
+        for assoc in _aslist(value):
+            if not isinstance(assoc, dict):
+                continue
+            marker = str(_first_leaf(assoc, _NTP_SYNC_LEAVES) or "").lower()
+            if "syspeer" not in marker.replace("-", ""):
+                continue
+            refid = _first_leaf(assoc, _NTP_REFID_LEAVES + ("address", "ip-address"))
+            if refid is not None:
+                return refid
+    return None
+
+
+def _normalize_ntp(payload):
+    """Best-effort {'synchronized', 'stratum', 'server'} scalars from ntp-status-info."""
+    container = _container(payload, "Cisco-IOS-XE-ntp-oper:ntp-oper-data") or {}
+    status = container.get("ntp-status-info")
+    status = status if isinstance(status, dict) else {}
+    normalized = {}
+    sync = _first_leaf(status, _NTP_SYNC_LEAVES)
+    if sync is not None:
+        normalized["synchronized"] = str(sync)
+    stratum = _to_int(_first_leaf(status, _NTP_STRATUM_LEAVES))
+    if stratum is not None:
+        normalized["stratum"] = stratum
+    server = _first_leaf(status, _NTP_REFID_LEAVES)
+    if server is None:
+        server = _ntp_selected_refid(status)
+    if server is not None:
+        normalized["server"] = str(server)
+    return normalized
+
+
+def _collect_ntp(ctx):
+    payload = ctx.get(_NTP_PATH, ok_404=True)
+    if not payload:
+        raise SkipCheck("NTP oper data not available")
+    return {"raw": {"ntp-oper": payload}, "normalized": _normalize_ntp(payload)}
+
+
+register(
+    CheckDef(
+        id="iosxe_ntp",
+        platform="iosxe",
+        description="NTP sync status: synchronized state, stratum, selected server.",
+        tier=3,
+        compare={"mode": "equality_scalar"},
+        miss_meaning=(
+            "Time sync changed — timestamps in every other capture and in device logs "
+            "become suspect."
+        ),
+        collector=_collect_ntp,
+        tags=("services",),
+    )
+)
