@@ -206,8 +206,25 @@ def _parse_session_count(cli_output):
         match = _COUNT_LINE.search(blob)
         if match:
             return int(match.group(1))
+        # Multi-dataplane platforms (PA-5200s) answer with one count member
+        # per DP and no aggregate phrase — the true total is the SUM. Labels
+        # can contain digits ("DP0: 6134"), so take each member's LAST
+        # integer. Guarded: a response holding <entry> children is a session
+        # dump and must never be misread as counts. (Field regression: a
+        # phrase-only parser read nothing here; an earlier first-member
+        # parser read only DP0 — half the real count.)
+        if result.find("entry") is None:
+            member_counts = []
+            for member in result.findall(".//member"):
+                integers = re.findall(r"-?\d+", "".join(member.itertext()))
+                if integers:
+                    member_counts.append(int(integers[-1]))
+            if member_counts:
+                return sum(member_counts)
         stripped = blob.strip()
-        if stripped.lstrip("-").isdigit():
+        # Bare numeric applies only to a CHILDLESS result (<result>7</result>);
+        # a dump's concatenated digits must never pass an isdigit test.
+        if len(result) == 0 and stripped.lstrip("-").isdigit():
             return int(stripped)
         if _NO_SESSIONS.search(blob):
             return 0

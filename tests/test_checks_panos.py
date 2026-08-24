@@ -351,6 +351,42 @@ class TestSessionCountParser(unittest.TestCase):
         )
         self.assertEqual(checks._parse_session_count("No Active Sessions\n"), 0)
 
+    def test_per_dataplane_members_are_summed(self):
+        # Multi-DP platforms answer one count member per dataplane, no
+        # aggregate phrase. The label's own digit (DP0) must not win — last
+        # integer per member, summed.
+        output = (
+            '<response status="success"><result>'
+            "<member>DP0: 6134</member><member>DP1: 6510</member>"
+            "</result></response>"
+        )
+        self.assertEqual(checks._parse_session_count(output), 12644)
+
+    def test_single_member_number_with_words(self):
+        output = (
+            '<response status="success"><result><member>Sessions: 1234</member></result></response>'
+        )
+        self.assertEqual(checks._parse_session_count(output), 1234)
+
+    def test_member_without_integer_is_skipped_in_sum(self):
+        output = (
+            '<response status="success"><result>'
+            "<member>counts follow</member><member>DP0: 40</member>"
+            "</result></response>"
+        )
+        self.assertEqual(checks._parse_session_count(output), 40)
+
+    def test_session_dump_is_never_misread_as_counts(self):
+        # A response with <entry> children is a session dump — digits inside
+        # it (ids, ports) must never be summed into a "count".
+        output = (
+            '<response status="success"><result>'
+            "<entry><idx>4211</idx><dport>443</dport></entry>"
+            "<entry><idx>4212</idx><dport>53</dport></entry>"
+            "</result></response>"
+        )
+        self.assertIsNone(checks._parse_session_count(output))
+
     def test_error_response_is_never_zero(self):
         output = '<response status="error"><msg><line>Invalid filter</line></msg></response>'
         self.assertIsNone(checks._parse_session_count(output))
