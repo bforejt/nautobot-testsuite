@@ -14,15 +14,19 @@ mask a real outage), while a check that only exists post is never a finding
 import json
 from datetime import datetime, timezone
 
-from nautobot.apps.jobs import BooleanVar, IntegerVar, Job, JSONVar, ObjectVar
+from nautobot.apps.jobs import BooleanVar, IntegerVar, Job, JSONVar, ObjectVar, StringVar
+from nautobot.extras.choices import JobResultStatusChoices
 from nautobot.extras.models import JobResult
 
 from . import constants as C
 from . import diffcore, envelope, registry
-from .snapshot_job import _attach_artifact
+from .snapshot_job import CaptureSnapshot, _attach_artifact
 
 # Jobs-UI grouping header (house convention).
 name = C.UI_GROUP
+
+# JobResult.name for capture runs — kept in lockstep with the capture job.
+CAPTURE_NAME = getattr(CaptureSnapshot.Meta, "name", "Capture Snapshot")
 
 
 def _read_fileproxy(fileproxy):
@@ -118,13 +122,29 @@ def _miss_lines(body):
 class CompareSnapshots(Job):
     """Diff pre vs post snapshot envelopes and attach one report per device pair."""
 
+    change_id = StringVar(
+        required=False,
+        description=(
+            "Auto-select the newest successful pre and post Capture Snapshot runs "
+            "tagged with this change id — the same id you typed at capture time. "
+            "The explicit pickers below override per side."
+        ),
+    )
     pre_result = ObjectVar(
         model=JobResult,
-        description="JobResult of the PRE Capture Snapshot run.",
+        required=False,
+        query_params={"name": [CAPTURE_NAME]},
+        description=(
+            "Explicit PRE-side pick (overrides change_id auto-selection). Nautobot's "
+            "dropdown labels carry no change context — the run log echoes each "
+            "side's change id and kind, so a mis-pick is visible immediately."
+        ),
     )
     post_result = ObjectVar(
         model=JobResult,
-        description="JobResult of the POST Capture Snapshot run.",
+        required=False,
+        query_params={"name": [CAPTURE_NAME]},
+        description="Explicit POST-side pick (overrides change_id auto-selection).",
     )
     device_map = JSONVar(
         required=False,
@@ -172,6 +192,7 @@ class CompareSnapshots(Job):
         soft_time_limit = 540
         time_limit = 600
         field_order = [
+            "change_id",
             "pre_result",
             "post_result",
             "device_map",
@@ -183,6 +204,7 @@ class CompareSnapshots(Job):
     def run(
         self,
         *,
+        change_id="",
         pre_result=None,
         post_result=None,
         device_map=None,
@@ -192,8 +214,14 @@ class CompareSnapshots(Job):
     ):
         """Compare two capture runs. Every kwarg defaults (ScheduledJob rule)."""
         self.logger.info("Compare Snapshots starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
+        change_id = str(change_id or "").strip()
         if pre_result is None or post_result is None:
-            raise RuntimeError("Both pre_result and post_result are required.")
+            if not change_id:
+                raise RuntimeError(
+                    "Provide a change_id (auto-selects the newest matching capture "
+                    "runs) or pick both pre_result and post_result explicitly."
+                )
+            pre_result, post_result = self._autoselect_results(change_id, pre_result, post_result)
         if pre_result.pk == post_result.pk:
             self.logger.warning(
                 "pre_result and post_result are the same JobResult — every check "
@@ -207,6 +235,7 @@ class CompareSnapshots(Job):
 
         pre_snaps = _load_snapshots(pre_result)
         post_snaps = _load_snapshots(post_result)
+        self._echo_sides(change_id, pre_snaps, post_snaps)
 
         want_major = _schema_major(C.SCHEMA_VERSION)
         for side, snaps in (("pre", pre_snaps), ("post", post_snaps)):
@@ -347,6 +376,95 @@ class CompareSnapshots(Job):
                 % (totals["unexpected"], summary_text)
             )
         return summary_text
+
+    def _autoselect_results(self, change_id, pre_result, post_result):
+        """Newest successful capture runs whose stored kwargs carry change_id.
+
+        Nautobot's JobResult dropdown labels carry no change/kind context, so
+        operators select by the change id they typed at capture time; explicit
+        picks always win per side. With no plain post capture, the newest
+        ROLLBACK capture serves as the post side (rollback-vs-pre proves
+        restoration). task_kwargs exist because has_sensitive_variables=False.
+        """
+        candidates = JobResult.objects.filter(
+            name=CAPTURE_NAME, status=JobResultStatusChoices.STATUS_SUCCESS
+        ).order_by("-date_created")[: C.AUTOSELECT_SCAN_LIMIT]
+        seen_change_ids = set()
+        matches = []  # newest first, (kind, JobResult)
+        for candidate in candidates:
+            kwargs = candidate.task_kwargs if isinstance(candidate.task_kwargs, dict) else {}
+            cid = str(kwargs.get("change_id") or "").strip()
+            if cid:
+                seen_change_ids.add(cid)
+            if cid == change_id:
+                matches.append((str(kwargs.get("kind") or "pre"), candidate))
+
+        def newest(kinds):
+            for kind, candidate in matches:
+                if kind in kinds:
+                    return candidate
+            return None
+
+        if pre_result is None:
+            pre_result = newest(("pre",))
+        if post_result is None:
+            post_result = newest(("post",))
+            if post_result is None:
+                post_result = newest(("rollback",))
+                if post_result is not None:
+                    self.logger.warning(
+                        "No post capture for change %r — using the newest ROLLBACK "
+                        "capture as the post side (rollback verification).",
+                        change_id,
+                    )
+        missing = [
+            side for side, value in (("pre", pre_result), ("post", post_result)) if value is None
+        ]
+        if missing:
+            raise RuntimeError(
+                "No successful Capture Snapshot run found for change %r (%s side). "
+                "Change ids seen in the last %d capture runs: %s"
+                % (
+                    change_id,
+                    " and ".join(missing),
+                    C.AUTOSELECT_SCAN_LIMIT,
+                    ", ".join(sorted(seen_change_ids)[:8]) or "none",
+                )
+            )
+        for side, result in (("pre", pre_result), ("post", post_result)):
+            kwargs = result.task_kwargs if isinstance(result.task_kwargs, dict) else {}
+            self.logger.info(
+                "%s side auto-selected: JobResult %s (created %s, kind=%s).",
+                side,
+                result.pk,
+                result.date_created,
+                kwargs.get("kind"),
+            )
+        return pre_result, post_result
+
+    def _echo_sides(self, change_id, pre_snaps, post_snaps):
+        """Make every selection verifiable in the log — mis-picks must be visible."""
+        for side, snaps in (("pre", pre_snaps), ("post", post_snaps)):
+            kinds = sorted({str(env.get("kind")) for env in snaps.values()})
+            cids = sorted({str(env.get("change_id")) for env in snaps.values()})
+            self.logger.info(
+                "%s side: %d device snapshot(s), change_id(s) %s, kind(s) %s.",
+                side,
+                len(snaps),
+                ", ".join(cids),
+                ", ".join(kinds),
+            )
+            if change_id and set(cids) - {change_id}:
+                self.logger.warning(
+                    "%s side carries change_id(s) %s, not %r — check the selection.",
+                    side,
+                    ", ".join(cids),
+                    change_id,
+                )
+        if {str(env.get("kind")) for env in pre_snaps.values()} == {"post"}:
+            self.logger.warning("pre side is a POST capture — the inputs may be swapped.")
+        if {str(env.get("kind")) for env in post_snaps.values()} == {"pre"}:
+            self.logger.warning("post side is a PRE capture — the inputs may be swapped.")
 
     def _check_staleness(self, label, pre_env, post_env, *, now, max_age_hours):
         """Warn on a stale baseline or swapped inputs; never blocks the compare."""

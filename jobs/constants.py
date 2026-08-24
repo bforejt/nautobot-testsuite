@@ -63,3 +63,4 @@ SESSION_MATRIX_MAX_ZONES = 12
 
 # --- compare-job guardrails -------------------------------------------------
 BASELINE_MAX_AGE_H = 24  # warn when the pre snapshot is older than this
+AUTOSELECT_SCAN_LIMIT = 200  # newest Capture Snapshot runs scanned for a change_id match
