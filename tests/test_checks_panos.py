@@ -841,6 +841,8 @@ class TestRegistrations(unittest.TestCase):
         "panos_drop_counters",
         "panos_nat_pools",
         "panos_rule_hit_counts",
+        "panos_ospf_neighbors",
+        "panos_crash_files",
     }
 
     def test_all_registered_once(self):
@@ -955,6 +957,59 @@ class TestTierBChecks(unittest.TestCase):
         }
         with self.assertRaises(checks.SkipCheck):
             checks._collect_rule_hit_counts(_FakeCtx(both_rejected))
+
+
+class TestOspfAndCrashFiles(unittest.TestCase):
+    def test_ospf_neighbors_legacy_form(self):
+        output = (
+            '<response status="success"><result><entry>'
+            "<neighbor-router-id>10.9.25.2</neighbor-router-id>"
+            "<neighbor-address>10.9.25.2</neighbor-address><status>full</status>"
+            "</entry></result></response>"
+        )
+        ctx = _FakeCtx({"show routing protocol ospf neighbor": output})
+        result = checks._collect_ospf_neighbors(ctx)
+        self.assertEqual(
+            result["normalized"]["ospf|10.9.25.2"],
+            {"state": "full", "address": "10.9.25.2"},
+        )
+
+    def test_ospf_falls_back_to_advanced_then_skips(self):
+        ctx = _FakeCtx(
+            {
+                "show routing protocol ospf neighbor": "Invalid syntax.",
+                "show advanced-routing ospf neighbor": _EMPTY_RESULT,
+            }
+        )
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_ospf_neighbors(ctx)
+
+    def test_core_files_ls_semantics_and_window(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        output = (
+            "total 3\n"
+            "-rw-r--r-- 1 root root 123456 Aug 22 18:22 core.pan_task.1234\n"
+            "-rw-r--r-- 1 root root 123456 Dec 30 11:00 core.wrapped_year\n"
+            "-rw-r--r-- 1 root root 123456 Aug 22 2024 core.ancient\n"
+        )
+        recent, older = checks._parse_core_files(output, now, 7)
+        self.assertEqual(list(recent), ["core.pan_task.1234"])  # time-form, this year
+        self.assertEqual(older, 2)  # Dec 30 wraps to 2025 (old); explicit 2024 old
+
+    def test_crash_collector_window_and_context(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        output = (
+            "-rw-r--r-- 1 root root 1 Aug 23 01:00 core.fresh\n"
+            "-rw-r--r-- 1 root root 1 Jan 05 2023 core.ancient\n"
+        )
+        ctx = _FakeCtx({"show system files": output})
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(list(result["normalized"]), ["core.fresh"])
+        self.assertEqual(result["context"]["older_files_ignored"], 1)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ not exist on this path.
 
 import re
 import time
+from datetime import datetime, timezone
 
 from . import constants as C
 from .panos_xml import PanosParseError, extract_xml, result_of, text, to_int
@@ -1441,5 +1442,155 @@ register(
         ),
         collector=_collect_rule_hit_counts,
         tags=("policy",),
+    )
+)
+
+
+# --- panos_ospf_neighbors + panos_crash_files (approved TAC-lens additions) ---
+
+
+def _collect_ospf_neighbors(ctx):
+    """OSPF adjacencies, engine-aware — the firewalls DO run OSPF with the core
+    (operator-confirmed), so this is the firewall's own view of the adjacency
+    the 9500-side check sees from the other end."""
+    raw = {}
+    for command in (
+        "show routing protocol ospf neighbor",
+        "show advanced-routing ospf neighbor",
+    ):
+        output = ctx.run_ssh(command)
+        _record_raw(raw, command, output)
+        if _cli_rejected(output):
+            continue
+        try:
+            result = result_of(extract_xml(output))
+        except PanosParseError:
+            continue
+        normalized = {}
+        for entry in result.findall(".//entry") if result is not None else []:
+            neighbor = (
+                entry.get("name")
+                or text(entry, "neighbor-router-id")
+                or text(entry, "neighbor-id")
+                or text(entry, "neighbor-address")
+            )
+            if not neighbor:
+                continue
+            value = {}
+            state = text(entry, "status") or text(entry, "state") or text(entry, "nbr-state")
+            if state is not None:
+                value["state"] = state
+            address = text(entry, "neighbor-address") or text(entry, "address")
+            if address is not None:
+                value["address"] = address
+            normalized["ospf|%s" % (neighbor,)] = value
+        if normalized:
+            return {"raw": raw, "normalized": normalized}
+    raise SkipCheck("no OSPF neighbors reported (OSPF unused, or forms need shakedown)")
+
+
+# ls-style listing: "-rw-r--r-- 1 root root 12345 Aug 24 18:22 core.pan_task"
+# (time form = within ~6 months) or "... Aug 24 2025 core.old" (year form).
+_LS_LINE = re.compile(
+    r"^\S{10,}\s+\d+\s+\S+\s+\S+\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+([\d:]{4,5}|\d{4})\s+(\S+)\s*$"
+)
+_MONTHS = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+}
+
+
+def _parse_core_files(cli_output, now, recent_days):
+    """(recent {name: {modified}}, older_count) from a `show system files` listing.
+
+    ls semantics: a time in the last column means the file is under ~6 months
+    old (year inferred: this year, or last year when the date lies ahead of
+    now); an explicit year means older. Only window-recent files become
+    normalized keys (a fresh core must ADD a key; ancient dumps must never
+    alarm — operator requirement). Unparseable months fail safe as recent.
+    """
+    recent = {}
+    older = 0
+    for line in (cli_output or "").splitlines():
+        match = _LS_LINE.match(line.strip())
+        if not match:
+            continue
+        month, day, time_or_year, name = match.groups()
+        month_num = _MONTHS.get(month)
+        if month_num is None:
+            recent[name] = {"modified": "%s %s %s" % (month, day, time_or_year)}
+            continue
+        if ":" in time_or_year:
+            year = now.year
+            modified = datetime(year, month_num, int(day), tzinfo=timezone.utc)
+            if modified > now:
+                modified = datetime(year - 1, month_num, int(day), tzinfo=timezone.utc)
+        else:
+            modified = datetime(int(time_or_year), month_num, int(day), tzinfo=timezone.utc)
+        if (now - modified).days <= recent_days:
+            recent[name] = {"modified": modified.strftime("%Y-%m-%d")}
+        else:
+            older += 1
+    return recent, older
+
+
+def _collect_crash_files(ctx, now=None):
+    if now is None:
+        now = datetime.now(timezone.utc)
+    command = "show system files"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("show system files rejected on this release — verify via shakedown")
+    recent, older = _parse_core_files(output, now, C.CRASH_RECENT_DAYS)
+    normalized = {name: value for name, value in recent.items()}
+    return {
+        "raw": raw,
+        "normalized": normalized,
+        "context": {"older_files_ignored": older, "recent_window_days": C.CRASH_RECENT_DAYS},
+    }
+
+
+register(
+    CheckDef(
+        id="panos_ospf_neighbors",
+        platform="panos",
+        description="OSPF adjacencies, engine-aware (the firewall's view of the core)",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "An OSPF adjacency on the firewall changed — the routing exchange with the "
+            "core that carries the changing prefixes is impaired from the firewall's "
+            "side."
+        ),
+        collector=_collect_ospf_neighbors,
+        tags=("routing",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_crash_files",
+        platform="panos",
+        description="Core/crash files within the recency window",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A core file appeared during the window — a dataplane or management "
+            "process crashed even if it recovered before anyone looked."
+        ),
+        collector=_collect_crash_files,
+        tags=("platform",),
     )
 )

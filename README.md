@@ -110,6 +110,10 @@ the humans reading the report.
 | `panos_drop_counters` | panos | 3 | Global drop-counter profile (informational canary) |
 | `panos_nat_pools` | panos | 3 | NAT pool tables, raw-first (utilization is load-dependent) |
 | `panos_rule_hit_counts` | panos | 2 | Security/NAT rule names with hit counts and last-hit times |
+| `panos_ospf_neighbors` | panos | 1 | OSPF adjacencies, engine-aware (the firewall's view of the core) |
+| `panos_crash_files` | panos | 1 | Core/crash files within the recency window |
+| `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
+| `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window |
 
 ## Always-everything capture
 

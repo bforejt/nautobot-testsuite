@@ -498,6 +498,8 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_svl_health",
         "iosxe_ntp",
         "iosxe_routing_config",
+        "iosxe_optics",
+        "iosxe_crash_files",
     }
 
     def test_all_registered_once(self):
@@ -555,6 +557,35 @@ class TestRoutingConfig(unittest.TestCase):
         self.assertNotIn("router", result["normalized"])
         with self.assertRaises(checks.SkipCheck):
             checks._collect_routing_config(_Ctx({}))
+
+
+class TestOpticsAndCrashFiles(unittest.TestCase):
+    def test_optics_table_parse(self):
+        output = (
+            "           Temperature  Voltage  Current   Tx Power  Rx Power\n"
+            "Port       (Celsius)    (Volts)  (mA)      (dBm)     (dBm)\n"
+            "---------  -----------  -------  --------  --------  --------\n"
+            "Te1/0/1      31.9       3.28      6.1       -2.5      -3.1\n"
+            "Te1/0/2      30.0       3.28      0.0       N/A       -30.0\n"
+        )
+        normalized = checks._parse_optics(output)
+        self.assertEqual(normalized["Te1/0/1"], {"tx_dbm": -2.5, "rx_dbm": -3.1})
+        self.assertEqual(normalized["Te1/0/2"], {"rx_dbm": -30.0})
+
+    def test_crash_dir_recency_window(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        output = (
+            "Directory of crashinfo:/\n"
+            "  14  -rw-  1234567   Aug 22 2026 18:22:11 +00:00  "
+            "system-report_1_20260822.tar.gz\n"
+            "  15  -rw-  7654321   Jan 02 2024 03:00:00 +00:00  crashinfo_old.txt\n"
+        )
+        recent, older = checks._parse_crash_dir(output, now, 7)
+        self.assertEqual(list(recent), ["system-report_1_20260822.tar.gz"])
+        self.assertEqual(recent["system-report_1_20260822.tar.gz"]["modified"], "2026-08-22")
+        self.assertEqual(older, 1)
 
 
 if __name__ == "__main__":

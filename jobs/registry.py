@@ -278,6 +278,33 @@ SEMANTICS = {
         "oversubscription setting differing between hardware and VM platforms is a "
         "real finding to look for in the raw tables."
     ),
+    "iosxe_optics": (
+        "Transceiver DOM light levels per optical port: tx_dbm/rx_dbm. Healthy "
+        "short-reach optics typically read roughly 0 to -10 dBm; values plunging "
+        "toward -30 mean little/no light (dirty/bad fiber or optic) — the classic "
+        "new-link failure that passes up/down checks while quietly eating frames. "
+        "Temperature/voltage stay in raw as jitter. Informational: levels drift "
+        "tenths of dB between healthy captures."
+    ),
+    "iosxe_crash_files": (
+        "Crash and system-report files WITHIN the recency window (context notes the "
+        "window and how many older files were ignored — ancient dumps never alarm). "
+        "Keys 'active|<file>' / 'stby|<file>'. A key ADDED between captures means "
+        "something on the chassis crashed during the change window, even if it "
+        "recovered before anyone looked. Empty is the healthy state."
+    ),
+    "panos_ospf_neighbors": (
+        "The firewall's OSPF adjacencies keyed 'ospf|<neighbor-id>' with state and "
+        "address — the firewall's own view of the core adjacency the switch-side "
+        "check sees from the other end (this network runs OSPF between firewall and "
+        "core). Engine-aware: legacy and advanced-routing command forms both tried."
+    ),
+    "panos_crash_files": (
+        "Core/crash files WITHIN the recency window (context notes the window and "
+        "older files ignored — ancient dumps never alarm). A key ADDED between "
+        "captures means a management or dataplane process crashed during the change "
+        "window. Empty is the healthy state."
+    ),
     "panos_rule_hit_counts": (
         "Security and NAT rules keyed '<rulebase>|<rule-name>' with cumulative hit "
         "counts and last-hit timestamps (vsys1). Two signals in one: the rule-NAME "

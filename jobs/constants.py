@@ -63,3 +63,9 @@ CAPABILITY_MIN_POST = 1  # ...and must show at least this many sessions post
 # single-sided count queries later poisoned an entire session — so the matrix
 # is complete-or-refused, never quietly partial.
 SESSION_MATRIX_MAX_PAIR_QUERIES = 676
+
+# Crash/core files newer than this many days become normalized keys (a fresh
+# crash must surface as an ADDED entry); older dumps are counted in context
+# only — ancient crash files must never create diff noise (operator
+# requirement).
+CRASH_RECENT_DAYS = 7

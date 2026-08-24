@@ -12,6 +12,7 @@ the per-run cache issues one GET for both checks.
 """
 
 import re
+from datetime import datetime, timezone
 
 from . import constants as C
 from .registry import CheckDef, CollectError, SkipCheck, register
@@ -1009,5 +1010,160 @@ register(
         ),
         collector=_collect_routing_config,
         tags=("routing", "config"),
+    )
+)
+
+
+# --- iosxe_optics + iosxe_crash_files (approved TAC-lens additions) -----------
+
+_OPTICS_LINE = re.compile(
+    r"^(\S+\d\S*)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+|N/A)\s+(-?[\d.]+|N/A)\s*$"
+)
+
+
+def _parse_optics(cli_output):
+    """'show interfaces transceiver' table -> {iface: {tx_dbm, rx_dbm}}.
+
+    Temperature/voltage/current are environmental jitter — raw only. Light
+    levels are the new-link health signal: marginal optics on freshly cabled
+    ports pass up/down checks while quietly eating frames.
+    """
+    normalized = {}
+    for line in (cli_output or "").splitlines():
+        match = _OPTICS_LINE.match(line.strip())
+        if not match:
+            continue
+        iface, _temp, _volt, _cur, tx, rx = match.groups()
+        if "/" not in iface:
+            continue
+        value = {}
+        if tx != "N/A":
+            value["tx_dbm"] = float(tx)
+        if rx != "N/A":
+            value["rx_dbm"] = float(rx)
+        if value:
+            normalized[iface] = value
+    return normalized
+
+
+def _collect_optics(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    command = "show interfaces transceiver"
+    output = ctx.run_ssh(command)
+    lowered = (output or "").lower()
+    if "invalid input" in lowered or "incomplete command" in lowered:
+        raise SkipCheck("transceiver command rejected on this platform")
+    normalized = _parse_optics(output)
+    if not normalized:
+        raise SkipCheck("no DOM-capable transceivers reported")
+    return {"raw": {command: output}, "normalized": normalized}
+
+
+_MONTHS = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+}
+# `dir` listing line: "  14  -rw-  123456   Aug 24 2026 18:22:11 +00:00  name"
+_DIR_LINE = re.compile(
+    r"^\s*\d+\s+\S+\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+(\d{4})\s+[\d:]+\s+\S*\s*(\S+)\s*$"
+)
+
+
+def _parse_crash_dir(cli_output, now, recent_days):
+    """(recent {name: {modified}}, older_count) from a `dir crashinfo:` listing.
+
+    Only files inside the recency window become normalized keys — a fresh
+    crash during a change window must surface as an ADDED key, while ancient
+    dumps must never create diff noise (operator requirement). Unparseable
+    dates fail safe: included as recent with the raw date string.
+    """
+    recent = {}
+    older = 0
+    for line in (cli_output or "").splitlines():
+        match = _DIR_LINE.match(line)
+        if not match:
+            continue
+        month, day, year, name = match.groups()
+        if name.lower() in ("core", "crashinfo:", ".", ".."):
+            continue
+        month_num = _MONTHS.get(month)
+        if month_num is None:
+            recent[name] = {"modified": "%s %s %s" % (month, day, year)}
+            continue
+        modified = datetime(int(year), month_num, int(day), tzinfo=timezone.utc)
+        if (now - modified).days <= recent_days:
+            recent[name] = {"modified": modified.strftime("%Y-%m-%d")}
+        else:
+            older += 1
+    return recent, older
+
+
+def _collect_crash_files(ctx, now=None):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    if now is None:
+        now = datetime.now(timezone.utc)
+    raw = {}
+    normalized = {}
+    older_total = 0
+    listings = 0
+    for command in ("dir crashinfo:", "dir stby-crashinfo:"):
+        output = ctx.run_ssh(command)
+        raw[command] = output
+        lowered = (output or "").lower()
+        if "invalid input" in lowered or "error" in lowered and "directory" not in lowered:
+            continue  # standby filesystem absent on non-SVL; recorded in raw
+        listings += 1
+        side = "stby" if "stby" in command else "active"
+        recent, older = _parse_crash_dir(output, now, C.CRASH_RECENT_DAYS)
+        older_total += older
+        for name, value in recent.items():
+            normalized["%s|%s" % (side, name)] = value
+    if listings == 0:
+        raise SkipCheck("crashinfo filesystems not listable on this platform")
+    return {
+        "raw": raw,
+        "normalized": normalized,
+        "context": {"older_files_ignored": older_total, "recent_window_days": C.CRASH_RECENT_DAYS},
+    }
+
+
+register(
+    CheckDef(
+        id="iosxe_optics",
+        platform="iosxe",
+        description="Transceiver DOM light levels (tx/rx dBm) per optical port",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_optics,
+        tags=("platform",),
+    )
+)
+
+register(
+    CheckDef(
+        id="iosxe_crash_files",
+        platform="iosxe",
+        description="Crash/system-report files within the recency window",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A crash or system-report file appeared during the window — something on "
+            "the chassis crashed even if it recovered before anyone looked."
+        ),
+        collector=_collect_crash_files,
+        tags=("platform",),
     )
 )
