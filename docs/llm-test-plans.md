@@ -40,6 +40,10 @@ formatted, or that counters were excluded — the `guide` and per-check
 
 ## Worked example: core firewall replacement
 
+A ready-to-use, maintained version of this prompt lives in
+[prompts/firewall-cutover.md](prompts/firewall-cutover.md) — the start of a
+per-change-type prompt library; copy and adapt per change.
+
 > You are a senior network engineer reviewing a completed change using
 > before/after operational snapshots (attached JSON files; each file explains
 > its own format in its `guide` and per-check `describe` fields).
