@@ -44,6 +44,10 @@ _SYSTEM_FIELDS = (
     ("model", "model"),
     ("serial", "serial"),
     ("hostname", "hostname"),
+    # A multi-vsys flavor change across a replacement silently reshapes every
+    # session/zone measurement (field finding: global counters count all vsys,
+    # enumeration is scope-dependent) — it must surface as a diff.
+    ("multi-vsys", "multi_vsys"),
 )
 
 
@@ -371,6 +375,40 @@ def _sanity_check_matrix(ctx, raw, normalized):
             )
 
 
+# --- panos_session_meter -----------------------------------------------------
+
+
+def _parse_session_meter(cli_output):
+    """'show session meter' -> {"vsys<id>": current-session-count}.
+
+    Per-vsys counts are the only view that reconciles global session counters
+    with what any one scope can enumerate on a multi-vsys box (field finding:
+    a "12k active vs 6k enumerable" mystery was a vsys split). Maximum/
+    throttled stay in raw only.
+    """
+    result = result_of(extract_xml(cli_output))
+    if result is None:
+        raise PanosParseError("no <result> in 'show session meter' output")
+    normalized = {}
+    for entry in result.findall(".//entry"):
+        vsys = text(entry, "vsys")
+        current = to_int(text(entry, "current"))
+        if vsys is None or current is None:
+            continue
+        key = vsys if vsys.lower().startswith("vsys") else "vsys%s" % (vsys,)
+        normalized[key] = current
+    return normalized
+
+
+def _collect_session_meter(ctx):
+    command = "show session meter"
+    output = ctx.run_ssh(command)
+    normalized = _parse_or_fail(_parse_session_meter, output, command)
+    if not normalized:
+        raise SkipCheck("no per-vsys meter entries (single-vsys platform or empty table)")
+    return {"raw": {command: output}, "normalized": normalized}
+
+
 # --- panos_routes ------------------------------------------------------------
 
 _FLAG_PROTOCOLS = {"S": "static", "C": "connect", "B": "bgp", "R": "rip", "H": "host"}
@@ -654,6 +692,23 @@ register(
             "flowing at expected volume."
         ),
         collector=_collect_session_info,
+        tags=("sessions",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_session_meter",
+        platform="panos",
+        description="Per-vsys session counts within tolerance of the baseline",
+        tier=1,
+        compare={"mode": "tolerance", "band": {"pct": C.SESSION_TOLERANCE_PCT}},
+        miss_meaning=(
+            "A vsys's session count did not recover — that vsys's traffic domain is not "
+            "flowing (on multi-vsys, each vsys is its own traffic domain and global "
+            "counters hide which one broke)."
+        ),
+        collector=_collect_session_meter,
         tags=("sessions",),
     )
 )

@@ -80,6 +80,7 @@ PACKAGES = {
         "panos_system_info",
         "panos_ha",
         "panos_session_info",
+        "panos_session_meter",
         "panos_session_matrix",
         "panos_routes",
         "panos_interfaces",

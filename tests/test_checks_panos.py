@@ -192,6 +192,35 @@ class TestSessionInfo(unittest.TestCase):
             )
 
 
+class TestSessionMeter(unittest.TestCase):
+    def test_per_vsys_counts_and_key_normalization(self):
+        output = (
+            '<response status="success"><result><meters><entry>'
+            "<vsys>1</vsys><current>6134</current><maximum>0</maximum>"
+            "</entry><entry>"
+            "<vsys>vsys2</vsys><current>0</current><maximum>0</maximum>"
+            "</entry><entry><vsys>3</vsys></entry>"  # no <current>: skipped
+            "</meters></result></response>"
+        )
+        self.assertEqual(checks._parse_session_meter(output), {"vsys1": 6134, "vsys2": 0})
+
+    def test_collector_skips_when_empty(self):
+        ctx = _FakeCtx({"show session meter": '<response status="success"><result/></response>'})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_session_meter(ctx)
+
+
+class TestSystemInfoMultiVsys(unittest.TestCase):
+    def test_multi_vsys_flag_is_captured(self):
+        output = (
+            '<response status="success"><result><system>'
+            "<hostname>fw-test</hostname><multi-vsys>on</multi-vsys>"
+            "</system></result></response>"
+        )
+        normalized = checks._normalize_system_info(output)
+        self.assertEqual(normalized["multi_vsys"], "on")
+
+
 class TestSessionCountParser(unittest.TestCase):
     def test_xml_member_form(self):
         output = _loader.fixture_text("panos_session_count_xml.txt")
@@ -481,6 +510,7 @@ class TestRegistrations(unittest.TestCase):
         "panos_system_info",
         "panos_ha",
         "panos_session_info",
+        "panos_session_meter",
         "panos_session_matrix",
         "panos_routes",
         "panos_interfaces",
