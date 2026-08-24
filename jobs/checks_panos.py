@@ -717,10 +717,21 @@ def _collect_ipsec(ctx):
     ipsec_command = "show vpn ipsec-sa"
     ike_output = ctx.run_ssh(ike_command)
     ipsec_output = ctx.run_ssh(ipsec_command)
-    ike_names = _parse_or_fail(_parse_sa_names, ike_output, ike_command)
-    ipsec_names = _parse_or_fail(_parse_sa_names, ipsec_output, ipsec_command)
+    if _cli_rejected(ike_output) and _cli_rejected(ipsec_output):
+        raise SkipCheck("VPN show commands rejected on this release — verify via shakedown")
+    # Presence enumerations: a box with no SAs answers with no XML payload at
+    # all (field finding on a tunnel-less firewall) — that IS the answer,
+    # zero, never a failed read. Raw keeps the verbatim reply for audit.
+    try:
+        ike_names = _parse_sa_names(ike_output)
+    except PanosParseError:
+        ike_names = []
+    try:
+        ipsec_names = _parse_sa_names(ipsec_output)
+    except PanosParseError:
+        ipsec_names = []
     if not ike_names and not ipsec_names:
-        raise SkipCheck("no IPsec configured")
+        raise SkipCheck("no IKE/IPsec SAs present (IPsec unused, or all tunnels down)")
     # Presence of the SA is the up signal; SPIs and lifetimes never emitted.
     normalized = {}
     for name in ike_names:

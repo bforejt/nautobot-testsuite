@@ -624,6 +624,32 @@ class TestVpnSaParsers(unittest.TestCase):
         with self.assertRaises(checks.SkipCheck):
             checks._collect_ipsec(ctx)
 
+    def test_non_xml_empty_reply_is_not_present_not_failed(self):
+        # Field finding: a box with zero SAs answers `show vpn ike-sa` with NO
+        # XML payload at all. For a presence enumeration that IS the answer —
+        # not-present, never a failed check.
+        ctx = _FakeCtx({"show vpn ike-sa": "\n\n", "show vpn ipsec-sa": ""})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_ipsec(ctx)
+
+    def test_one_side_non_xml_still_collects_the_other(self):
+        ctx = _FakeCtx(
+            {
+                "show vpn ike-sa": _loader.fixture_text("panos_ike_sa.txt"),
+                "show vpn ipsec-sa": "\n",
+            }
+        )
+        result = checks._collect_ipsec(ctx)
+        self.assertTrue(any(key.startswith("ike|") for key in result["normalized"]))
+        self.assertFalse(any(key.startswith("tunnel|") for key in result["normalized"]))
+
+    def test_rejected_commands_skip_with_reason(self):
+        rejected = "Invalid syntax."
+        ctx = _FakeCtx({"show vpn ike-sa": rejected, "show vpn ipsec-sa": rejected})
+        with self.assertRaises(checks.SkipCheck) as caught:
+            checks._collect_ipsec(ctx)
+        self.assertIn("rejected", str(caught.exception))
+
 
 class TestLicenses(unittest.TestCase):
     def test_expired_flags_per_feature(self):

@@ -83,7 +83,14 @@ class CollectorContext:
         return self.ssh is not None
 
     def close(self):
-        if self.restconf is not None:
-            self.restconf.close()
-        if self.ssh is not None:
-            self.ssh.close()
+        # Teardown is best-effort: a transport refusing to close cleanly must
+        # never fail a job whose work already finished (field finding: a
+        # completed shakedown went FAILED on teardown), and one transport's
+        # tantrum must not skip closing the other.
+        for transport in (self.restconf, self.ssh):
+            if transport is None:
+                continue
+            try:
+                transport.close()
+            except Exception:
+                pass

@@ -77,11 +77,20 @@ class SshRunner:
             self._send(command, timeout=30)
 
     def close(self):
-        if self.conn is not None:
-            try:
-                self.conn.disconnect()
-            finally:
-                self.conn = None
+        if self.conn is None:
+            return
+        try:
+            self.conn.disconnect()
+        except Exception as exc:  # teardown must never fail a finished job
+            if self.logger is not None:
+                self.logger.warning(
+                    "%s: SSH disconnect raised %s: %s — ignored (teardown)",
+                    self.host,
+                    type(exc).__name__,
+                    exc,
+                )
+        finally:
+            self.conn = None
 
     def _allowed(self, command):
         cmd = command.strip()
