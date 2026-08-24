@@ -1081,7 +1081,7 @@ class TestSyslogEvents(unittest.TestCase):
         return datetime(2026, 8, 24, 20, 0, 0, tzinfo=timezone.utc)
 
     def _command(self):
-        return 'show log system start-time equal "2026/08/23 20:00:00" direction equal backward'
+        return 'show log system start-time equal "2026/08/23@20:00:00" direction equal backward'
 
     def test_window_command_and_severity_counting(self):
         output = (

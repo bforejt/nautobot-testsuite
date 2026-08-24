@@ -1834,8 +1834,9 @@ def _collect_syslog_events(ctx, now=None):
     if now is None:
         now = datetime.now(timezone.utc)
     start = now - timedelta(hours=C.LOG_WINDOW_HOURS)
+    # Field-verified timestamp form: date@time joined with '@', not a space.
     command = 'show log system start-time equal "%s" direction equal backward' % (
-        start.strftime("%Y/%m/%d %H:%M:%S"),
+        start.strftime("%Y/%m/%d@%H:%M:%S"),
     )
     output = ctx.run_ssh(command, timeout=C.SSH_BIG_READ_TIMEOUT)
     raw = {}
