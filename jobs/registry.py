@@ -253,11 +253,6 @@ SEMANTICS = {
         "NTP synchronization state, best-effort. If time sync changed, timestamps in "
         "every capture and log become suspect."
     ),
-    "panos_pending_changes": (
-        "Whether uncommitted candidate-config changes exist ('pending': yes/no). "
-        "Pending changes at capture time mean config-derived state may not reflect "
-        "what is running — or someone left work half-finished on the box."
-    ),
     "panos_pbf": (
         "Policy-based forwarding rules keyed 'pbf|<rule>' with action/egress when "
         "derivable. PBF steers traffic AROUND the routing tables the other checks "
@@ -309,7 +304,11 @@ SEMANTICS = {
         "Unfinished commit/config jobs keyed 'job|<id>' with status/type; finished-"
         "job history stays in context counts (jobs_total, jobs_not_ok) so churning "
         "history never diffs. Any key present means policy programming may be "
-        "incomplete — the device answers, but the dataplane may not reflect config."
+        "incomplete — the device answers, but the dataplane may not reflect config. "
+        "Known limit: candidate-config edits typed but never committed are NOT "
+        "visible here (the CLI has no pending-changes query on this release; the "
+        "XML API's check pending-changes would cover it if API access is enabled "
+        "later)."
     ),
     "panos_chassis_ready": (
         "Dataplane readiness ('ready': yes/no). 'no' is the post-boot window where "

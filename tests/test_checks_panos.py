@@ -774,49 +774,6 @@ class TestNtp(unittest.TestCase):
         self.assertEqual(result["raw"]["show ntp"], output)
 
 
-class TestPendingChanges(unittest.TestCase):
-    def test_rejected_command_skips(self):
-        ctx = _FakeCtx({"check pending-changes": "Unknown command: check"})
-        with self.assertRaises(checks.SkipCheck):
-            checks._collect_pending_changes(ctx)
-
-    def test_xml_yes(self):
-        output = '<response status="success"><result>yes</result></response>'
-        ctx = _FakeCtx({"check pending-changes": output})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {"pending": "yes"})
-
-    def test_xml_no(self):
-        output = '<response status="success"><result>no</result></response>'
-        ctx = _FakeCtx({"check pending-changes": output})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {"pending": "no"})
-
-    def test_plain_text_yes(self):
-        ctx = _FakeCtx({"check pending-changes": "Yes\n"})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {"pending": "yes"})
-
-    def test_plain_text_no(self):
-        ctx = _FakeCtx({"check pending-changes": "No\n"})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {"pending": "no"})
-
-    def test_yes_wins_when_both_words_present(self):
-        ctx = _FakeCtx({"check pending-changes": "yes (no pending commit locks)"})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {"pending": "yes"})
-
-    def test_no_never_matches_inside_another_word(self):
-        # "Nothing" starts with "no" — word-anchoring must keep it from
-        # fabricating a "no" answer; unknown shape keeps raw, normalized {}.
-        output = "Nothing to report"
-        ctx = _FakeCtx({"check pending-changes": output})
-        result = checks._collect_pending_changes(ctx)
-        self.assertEqual(result["normalized"], {})
-        self.assertEqual(result["raw"]["check pending-changes"], output)
-
-
 class TestRegistrations(unittest.TestCase):
     EXPECTED_IDS = {
         "panos_system_info",
@@ -836,7 +793,6 @@ class TestRegistrations(unittest.TestCase):
         "panos_logging_status",
         "panos_url_cloud",
         "panos_ntp",
-        "panos_pending_changes",
         "panos_pbf",
         "panos_drop_counters",
         "panos_nat_pools",

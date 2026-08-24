@@ -105,7 +105,6 @@ the humans reading the report.
 | `panos_logging_status` | panos | 3 | Log forwarding status — is telemetry actually flowing |
 | `panos_url_cloud` | panos | 3 | URL-filtering cloud connectivity |
 | `panos_ntp` | panos | 3 | NTP synchronization state |
-| `panos_pending_changes` | panos | 1 | Uncommitted candidate-config changes present |
 | `panos_pbf` | panos | 1 | Policy-based forwarding rules (not-present when PBF is unused) |
 | `panos_drop_counters` | panos | 3 | Global drop-counter profile (informational canary) |
 | `panos_nat_pools` | panos | 3 | NAT pool tables, raw-first (utilization is load-dependent) |

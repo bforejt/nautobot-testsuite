@@ -22,14 +22,14 @@ from . import constants as C
 # to ALLOWED_EXACT (or a full-command prefix like "test security-policy-match ")
 # — never a bare verb. "request license info" is a pure display command
 # despite the verb (verified against PA KB); no other "request" form is
-# permitted. "check pending-changes" is likewise a pure read (candidate-config
-# status display); the bare "check " prefix stays banned.
+# permitted. (Field lesson: `check` is not a CLI command at all on 11.2 —
+# a once-allowlisted "check pending-changes" entry was removed dead.)
 ALLOWED_PREFIXES = {
     "paloalto_panos": ("show ",),
     "cisco_xe": ("show ",),
 }
 ALLOWED_EXACT = {
-    "paloalto_panos": ("request license info", "check pending-changes"),
+    "paloalto_panos": ("request license info",),
     # `dir` listings are pure reads; the two crashinfo filesystems are the
     # only vetted targets (field finding: the guard correctly refused the
     # crash-files collector until these exact commands were allowlisted).

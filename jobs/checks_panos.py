@@ -1166,39 +1166,6 @@ def _collect_ntp(ctx):
 
 # Word-anchored so "no" never matches inside "nothing"/"not"; yes wins when
 # both words appear ("yes (no pending commit locks)").
-_PENDING_YES = re.compile(r"\byes\b", re.IGNORECASE)
-_PENDING_NO = re.compile(r"\bno\b", re.IGNORECASE)
-
-
-def _collect_pending_changes(ctx):
-    """'check pending-changes' -> {"pending": "yes"/"no"} from a yes/no reply.
-
-    The reply is boolean-ish across shapes (XML <result>yes</result> or plain
-    text); the word is searched in the result's text when XML parses, else in
-    the raw output. Neither word found -> normalized {} with raw kept.
-    """
-    command = "check pending-changes"  # exact string allowlisted; pure status display
-    output = ctx.run_ssh(command)
-    raw = {}
-    _record_raw(raw, command, output)
-    if _cli_rejected(output):
-        raise SkipCheck("command rejected on this release — verify via shakedown")
-    blob = output or ""
-    try:
-        result = result_of(extract_xml(output))
-    except PanosParseError:
-        result = None
-    if result is not None:
-        blob = "".join(result.itertext())
-    if _PENDING_YES.search(blob):
-        normalized = {"pending": "yes"}
-    elif _PENDING_NO.search(blob):
-        normalized = {"pending": "no"}
-    else:
-        normalized = {}
-    return {"raw": raw, "normalized": normalized}
-
-
 register(
     CheckDef(
         id="panos_logging_status",
@@ -1234,22 +1201,6 @@ register(
         compare={"mode": "info_only"},
         miss_meaning="",
         collector=_collect_ntp,
-        tags=("system",),
-    )
-)
-
-register(
-    CheckDef(
-        id="panos_pending_changes",
-        platform="panos",
-        description="Uncommitted candidate-config changes present",
-        tier=1,
-        compare={"mode": "equality_scalar"},
-        miss_meaning=(
-            "Uncommitted changes at capture time — config-derived state may not reflect "
-            "what is actually running (or someone left work half-finished on the box)."
-        ),
-        collector=_collect_pending_changes,
         tags=("system",),
     )
 )
