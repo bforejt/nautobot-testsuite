@@ -157,7 +157,10 @@ class CollectorShakedown(Job):
                 record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
                 restconf.close()
                 raise RuntimeError(
-                    "%s: RESTCONF unreachable at %s (probe: %s)" % (device.name, host, record)
+                    "%s: RESTCONF unreachable at %s — verify `restconf`, HTTPS "
+                    "reachability, and privilege 15; if RESTCONF was enabled "
+                    "recently, `show platform software yang-management process` "
+                    "should show every process Running. (probe: %s)" % (device.name, host, record)
                 )
             ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
         else:

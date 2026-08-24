@@ -31,9 +31,17 @@ CONNECT_TIMEOUT = 10  # seconds to establish TCP/TLS
 GET_TIMEOUT = 120  # read timeout for normal scoped GETs
 BIG_GET_TIMEOUT = 300  # full-RIB class fetches; anything needing more is mis-scoped
 # Cheap existence probe target used by ping(): must return 2xx on a healthy DMI.
+# NOTE the /device-hardware level between the top container and
+# device-system-data — omitting it 404s on every real device (found on a live
+# 17.12.06 switch; path verified against the nautobot-upgrades production path).
 DATA_DEVICE_SYSTEM = (
-    "/data/Cisco-IOS-XE-device-hardware-oper:device-hardware-data/device-system-data"
+    "/data/Cisco-IOS-XE-device-hardware-oper:device-hardware-data"
+    "/device-hardware/device-system-data"
 )
+# Fallback probe: RFC 8040 makes ietf-yang-library mandatory on every RESTCONF
+# server, so a 404 here (and on DATA_DEVICE_SYSTEM) means the DMI is not
+# serving data at all — not a single quirky model.
+DATA_YANG_LIBRARY = "/data/ietf-yang-library:modules-state?depth=1"
 
 # --- SSH --------------------------------------------------------------------
 SSH_CONNECT_TIMEOUT = 15

@@ -95,6 +95,13 @@ class RestconfClient:
         return record
 
     def ping(self):
-        """True only on a genuine 2xx from a known-good oper path (404 is NOT reachable)."""
-        record = self.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
-        return record["status"] is not None and 200 <= record["status"] < 300
+        """True on a genuine 2xx from the device-hardware probe, or — fallback —
+        from the RFC 8040-mandatory yang-library. One vendor model going
+        missing on a given image must not read as "device unreachable"; both
+        404ing means the DMI is not serving data at all.
+        """
+        for path in (C.DATA_DEVICE_SYSTEM, C.DATA_YANG_LIBRARY):
+            record = self.probe_get(path, timeout=30)
+            if record["status"] is not None and 200 <= record["status"] < 300:
+                return True
+        return False

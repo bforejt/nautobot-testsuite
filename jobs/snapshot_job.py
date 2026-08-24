@@ -325,8 +325,10 @@ class CaptureSnapshot(Job):
                 restconf.close()
                 self.logger.error(
                     "%s: RESTCONF unreachable at %s — verify `restconf` is enabled, "
-                    "HTTPS/%s is reachable, and the account has API privileges "
-                    "(probe: %s)",
+                    "HTTPS/%s is reachable, and the account is privilege 15. If "
+                    "RESTCONF was enabled recently the DMI may still be "
+                    "initializing: `show platform software yang-management process` "
+                    "should show every process Running. (probe: %s)",
                     device.name,
                     host,
                     C.RESTCONF_PORT,
