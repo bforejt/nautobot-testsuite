@@ -31,7 +31,21 @@ class _FakeCtx:
         return True
 
 
-class TestSessionMatrixSentinel(unittest.TestCase):
+def _matrix_outputs(zones, interfaces, per_pair_output):
+    """Canned _FakeCtx outputs for a full matrix sweep (intra-zone included)."""
+    outputs = {
+        "show interface all": interfaces,
+        "show session info": _loader.fixture_text("panos_session_info.txt"),
+    }
+    for src in zones:
+        for dst in zones:
+            outputs["show session all filter count yes from %s to %s" % (src, dst)] = (
+                per_pair_output
+            )
+    return outputs
+
+
+class TestSessionMatrix(unittest.TestCase):
     def test_unparsed_pair_lands_as_none_not_omitted(self):
         # An unreadable count must reach the capability differ as None — the
         # sentinel for "unreadable" — never vanish (which would read as zero).
@@ -39,24 +53,36 @@ class TestSessionMatrixSentinel(unittest.TestCase):
         zones = checks._parse_zones(interfaces)
         self.assertGreaterEqual(len(zones), 2)
         a, b = zones[0], zones[1]
-        outputs = {"show interface all": interfaces}
         good = (
             '<response status="success"><result><member>'
             "Number of sessions that match filter: 12</member></result></response>"
         )
-        for src in zones:
-            for dst in zones:
-                if src == dst:
-                    continue
-                cmd = "show session all filter from-zone %s to-zone %s count yes" % (src, dst)
-                outputs[cmd] = good
-        broken = "show session all filter from-zone %s to-zone %s count yes" % (a, b)
+        outputs = _matrix_outputs(zones, interfaces, good)
+        broken = "show session all filter count yes from %s to %s" % (a, b)
         outputs[broken] = "Server error: unexpected response"
         result = checks._collect_session_matrix(_FakeCtx(outputs))
         pair = "%s>%s" % (a, b)
         self.assertIn(pair, result["normalized"])
         self.assertIsNone(result["normalized"][pair])
         self.assertEqual(result["raw"]["unparsed_pairs"], [pair])
+        # Intra-zone pairs are swept too — without them the matrix could never
+        # reconcile with the active-session total.
+        self.assertIn("%s>%s" % (a, a), result["normalized"])
+
+    def test_zero_match_pairs_read_as_zero_and_sanity_flags_shortfall(self):
+        # Field regression: every pair empty (<result/>) must be a measured 0,
+        # not unparseable — and a matrix totalling far below `show session
+        # info`'s active count records a sanity warning instead of passing
+        # silently.
+        interfaces = _loader.fixture_text("panos_interfaces.txt")
+        zones = checks._parse_zones(interfaces)
+        empty = '<response status="success"><result/></response>'
+        result = checks._collect_session_matrix(_FakeCtx(_matrix_outputs(zones, interfaces, empty)))
+        self.assertEqual(result["raw"]["unparsed_pairs"], [])
+        self.assertTrue(all(count == 0 for count in result["normalized"].values()))
+        self.assertEqual(result["raw"]["matrix_total"], 0)
+        self.assertEqual(result["raw"]["active_at_sweep"], 48213)
+        self.assertIn("missing traffic", result["raw"]["sanity_warning"])
 
 
 class TestSystemInfo(unittest.TestCase):
@@ -160,13 +186,39 @@ class TestSessionCountParser(unittest.TestCase):
         output = "Number of sessions that match filter: 0\n"
         self.assertEqual(checks._parse_session_count(output), 0)
 
+    def test_empty_result_on_success_means_zero(self):
+        # PAN-OS answers a zero-match count query with an empty <result/> — a
+        # valid zero, not an unparseable response (field finding: the old None
+        # here flooded "unparseable" for every quiet zone pair).
+        self.assertEqual(
+            checks._parse_session_count('<response status="success"><result/></response>'), 0
+        )
+        self.assertEqual(
+            checks._parse_session_count(
+                "show session all filter count yes from a to b\n"
+                '<response status="success"><result>\n</result></response>\n\n'
+            ),
+            0,
+        )
+
+    def test_no_active_sessions_means_zero(self):
+        self.assertEqual(
+            checks._parse_session_count(
+                '<response status="success"><result><member>No Active Sessions'
+                "</member></result></response>"
+            ),
+            0,
+        )
+        self.assertEqual(checks._parse_session_count("No Active Sessions\n"), 0)
+
+    def test_error_response_is_never_zero(self):
+        output = '<response status="error"><msg><line>Invalid filter</line></msg></response>'
+        self.assertIsNone(checks._parse_session_count(output))
+
     def test_garbage_is_none(self):
         self.assertIsNone(checks._parse_session_count("Server error : Invalid syntax."))
         self.assertIsNone(checks._parse_session_count(""))
         self.assertIsNone(checks._parse_session_count(None))
-        self.assertIsNone(
-            checks._parse_session_count('<response status="success"><result/></response>')
-        )
 
 
 class TestProtocolFromFlags(unittest.TestCase):

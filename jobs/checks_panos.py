@@ -163,17 +163,30 @@ def _parse_zones(cli_output):
     return sorted(zones)
 
 
+_NO_SESSIONS = re.compile(r"no\s+active\s+sessions?", re.IGNORECASE)
+
+
 def _parse_session_count(cli_output):
     """Count out of a 'show session all ... count yes' response, or None.
 
     Tries the XML shapes first (a count-like element, then bare result text),
-    then falls back to the classic text line "Number of sessions that match
-    filter: N". None means unparseable — the caller records it as such.
+    then the classic text line "Number of sessions that match filter: N".
+
+    Zero matches: PAN-OS answers a zero-match count query with an EMPTY
+    <result/> on a success response rather than an explicit zero (found in
+    the field — an unpatched parser floods "unparseable" for every quiet zone
+    pair), and some paths print "No Active Sessions"; both mean 0. A
+    status="error" response is never a zero — the query was refused. None
+    means genuinely unparseable; the caller records it as such.
     """
+    root = None
     try:
-        result = result_of(extract_xml(cli_output))
+        root = extract_xml(cli_output)
     except PanosParseError:
-        result = None
+        root = None
+    if root is not None and root.tag == "response" and root.get("status") == "error":
+        return None
+    result = result_of(root)
     if result is not None:
         for path in ("count", "member/count", "member"):
             value = to_int(text(result, path))
@@ -183,12 +196,19 @@ def _parse_session_count(cli_output):
             value = to_int(result.text)
             if value is not None:
                 return value
+        text_blob = "".join(result.itertext())
+        if _NO_SESSIONS.search(text_blob):
+            return 0
+        if len(result) == 0 and not text_blob.strip():
+            return 0
     for line in (cli_output or "").splitlines():
         lowered = line.lower()
         if "match" in lowered and "filter" in lowered:
             value = to_int(line)
             if value is not None:
                 return value
+        if _NO_SESSIONS.search(line):
+            return 0
     return None
 
 
@@ -210,12 +230,16 @@ def _collect_session_matrix(ctx):
     normalized = {}
     unparsed = []
     total = 0
+    # Every ORDERED pair including intra-zone (a>a): sessions between
+    # interfaces in the same zone are real traffic, and without them the
+    # matrix total could never reconcile with `show session info`.
+    # Filter keywords verified against the PA KB: `from <zone>` / `to <zone>`
+    # with `count yes` — NOT `from-zone`/`to-zone`, which the CLI rejects for
+    # every pair (found in the field: 12k active sessions, zero parsed pairs).
     for a in zones:
         for b in zones:
-            if a == b:
-                continue
             total += 1
-            command = "show session all filter from-zone %s to-zone %s count yes" % (a, b)
+            command = "show session all filter count yes from %s to %s" % (a, b)
             output = ctx.run_ssh(command)
             raw[command] = output
             count = _parse_session_count(output)
@@ -237,7 +261,37 @@ def _collect_session_matrix(ctx):
         raise CollectError(
             "%d of %d zone-pair counts unparseable — sweep unusable" % (len(unparsed), total)
         )
+    _sanity_check_matrix(ctx, raw, normalized)
     return {"raw": raw, "normalized": normalized}
+
+
+def _sanity_check_matrix(ctx, raw, normalized):
+    """Reconcile the sweep against `show session info` — a silent-breakage tripwire.
+
+    The pair counts should sum to roughly the active-session total (timing
+    drift aside). A matrix totalling far below a busy firewall's active count
+    means the sweep itself is broken (bad filter syntax, zones missed), which
+    per-pair parsing cannot see. Best-effort: never fails the check.
+    """
+    matrix_total = sum(count for count in normalized.values() if isinstance(count, int))
+    raw["matrix_total"] = matrix_total
+    try:
+        command = "show session info"
+        output = ctx.run_ssh(command)
+        active = _normalize_session_info(output).get("active")
+    except Exception as exc:
+        raw["active_at_sweep"] = "unavailable: %s" % (exc,)
+        return
+    raw["active_at_sweep"] = active
+    if isinstance(active, int) and active >= 100 and matrix_total * 2 < active:
+        message = (
+            "session matrix totals %d but the firewall reports %d active sessions — "
+            "the sweep is missing traffic (zone list incomplete, filter syntax, or "
+            "multi-vsys); treat the matrix as suspect" % (matrix_total, active)
+        )
+        raw["sanity_warning"] = message
+        if ctx.logger is not None:
+            ctx.logger.warning("%s: %s", ctx.device_name, message)
 
 
 # --- panos_routes ------------------------------------------------------------
