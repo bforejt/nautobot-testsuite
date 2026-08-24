@@ -173,6 +173,41 @@ class TestSessionMatrix(unittest.TestCase):
         checks._record_raw(raw, "small", "ok")
         self.assertEqual(raw["small"], "ok")
 
+    def test_sweep_announces_itself_and_emits_milestones(self):
+        # Liveness: a healthy multi-minute sweep must never look hung. With
+        # _PROGRESS_EVERY lowered below the pair count, at least one
+        # percentage milestone must appear alongside the opening banner.
+        class _FakeLogger:
+            def __init__(self):
+                self.infos = []
+
+            def info(self, message, *args, **kwargs):
+                self.infos.append(message % args if args else message)
+
+            def warning(self, message, *args, **kwargs):
+                pass
+
+        interfaces = _loader.fixture_text("panos_interfaces.txt")
+        zones = checks._parse_zones(interfaces)
+        ctx = _FakeCtx(_matrix_outputs(zones, interfaces, _count_response(3)))
+        ctx.logger = _FakeLogger()
+        original = checks._PROGRESS_EVERY
+        checks._PROGRESS_EVERY = 2
+        try:
+            checks._collect_session_matrix(ctx)
+        finally:
+            checks._PROGRESS_EVERY = original
+        banner = [line for line in ctx.logger.infos if "sweeping" in line]
+        milestones = [line for line in ctx.logger.infos if "remaining" in line]
+        self.assertEqual(len(banner), 1)
+        self.assertGreaterEqual(len(milestones), 1)
+        self.assertIn("%", milestones[0])
+
+    def test_fmt_duration(self):
+        self.assertEqual(checks._fmt_duration(42), "42s")
+        self.assertEqual(checks._fmt_duration(65), "1m05s")
+        self.assertEqual(checks._fmt_duration(3601), "60m01s")
+
 
 class TestSystemInfo(unittest.TestCase):
     def test_versions_and_identity_only(self):

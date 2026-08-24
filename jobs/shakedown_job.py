@@ -198,7 +198,8 @@ class CollectorShakedown(Job):
                         model: modules.get(model) for model in IOSXE_KEY_MODELS
                     }
 
-            for check in checks:
+            for index, check in enumerate(checks, 1):
+                self.logger.info("[%d/%d] %s ...", index, len(checks), check.id, extra=log_extra)
                 trace_start = len(ctx.trace)
                 started = time.monotonic()
                 status, error, normalized = "ok", None, {}

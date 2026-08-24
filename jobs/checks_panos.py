@@ -19,6 +19,7 @@ not exist on this path.
 """
 
 import re
+import time
 
 from . import constants as C
 from .panos_xml import PanosParseError, extract_xml, result_of, text, to_int
@@ -261,6 +262,17 @@ def _record_raw(raw, command, output):
 # session; fail fast, keep the evidence).
 _SWEEP_ABORT_AFTER = 5
 
+# Emit a progress line to the job log every N sweep queries: a healthy
+# multi-minute sweep must never look hung (field feedback).
+_PROGRESS_EVERY = 50
+
+
+def _fmt_duration(seconds):
+    seconds = int(seconds)
+    if seconds < 60:
+        return "%ds" % (seconds,)
+    return "%dm%02ds" % (seconds // 60, seconds % 60)
+
 
 def _collect_session_matrix(ctx):
     """Ordered zone-pair session counts, PAIR FORM ONLY.
@@ -292,6 +304,17 @@ def _collect_session_matrix(ctx):
             % (len(zones), len(zones) * len(zones), C.SESSION_MATRIX_MAX_PAIR_QUERIES)
         )
 
+    total_queries = len(zones) * len(zones)
+    if ctx.logger is not None:
+        ctx.logger.info(
+            "%s: session matrix — sweeping %d ordered zone pairs across %d zones "
+            "with count-only queries; progress every %d queries.",
+            ctx.device_name,
+            total_queries,
+            len(zones),
+            _PROGRESS_EVERY,
+        )
+    sweep_started = time.monotonic()
     normalized = {}
     unparsed = []
     queries = 0
@@ -319,6 +342,22 @@ def _collect_session_matrix(ctx):
                 raise CollectError(
                     "first %d count responses all unreadable — aborting the sweep "
                     "(session or syntax problem; see the stored raw outputs)" % (queries,)
+                )
+            if (
+                ctx.logger is not None
+                and queries % _PROGRESS_EVERY == 0
+                and queries < total_queries
+            ):
+                elapsed = time.monotonic() - sweep_started
+                remaining = (elapsed / queries) * (total_queries - queries)
+                ctx.logger.info(
+                    "%s: session matrix %d/%d (%d%%) — %s elapsed, ~%s remaining.",
+                    ctx.device_name,
+                    queries,
+                    total_queries,
+                    100 * queries // total_queries,
+                    _fmt_duration(elapsed),
+                    _fmt_duration(remaining),
                 )
 
     # Derived per-zone directional totals: the coverage layer.

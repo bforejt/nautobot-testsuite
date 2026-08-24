@@ -405,7 +405,18 @@ class CaptureSnapshot(Job):
                     extra=log_extra,
                 )
                 return True
-            for check in checks:
+            for index, check in enumerate(checks, 1):
+                # Liveness: a healthy long check (the session-matrix sweep runs
+                # minutes) must never leave the job log silent — the JobResult
+                # page shows these lines as they are written.
+                self.logger.info(
+                    "%s: [%d/%d] %s ...",
+                    device.name,
+                    index,
+                    len(checks),
+                    check.id,
+                    extra=log_extra,
+                )
                 started = time.monotonic()
                 try:
                     outcome = check.collector(ctx)
@@ -421,6 +432,17 @@ class CaptureSnapshot(Job):
                         duration_s=time.monotonic() - started,
                     )
                     raw_bundle[check.id] = outcome.get("raw")
+                    self.logger.info(
+                        "%s: [%d/%d] %s ok — %d normalized entr%s in %.1fs",
+                        device.name,
+                        index,
+                        len(checks),
+                        check.id,
+                        len(outcome.get("normalized") or {}),
+                        "y" if len(outcome.get("normalized") or {}) == 1 else "ies",
+                        time.monotonic() - started,
+                        extra=log_extra,
+                    )
                 except SkipCheck as exc:
                     envelope.record_check(
                         env,
