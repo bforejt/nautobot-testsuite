@@ -166,6 +166,22 @@ treated as emptiness — a check whose collection failed is reported failed (and
 fails the compare JobResult regardless of `fail_on_unexpected`), not as a wall
 of `removed` entries.
 
+## LLM-assisted analysis
+
+Snapshots are **self-describing**: every `snapshot_*.json` embeds an
+interpretation guide, per-check descriptions/semantics, curated context facts
+(e.g. the session-matrix reconciliation totals), the device's role/location,
+and the operator's `change_description`. The intended analysis workflow: the
+engineer building the change writes the test plan **as a prompt** (plain
+language — intent, priorities, suspicions), downloads the pre and post
+snapshot files, and feeds both to whatever LLM the organization approves.
+The prompt never explains the data format; the files do. Nautobot never
+contacts an LLM. `Compare Snapshots` remains available as a deterministic
+assist — its exhaustive diff index saves an LLM from doing set arithmetic
+over large tables with attention. See
+[docs/llm-test-plans.md](docs/llm-test-plans.md) for the contract and a
+worked firewall-replacement example.
+
 ## Development
 
 Python 3.9-compatible, Ruff-formatted at line length 100:

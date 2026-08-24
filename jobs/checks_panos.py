@@ -373,7 +373,22 @@ def _collect_session_matrix(ctx):
             "%d of %d session counts unparseable — sweep unusable" % (len(unparsed), queries)
         )
     _sanity_check_matrix(ctx, raw, normalized)
-    return {"raw": raw, "normalized": normalized}
+    # The reconciliation facts are the sweep's own proof of completeness —
+    # promoted into the envelope (context) so the snapshot self-describes;
+    # raw keeps them too as part of the audit trail.
+    context_keys = (
+        "matrix_total",
+        "from_zone_total",
+        "filterable_at_sweep",
+        "session_info_at_sweep",
+        "sanity_warning",
+        "note_active_vs_filterable",
+        "zones",
+        "zones_excluded",
+        "unparsed_pairs",
+    )
+    context = {key: raw[key] for key in context_keys if key in raw}
+    return {"raw": raw, "normalized": normalized, "context": context}
 
 
 _INFO_COUNTER_LEAVES = (

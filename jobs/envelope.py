@@ -31,12 +31,46 @@ def parse_iso(stamp):
         return None
 
 
-def new_envelope(device_info, change_id, kind, package, check_ids, job_info):
+# Embedded in every snapshot so each artifact is SELF-DESCRIBING: a human or
+# LLM holding one file needs nothing else to read it correctly. An engineer's
+# test-plan prompt therefore never explains the data format — only the change.
+INTERPRETATION_GUIDE = [
+    "This file is a point-in-time operational snapshot of one network device, "
+    "captured read-only. Compare two captures (before and after a change) to "
+    "see what the change did.",
+    "checks.<id>.normalized is the curated view: lists are re-keyed by stable "
+    "natural identities and volatile data (counters, uptimes, ages, timestamps) "
+    "is deliberately absent, so two healthy captures differ only where the "
+    "network differs.",
+    "Value sentinels — 0: a measured zero. null/None: the device answered but "
+    "the value was unreadable (treat as unknown, never as zero). Key entirely "
+    "absent: not measured on this capture. Never conflate the three.",
+    "checks.<id>.status — success: data is trustworthy. failed: the READ failed; "
+    "the data is missing, which says nothing about the network (treat as a "
+    "caveat, never as 'everything vanished'). not-present: the feature is not "
+    "configured/available on this device (a legitimate fact, not an error).",
+    "checks.<id>.describe explains that check's key format and what was "
+    "deliberately excluded; checks.<id>.context carries small curated "
+    "measurements recorded at capture time (e.g. reconciliation totals).",
+    "All counts are instantaneous at captured_at; two captures minutes apart "
+    "differ by normal churn even on an unchanged network.",
+    "Raw command/API output for every check is preserved in a sibling "
+    "raw_<device>_<change_id>.json artifact on the same JobResult, keyed by "
+    "check id — the audit trail when the normalized view raises questions.",
+    "change_id tags every capture belonging to one change; kind records which "
+    "side of the change (pre/post/rollback/adhoc) this capture was taken on; "
+    "change_description is the operator's statement of what the change is.",
+]
+
+
+def new_envelope(device_info, change_id, kind, package, check_ids, job_info, change_description=""):
     """Start a snapshot envelope. ``device_info``/``job_info`` are plain dicts."""
     return {
         "schema_version": C.SCHEMA_VERSION,
+        "guide": INTERPRETATION_GUIDE,
         "kind": kind,
         "change_id": change_id,
+        "change_description": change_description,
         "captured_at": utcnow_iso(),
         "framework": {"name": C.FRAMEWORK_NAME, "version": C.JOB_VERSION},
         "job": job_info,
@@ -48,13 +82,23 @@ def new_envelope(device_info, change_id, kind, package, check_ids, job_info):
 
 
 def record_check(
-    envelope, check, status, normalized=None, error=None, duration_s=None, collector_meta=None
+    envelope,
+    check,
+    status,
+    normalized=None,
+    error=None,
+    duration_s=None,
+    collector_meta=None,
+    describe=None,
+    context=None,
 ):
     """Record one check's outcome into the envelope.
 
     status: success | failed | skipped | not-present. The check's effective
     compare config is copied in so pre and post can never disagree about how
-    to compare.
+    to compare. ``describe`` (description/semantics/miss_meaning) makes the
+    entry self-describing; ``context`` carries the collector's small curated
+    facts (never bulk data — that is what normalized and raw are for).
     """
     envelope["checks"][check.id] = {
         "status": status,
@@ -63,6 +107,8 @@ def record_check(
         "tier": check.tier,
         "compare": check.compare,
         "collector": collector_meta or {},
+        "describe": describe or {},
+        "context": context or {},
         "normalized": normalized if normalized is not None else {},
     }
 

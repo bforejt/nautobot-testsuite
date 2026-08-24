@@ -673,6 +673,25 @@ class TestRegistrations(unittest.TestCase):
             self.assertTrue(callable(check.collector), check.id)
             self.assertIn(check.compare.get("mode", "equality_set"), diffcore.MODES, check.id)
 
+    def test_every_registered_check_has_semantics(self):
+        # The self-description contract: snapshots must explain themselves,
+        # so a check without SEMANTICS text ships an unreadable section.
+        for check_id in registry.CHECKS:
+            self.assertIn(check_id, registry.SEMANTICS, check_id)
+            self.assertGreater(len(registry.SEMANTICS[check_id]), 40, check_id)
+
+    def test_matrix_collector_exposes_reconciliation_context(self):
+        interfaces = _loader.fixture_text("panos_interfaces.txt")
+        zones = checks._parse_zones(interfaces)
+        result = checks._collect_session_matrix(
+            _FakeCtx(_matrix_outputs(zones, interfaces, _count_response(12)))
+        )
+        context = result["context"]
+        self.assertEqual(context["matrix_total"], 12 * len(zones) * len(zones))
+        self.assertIn("filterable_at_sweep", context)
+        self.assertIn("session_info_at_sweep", context)
+        self.assertEqual(context["zones"], zones)
+
 
 if __name__ == "__main__":
     unittest.main()

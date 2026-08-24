@@ -57,6 +57,21 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
         self.assertEqual(env["checks"], {})
         # captured_at is our own ISO format and must round-trip through parse_iso.
         self.assertIsNotNone(envelope.parse_iso(env["captured_at"]))
+        # Self-description contract (schema 1.1): the interpretation guide
+        # ships INSIDE every snapshot, and the change intent field exists.
+        self.assertIs(env["guide"], envelope.INTERPRETATION_GUIDE)
+        self.assertGreaterEqual(len(env["guide"]), 5)
+        self.assertEqual(env["change_description"], "")
+        described = envelope.new_envelope(
+            device_info={},
+            change_id="C1",
+            kind="pre",
+            package="full",
+            check_ids=[],
+            job_info={},
+            change_description="Replace fw-old with fw-new",
+        )
+        self.assertEqual(described["change_description"], "Replace fw-old with fw-new")
 
         check = _checkdef("iosxe_arp", tier=1, compare={"mode": "equality_set"})
         envelope.record_check(
@@ -80,6 +95,19 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
         self.assertEqual(body["compare"], {"mode": "equality_set"})
         self.assertEqual(body["collector"], {"source": "restconf"})
         self.assertEqual(body["normalized"], {"Vlan10|192.0.2.1": "aa:bb:cc:00:00:01"})
+        # describe/context default to {} and pass through when supplied.
+        self.assertEqual(body["describe"], {})
+        self.assertEqual(body["context"], {})
+        envelope.record_check(
+            env,
+            _checkdef("iosxe_interfaces"),
+            "success",
+            describe={"description": "d", "semantics": "s", "miss_meaning": "m"},
+            context={"total": 42},
+        )
+        rich = env["checks"]["iosxe_interfaces"]
+        self.assertEqual(rich["describe"]["semantics"], "s")
+        self.assertEqual(rich["context"], {"total": 42})
 
         failed = env["checks"]["iosxe_routes_rib"]
         self.assertEqual(failed["error"], "timeout")
@@ -89,7 +117,7 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
 
         self.assertEqual(
             envelope.envelope_summary(env),
-            {"success": 1, "failed": 2, "skipped": 1, "not-present": 1},
+            {"success": 2, "failed": 2, "skipped": 1, "not-present": 1},
         )
 
 

@@ -12,7 +12,9 @@ JOB_VERSION = "0.1.0-dev"
 UI_GROUP = "Network Validation"
 
 # --- snapshot envelope ------------------------------------------------------
-SCHEMA_VERSION = "1.0"
+# 1.1: additive — embedded interpretation guide, per-check describe/context,
+# change_description, device role/location. 1.x readers remain compatible.
+SCHEMA_VERSION = "1.1"
 FRAMEWORK_NAME = "nautobot-testsuite"
 
 # Artifact filenames attached to the JobResult, one set per device.

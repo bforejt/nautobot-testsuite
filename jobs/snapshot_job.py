@@ -93,6 +93,15 @@ def _parse_override_checks(raw):
     return ids
 
 
+def _describe_check(check):
+    """Self-description embedded with every check entry (schema 1.1)."""
+    return {
+        "description": check.description,
+        "semantics": registry.SEMANTICS.get(check.id, ""),
+        "miss_meaning": check.miss_meaning,
+    }
+
+
 def _attach_artifact(job, filename, payload):
     """Attach a JSON artifact to the running job's JobResult; never fatal.
 
@@ -124,6 +133,15 @@ class CaptureSnapshot(Job):
         description=(
             "Change/ticket identifier. Tags the attached artifacts and pairs a pre "
             "snapshot with its post snapshot in Compare Snapshots."
+        ),
+    )
+    change_description = StringVar(
+        required=False,
+        description=(
+            "One or two sentences describing WHAT the change is (e.g. 'Replace "
+            "PA-5250 with VM-500; default route and ~24 prefixes move from VL909 "
+            "to VL925'). Embedded in every snapshot so any later reader — human "
+            "or LLM — knows the intent behind the capture."
         ),
     )
     kind = ChoiceVar(
@@ -190,6 +208,7 @@ class CaptureSnapshot(Job):
         field_order = [
             "devices",
             "change_id",
+            "change_description",
             "kind",
             "package",
             "override_checks",
@@ -203,6 +222,7 @@ class CaptureSnapshot(Job):
         *,
         devices=None,
         change_id="",
+        change_description="",
         kind="pre",
         package="full",
         override_checks="",
@@ -235,6 +255,7 @@ class CaptureSnapshot(Job):
                 ok = self._capture_device(
                     device,
                     change_id=change_id,
+                    change_description=str(change_description or "").strip(),
                     kind=kind,
                     package=package,
                     override_ids=override_ids,
@@ -285,7 +306,17 @@ class CaptureSnapshot(Job):
         )
 
     def _capture_device(
-        self, device, *, change_id, kind, package, override_ids, secrets_group, dryrun, debug=False
+        self,
+        device,
+        *,
+        change_id,
+        kind,
+        package,
+        override_ids,
+        secrets_group,
+        dryrun,
+        debug=False,
+        change_description="",
     ):
         """Snapshot one device end to end; returns True when it counts as succeeded."""
         log_extra = {"object": device}
@@ -379,8 +410,11 @@ class CaptureSnapshot(Job):
                 "id": str(device.pk),
                 "platform": driver,
                 "primary_ip": host,
+                "role": str(getattr(device, "role", "") or ""),
+                "location": str(getattr(device, "location", "") or ""),
             },
             change_id=change_id,
+            change_description=change_description,
             kind=kind,
             package=package,
             check_ids=check_ids,
@@ -430,6 +464,8 @@ class CaptureSnapshot(Job):
                         "success",
                         normalized=outcome.get("normalized"),
                         duration_s=time.monotonic() - started,
+                        describe=_describe_check(check),
+                        context=outcome.get("context"),
                     )
                     raw_bundle[check.id] = outcome.get("raw")
                     self.logger.info(
@@ -450,6 +486,7 @@ class CaptureSnapshot(Job):
                         "not-present",
                         error=str(exc),
                         duration_s=time.monotonic() - started,
+                        describe=_describe_check(check),
                     )
                     self.logger.info(
                         "%s: %s not present: %s",
@@ -467,6 +504,7 @@ class CaptureSnapshot(Job):
                         "failed",
                         error="aborted: Celery soft time limit reached",
                         duration_s=time.monotonic() - started,
+                        describe=_describe_check(check),
                     )
                     self.logger.error(
                         "%s: soft time limit reached during %s — attaching the "
@@ -485,6 +523,7 @@ class CaptureSnapshot(Job):
                         "failed",
                         error=str(exc),
                         duration_s=time.monotonic() - started,
+                        describe=_describe_check(check),
                     )
                     self.logger.warning(
                         "%s: check %s failed: %s",
@@ -501,6 +540,7 @@ class CaptureSnapshot(Job):
                         "failed",
                         error="%s: %s" % (type(exc).__name__, exc),
                         duration_s=time.monotonic() - started,
+                        describe=_describe_check(check),
                     )
                     self.logger.warning(
                         "%s: check %s failed unexpectedly (%s): %s",
