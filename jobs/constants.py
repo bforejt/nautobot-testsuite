@@ -63,7 +63,3 @@ CAPABILITY_MIN_POST = 1  # ...and must show at least this many sessions post
 # single-sided count queries later poisoned an entire session — so the matrix
 # is complete-or-refused, never quietly partial.
 SESSION_MATRIX_MAX_PAIR_QUERIES = 676
-
-# --- compare-job guardrails -------------------------------------------------
-BASELINE_MAX_AGE_H = 24  # warn when the pre snapshot is older than this
-AUTOSELECT_SCAN_LIMIT = 200  # newest Capture Snapshot runs scanned for a change_id match

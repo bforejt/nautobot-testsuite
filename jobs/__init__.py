@@ -8,11 +8,10 @@ Importing the checks modules populates the check registry as a side effect.
 from nautobot.apps.jobs import register_jobs
 
 from . import checks_iosxe, checks_panos  # noqa: F401  (registry population)
-from .compare_job import CompareSnapshots
 from .constants import JOB_VERSION
 from .shakedown_job import CollectorShakedown
 from .snapshot_job import CaptureSnapshot
 
 __version__ = JOB_VERSION
 
-register_jobs(CaptureSnapshot, CompareSnapshots, CollectorShakedown)
+register_jobs(CaptureSnapshot, CollectorShakedown)

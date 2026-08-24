@@ -4,7 +4,7 @@ Pre/post change-validation jobs for Nautobot. Snapshot a device before a change,
 make the change, snapshot again, compare — and get a JSON verdict on the JobResult
 that separates the diffs you *declared* you would cause from the ones you did not.
 
-Three jobs, all under the **Network Validation** grouping:
+Two jobs, both under the **Network Validation** grouping:
 
 - **Capture Snapshot** — runs every read-only check the platform supports
   against one or more devices (mixed platforms in one run collect per device) and attaches a versioned snapshot envelope (plus a raw-evidence bundle)
@@ -12,10 +12,10 @@ Three jobs, all under the **Network Validation** grouping:
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
   full transport trace (every RESTCONF path and SSH command with timing, outcome,
   and payload), so even a FAILED check keeps its evidence.
-- **Compare Snapshots** — pairs a pre and a post envelope per device, diffs every
-  check under its declared compare mode, classifies each diff against your
-  expectations list, and attaches `report_<device>.json`. A pre snapshot older
-  than 24 hours draws a warning.
+- *(analysis happens outside Nautobot: download the snapshot files and feed
+  them, with your test-plan prompt, to the LLM your organization approves —
+  see below. `tools/diff_snapshots.py` builds an optional deterministic diff
+  index locally.)*
 - **Collector Shakedown (dev)** — hidden development job: runs *every* registered
   check for one device's platform in debug mode and attaches per-check verdicts
   with advisories ("parsed but empty — leaf names likely differ on this
@@ -35,8 +35,8 @@ as source, never pip-installed:
 
 1. Add the repository URL with the **Jobs** provided content.
 2. Sync. Nautobot imports the `jobs` package and registers the jobs.
-3. Enable **Capture Snapshot**, **Compare Snapshots**, and (for development)
-   **Collector Shakedown** under Jobs (jobs arrive disabled by design; the
+3. Enable **Capture Snapshot** and (for development) **Collector Shakedown**
+   under Jobs (jobs arrive disabled by design; the
    shakedown is additionally hidden from the default list).
 
 Worker requirements: `requests` and `netmiko`, both already present on any worker
@@ -56,32 +56,18 @@ Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 2. **Cut over.** Do the change.
 3. **Capture post.** Same again, `kind = post`, same `change_id` — now
    targeting the active VM-500 as the firewall.
-4. **Compare (optional deterministic assist).** Run *Compare Snapshots* typing
-   just the `change_id` — it merges every matching capture run per side. The
-   firewall was renamed, so `device_map` maps the pre-change device name to
-   its post-change replacement:
+4. **Analyze.** Download the `snapshot_*.json` files from both capture
+   JobResults and feed them, with your test-plan prompt
+   (docs/llm-test-plans.md has a worked example for exactly this change), to
+   the LLM your organization approves. Optionally build the deterministic
+   diff index first so vanished routes arrive pre-enumerated:
 
-   ```json
-   {"dc1-fw-5250-a": "dc1-fw-vm500-a"}
+   ```sh
+   python3 tools/diff_snapshots.py --pre pre/*.json --post post/*.json -o diff-index.json
    ```
 
-   and `expectations` declares the diffs the change was *supposed* to make,
-   e.g. the 9500s' default route now pointing at the VM-500 pair:
-
-   ```json
-   [
-     {"check": "iosxe_routes_rib", "key": "default|0.0.0.0/0", "op": "changed",
-      "field": "next_hops", "to_contains": "10.99.1.6",
-      "note": "default next-hop moves to the VM-500 HA pair"}
-   ]
-   ```
-
-   `fail_on_unexpected` controls whether unexpected diffs fail the JobResult or
-   just report; `baseline_max_age_hours` overrides the stale-baseline warning.
-
-The report classifies every observed diff `expected` or `unexpected`, and lists
-expectations that matched nothing (`not_observed`) — a declared change that did
-not happen is a finding too.
+   Devices pair by name; the renamed firewall shows up as pre-only/post-only
+   "replacement candidate" sections for the analyst — no mapping input needed.
 
 ## Check catalog
 
@@ -143,50 +129,6 @@ build if this ever matches anything:
 ```sh
 grep -rniE 'send_config|config_mode|\.(patch|post|put|delete|request)\(' jobs/
 ```
-
-## Expectations syntax
-
-`expectations` is a JSON list of objects; each classifies matching diff entries
-as expected:
-
-| Key | Meaning |
-| --- | --- |
-| `check` | Exact check id; omit to match any check |
-| `key` | Glob against the diff entry's key (default `*`), e.g. `default\|0.0.0.0/0` |
-| `op` | `added`, `removed`, `changed`, or `any` (default) |
-| `device` | Glob against the pre/post device name; omit to apply on every pair |
-| `field` | Exact field name, for `changed` entries on dict-valued keys |
-| `to` | `changed` only: new value must equal this |
-| `to_contains` | `changed` only: substring of the new value |
-| `id`, `note` | Optional label and human note, echoed in the report |
-
-Tolerance and capability misses match as `op: changed` (keyed by the bucket key
-or field name), so a planned numeric shift can be declared expected too. An
-entry with no selector keys at all is rejected — a deliberate match-everything
-wildcard must say `{"key": "*"}` explicitly.
-
-Expectation matching is **run-global**: an expectation is reported
-`not_observed` only when *no* device pair in the run matched it, so per-device
-expectations do not false-alarm on their neighbors. Failed reads are never
-treated as emptiness — a check whose collection failed is reported failed (and
-fails the compare JobResult regardless of `fail_on_unexpected`), not as a wall
-of `removed` entries.
-
-## LLM-assisted analysis
-
-Snapshots are **self-describing**: every `snapshot_*.json` embeds an
-interpretation guide, per-check descriptions/semantics, curated context facts
-(e.g. the session-matrix reconciliation totals), the device's role/location,
-and the operator's `change_description`. The intended analysis workflow: the
-engineer building the change writes the test plan **as a prompt** (plain
-language — intent, priorities, suspicions), downloads the pre and post
-snapshot files, and feeds both to whatever LLM the organization approves.
-The prompt never explains the data format; the files do. Nautobot never
-contacts an LLM. `Compare Snapshots` remains available as a deterministic
-assist — its exhaustive diff index saves an LLM from doing set arithmetic
-over large tables with attention. See
-[docs/llm-test-plans.md](docs/llm-test-plans.md) for the contract and a
-worked firewall-replacement example.
 
 ## Development
 

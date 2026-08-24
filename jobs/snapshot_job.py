@@ -1,6 +1,6 @@
 """Capture Snapshot job — read-only per-device operational snapshots.
 
-This module (with compare_job and creds) is the only place allowed to import
+This module (with shakedown_job and creds) is the only place allowed to import
 Nautobot and the device transports. Check collectors never see either: each
 device gets a CollectorContext wired to the right transport, and everything a
 check learns lands in a versioned envelope attached to the JobResult as JSON
@@ -188,10 +188,11 @@ class CaptureSnapshot(Job):
             "read-only), every check the platform supports runs by doctrine — features "
             "not in use record loudly as not-present — and each records a normalized "
             "view alongside its raw evidence. Run once as `pre` before the change and "
-            "once as `post` after "
-            "it, with the same change id, then feed both JobResults to *Compare "
-            "Snapshots*. A device with any failed check marks the run FAILED (a bad "
-            "baseline must be loud) but its envelope is still attached."
+            "once as `post` after it, with the same change id, then download the "
+            "snapshot files and analyze them with your test-plan prompt "
+            "(docs/llm-test-plans.md; tools/diff_snapshots.py builds an optional "
+            "deterministic diff index). A device with any failed check marks the run "
+            "FAILED (a bad baseline must be loud) but its envelope is still attached."
         )
         has_sensitive_variables = False
         read_only = True

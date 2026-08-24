@@ -15,11 +15,14 @@ The division of labor in this framework:
   sets of files) in whatever LLM your organization approves. Nautobot never
   contacts an LLM.
 
-`Compare Snapshots` remains available as an optional deterministic assist —
-its report enumerates every added/removed/changed key, which no attention
-mechanism can guarantee over large tables. Attach its `report_*.json`
-alongside the snapshots when you want the LLM to interpret an exhaustive
-diff index rather than perform its own set arithmetic.
+For recall insurance over large tables, run the local diff-index tool over
+the downloaded files — deterministic set math no attention mechanism can
+guarantee — and attach its output alongside the snapshots so the LLM
+interprets an exhaustive index rather than performing its own arithmetic:
+
+```sh
+python3 tools/diff_snapshots.py --pre pre/*.json --post post/*.json -o diff-index.json
+```
 
 ## The contract
 
@@ -84,5 +87,5 @@ what it found. The files stay authoritative; the prompt is yours.
 - Set `change_description` when capturing: it embeds the change intent into
   every file, so even a stray snapshot found later explains itself.
 - Big tables (full RIBs) are where LLM attention is weakest. That is what
-  the optional `Compare Snapshots` diff index is for — deterministic set
+  the optional `tools/diff_snapshots.py` index is for — deterministic set
   math the LLM interprets instead of performs.
