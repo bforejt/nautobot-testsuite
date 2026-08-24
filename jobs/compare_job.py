@@ -44,9 +44,9 @@ def _read_fileproxy(fileproxy):
 def _load_snapshots(job_result):
     """Load every snapshot envelope attached to a Capture Snapshot JobResult.
 
-    Returns {device_name: envelope}. Raises RuntimeError when the result has
-    no snapshot artifacts or an artifact is not a valid envelope — a compare
-    against nothing must never silently pass.
+    Returns {device_name: envelope} — possibly empty (a dryrun capture
+    attaches nothing; the CALLER decides whether an empty side is fatal).
+    A corrupt artifact still raises: fail-closed, never silently skipped.
     """
     snapshots = {}
     for fileproxy in job_result.files.all():
@@ -70,11 +70,6 @@ def _load_snapshots(job_result):
                 "Artifact %s on JobResult %s has no device name." % (filename, job_result.pk)
             )
         snapshots[device_name] = env
-    if not snapshots:
-        raise RuntimeError(
-            "JobResult %s has no snapshot_* artifacts. Was it a Capture Snapshot "
-            "run, and did it run without dryrun?" % (job_result.pk,)
-        )
     return snapshots
 
 
@@ -125,9 +120,10 @@ class CompareSnapshots(Job):
     change_id = StringVar(
         required=False,
         description=(
-            "Auto-select the newest successful pre and post Capture Snapshot runs "
-            "tagged with this change id — the same id you typed at capture time. "
-            "The explicit pickers below override per side."
+            "Auto-select ALL successful Capture Snapshot runs tagged with this "
+            "change id — the same id you typed at capture time — merging their "
+            "per-device snapshots per side (a change may span several capture "
+            "runs). The explicit pickers below override per side."
         ),
     )
     pre_result = ObjectVar(
@@ -215,13 +211,12 @@ class CompareSnapshots(Job):
         """Compare two capture runs. Every kwarg defaults (ScheduledJob rule)."""
         self.logger.info("Compare Snapshots starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
         change_id = str(change_id or "").strip()
-        if pre_result is None or post_result is None:
-            if not change_id:
-                raise RuntimeError(
-                    "Provide a change_id (auto-selects the newest matching capture "
-                    "runs) or pick both pre_result and post_result explicitly."
-                )
-            pre_result, post_result = self._autoselect_results(change_id, pre_result, post_result)
+        if (pre_result is None or post_result is None) and not change_id:
+            raise RuntimeError(
+                "Provide a change_id (auto-selects all matching capture runs) "
+                "or pick both pre_result and post_result explicitly."
+            )
+        pre_results, post_results = self._select_results(change_id, pre_result, post_result)
         if pre_result.pk == post_result.pk:
             self.logger.warning(
                 "pre_result and post_result are the same JobResult — every check "
@@ -233,8 +228,8 @@ class CompareSnapshots(Job):
         if baseline_max_age_hours is None:
             baseline_max_age_hours = C.BASELINE_MAX_AGE_H
 
-        pre_snaps = _load_snapshots(pre_result)
-        post_snaps = _load_snapshots(post_result)
+        pre_snaps = self._load_side("pre", pre_results)
+        post_snaps = self._load_side("post", post_results)
         self._echo_sides(change_id, pre_snaps, post_snaps)
 
         want_major = _schema_major(C.SCHEMA_VERSION)
@@ -377,15 +372,19 @@ class CompareSnapshots(Job):
             )
         return summary_text
 
-    def _autoselect_results(self, change_id, pre_result, post_result):
-        """Newest successful capture runs whose stored kwargs carry change_id.
+    def _select_results(self, change_id, pre_result, post_result):
+        """ALL successful capture runs whose stored kwargs carry change_id, per side.
 
-        Nautobot's JobResult dropdown labels carry no change/kind context, so
-        operators select by the change id they typed at capture time; explicit
-        picks always win per side. With no plain post capture, the newest
-        ROLLBACK capture serves as the post side (rollback-vs-pre proves
-        restoration). task_kwargs exist because has_sensitive_variables=False.
+        One change usually spans several capture runs (the Palo sweep in one
+        run, the switches in another) — every matching run contributes, and
+        _load_side merges their per-device snapshots (newest run wins per
+        device). Explicit picks always win per side. With no plain post
+        capture, the ROLLBACK captures serve as the post side (rollback-vs-pre
+        proves restoration). task_kwargs exist because
+        has_sensitive_variables=False.
         """
+        if pre_result is not None and post_result is not None:
+            return [pre_result], [post_result]
         candidates = JobResult.objects.filter(
             name=CAPTURE_NAME, status=JobResultStatusChoices.STATUS_SUCCESS
         ).order_by("-date_created")[: C.AUTOSELECT_SCAN_LIMIT]
@@ -399,26 +398,24 @@ class CompareSnapshots(Job):
             if cid == change_id:
                 matches.append((str(kwargs.get("kind") or "pre"), candidate))
 
-        def newest(kinds):
-            for kind, candidate in matches:
-                if kind in kinds:
-                    return candidate
-            return None
+        def matching(kinds):
+            return [candidate for kind, candidate in matches if kind in kinds]
 
-        if pre_result is None:
-            pre_result = newest(("pre",))
-        if post_result is None:
-            post_result = newest(("post",))
-            if post_result is None:
-                post_result = newest(("rollback",))
-                if post_result is not None:
+        pre_results = [pre_result] if pre_result is not None else matching(("pre",))
+        if post_result is not None:
+            post_results = [post_result]
+        else:
+            post_results = matching(("post",))
+            if not post_results:
+                post_results = matching(("rollback",))
+                if post_results:
                     self.logger.warning(
-                        "No post capture for change %r — using the newest ROLLBACK "
-                        "capture as the post side (rollback verification).",
+                        "No post capture for change %r — using ROLLBACK capture(s) as "
+                        "the post side (rollback verification).",
                         change_id,
                     )
         missing = [
-            side for side, value in (("pre", pre_result), ("post", post_result)) if value is None
+            side for side, values in (("pre", pre_results), ("post", post_results)) if not values
         ]
         if missing:
             raise RuntimeError(
@@ -431,16 +428,52 @@ class CompareSnapshots(Job):
                     ", ".join(sorted(seen_change_ids)[:8]) or "none",
                 )
             )
-        for side, result in (("pre", pre_result), ("post", post_result)):
-            kwargs = result.task_kwargs if isinstance(result.task_kwargs, dict) else {}
-            self.logger.info(
-                "%s side auto-selected: JobResult %s (created %s, kind=%s).",
-                side,
-                result.pk,
-                result.date_created,
-                kwargs.get("kind"),
+        return pre_results, post_results
+
+    def _load_side(self, side, results):
+        """Merge per-device snapshots across a side's runs; newest run wins.
+
+        A run contributing nothing (a dryrun capture attaches no artifacts) is
+        a warning, not fatal — but a side with nothing at all is. Corrupt
+        artifacts raise from _load_snapshots regardless: fail-closed.
+        """
+        merged = {}
+        for result in results:  # newest first
+            snaps = _load_snapshots(result)
+            if not snaps:
+                self.logger.warning(
+                    "%s side: JobResult %s has no snapshot artifacts (dryrun capture?) — skipped.",
+                    side,
+                    result.pk,
+                )
+                continue
+            provided = []
+            for name, env in snaps.items():
+                if name in merged:
+                    self.logger.warning(
+                        "%s side: device %s already provided by a newer run — ignoring "
+                        "the older copy in JobResult %s.",
+                        side,
+                        name,
+                        result.pk,
+                    )
+                    continue
+                merged[name] = env
+                provided.append(name)
+            if provided:
+                self.logger.info(
+                    "%s side: JobResult %s (created %s) provides %s.",
+                    side,
+                    result.pk,
+                    result.date_created,
+                    ", ".join(sorted(provided)),
+                )
+        if not merged:
+            raise RuntimeError(
+                "%s side has no snapshot artifacts across %d selected run(s) — were "
+                "they dryrun captures?" % (side, len(results))
             )
-        return pre_result, post_result
+        return merged
 
     def _echo_sides(self, change_id, pre_snaps, post_snaps):
         """Make every selection verifiable in the log — mis-picks must be visible."""
