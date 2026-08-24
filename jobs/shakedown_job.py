@@ -114,7 +114,7 @@ class CollectorShakedown(Job):
     )
 
     class Meta:
-        name = "Collector Shakedown (dev)"
+        name = "Test Suite Shakedown (dev)"
         description = (
             "Development tool: runs every registered check for this device's "
             "platform in debug mode and attaches `shakedown_*.json` (per-check "
@@ -133,7 +133,7 @@ class CollectorShakedown(Job):
 
     def run(self, *, device=None, secrets_group=None):
         """Shake down one device. Every kwarg defaults (ScheduledJob rule)."""
-        self.logger.info("Collector Shakedown — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
+        self.logger.info("Test Suite Shakedown — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
         if device is None:
             raise RuntimeError("Pick a device.")
         log_extra = {"object": device}

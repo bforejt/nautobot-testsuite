@@ -2,7 +2,7 @@
 
 The division of labor in this framework:
 
-- **Nautobot captures.** `Capture Snapshot` produces one self-describing JSON
+- **Nautobot captures.** `Test Suite Capture` produces one self-describing JSON
   per device per point in time (`snapshot_<device>_<change_id>.json`). Each
   file embeds its own interpretation guide, per-check descriptions, and
   curated context facts — a reader (human or LLM) holding one file needs

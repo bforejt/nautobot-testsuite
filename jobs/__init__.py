@@ -1,4 +1,4 @@
-"""Network Validation jobs — pre/post change snapshots and comparison.
+"""Test Suite jobs — self-describing pre/post change snapshots.
 
 Nautobot's Git-repository loader imports only this package; every Job class
 must be imported and passed to register_jobs() here (Nautobot issue #5971).

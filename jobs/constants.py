@@ -1,4 +1,4 @@
-"""Shared knobs for the Network Validation jobs.
+"""Shared knobs for the Test Suite jobs.
 
 Every tunable lives here, documented in place (nautobot-upgrades convention).
 JOB_VERSION is logged at the start of every run so each JobResult records
@@ -9,7 +9,9 @@ it (see the sister repo's RELEASING.md model).
 JOB_VERSION = "0.1.0-dev"
 
 # Jobs-UI grouping header. Each job module sets ``name = C.UI_GROUP``.
-UI_GROUP = "Network Validation"
+# Renamed from "Network Validation" after the analysis pivot: Nautobot
+# captures and describes; validation happens in the test-plan prompt outside.
+UI_GROUP = "Test Suite"
 
 # --- snapshot envelope ------------------------------------------------------
 # 1.1: additive — embedded interpretation guide, per-check describe/context,

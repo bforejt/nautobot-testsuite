@@ -179,7 +179,7 @@ class CaptureSnapshot(Job):
     )
 
     class Meta:
-        name = "Capture Snapshot"
+        name = "Test Suite Capture"
         description = (
             "Collects a read-only operational snapshot from each selected device and "
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
@@ -227,7 +227,7 @@ class CaptureSnapshot(Job):
         debug=False,
     ):
         """Snapshot every selected device. Every kwarg defaults (ScheduledJob rule)."""
-        self.logger.info("Capture Snapshot starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
+        self.logger.info("Test Suite Capture starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
         device_list = list(devices) if devices is not None else []
         if not device_list:
             raise RuntimeError("No devices selected — pick at least one device.")

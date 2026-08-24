@@ -4,9 +4,9 @@ Pre/post change-validation jobs for Nautobot. Snapshot a device before a change,
 make the change, snapshot again, compare — and get a JSON verdict on the JobResult
 that separates the diffs you *declared* you would cause from the ones you did not.
 
-Two jobs, both under the **Network Validation** grouping:
+Two jobs, both under the **Test Suite** grouping:
 
-- **Capture Snapshot** — runs every read-only check the platform supports
+- **Test Suite Capture** — runs every read-only check the platform supports
   against one or more devices (mixed platforms in one run collect per device) and attaches a versioned snapshot envelope (plus a raw-evidence bundle)
   to the JobResult: `snapshot_<device>_<change_id>.json` / `raw_<device>_<change_id>.json`.
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
@@ -16,7 +16,7 @@ Two jobs, both under the **Network Validation** grouping:
   them, with your test-plan prompt, to the LLM your organization approves —
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
   index locally.)*
-- **Collector Shakedown (dev)** — hidden development job: runs *every* registered
+- **Test Suite Shakedown (dev)** — hidden development job: runs *every* registered
   check for one device's platform in debug mode and attaches per-check verdicts
   with advisories ("parsed but empty — leaf names likely differ on this
   version"), the yang-library module inventory, discovered rib/FIB instance
@@ -35,7 +35,7 @@ as source, never pip-installed:
 
 1. Add the repository URL with the **Jobs** provided content.
 2. Sync. Nautobot imports the `jobs` package and registers the jobs.
-3. Enable **Capture Snapshot** and (for development) **Collector Shakedown**
+3. Enable **Test Suite Capture** and (for development) **Test Suite Shakedown**
    under Jobs (jobs arrive disabled by design; the
    shakedown is additionally hidden from the default list).
 
@@ -49,7 +49,7 @@ group), never from job inputs.
 
 Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 
-1. **Capture pre.** Run *Capture Snapshot* with `change_id = CHG0031337`,
+1. **Capture pre.** Run *Test Suite Capture* with `change_id = CHG0031337`,
    `kind = pre`, a `change_description`, and both 9500s plus the **active**
    PA-5250 selected (each device collects everything its platform supports;
    splitting into separate runs with the same change id also works).
@@ -172,7 +172,7 @@ and the read-only grep guard.
 
 ### Bringing a collector up against a real device
 
-1. Run **Collector Shakedown (dev)** against one device of the platform.
+1. Run **Test Suite Shakedown (dev)** against one device of the platform.
 2. Read the advisories: `ok` needs nothing; "parsed but empty" means the trace
    payload holds the real leaf/element names — adjust the normalizer to match;
    "nothing fetched" is a path/transport problem (check the module inventory in
