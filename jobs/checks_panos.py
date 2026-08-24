@@ -221,23 +221,42 @@ def _parse_session_count(cli_output):
     return None
 
 
-def _select_pair_zones(zones, activity, cap):
-    """Zones eligible for the pair sweep: active ones, busiest first when capped.
+_RAW_OUTPUT_CAP = 20000  # chars kept per stored command output; dumps are not audit
 
-    ``activity`` maps zone -> summed from+to counts, with None meaning
-    "unreadable" — an unknown zone is never silently dropped. Returns
-    (paired, dropped), both sorted for stable artifacts. Field lesson: the old
-    cap kept the first N zones ALPHABETICALLY, silently dropping 9 of 21
-    zones including busy ones — selection must follow traffic, not spelling.
+
+def _record_raw(raw, command, output):
+    """Store a command's output for the audit trail, capped.
+
+    A response that unexpectedly turns out to be a full session dump must not
+    balloon the raw artifact past the platform's per-file cap (field finding).
     """
-    active = [zone for zone in zones if activity.get(zone) != 0]
-    if len(active) <= cap:
-        return sorted(active), []
-    ranked = sorted(active, key=lambda zone: (-(activity.get(zone) or 0), zone))
-    return sorted(ranked[:cap]), sorted(ranked[cap:])
+    if output is not None and len(output) > _RAW_OUTPUT_CAP:
+        raw[command] = output[:_RAW_OUTPUT_CAP] + "\n...[truncated %d chars]" % (
+            len(output) - _RAW_OUTPUT_CAP,
+        )
+    else:
+        raw[command] = output
+
+
+# Abort the sweep when this many leading responses are ALL unreadable — a
+# poisoned SSH session or wrong syntax makes hundreds more queries pointless
+# (field finding: 186/186 unparseable after unproven query forms desynced the
+# session; fail fast, keep the evidence).
+_SWEEP_ABORT_AFTER = 5
 
 
 def _collect_session_matrix(ctx):
+    """Ordered zone-pair session counts, PAIR FORM ONLY.
+
+    Only `show session all filter count yes from <A> to <B>` is field-proven;
+    single-sided from/to count queries broke a live sweep and are never sent.
+    Per-zone directional totals ("Z>*", "*>Z") are DERIVED by row/column sums
+    over the full matrix — complete because every ordered pair (intra-zone
+    included) is swept — so the normalized key surface is unchanged and the
+    from-total still reconciles against the unfiltered count in the sanity
+    check. A row/column containing an unreadable cell derives a None total
+    (unreadable, never a fabricated number).
+    """
     interfaces_command = "show interface all"
     interfaces_output = ctx.run_ssh(interfaces_command)
     zones = _parse_or_fail(_parse_zones, interfaces_output, interfaces_command)
@@ -249,58 +268,48 @@ def _collect_session_matrix(ctx):
     raw["zones"] = zones
     if len(zones) < 2:
         raise SkipCheck("fewer than two zones — no zone pairs to sweep")
+    if len(zones) * len(zones) > C.SESSION_MATRIX_MAX_PAIR_QUERIES:
+        raise CollectError(
+            "%d zones would need %d pair queries (cap %d) — this platform needs a "
+            "scoped zone list before the matrix is usable"
+            % (len(zones), len(zones) * len(zones), C.SESSION_MATRIX_MAX_PAIR_QUERIES)
+        )
 
     normalized = {}
     unparsed = []
     queries = 0
+    parsed_ok = 0
+    for a in zones:
+        for b in zones:
+            queries += 1
+            command = "show session all filter count yes from %s to %s" % (a, b)
+            output = ctx.run_ssh(command)
+            _record_raw(raw, command, output)
+            count = _parse_session_count(output)
+            pair = "%s>%s" % (a, b)
+            # None = unreadable (the capability differ's sentinel); a key
+            # absent entirely means "not swept". Never conflate with zero.
+            normalized[pair] = count
+            if count is None:
+                unparsed.append(pair)
+                if ctx.logger is not None:
+                    ctx.logger.warning(
+                        "%s: session count for %s unparseable", ctx.device_name, pair
+                    )
+            else:
+                parsed_ok += 1
+            if queries >= _SWEEP_ABORT_AFTER and parsed_ok == 0:
+                raise CollectError(
+                    "first %d count responses all unreadable — aborting the sweep "
+                    "(session or syntax problem; see the stored raw outputs)" % (queries,)
+                )
 
-    def _count_query(command, key):
-        nonlocal queries
-        queries += 1
-        output = ctx.run_ssh(command)
-        raw[command] = output
-        count = _parse_session_count(output)
-        # None = unreadable (the capability differ's sentinel); a key absent
-        # entirely means "not swept". Never conflate the two with zero.
-        normalized[key] = count
-        if count is None:
-            unparsed.append(key)
-            if ctx.logger is not None:
-                ctx.logger.warning("%s: session count for %s unparseable", ctx.device_name, key)
-        return count
-
-    # Stage 1 — per-zone directional totals, EVERY zone, never capped: the
-    # coverage layer. Every session has exactly one from-zone, so the sum of
-    # the from-totals must reconcile with the unfiltered count; a shortfall
-    # means zone discovery itself missed traffic. Filter keywords verified
-    # against the PA KB: `from <zone>` / `to <zone>` with `count yes`.
-    activity = {}
+    # Derived per-zone directional totals: the coverage layer.
     for zone in zones:
-        from_count = _count_query(
-            "show session all filter count yes from %s" % (zone,), "%s>*" % (zone,)
-        )
-        to_count = _count_query(
-            "show session all filter count yes to %s" % (zone,), "*>%s" % (zone,)
-        )
-        if from_count is None or to_count is None:
-            activity[zone] = None
-        else:
-            activity[zone] = from_count + to_count
-
-    # Stage 2 — every ORDERED pair including intra-zone (a>a), but only among
-    # zones that actually carry traffic: zero-activity zones add nothing the
-    # per-zone layer has not already proven, and the cap (busiest first) now
-    # trims pair granularity, never coverage.
-    paired, dropped = _select_pair_zones(zones, activity, C.SESSION_MATRIX_MAX_ZONES)
-    raw["zones_paired"] = paired
-    if dropped:
-        raw["zones_pair_capped"] = dropped
-    for a in paired:
-        for b in paired:
-            _count_query(
-                "show session all filter count yes from %s to %s" % (a, b),
-                "%s>%s" % (a, b),
-            )
+        row = [normalized["%s>%s" % (zone, b)] for b in zones]
+        column = [normalized["%s>%s" % (a, zone)] for a in zones]
+        normalized["%s>*" % (zone,)] = None if None in row else sum(row)
+        normalized["*>%s" % (zone,)] = None if None in column else sum(column)
 
     raw["unparsed_pairs"] = unparsed
     if unparsed and len(unparsed) * 2 > queries:

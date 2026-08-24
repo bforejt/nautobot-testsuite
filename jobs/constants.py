@@ -55,11 +55,12 @@ ROUTE_ROLLUP_TOLERANCE_ABS = 3  # per-protocol/per-type counts: "within just a c
 PEER_PREFIX_TOLERANCE_ABS = 3  # BGP per-peer installed/received prefixes
 CAPABILITY_FLOOR_PRE = 5  # session-matrix pairs at/above this pre-count are gating
 CAPABILITY_MIN_POST = 1  # ...and must show at least this many sessions post
-# Caps only the PAIR stage of the session matrix, among zones that actually
-# carry traffic, selected busiest-first. Per-zone directional totals are never
-# capped — they are the coverage layer (field lesson: an alphabetical cap here
-# once silently dropped 9 of 21 zones from the sweep).
-SESSION_MATRIX_MAX_ZONES = 12
+# Ceiling on total pair queries for the session matrix (26 zones = 676). The
+# sweep covers EVERY ordered zone pair — two field lessons shaped this: an
+# alphabetical 12-zone cap once silently dropped 9 of 21 zones, and unproven
+# single-sided count queries later poisoned an entire session — so the matrix
+# is complete-or-refused, never quietly partial.
+SESSION_MATRIX_MAX_PAIR_QUERIES = 676
 
 # --- compare-job guardrails -------------------------------------------------
 BASELINE_MAX_AGE_H = 24  # warn when the pre snapshot is older than this
