@@ -126,6 +126,7 @@ class TestSystemInfo(unittest.TestCase):
                 "model": "PA-5250",
                 "serial": "013201000001",
                 "hostname": "fw-edge-01",
+                "multi_vsys": "off",
             },
         )
 
