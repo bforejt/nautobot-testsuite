@@ -30,7 +30,11 @@ ALLOWED_PREFIXES = {
 }
 ALLOWED_EXACT = {
     "paloalto_panos": ("request license info", "check pending-changes"),
-    "cisco_xe": (),
+    # `dir` listings are pure reads; the two crashinfo filesystems are the
+    # only vetted targets (field finding: the guard correctly refused the
+    # crash-files collector until these exact commands were allowlisted).
+    # The bare `dir ` verb stays banned like every other non-show verb.
+    "cisco_xe": ("dir crashinfo:", "dir stby-crashinfo:"),
 }
 # Session-scoped presentation settings sent once after connect. Safe: they
 # alter this CLI session's output format only.
