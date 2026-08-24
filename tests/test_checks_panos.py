@@ -205,6 +205,27 @@ class TestSessionCountParser(unittest.TestCase):
         output = '<response status="success"><result>7</result></response>'
         self.assertEqual(checks._parse_session_count(output), 7)
 
+    def test_xml_count_phrase_directly_under_result(self):
+        # PANW's own parsers prove free-text op output is inconsistently
+        # wrapped: some commands put the line directly under <result> as
+        # character data (no <member>). Both shapes must parse identically.
+        output = (
+            '<response status="success"><result>'
+            "Number of sessions that match filter: 512"
+            "</result></response>"
+        )
+        self.assertEqual(checks._parse_session_count(output), 512)
+
+    def test_count_phrase_wins_over_earlier_digits(self):
+        # Phrase-anchored extraction: a stray digit earlier in the blob must
+        # never be mistaken for the count.
+        output = (
+            '<response status="success"><result><member>vsys1</member>'
+            "<member>Number of sessions that match filter: 33</member>"
+            "</result></response>"
+        )
+        self.assertEqual(checks._parse_session_count(output), 33)
+
     def test_plain_text_form(self):
         output = _loader.fixture_text("panos_session_count_text.txt")
         self.assertEqual(checks._parse_session_count(output), 23)

@@ -164,13 +164,19 @@ def _parse_zones(cli_output):
 
 
 _NO_SESSIONS = re.compile(r"no\s+active\s+sessions?", re.IGNORECASE)
+# Phrase-anchored so a stray earlier digit can never win. PAN-OS wraps free-
+# text op output inconsistently (bare text under <result> on some commands,
+# <member>-wrapped on others — both proven in PANW's own parsers), so the
+# count is extracted from ALL descendant text, never result.text alone.
+_COUNT_LINE = re.compile(r"match(?:es)?\s+filter:\s*(-?\d+)", re.IGNORECASE)
 
 
 def _parse_session_count(cli_output):
     """Count out of a 'show session all ... count yes' response, or None.
 
-    Tries the XML shapes first (a count-like element, then bare result text),
-    then the classic text line "Number of sessions that match filter: N".
+    Tries the XML shapes first (a <count> element, the anchored count phrase
+    anywhere in the result's descendant text, a bare numeric result), then the
+    classic plain-text line "Number of sessions that match filter: N".
 
     Zero matches: PAN-OS answers a zero-match count query with an EMPTY
     <result/> on a success response rather than an explicit zero (found in
@@ -188,27 +194,26 @@ def _parse_session_count(cli_output):
         return None
     result = result_of(root)
     if result is not None:
-        for path in ("count", "member/count", "member"):
+        for path in ("count", "member/count"):
             value = to_int(text(result, path))
             if value is not None:
                 return value
-        if result.text and result.text.strip():
-            value = to_int(result.text)
-            if value is not None:
-                return value
-        text_blob = "".join(result.itertext())
-        if _NO_SESSIONS.search(text_blob):
+        blob = "".join(result.itertext())
+        match = _COUNT_LINE.search(blob)
+        if match:
+            return int(match.group(1))
+        stripped = blob.strip()
+        if stripped.lstrip("-").isdigit():
+            return int(stripped)
+        if _NO_SESSIONS.search(blob):
             return 0
-        if len(result) == 0 and not text_blob.strip():
+        if len(result) == 0 and not stripped:
             return 0
-    for line in (cli_output or "").splitlines():
-        lowered = line.lower()
-        if "match" in lowered and "filter" in lowered:
-            value = to_int(line)
-            if value is not None:
-                return value
-        if _NO_SESSIONS.search(line):
-            return 0
+    match = _COUNT_LINE.search(cli_output or "")
+    if match:
+        return int(match.group(1))
+    if cli_output and _NO_SESSIONS.search(cli_output):
+        return 0
     return None
 
 
