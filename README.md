@@ -6,8 +6,8 @@ that separates the diffs you *declared* you would cause from the ones you did no
 
 Three jobs, all under the **Network Validation** grouping:
 
-- **Capture Snapshot** — runs a package of read-only checks against one or more
-  devices and attaches a versioned snapshot envelope (plus a raw-evidence bundle)
+- **Capture Snapshot** — runs every read-only check the platform supports
+  against one or more devices (mixed platforms in one run collect per device) and attaches a versioned snapshot envelope (plus a raw-evidence bundle)
   to the JobResult: `snapshot_<device>_<change_id>.json` / `raw_<device>_<change_id>.json`.
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
   full transport trace (every RESTCONF path and SSH command with timing, outcome,
@@ -50,14 +50,16 @@ group), never from job inputs.
 Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 
 1. **Capture pre.** Run *Capture Snapshot* with `change_id = CHG0031337`,
-   `kind = pre`, package `fw-cutover-core-switch` against both 9500s, and again
-   with package `fw-cutover-firewall` against the **active** PA-5250.
+   `kind = pre`, a `change_description`, and both 9500s plus the **active**
+   PA-5250 selected (each device collects everything its platform supports;
+   splitting into separate runs with the same change id also works).
 2. **Cut over.** Do the change.
-3. **Capture post.** Same runs, `kind = post`, same `change_id` — the firewall
-   run now targets the active VM-500.
-4. **Compare.** Run *Compare Snapshots* with the pre and post capture JobResults
-   (`pre_result` / `post_result`). The firewall was renamed, so `device_map`
-   maps the pre-change device name to its post-change replacement:
+3. **Capture post.** Same again, `kind = post`, same `change_id` — now
+   targeting the active VM-500 as the firewall.
+4. **Compare (optional deterministic assist).** Run *Compare Snapshots* typing
+   just the `change_id` — it merges every matching capture run per side. The
+   firewall was renamed, so `device_map` maps the pre-change device name to
+   its post-change replacement:
 
    ```json
    {"dc1-fw-5250-a": "dc1-fw-vm500-a"}
@@ -107,18 +109,22 @@ the humans reading the report.
 | `panos_ipsec` | panos | 1 | IKE and IPsec SA presence per gateway/tunnel |
 | `panos_licenses` | panos | 3 | Licensed features and their expiry flags |
 | `panos_resources` | panos | 3 | Resource-monitor snapshot, stored verbatim (informational) |
+| `panos_bgp_peers` | panos | 1 | BGP peer states, engine-aware (not-present when BGP is unused) |
+| `panos_globalprotect` | panos | 3 | GlobalProtect user count (not-present when GP is unused) |
+| `panos_dhcp` | panos | 3 | DHCP server lease overview (not-present when DHCP is unused) |
+| `iosxe_dhcp` | iosxe | 3 | DHCP server/relay configuration (not-present when unused) |
 
-## Test packages
+## Always-everything capture
 
-Selection is data, not code (`jobs/registry.py`); a package may mix platforms and
-is filtered to each target device's platform at run time.
-
-| Package | Contents |
-| --- | --- |
-| `full` | Every registered check for the device's platform |
-| `fw-cutover-core-switch` | Routes (RIB/FIB/rollups), BGP, OSPF, ARP, CDP/LLDP, interfaces, platform health |
-| `fw-cutover-firewall` | System info, HA, sessions, session matrix, routes, interfaces, ARP, IPsec, licenses, resources |
-| `quick-health` | Interfaces, neighbors, platform health (iosxe) + system info, HA, session count (panos) |
+Capture-time subsetting (the old "test packages") is retired by doctrine:
+every capture collects **everything the device's platform supports**, and a
+mixed selection (core switches + a firewall in one run) collects per-platform
+per device automatically. Features that are not in use record loudly as
+`not-present` — that is information, not noise: BGP quietly appearing on a
+firewall, or DHCP config vanishing from a switch, is exactly the kind of
+change worth seeing. Subsets happen at **analysis time**, in the engineer's
+test-plan prompt ("for this change, focus on the session matrix and routes").
+`override_checks` remains as a development tool for running a single check.
 
 ## Read-only guarantee
 

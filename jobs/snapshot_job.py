@@ -149,11 +149,6 @@ class CaptureSnapshot(Job):
         default="pre",
         description="Which side of the change this capture is.",
     )
-    package = ChoiceVar(
-        choices=[(pkg, pkg) for pkg in sorted(registry.PACKAGES)],
-        default="full",
-        description="Test package; filtered to each device's platform at run time.",
-    )
     override_checks = StringVar(
         required=False,
         description="Comma-separated check ids replacing the package selection.",
@@ -190,9 +185,10 @@ class CaptureSnapshot(Job):
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
             "`raw_*.json` evidence bundle per device. The device platform picks the "
             "transport (RESTCONF for IOS-XE, SSH for PAN-OS — both structurally "
-            "read-only), the chosen package (or an explicit `override_checks` list) "
-            "picks the checks, and every check records a normalized view alongside its "
-            "raw evidence. Run once as `pre` before the change and once as `post` after "
+            "read-only), every check the platform supports runs by doctrine — features "
+            "not in use record loudly as not-present — and each records a normalized "
+            "view alongside its raw evidence. Run once as `pre` before the change and "
+            "once as `post` after "
             "it, with the same change id, then feed both JobResults to *Compare "
             "Snapshots*. A device with any failed check marks the run FAILED (a bad "
             "baseline must be loud) but its envelope is still attached."
@@ -210,7 +206,6 @@ class CaptureSnapshot(Job):
             "change_id",
             "change_description",
             "kind",
-            "package",
             "override_checks",
             "secrets_group",
             "dryrun",
@@ -243,10 +238,13 @@ class CaptureSnapshot(Job):
         if kind not in dict(KINDS):
             raise RuntimeError("kind must be one of: %s" % (", ".join(dict(KINDS)),))
         override_ids = _parse_override_checks(override_checks)
-        if override_ids is None and package not in registry.PACKAGES:
-            raise RuntimeError(
-                "Unknown package %r; valid packages: %s"
-                % (package, ", ".join(sorted(registry.PACKAGES)))
+        if package not in ("", "full", None):
+            # Retired input, kept in the signature so stored ScheduledJob
+            # kwargs replay cleanly. Capture is always-everything by doctrine.
+            self.logger.info(
+                "package %r is retired — capturing every check the platform "
+                "supports (subset at analysis time instead).",
+                package,
             )
 
         succeeded, failed = [], []
@@ -385,15 +383,14 @@ class CaptureSnapshot(Job):
         if override_ids is not None:
             checks = registry.checks_for(platform, override_ids)
         else:
-            checks = registry.checks_for(platform, registry.package_check_ids(package, platform))
+            checks = registry.checks_for(platform)
         checks = sorted(checks, key=lambda check: (check.tier, check.id))
         check_ids = [check.id for check in checks]
         if not checks:
             # An empty selection is operator error (wrong package for the platform),
             # and an empty "baseline" would pass every later compare — fail loudly.
             self.logger.error(
-                "%s: no checks in the selection apply to platform %s — pick a package "
-                "that covers this platform (or fix override_checks).",
+                "%s: no checks in the selection apply to platform %s — fix override_checks.",
                 device.name,
                 platform,
                 extra=log_extra,
@@ -416,7 +413,7 @@ class CaptureSnapshot(Job):
             change_id=change_id,
             change_description=change_description,
             kind=kind,
-            package=package,
+            package="full",
             check_ids=check_ids,
             job_info={
                 "job_result_id": str(self.job_result.pk),

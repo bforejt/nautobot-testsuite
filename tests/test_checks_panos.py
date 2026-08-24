@@ -652,6 +652,9 @@ class TestRegistrations(unittest.TestCase):
         "panos_ipsec",
         "panos_licenses",
         "panos_resources",
+        "panos_bgp_peers",
+        "panos_globalprotect",
+        "panos_dhcp",
     }
 
     def test_all_registered_once(self):
@@ -660,10 +663,9 @@ class TestRegistrations(unittest.TestCase):
         }
         self.assertEqual(registered, self.EXPECTED_IDS)
 
-    def test_firewall_package_resolves_to_panos_only(self):
-        ids = registry.package_check_ids("fw-cutover-firewall", "panos")
-        self.assertEqual(set(ids), self.EXPECTED_IDS)
-        self.assertEqual(registry.package_check_ids("fw-cutover-firewall", "iosxe"), [])
+    def test_checks_for_filters_by_platform(self):
+        ids = {check.id for check in registry.checks_for("panos")}
+        self.assertEqual(ids, self.EXPECTED_IDS)
 
     def test_every_check_has_collector_and_valid_mode(self):
         diffcore = _loader.diffcore

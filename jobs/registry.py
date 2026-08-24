@@ -59,52 +59,11 @@ def checks_for(platform, check_ids=None):
     return resolved
 
 
-# --- test packages -----------------------------------------------------------
-# A package may mix platforms; the capture job filters to the target device's
-# platform. None means "every registered check for the platform".
-
-PACKAGES = {
-    "full": None,
-    "fw-cutover-core-switch": [
-        "iosxe_routes_rib",
-        "iosxe_routes_fib",
-        "iosxe_route_rollups",
-        "iosxe_bgp_peers",
-        "iosxe_ospf_neighbors",
-        "iosxe_arp",
-        "iosxe_neighbors",
-        "iosxe_interfaces",
-        "iosxe_platform_health",
-    ],
-    "fw-cutover-firewall": [
-        "panos_system_info",
-        "panos_ha",
-        "panos_session_info",
-        "panos_session_meter",
-        "panos_session_matrix",
-        "panos_routes",
-        "panos_interfaces",
-        "panos_arp",
-        "panos_ipsec",
-        "panos_licenses",
-        "panos_resources",
-    ],
-    "quick-health": [
-        "iosxe_interfaces",
-        "iosxe_neighbors",
-        "iosxe_platform_health",
-        "panos_system_info",
-        "panos_ha",
-        "panos_session_info",
-    ],
-}
-
-
-def package_check_ids(package, platform):
-    """Check ids for a package on one platform; None package entry means all."""
-    ids = PACKAGES.get(package)
-    checks = checks_for(platform, ids)
-    return [check.id for check in checks]
+# Capture-time subsetting (the old "test packages" concept) is retired by
+# doctrine: capture EVERYTHING the platform supports, always — a feature that
+# is not configured records loudly as "not-present", which is information,
+# not noise. Subsets happen at ANALYSIS time, in the engineer's test-plan
+# prompt. `override_checks` on the capture job remains as a development tool.
 
 
 # --- per-check semantics (embedded into every snapshot for LLM/human readers) -
@@ -231,6 +190,27 @@ SEMANTICS = {
         "buffers). Never compared — hardware and VM dataplanes are architecturally "
         "different; judge post-change values against absolute headroom, not the "
         "baseline."
+    ),
+    "panos_bgp_peers": (
+        "The firewall's BGP peers keyed 'peer|<name-or-address>' with session state. "
+        "Recorded as not-present when BGP is unused — always asked by doctrine, so "
+        "BGP quietly appearing or disappearing across a change is visible."
+    ),
+    "panos_globalprotect": (
+        "GlobalProtect connected-user count. Not-present when GP is unlicensed/"
+        "unconfigured — always asked by doctrine. User counts vary by time of day; "
+        "informational, never equality-compared."
+    ),
+    "panos_dhcp": (
+        "DHCP server lease overview: lease count and serving interfaces in context. "
+        "Not-present when DHCP is unused — always asked by doctrine. Individual "
+        "leases churn constantly; informational only."
+    ),
+    "iosxe_dhcp": (
+        "The switch's DHCP server/relay configuration (native config, stable) as one "
+        "comparable blob under key 'dhcp-config'. Not-present when no DHCP config "
+        "exists — always asked by doctrine. Per-interface helper addresses live in "
+        "interface config, not here."
     ),
 }
 

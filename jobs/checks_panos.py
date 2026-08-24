@@ -947,3 +947,129 @@ register(
         tags=("system",),
     )
 )
+
+
+# --- always-on optional-feature checks ---------------------------------------
+# Doctrine: always ask, even for features this network may not use — a
+# "not-present" record is information, not noise. Defensively parsed: a
+# command rejected on some release records as not-present with the reason,
+# never as garbage (command forms below are shakedown-pending on real 11.2).
+
+
+def _cli_rejected(cli_output):
+    """True when the CLI refused the command (error response or rejection text)."""
+    try:
+        root = extract_xml(cli_output)
+        if root.tag == "response" and root.get("status") == "error":
+            return True
+    except PanosParseError:
+        pass
+    lowered = (cli_output or "").lower()
+    return "invalid syntax" in lowered or "unknown command" in lowered
+
+
+def _collect_bgp_peers(ctx):
+    raw = {}
+    for command in ("show routing protocol bgp summary", "show advanced-routing bgp summary"):
+        output = ctx.run_ssh(command)
+        _record_raw(raw, command, output)
+        if _cli_rejected(output):
+            continue
+        try:
+            result = result_of(extract_xml(output))
+        except PanosParseError:
+            continue
+        normalized = {}
+        for entry in result.findall(".//entry") if result is not None else []:
+            peer = entry.get("name") or text(entry, "peer-address") or text(entry, "peer")
+            if not peer:
+                continue
+            normalized["peer|%s" % (peer,)] = {
+                "state": text(entry, "state") or text(entry, "status") or "unknown"
+            }
+        if normalized:
+            return {"raw": raw, "normalized": normalized}
+    raise SkipCheck("BGP not running (or summary form unsupported — verify via shakedown)")
+
+
+def _collect_globalprotect(ctx):
+    command = "show global-protect-gateway statistics"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("GlobalProtect not licensed/configured on this device")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError as exc:
+        raise CollectError("show global-protect-gateway statistics: %s" % (exc,)) from exc
+    current = None
+    if result is not None:
+        current = to_int(text(result, "TotalCurrentUsers"))
+        if current is None:
+            current = to_int(text(result, "total-current-users"))
+    if current is None:
+        raise SkipCheck("GlobalProtect statistics empty — not in use")
+    return {"raw": raw, "normalized": {"current_users": current}}
+
+
+def _collect_dhcp(ctx):
+    command = "show dhcp server lease all"
+    output = ctx.run_ssh(command)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck("DHCP server not in use (or lease form unsupported — verify via shakedown)")
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    entries = result.findall(".//entry") if result is not None else []
+    context = {"lease_count": len(entries)}
+    interfaces = sorted({text(entry, "interface") for entry in entries} - {None})
+    if interfaces:
+        context["interfaces"] = interfaces
+    return {"raw": raw, "normalized": {}, "context": context}
+
+
+register(
+    CheckDef(
+        id="panos_bgp_peers",
+        platform="panos",
+        description="BGP peer states (engine-aware; not-present when BGP is unused)",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A BGP peer on the firewall changed state — routing exchange with that "
+            "neighbor is impaired."
+        ),
+        collector=_collect_bgp_peers,
+        tags=("routing",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_globalprotect",
+        platform="panos",
+        description="GlobalProtect gateway user count (not-present when GP is unused)",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_globalprotect,
+        tags=("vpn",),
+    )
+)
+
+register(
+    CheckDef(
+        id="panos_dhcp",
+        platform="panos",
+        description="DHCP server lease overview (not-present when DHCP is unused)",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_dhcp,
+        tags=("services",),
+    )
+)

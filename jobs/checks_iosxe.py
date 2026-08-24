@@ -650,3 +650,36 @@ register(
         tags=("platform",),
     )
 )
+
+
+# --- iosxe_dhcp (always-on optional feature) ----------------------------------
+# Doctrine: always ask, even where DHCP is not expected — "not-present" is a
+# recorded fact. Config, not oper: stable and equality-comparable.
+
+
+def _collect_dhcp_config(ctx):
+    payload = ctx.get("/data/Cisco-IOS-XE-native:native/ip/dhcp", ok_404=True)
+    if not payload:
+        raise SkipCheck("no DHCP server/relay configuration present")
+    # The container key carries an augment-module prefix that varies by train;
+    # store the inner config as one stable blob rather than guessing leaves.
+    container = next(iter(payload.values())) if isinstance(payload, dict) else payload
+    normalized = {"dhcp-config": {"value": container}}
+    return {"raw": {"native/ip/dhcp": payload}, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="iosxe_dhcp",
+        platform="iosxe",
+        description="DHCP server/relay configuration (not-present when unused)",
+        tier=3,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "The switch's DHCP configuration changed — pools or relay behavior differ "
+            "from the baseline."
+        ),
+        collector=_collect_dhcp_config,
+        tags=("services",),
+    )
+)
