@@ -221,6 +221,22 @@ def _parse_session_count(cli_output):
     return None
 
 
+def _select_pair_zones(zones, activity, cap):
+    """Zones eligible for the pair sweep: active ones, busiest first when capped.
+
+    ``activity`` maps zone -> summed from+to counts, with None meaning
+    "unreadable" — an unknown zone is never silently dropped. Returns
+    (paired, dropped), both sorted for stable artifacts. Field lesson: the old
+    cap kept the first N zones ALPHABETICALLY, silently dropping 9 of 21
+    zones including busy ones — selection must follow traffic, not spelling.
+    """
+    active = [zone for zone in zones if activity.get(zone) != 0]
+    if len(active) <= cap:
+        return sorted(active), []
+    ranked = sorted(active, key=lambda zone: (-(activity.get(zone) or 0), zone))
+    return sorted(ranked[:cap]), sorted(ranked[cap:])
+
+
 def _collect_session_matrix(ctx):
     interfaces_command = "show interface all"
     interfaces_output = ctx.run_ssh(interfaces_command)
@@ -230,45 +246,66 @@ def _collect_session_matrix(ctx):
     if excluded:
         raw["zones_excluded"] = excluded
         zones = [zone for zone in zones if _SAFE_ZONE.match(zone)]
-    if len(zones) > C.SESSION_MATRIX_MAX_ZONES:
-        raw["zones_truncated"] = {"zone_count": len(zones), "used": C.SESSION_MATRIX_MAX_ZONES}
-        zones = zones[: C.SESSION_MATRIX_MAX_ZONES]
     raw["zones"] = zones
     if len(zones) < 2:
         raise SkipCheck("fewer than two zones — no zone pairs to sweep")
+
     normalized = {}
     unparsed = []
-    total = 0
-    # Every ORDERED pair including intra-zone (a>a): sessions between
-    # interfaces in the same zone are real traffic, and without them the
-    # matrix total could never reconcile with `show session info`.
-    # Filter keywords verified against the PA KB: `from <zone>` / `to <zone>`
-    # with `count yes` — NOT `from-zone`/`to-zone`, which the CLI rejects for
-    # every pair (found in the field: 12k active sessions, zero parsed pairs).
-    for a in zones:
-        for b in zones:
-            total += 1
-            command = "show session all filter count yes from %s to %s" % (a, b)
-            output = ctx.run_ssh(command)
-            raw[command] = output
-            count = _parse_session_count(output)
-            pair = "%s>%s" % (a, b)
-            # An unparseable count goes into the normalized view as None — the
-            # capability differ treats it as "unreadable", never as zero. Only
-            # keys absent entirely mean "not swept" (zone-set mismatch).
-            normalized[pair] = count
-            if count is None:
-                unparsed.append(pair)
-                if ctx.logger is not None:
-                    ctx.logger.warning(
-                        "%s: session count for zone pair %s unparseable",
-                        ctx.device_name,
-                        pair,
-                    )
+    queries = 0
+
+    def _count_query(command, key):
+        nonlocal queries
+        queries += 1
+        output = ctx.run_ssh(command)
+        raw[command] = output
+        count = _parse_session_count(output)
+        # None = unreadable (the capability differ's sentinel); a key absent
+        # entirely means "not swept". Never conflate the two with zero.
+        normalized[key] = count
+        if count is None:
+            unparsed.append(key)
+            if ctx.logger is not None:
+                ctx.logger.warning("%s: session count for %s unparseable", ctx.device_name, key)
+        return count
+
+    # Stage 1 — per-zone directional totals, EVERY zone, never capped: the
+    # coverage layer. Every session has exactly one from-zone, so the sum of
+    # the from-totals must reconcile with the unfiltered count; a shortfall
+    # means zone discovery itself missed traffic. Filter keywords verified
+    # against the PA KB: `from <zone>` / `to <zone>` with `count yes`.
+    activity = {}
+    for zone in zones:
+        from_count = _count_query(
+            "show session all filter count yes from %s" % (zone,), "%s>*" % (zone,)
+        )
+        to_count = _count_query(
+            "show session all filter count yes to %s" % (zone,), "*>%s" % (zone,)
+        )
+        if from_count is None or to_count is None:
+            activity[zone] = None
+        else:
+            activity[zone] = from_count + to_count
+
+    # Stage 2 — every ORDERED pair including intra-zone (a>a), but only among
+    # zones that actually carry traffic: zero-activity zones add nothing the
+    # per-zone layer has not already proven, and the cap (busiest first) now
+    # trims pair granularity, never coverage.
+    paired, dropped = _select_pair_zones(zones, activity, C.SESSION_MATRIX_MAX_ZONES)
+    raw["zones_paired"] = paired
+    if dropped:
+        raw["zones_pair_capped"] = dropped
+    for a in paired:
+        for b in paired:
+            _count_query(
+                "show session all filter count yes from %s to %s" % (a, b),
+                "%s>%s" % (a, b),
+            )
+
     raw["unparsed_pairs"] = unparsed
-    if unparsed and len(unparsed) * 2 > total:
+    if unparsed and len(unparsed) * 2 > queries:
         raise CollectError(
-            "%d of %d zone-pair counts unparseable — sweep unusable" % (len(unparsed), total)
+            "%d of %d session counts unparseable — sweep unusable" % (len(unparsed), queries)
         )
     _sanity_check_matrix(ctx, raw, normalized)
     return {"raw": raw, "normalized": normalized}
@@ -314,8 +351,14 @@ def _sanity_check_matrix(ctx, raw, normalized):
       informational note, not a warning (field finding: 5.9k matrix vs 12.7k
       num-active with a complete matrix).
     """
-    matrix_total = sum(count for count in normalized.values() if isinstance(count, int))
-    raw["matrix_total"] = matrix_total
+    pair_total = sum(
+        count for key, count in normalized.items() if "*" not in key and isinstance(count, int)
+    )
+    from_total = sum(
+        count for key, count in normalized.items() if key.endswith(">*") and isinstance(count, int)
+    )
+    raw["matrix_total"] = pair_total
+    raw["from_zone_total"] = from_total
 
     filterable = None
     try:
@@ -337,13 +380,15 @@ def _sanity_check_matrix(ctx, raw, normalized):
         raw["session_info_at_sweep"] = "unavailable: %s" % (exc,)
     active = counters.get("active")
 
-    if isinstance(filterable, int) and filterable >= 100 and matrix_total * 5 < filterable * 4:
-        # >20% below the same engine's unfiltered count: pairs are missing.
+    if isinstance(filterable, int) and filterable >= 100 and from_total * 5 < filterable * 4:
+        # The from-totals cover EVERY discovered zone, so falling >20% below
+        # the same engine's unfiltered count means discovery itself missed
+        # traffic — not a pair-cap artifact.
         message = (
-            "session matrix totals %d but the unfiltered session count is %d — the "
-            "sweep is missing traffic (zones absent from the sweep, or multi-vsys "
-            "scoping); check raw zones/zones_excluded; treat the matrix as suspect"
-            % (matrix_total, filterable)
+            "per-zone from-totals sum to %d but the unfiltered session count is %d — "
+            "zone discovery missed traffic (zones absent from 'show interface all' "
+            "parsing, zones_excluded, or multi-vsys scoping); treat the matrix as "
+            "suspect" % (from_total, filterable)
         )
         raw["sanity_warning"] = message
         if ctx.logger is not None:
@@ -352,13 +397,13 @@ def _sanity_check_matrix(ctx, raw, normalized):
         filterable is None
         and isinstance(active, int)
         and active >= 100
-        and (matrix_total * 2 < active)
+        and (from_total * 2 < active)
     ):
         # Fallback heuristic when the unfiltered count could not be read.
         message = (
-            "session matrix totals %d but the firewall reports %d active sessions "
-            "(unfiltered filter-count unavailable) — possibly missing traffic; "
-            "treat the matrix as suspect" % (matrix_total, active)
+            "per-zone from-totals sum to %d but the firewall reports %d active "
+            "sessions (unfiltered filter-count unavailable) — possibly missing "
+            "traffic; treat the matrix as suspect" % (from_total, active)
         )
         raw["sanity_warning"] = message
         if ctx.logger is not None:

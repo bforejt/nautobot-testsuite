@@ -34,19 +34,48 @@ class _FakeCtx:
 _EMPTY_RESULT = '<response status="success"><result/></response>'
 
 
+def _count_response(value):
+    return (
+        '<response status="success"><result><member>'
+        "Number of sessions that match filter: %d</member></result></response>" % (value,)
+    )
+
+
 def _matrix_outputs(zones, interfaces, per_pair_output, unfiltered_output=_EMPTY_RESULT):
-    """Canned _FakeCtx outputs for a full matrix sweep (intra-zone included)."""
+    """Canned _FakeCtx outputs for a full sweep: per-zone totals + all pairs."""
     outputs = {
         "show interface all": interfaces,
         "show session info": _loader.fixture_text("panos_session_info.txt"),
         "show session all filter count yes": unfiltered_output,
     }
+    for zone in zones:
+        outputs["show session all filter count yes from %s" % (zone,)] = per_pair_output
+        outputs["show session all filter count yes to %s" % (zone,)] = per_pair_output
     for src in zones:
         for dst in zones:
             outputs["show session all filter count yes from %s to %s" % (src, dst)] = (
                 per_pair_output
             )
     return outputs
+
+
+class TestSelectPairZones(unittest.TestCase):
+    def test_zero_activity_dropped_unknown_kept(self):
+        zones = ["a", "b", "c", "d"]
+        activity = {"a": 100, "b": 0, "c": None, "d": 5}
+        paired, dropped = checks._select_pair_zones(zones, activity, 12)
+        self.assertEqual(paired, ["a", "c", "d"])
+        self.assertEqual(dropped, [])
+
+    def test_cap_keeps_busiest_not_alphabetical(self):
+        # Field lesson: an alphabetical cap once dropped 9 of 21 zones,
+        # including busy ones late in the alphabet.
+        zones = ["z%02d" % i for i in range(15)]
+        activity = {zone: index * 10 for index, zone in enumerate(zones)}
+        paired, dropped = checks._select_pair_zones(zones, activity, 4)
+        self.assertEqual(paired, ["z11", "z12", "z13", "z14"])  # busiest four
+        self.assertIn("z01", dropped)  # early alphabet, low activity: dropped
+        self.assertNotIn("z00", dropped)  # zero activity: not even active
 
 
 class TestSessionMatrix(unittest.TestCase):
@@ -57,11 +86,7 @@ class TestSessionMatrix(unittest.TestCase):
         zones = checks._parse_zones(interfaces)
         self.assertGreaterEqual(len(zones), 2)
         a, b = zones[0], zones[1]
-        good = (
-            '<response status="success"><result><member>'
-            "Number of sessions that match filter: 12</member></result></response>"
-        )
-        outputs = _matrix_outputs(zones, interfaces, good)
+        outputs = _matrix_outputs(zones, interfaces, _count_response(12))
         broken = "show session all filter count yes from %s to %s" % (a, b)
         outputs[broken] = "Server error: unexpected response"
         result = checks._collect_session_matrix(_FakeCtx(outputs))
@@ -69,16 +94,18 @@ class TestSessionMatrix(unittest.TestCase):
         self.assertIn(pair, result["normalized"])
         self.assertIsNone(result["normalized"][pair])
         self.assertEqual(result["raw"]["unparsed_pairs"], [pair])
-        # Intra-zone pairs are swept too — without them the matrix could never
-        # reconcile with the active-session total.
+        # Intra-zone pairs are swept too, and the per-zone coverage layer
+        # exists for every zone.
         self.assertIn("%s>%s" % (a, a), result["normalized"])
+        self.assertEqual(result["normalized"]["%s>*" % (a,)], 12)
+        self.assertEqual(result["normalized"]["*>%s" % (a,)], 12)
 
     def test_zero_match_pairs_read_as_zero_without_false_alarm(self):
-        # Field regression: every pair empty (<result/>) must be a measured 0,
+        # Field regression: every count empty (<result/>) must be a measured 0,
         # not unparseable. With the unfiltered filter-count ALSO at zero, the
-        # matrix agrees with its own engine — no missing-traffic warning even
-        # though num-active is large; the num-active gap is an informational
-        # note (predict/mcast/closing sessions are not filter-enumerable).
+        # sweep agrees with its own engine — no missing-traffic warning even
+        # though num-active is large; that gap is an informational note. With
+        # zero activity everywhere, the pair stage runs on nothing.
         interfaces = _loader.fixture_text("panos_interfaces.txt")
         zones = checks._parse_zones(interfaces)
         result = checks._collect_session_matrix(
@@ -87,29 +114,59 @@ class TestSessionMatrix(unittest.TestCase):
         self.assertEqual(result["raw"]["unparsed_pairs"], [])
         self.assertTrue(all(count == 0 for count in result["normalized"].values()))
         self.assertEqual(result["raw"]["matrix_total"], 0)
+        self.assertEqual(result["raw"]["from_zone_total"], 0)
         self.assertEqual(result["raw"]["filterable_at_sweep"], 0)
         self.assertEqual(result["raw"]["session_info_at_sweep"]["active"], 48213)
+        self.assertEqual(result["raw"]["zones_paired"], [])
         self.assertNotIn("sanity_warning", result["raw"])
         self.assertIn("not missing traffic", result["raw"]["note_active_vs_filterable"])
 
-    def test_matrix_far_below_unfiltered_count_warns_missing_traffic(self):
-        # The same filter engine reports far more sessions than the swept
-        # pairs sum to: pairs are genuinely missing (zones absent, multi-vsys).
+    def test_from_totals_far_below_unfiltered_count_warns_missing_traffic(self):
+        # The coverage layer (per-zone from-totals over EVERY zone) summing far
+        # below the same engine's unfiltered count means zone discovery itself
+        # missed traffic — never a pair-cap artifact.
         interfaces = _loader.fixture_text("panos_interfaces.txt")
         zones = checks._parse_zones(interfaces)
-        good = (
-            '<response status="success"><result><member>'
-            "Number of sessions that match filter: 12</member></result></response>"
-        )
-        unfiltered = (
-            '<response status="success"><result><member>'
-            "Number of sessions that match filter: 12000</member></result></response>"
-        )
         result = checks._collect_session_matrix(
-            _FakeCtx(_matrix_outputs(zones, interfaces, good, unfiltered))
+            _FakeCtx(
+                _matrix_outputs(zones, interfaces, _count_response(12), _count_response(12000))
+            )
         )
         self.assertEqual(result["raw"]["filterable_at_sweep"], 12000)
-        self.assertIn("missing traffic", result["raw"]["sanity_warning"])
+        self.assertIn("zone discovery missed traffic", result["raw"]["sanity_warning"])
+
+    def test_pair_sweep_limited_to_active_zones(self):
+        # Zero-activity zones stay in the per-zone coverage layer but are not
+        # paired — the _FakeCtx raises on any unexpected command, so a pair
+        # query against an inactive zone would fail this test by itself.
+        interfaces = _loader.fixture_text("panos_interfaces.txt")
+        zones = checks._parse_zones(interfaces)
+        self.assertGreaterEqual(len(zones), 3)
+        busy = sorted(zones[:2])
+        outputs = {
+            "show interface all": interfaces,
+            "show session info": _loader.fixture_text("panos_session_info.txt"),
+            "show session all filter count yes": _count_response(200),
+        }
+        for zone in zones:
+            value = _count_response(100) if zone in busy else _EMPTY_RESULT
+            outputs["show session all filter count yes from %s" % (zone,)] = value
+            outputs["show session all filter count yes to %s" % (zone,)] = value
+        for a in busy:
+            for b in busy:
+                outputs["show session all filter count yes from %s to %s" % (a, b)] = (
+                    _count_response(50)
+                )
+        result = checks._collect_session_matrix(_FakeCtx(outputs))
+        self.assertEqual(result["raw"]["zones_paired"], busy)
+        for a in busy:
+            for b in busy:
+                self.assertEqual(result["normalized"]["%s>%s" % (a, b)], 50)
+        for zone in zones:
+            if zone in busy:
+                continue
+            self.assertNotIn("%s>%s" % (zone, zone), result["normalized"])
+            self.assertEqual(result["normalized"]["%s>*" % (zone,)], 0)
 
 
 class TestSystemInfo(unittest.TestCase):
