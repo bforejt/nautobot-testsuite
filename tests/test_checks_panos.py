@@ -848,6 +848,7 @@ class TestRegistrations(unittest.TestCase):
         "panos_disk_space",
         "panos_panorama",
         "panos_environmentals",
+        "panos_syslog_events",
     }
 
     def test_all_registered_once(self):
@@ -1071,6 +1072,39 @@ class TestReadinessCluster(unittest.TestCase):
         self.assertEqual(result["normalized"], {"env|Temperature @ CPU": {"alarm": "False"}})
         with self.assertRaises(checks.SkipCheck):
             checks._collect_environmentals(_FakeCtx({"show system environmentals": _EMPTY_RESULT}))
+
+
+class TestSyslogEvents(unittest.TestCase):
+    def _now(self):
+        from datetime import datetime, timezone
+
+        return datetime(2026, 8, 24, 20, 0, 0, tzinfo=timezone.utc)
+
+    def _command(self):
+        return 'show log system start-time equal "2026/08/23 20:00:00" direction equal backward'
+
+    def test_window_command_and_severity_counting(self):
+        output = (
+            '<response status="success"><result>'
+            "<entry><severity>critical</severity><eventid>ras-auth-fail</eventid></entry>"
+            "<entry><severity>critical</severity><eventid>ras-auth-fail</eventid></entry>"
+            "<entry><severity>high</severity><eventid>link-down</eventid></entry>"
+            "<entry><severity>informational</severity><eventid>general</eventid></entry>"
+            "</result></response>"
+        )
+        ctx = _FakeCtx({self._command(): output})
+        result = checks._collect_syslog_events(ctx, now=self._now())
+        self.assertEqual(result["normalized"]["critical|ras-auth-fail"], {"count": 2})
+        self.assertEqual(result["normalized"]["high|link-down"], {"count": 1})
+        self.assertEqual(result["context"]["events_in_window"], 4)
+        self.assertEqual(result["context"]["below_high_severity"], 1)
+
+    def test_rejected_grammar_skips_and_never_falls_back(self):
+        ctx = _FakeCtx({self._command(): "Invalid syntax."})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_syslog_events(ctx, now=self._now())
+        # The bounded command was the ONLY command issued — no unbounded retry.
+        self.assertEqual(len(ctx.commands), 1)
 
 
 if __name__ == "__main__":

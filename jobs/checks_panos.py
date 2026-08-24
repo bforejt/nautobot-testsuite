@@ -20,7 +20,7 @@ not exist on this path.
 
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import constants as C
 from .panos_xml import PanosParseError, extract_xml, result_of, text, to_int
@@ -1813,5 +1813,75 @@ register(
         ),
         collector=_collect_environmentals,
         tags=("platform",),
+    )
+)
+
+
+# --- panos_syslog_events (time-bounded — never unbounded with the pager off) --
+
+
+def _collect_syslog_events(ctx, now=None):
+    """System-log events from the last LOG_WINDOW_HOURS, newest first.
+
+    The time bound is load-bearing: with `set cli pager off` an unbounded
+    `show log system` streams the entire log database (field-confirmed: the
+    CLI pages it interactively; we run pager-less). If this release rejects
+    the bounded grammar, the check skips with the reason — it must NEVER fall
+    back to an unbounded form. Normalized counts high/critical events by
+    eventid (novelty is the analyst's signal); lower severities are counted
+    in context; the raw tail is capped as always.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    start = now - timedelta(hours=C.LOG_WINDOW_HOURS)
+    command = 'show log system start-time equal "%s" direction equal backward' % (
+        start.strftime("%Y/%m/%d %H:%M:%S"),
+    )
+    output = ctx.run_ssh(command, timeout=C.SSH_BIG_READ_TIMEOUT)
+    raw = {}
+    _record_raw(raw, command, output)
+    if _cli_rejected(output):
+        raise SkipCheck(
+            "time-bounded log query rejected on this release — report the accepted "
+            "grammar; an unbounded form is deliberately never attempted"
+        )
+    try:
+        result = result_of(extract_xml(output))
+    except PanosParseError:
+        result = None
+    normalized = {}
+    lower_severities = 0
+    total = 0
+    for entry in result.findall(".//entry") if result is not None else []:
+        total += 1
+        severity = (text(entry, "severity") or "unknown").lower()
+        eventid = text(entry, "eventid") or text(entry, "subtype") or "unknown"
+        if severity in ("high", "critical"):
+            key = "%s|%s" % (severity, eventid)
+            slot = normalized.setdefault(key, {"count": 0})
+            slot["count"] += 1
+        else:
+            lower_severities += 1
+    return {
+        "raw": raw,
+        "normalized": normalized,
+        "context": {
+            "window_hours": C.LOG_WINDOW_HOURS,
+            "events_in_window": total,
+            "below_high_severity": lower_severities,
+        },
+    }
+
+
+register(
+    CheckDef(
+        id="panos_syslog_events",
+        platform="panos",
+        description="High/critical system-log event counts from the last 24 hours",
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_syslog_events,
+        tags=("system",),
     )
 )

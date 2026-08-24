@@ -343,6 +343,14 @@ SEMANTICS = {
         "down, w waiting, H hot-standby — a suspended member quietly halves bundle "
         "capacity without downing the port-channel."
     ),
+    "panos_syslog_events": (
+        "High/critical system-log event counts from the capture-relative window "
+        "(context notes window hours and how many lower-severity events were "
+        "counted but not keyed). Keys 'severity|eventid'. Informational — counts "
+        "drift; the analyst reads NOVELTY: event types present after the change "
+        "that were absent before. The query is always time-bounded; an unbounded "
+        "log dump is never issued."
+    ),
     "panos_rule_hit_counts": (
         "Security and NAT rules keyed '<rulebase>|<rule-name>' with cumulative hit "
         "counts and last-hit timestamps (vsys1). Two signals in one: the rule-NAME "

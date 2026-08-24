@@ -69,3 +69,8 @@ SESSION_MATRIX_MAX_PAIR_QUERIES = 676
 # only — ancient crash files must never create diff noise (operator
 # requirement).
 CRASH_RECENT_DAYS = 7
+
+# System-log capture window (hours back from capture time). The query is
+# ALWAYS time-bounded: with the pager off, an unbounded `show log system`
+# would stream the entire log database (field-confirmed paging behavior).
+LOG_WINDOW_HOURS = 24

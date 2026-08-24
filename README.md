@@ -121,6 +121,7 @@ the humans reading the report.
 | `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
 | `panos_panorama` | panos | 1 | Panorama connectivity per configured server |
 | `panos_environmentals` | panos | 3 | Hardware environmental ALARM states (not-present on VM) |
+| `panos_syslog_events` | panos | 3 | High/critical system-log event counts, last 24 h (time-bounded query) |
 
 ## Always-everything capture
 
