@@ -497,6 +497,7 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_syslog_errors",
         "iosxe_svl_health",
         "iosxe_ntp",
+        "iosxe_routing_config",
     }
 
     def test_all_registered_once(self):
@@ -516,6 +517,44 @@ class TestRegistrations(unittest.TestCase):
                 continue
             self.assertTrue(callable(check.collector), check.id)
             self.assertIn(check.compare.get("mode", "equality_set"), diffcore.MODES, check.id)
+
+
+class TestRoutingConfig(unittest.TestCase):
+    def test_scrub_masks_credential_keys_recursively(self):
+        node = {
+            "router": {
+                "bgp": [
+                    {
+                        "id": 65000,
+                        "neighbor": [{"id": "203.0.113.9", "password": {"text": "hunter2"}}],
+                    }
+                ],
+                "ospf": {"authentication-key": "k3y", "area": [{"id": 0}]},
+            }
+        }
+        scrubbed = checks._scrub_secrets(node)
+        self.assertEqual(scrubbed["router"]["bgp"][0]["neighbor"][0]["password"], "***scrubbed***")
+        self.assertEqual(scrubbed["router"]["ospf"]["authentication-key"], "***scrubbed***")
+        self.assertEqual(scrubbed["router"]["ospf"]["area"], [{"id": 0}])
+
+    def test_collector_sections_and_skip(self):
+        class _Ctx:
+            def __init__(self, payloads):
+                self.payloads = payloads
+
+            def get(self, path, **kwargs):
+                return self.payloads.get(path)
+
+        payloads = {
+            "/data/Cisco-IOS-XE-native:native/ip/route": {
+                "Cisco-IOS-XE-native:route": {"ip-route-interface-forwarding-list": []}
+            }
+        }
+        result = checks._collect_routing_config(_Ctx(payloads))
+        self.assertIn("ip-route", result["normalized"])
+        self.assertNotIn("router", result["normalized"])
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_routing_config(_Ctx({}))
 
 
 if __name__ == "__main__":

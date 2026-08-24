@@ -928,8 +928,9 @@ class TestTierBChecks(unittest.TestCase):
             "<hit-count>120345</hit-count><last-hit-timestamp>2026/08/24 10:00:01"
             "</last-hit-timestamp></entry></result></response>"
         )
+        primary = "show rule-hit-count vsys vsys-name vsys1 rule-base security rules all"
         outputs = {
-            "show rule-hit-count vsys vsys1 rule-base security rules all": "Invalid syntax.",
+            primary: "Invalid syntax.",
             "show running rule-use hit-count vsys vsys1 rule-base security rules all": hit,
             "show running rule-use hit-count vsys vsys1 rule-base nat rules all": _EMPTY_RESULT,
         }
@@ -941,12 +942,14 @@ class TestTierBChecks(unittest.TestCase):
         )
         # Once the fallback form is accepted, the primary form is not retried
         # for the second rulebase.
-        self.assertNotIn("show rule-hit-count vsys vsys1 rule-base nat rules all", ctx.commands)
+        self.assertNotIn(
+            "show rule-hit-count vsys vsys-name vsys1 rule-base nat rules all", ctx.commands
+        )
         both_rejected = {
             form % (rulebase,): "Invalid syntax."
             for rulebase in ("security", "nat")
             for form in (
-                "show rule-hit-count vsys vsys1 rule-base %s rules all",
+                "show rule-hit-count vsys vsys-name vsys1 rule-base %s rules all",
                 "show running rule-use hit-count vsys vsys1 rule-base %s rules all",
             )
         }

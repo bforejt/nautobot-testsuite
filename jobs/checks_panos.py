@@ -1342,8 +1342,10 @@ def _collect_nat_pools(ctx):
 
 
 def _collect_rule_hit_counts(ctx):
+    # Field-verified on 11.2: the rule-hit-count tree takes a literal
+    # `vsys-name` keyword before the value; the rule-use fallback does not.
     forms = (
-        "show rule-hit-count vsys vsys1 rule-base %s rules all",
+        "show rule-hit-count vsys vsys-name vsys1 rule-base %s rules all",
         "show running rule-use hit-count vsys vsys1 rule-base %s rules all",
     )
     raw = {}

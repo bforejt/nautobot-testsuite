@@ -212,6 +212,14 @@ SEMANTICS = {
         "exists — always asked by doctrine. Per-interface helper addresses live in "
         "interface config, not here."
     ),
+    "iosxe_routing_config": (
+        "What a human TYPED: static-route statements and the OSPF/BGP router "
+        "stanzas as stable config blobs (keys ip-route/ipv6-route/router), with "
+        "credential-looking values masked. Config has zero volatility, so any diff "
+        "is either the planned edit (verify it matches the change plan exactly) or "
+        "an undeclared mid-window change. Config-vs-state separates operator error "
+        "from network reaction."
+    ),
     "iosxe_syslog_errors": (
         "Counts of error-and-worse syslog events (severity 0-3) from the finite "
         "logging buffer, keyed 'sev<N>|%FACILITY-N-MNEMONIC'. Informational: counts "

@@ -945,3 +945,69 @@ register(
         tags=("services",),
     )
 )
+
+
+# --- iosxe_routing_config (approved: intended-change vs network-reaction) -----
+# Captures what a human TYPED (static routes + router stanzas), not what the
+# control plane decided — separating operator error from network behavior, and
+# catching mid-window edits with no immediate RIB effect. Config is perfectly
+# stable, so two healthy captures diff to nothing.
+
+_SECRET_KEY_TOKENS = ("password", "secret", "community", "authentication-key", "auth-key")
+
+
+def _scrub_secrets(node):
+    """Recursively mask values whose key names suggest credentials.
+
+    Router stanzas can carry neighbor passwords and auth keys; these artifacts
+    get downloaded and pasted into LLM conversations, so secrets must never
+    leave the device inside a snapshot. Masks in place, returns the node.
+    """
+    if isinstance(node, dict):
+        for key in list(node):
+            if any(token in key.lower() for token in _SECRET_KEY_TOKENS):
+                node[key] = "***scrubbed***"
+            else:
+                _scrub_secrets(node[key])
+    elif isinstance(node, list):
+        for item in node:
+            _scrub_secrets(item)
+    return node
+
+
+def _collect_routing_config(ctx):
+    sections = (
+        ("ip-route", "/data/Cisco-IOS-XE-native:native/ip/route"),
+        ("ipv6-route", "/data/Cisco-IOS-XE-native:native/ipv6/route"),
+        ("router", "/data/Cisco-IOS-XE-native:native/router"),
+    )
+    raw = {}
+    normalized = {}
+    for label, path in sections:
+        payload = ctx.get(path, ok_404=True)
+        raw[path] = payload
+        if not payload:
+            continue
+        inner = next(iter(payload.values())) if isinstance(payload, dict) else payload
+        normalized[label] = {"value": _scrub_secrets(inner)}
+    if not normalized:
+        raise SkipCheck("no static-route or router configuration present")
+    return {"raw": raw, "normalized": normalized}
+
+
+register(
+    CheckDef(
+        id="iosxe_routing_config",
+        platform="iosxe",
+        description="Static-route and router-stanza configuration (secrets scrubbed)",
+        tier=2,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "The routing CONFIGURATION changed — either the planned edit (verify it "
+            "matches the change plan exactly) or a mid-window edit nobody declared. "
+            "Config-vs-state separates operator error from network reaction."
+        ),
+        collector=_collect_routing_config,
+        tags=("routing", "config"),
+    )
+)
