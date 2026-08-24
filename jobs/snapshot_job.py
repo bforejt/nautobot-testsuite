@@ -39,7 +39,7 @@ from . import creds, envelope, registry
 from .context import CollectorContext
 from .panos_xml import PanosParseError
 from .registry import CollectError, SkipCheck
-from .transport_restconf import RestconfClient, RestconfError
+from .transport_restconf import RestconfClient, RestconfError, probe_hint
 from .transport_ssh import SshCommandRefused, SshRunner
 
 # Jobs-UI grouping header (house convention).
@@ -324,14 +324,11 @@ class CaptureSnapshot(Job):
                 record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
                 restconf.close()
                 self.logger.error(
-                    "%s: RESTCONF unreachable at %s — verify `restconf` is enabled, "
-                    "HTTPS/%s is reachable, and the account is privilege 15. If "
-                    "RESTCONF was enabled recently the DMI may still be "
-                    "initializing: `show platform software yang-management process` "
-                    "should show every process Running. (probe: %s)",
+                    "%s: RESTCONF unreachable at %s:%s — %s (probe: %s)",
                     device.name,
                     host,
                     C.RESTCONF_PORT,
+                    probe_hint(record),
                     record,
                     extra=log_extra,
                 )
