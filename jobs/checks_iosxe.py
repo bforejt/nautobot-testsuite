@@ -1016,21 +1016,16 @@ register(
 
 # --- iosxe_optics + iosxe_crash_files (approved TAC-lens additions) -----------
 
-_OPTICS_LINE = re.compile(
+_OPTICS_TABLE_LINE = re.compile(
     r"^(\S+\d\S*)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+|N/A)\s+(-?[\d.]+|N/A)\s*$"
 )
 
 
-def _parse_optics(cli_output):
-    """'show interfaces transceiver' table -> {iface: {tx_dbm, rx_dbm}}.
-
-    Temperature/voltage/current are environmental jitter — raw only. Light
-    levels are the new-link health signal: marginal optics on freshly cabled
-    ports pass up/down checks while quietly eating frames.
-    """
+def _parse_optics_table(cli_output):
+    """Bare 'show interfaces transceiver' combined table -> {iface: {tx_dbm, rx_dbm}}."""
     normalized = {}
     for line in (cli_output or "").splitlines():
-        match = _OPTICS_LINE.match(line.strip())
+        match = _OPTICS_TABLE_LINE.match(line.strip())
         if not match:
             continue
         iface, _temp, _volt, _cur, tx, rx = match.groups()
@@ -1046,18 +1041,78 @@ def _parse_optics(cli_output):
     return normalized
 
 
+# Detail-format sections we keep; everything else (temperature/voltage/
+# current) is environmental jitter and stays in raw.
+_OPTICS_SECTIONS = (
+    ("transmit power", "tx"),
+    ("receive power", "rx"),
+    ("temperature", None),
+    ("voltage", None),
+    ("current", None),
+)
+# Value line: port, current value, then an optional threshold-violation marker
+# (++ high alarm, -- low alarm, + / - warns). Lookaheads keep a single +/-
+# marker from swallowing the sign of the negative THRESHOLD that follows.
+_OPTICS_DETAIL_LINE = re.compile(r"^(\S+\d/\S*)\s+(-?[\d.]+)\s*(\+\+|--|\+(?![\d.])|-(?![\d.]))?")
+
+
+def _parse_optics_detail(cli_output):
+    """'show interfaces transceiver detail' -> {iface: {tx_dbm, rx_dbm, *flags}}.
+
+    Field-verified format: detail prints SEPARATE per-metric tables, each
+    port per line with the live value, threshold columns, and a violation
+    marker beside out-of-range values — the marker rides along as
+    tx_flag/rx_flag (an alarm the optic itself is raising).
+    """
+    normalized = {}
+    section = None
+    for line in (cli_output or "").splitlines():
+        lowered = line.lower()
+        matched_section = False
+        for token, tag in _OPTICS_SECTIONS:
+            if token in lowered:
+                section = tag
+                matched_section = True
+                break
+        if matched_section:
+            continue
+        if section is None:
+            continue
+        match = _OPTICS_DETAIL_LINE.match(line.strip())
+        if not match:
+            continue
+        iface, value, flag = match.groups()
+        entry = normalized.setdefault(iface, {})
+        entry["%s_dbm" % (section,)] = float(value)
+        if flag:
+            entry["%s_flag" % (section,)] = flag
+    return {iface: entry for iface, entry in normalized.items() if entry}
+
+
 def _collect_optics(ctx):
     if not ctx.has_ssh:
         raise SkipCheck("no SSH transport")
-    command = "show interfaces transceiver"
-    output = ctx.run_ssh(command)
-    lowered = (output or "").lower()
-    if "invalid input" in lowered or "incomplete command" in lowered:
-        raise SkipCheck("transceiver command rejected on this platform")
-    normalized = _parse_optics(output)
-    if not normalized:
-        raise SkipCheck("no DOM-capable transceivers reported")
-    return {"raw": {command: output}, "normalized": normalized}
+    raw = {}
+    accepted = False
+    # Field-verified: this platform requires the `detail` keyword (the bare
+    # form answers "Incomplete command"); other platforms accept the bare
+    # combined table, kept as the fallback.
+    for command, parser in (
+        ("show interfaces transceiver detail", _parse_optics_detail),
+        ("show interfaces transceiver", _parse_optics_table),
+    ):
+        output = ctx.run_ssh(command)
+        raw[command] = output
+        lowered = (output or "").lower()
+        if "invalid input" in lowered or "incomplete command" in lowered:
+            continue
+        accepted = True
+        normalized = parser(output)
+        if normalized:
+            return {"raw": raw, "normalized": normalized}
+    if accepted:
+        raise SkipCheck("no DOM-capable transceivers reported (or format needs shakedown)")
+    raise SkipCheck("transceiver command forms rejected on this platform")
 
 
 _MONTHS = {

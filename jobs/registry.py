@@ -274,12 +274,15 @@ SEMANTICS = {
         "real finding to look for in the raw tables."
     ),
     "iosxe_optics": (
-        "Transceiver DOM light levels per optical port: tx_dbm/rx_dbm. Healthy "
-        "short-reach optics typically read roughly 0 to -10 dBm; values plunging "
-        "toward -30 mean little/no light (dirty/bad fiber or optic) — the classic "
-        "new-link failure that passes up/down checks while quietly eating frames. "
-        "Temperature/voltage stay in raw as jitter. Informational: levels drift "
-        "tenths of dB between healthy captures."
+        "Transceiver DOM light levels per optical port: tx_dbm/rx_dbm, plus "
+        "tx_flag/rx_flag when the optic itself marks a threshold violation "
+        "(-- low alarm, ++ high alarm, single -/+ warns). Healthy short-reach "
+        "optics typically read roughly 0 to -10 dBm; values plunging toward -30 "
+        "mean little/no light (dirty/bad fiber or optic) — the classic new-link "
+        "failure that passes up/down checks while quietly eating frames. Any "
+        "*_flag present is the optic raising its own alarm. Temperature/voltage "
+        "stay in raw as jitter. Informational: levels drift tenths of dB between "
+        "healthy captures."
     ),
     "iosxe_crash_files": (
         "Crash and system-report files WITHIN the recency window (context notes the "

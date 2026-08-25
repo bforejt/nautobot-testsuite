@@ -570,9 +570,71 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
             "Te1/0/1      31.9       3.28      6.1       -2.5      -3.1\n"
             "Te1/0/2      30.0       3.28      0.0       N/A       -30.0\n"
         )
-        normalized = checks._parse_optics(output)
+        normalized = checks._parse_optics_table(output)
         self.assertEqual(normalized["Te1/0/1"], {"tx_dbm": -2.5, "rx_dbm": -3.1})
         self.assertEqual(normalized["Te1/0/2"], {"rx_dbm": -30.0})
+
+    def test_optics_detail_sections_and_alarm_flags(self):
+        # Field-verified format: separate per-metric tables; violation
+        # markers beside out-of-range values become *_flag entries. A
+        # negative THRESHOLD after the value must never read as a marker.
+        output = (
+            "                          High Alarm  High Warn  Low Warn   Low Alarm\n"
+            "     Temperature          Threshold   Threshold  Threshold  Threshold\n"
+            "Port (Celsius)            (Celsius)   (Celsius)  (Celsius)  (Celsius)\n"
+            "---- -------------------- ----------  ---------  ---------  ---------\n"
+            "Te1/1/1   28.5               75.0        70.0        0.0       -5.0\n"
+            "\n"
+            "     Optical              High Alarm  High Warn  Low Warn   Low Alarm\n"
+            "     Transmit Power       Threshold   Threshold  Threshold  Threshold\n"
+            "Port (dBm)                (dBm)       (dBm)      (dBm)      (dBm)\n"
+            "---- -------------------- ----------  ---------  ---------  ---------\n"
+            "Te1/1/1   -2.1                1.6         0.6       -8.2      -9.2\n"
+            "\n"
+            "     Optical              High Alarm  High Warn  Low Warn   Low Alarm\n"
+            "     Receive Power        Threshold   Threshold  Threshold  Threshold\n"
+            "Port (dBm)                (dBm)       (dBm)      (dBm)      (dBm)\n"
+            "---- -------------------- ----------  ---------  ---------  ---------\n"
+            "Te1/1/1   -3.4                2.4         1.4      -13.2     -15.2\n"
+            "Te1/1/2  -30.1 --             2.4         1.4      -13.2     -15.2\n"
+        )
+        normalized = checks._parse_optics_detail(output)
+        self.assertEqual(normalized["Te1/1/1"], {"tx_dbm": -2.1, "rx_dbm": -3.4})
+        self.assertEqual(normalized["Te1/1/2"], {"rx_dbm": -30.1, "rx_flag": "--"})
+
+    def test_optics_collector_falls_back_and_skips(self):
+        class _Ctx:
+            has_ssh = True
+
+            def __init__(self, outputs):
+                self.outputs = outputs
+                self.commands = []
+
+            def run_ssh(self, command, **kwargs):
+                self.commands.append(command)
+                return self.outputs[command]
+
+        rejected = "% Invalid input detected at marker"
+        table = (
+            "Port       (Celsius)    (Volts)  (mA)      (dBm)     (dBm)\n"
+            "Te1/0/1      31.9       3.28      6.1       -2.5      -3.1\n"
+        )
+        ctx = _Ctx(
+            {
+                "show interfaces transceiver detail": rejected,
+                "show interfaces transceiver": table,
+            }
+        )
+        result = checks._collect_optics(ctx)
+        self.assertEqual(result["normalized"]["Te1/0/1"], {"tx_dbm": -2.5, "rx_dbm": -3.1})
+        both = _Ctx(
+            {
+                "show interfaces transceiver detail": rejected,
+                "show interfaces transceiver": rejected,
+            }
+        )
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_optics(both)
 
     def test_crash_dir_recency_window(self):
         from datetime import datetime, timezone
