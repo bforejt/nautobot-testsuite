@@ -1063,5 +1063,39 @@ class TestSyslogEvents(unittest.TestCase):
         self.assertEqual(len(ctx.commands), 1)
 
 
+class TestBgpPeers(unittest.TestCase):
+    def test_peer_form_primary_with_entries(self):
+        peer_output = (
+            '<response status="success"><result><entry name="core-a">'
+            "<peer-address>10.9.25.2:179</peer-address><status>Established</status>"
+            "<peer-as>65000</peer-as></entry></result></response>"
+        )
+        ctx = _FakeCtx({"show routing protocol bgp peer": peer_output})
+        result = checks._collect_bgp_peers(ctx)
+        self.assertEqual(
+            result["normalized"]["peer|core-a"],
+            {"state": "Established", "address": "10.9.25.2:179", "peer_as": "65000"},
+        )
+        # Peer form satisfied — summary/ARE forms never issued.
+        self.assertEqual(ctx.commands, ["show routing protocol bgp peer"])
+
+    def test_unitemized_summary_falls_through_field_regression(self):
+        # Field regression: summary is ACCEPTED but does not itemize peers as
+        # <entry> elements — the old summary-first order recorded zero BGP
+        # sessions on boxes actively running BGP during the cutover.
+        flat_summary = (
+            '<response status="success"><result><member>'
+            "peers: 2 established: 2</member></result></response>"
+        )
+        outputs = {
+            "show routing protocol bgp peer": "Invalid syntax.",
+            "show routing protocol bgp summary": flat_summary,
+            "show advanced-routing bgp peer": "Invalid syntax.",
+            "show advanced-routing bgp summary": "Invalid syntax.",
+        }
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_bgp_peers(_FakeCtx(outputs))
+
+
 if __name__ == "__main__":
     unittest.main()

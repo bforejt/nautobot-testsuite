@@ -981,8 +981,19 @@ def _cli_rejected(cli_output):
 
 
 def _collect_bgp_peers(ctx):
+    """BGP peers, engine-aware. Field-verified on 11.2: `show routing protocol
+    bgp peer` answers one <entry> per peer (the shape this parser hunts),
+    while the accepted `summary` form does NOT itemize peers as entries — a
+    capture during the cutover recorded zero sessions because summary was
+    tried first. Peer form leads; summary stays as fallback; the
+    advanced-routing forms remain last for any future ARE box."""
     raw = {}
-    for command in ("show routing protocol bgp summary", "show advanced-routing bgp summary"):
+    for command in (
+        "show routing protocol bgp peer",
+        "show routing protocol bgp summary",
+        "show advanced-routing bgp peer",
+        "show advanced-routing bgp summary",
+    ):
         output = ctx.run_ssh(command)
         _record_raw(raw, command, output)
         if _cli_rejected(output):
@@ -996,12 +1007,17 @@ def _collect_bgp_peers(ctx):
             peer = entry.get("name") or text(entry, "peer-address") or text(entry, "peer")
             if not peer:
                 continue
-            normalized["peer|%s" % (peer,)] = {
-                "state": text(entry, "state") or text(entry, "status") or "unknown"
-            }
+            value = {"state": text(entry, "state") or text(entry, "status") or "unknown"}
+            address = text(entry, "peer-address") or text(entry, "address")
+            if address is not None:
+                value["address"] = address
+            peer_as = text(entry, "peer-as") or text(entry, "remote-as")
+            if peer_as is not None:
+                value["peer_as"] = peer_as
+            normalized["peer|%s" % (peer,)] = value
         if normalized:
             return {"raw": raw, "normalized": normalized}
-    raise SkipCheck("BGP not running (or summary form unsupported — verify via shakedown)")
+    raise SkipCheck("BGP not running (or peer/summary forms unsupported — verify via shakedown)")
 
 
 def _collect_globalprotect(ctx):

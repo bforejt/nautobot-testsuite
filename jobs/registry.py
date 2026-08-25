@@ -192,9 +192,12 @@ SEMANTICS = {
         "baseline."
     ),
     "panos_bgp_peers": (
-        "The firewall's BGP peers keyed 'peer|<name-or-address>' with session state. "
+        "The firewall's BGP peers keyed 'peer|<name>' with session state "
+        "(Established is healthy), peer address, and remote AS when reported. "
         "Recorded as not-present when BGP is unused — always asked by doctrine, so "
-        "BGP quietly appearing or disappearing across a change is visible."
+        "BGP quietly appearing or disappearing across a change is visible. This is "
+        "the firewall's own view of the peering the switch-side check sees from "
+        "the other end."
     ),
     "panos_globalprotect": (
         "GlobalProtect connected-user count. Not-present when GP is unlicensed/"
