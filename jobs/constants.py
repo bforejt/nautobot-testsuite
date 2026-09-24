@@ -47,6 +47,61 @@ DATA_DEVICE_SYSTEM = (
 # serving data at all — not a single quirky model.
 DATA_YANG_LIBRARY = "/data/ietf-yang-library:modules-state?depth=1"
 
+# --- Redfish (Lenovo XClarity Controller on the SE350) ----------------------
+# Tabled 2026-09-24: the XCCs at the current NFV sites are unreachable from the
+# worker, so the platform is switched off here rather than removed — the
+# transport, checks, fixtures and tests all stay green and ready. Flip to True
+# to re-enable; both jobs refuse an xcc device with an operator-facing message
+# while this is False. When revived, detection should also accept a BMC
+# modelled as an Interface on the host Device (name from XCC_INTERFACE_NAMES,
+# with an assigned address) and attach its evidence as a separate
+# snapshot_<device>-xcc_<change_id>.json artifact.
+XCC_ENABLED = False
+XCC_INTERFACE_NAMES = ("xcc", "xclarity", "bmc", "ilo", "idrac", "imm")
+# GET-only over HTTPS with Basic auth on every request: no SessionService
+# login, so nothing is ever created on the BMC. Every Basic-auth GET is an
+# XCC login and an AuditLog entry — the budgets below keep that footprint
+# proportionate.
+REDFISH_PORT = 443
+REDFISH_GET_TIMEOUT = 60  # XCC answers most resources in < 2 s; $expand walks take longer
+# Minimum spacing between two GETs to one XCC. Lenovo tip HT512365 reports the
+# Redfish service on SE350 going out of service under request stress; the
+# number is prudent, not verified (the tip returned 403 during research).
+REDFISH_MIN_INTERVAL = 1.0
+# Ceiling a collector may declare through ctx.budget(); higher is a mis-scoped
+# check, not a bigger budget. Exceeding a declared budget raises — a capture
+# is complete-or-refused, never silently partial (session-matrix lesson).
+REDFISH_MAX_CHECK_BUDGET = 40
+REDFISH_SERVICE_ROOT = "/redfish/v1/"
+# Reachability/authorization probe target: the one ComputerSystem an SE350
+# serves. Answering 2xx here proves HTTPS, Basic auth and the role at once.
+REDFISH_PROBE_SYSTEM = "/redfish/v1/Systems/1"
+
+# --- vSphere SOAP (standalone ESXi 8.x hostd, /sdk) --------------------------
+# POST by protocol, read-only by operation allowlist (jobs/vsphere_soap.py
+# OPERATIONS) and by the Read-only ESXi role on the server side. See the
+# README's read-only guarantee and the CI "SOAP operation guard" step.
+VSPHERE_PORT = 443
+VSPHERE_SDK_PATH = "/sdk"
+# Unauthenticated: lists the SOAP namespaces hostd serves, so the SOAPAction
+# version is discovered per host instead of hard-coded.
+VSPHERE_VERSIONS_PATH = "/sdk/vimServiceVersions.xml"
+VSPHERE_CALL_TIMEOUT = 120  # one RetrievePropertiesEx round trip
+VSPHERE_BIG_CALL_TIMEOUT = 300  # config.option (~1 200 OptionValues) and per-VM device arrays
+VSPHERE_LOGIN_TIMEOUT = 30
+VSPHERE_LOCALE = "en"  # fixed so device labels ("Network adapter 1") are stable across captures
+# The suite talks to hosts directly; a vCenter answering here (apiType
+# "VirtualCenter") violates that constraint and is refused, not noted.
+VSPHERE_REQUIRED_API_TYPE = "HostAgent"
+# Hard cap on ContinueRetrievePropertiesEx pages per call — a token that never
+# clears must not spin the job to its time limit.
+VSPHERE_MAX_PAGES = 50
+
+# Which credential access type each platform resolves from its Secrets Group.
+# creds._access_types cascades any non-ssh label through RESTCONF/HTTP/REST/
+# GENERIC, so the two HTTPS platforms need no creds.py change.
+TRANSPORT_FOR = {"iosxe": "restconf", "panos": "ssh", "vmware": "https", "xcc": "https"}
+
 # --- SSH --------------------------------------------------------------------
 SSH_CONNECT_TIMEOUT = 15
 SSH_READ_TIMEOUT = 90  # several PAN-OS shows run long

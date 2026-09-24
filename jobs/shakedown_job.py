@@ -12,6 +12,7 @@ fail the JobResult — finding them is its purpose. It is hidden from the
 default job list (development tooling, not an operator surface).
 """
 
+import json
 import time
 
 from nautobot.apps.jobs import Job, ObjectVar
@@ -20,16 +21,43 @@ from nautobot.extras.models import SecretsGroup
 
 from . import constants as C
 from . import creds, envelope, registry
+from .checks_vmware import (
+    _HARDWARE_PATHS,
+    _HEALTH_PATHS,
+    _HOST_MOID,
+    _NETWORK_PATHS,
+    _OPTION_PATHS,
+    _SERVICE_PATHS,
+)
+from .checks_xcc import (
+    _FIRMWARE,
+    _HOST_NICS,
+    _LOG_SERVICES,
+    _MANAGER,
+    _MANAGER_NICS,
+    _MEMORY,
+    _PCIE,
+    _PROCESSORS,
+    _ROOT,
+    _STORAGE,
+    _SYSTEM,
+)
 from .context import CollectorContext
 from .registry import SkipCheck
 from .snapshot_job import (
+    PLATFORM_HINT,
+    PLATFORM_NAMES,
     SoftTimeLimitExceeded,
     _attach_artifact,
     _device_host,
     _map_platform,
 )
+from .transport_redfish import RedfishClient
+from .transport_redfish import probe_hint as redfish_probe_hint
 from .transport_restconf import RestconfClient, probe_hint
 from .transport_ssh import SshRunner
+from .transport_vsphere import VsphereClient, VsphereError
+from .transport_vsphere import probe_hint as vsphere_probe_hint
 
 # Jobs-UI grouping header (house convention).
 name = C.UI_GROUP
@@ -100,6 +128,224 @@ def _fib_instances(ctx):
     ]
 
 
+# --- xcc discovery -----------------------------------------------------------
+# The Redfish questions the collectors were written around (plan §8). Every
+# path is the collectors' own spelling, so the per-run cache serves both.
+
+# Collections the inventory/firmware/storage/NIC checks walk: their member
+# counts with the host on AND off are what sizes the per-check GET budgets.
+XCC_COLLECTIONS = (
+    ("memory", _MEMORY),
+    ("processors", _PROCESSORS),
+    ("pcie_devices", _PCIE),
+    ("host_nics", _HOST_NICS),
+    ("firmware_inventory", _FIRMWARE),
+    ("storage", _STORAGE),
+    ("manager_nics", _MANAGER_NICS),
+)
+
+
+def _xcc_service_root(ctx):
+    """RedfishVersion and ProtocolFeaturesSupported ($expand decides the GET budget strategy)."""
+    root = ctx.get(_ROOT) or {}
+    return {
+        "redfish_version": root.get("RedfishVersion"),
+        "protocol_features": root.get("ProtocolFeaturesSupported"),
+        "vendor": root.get("Vendor"),
+        "product": root.get("Product"),
+    }
+
+
+def _xcc_manager_links(ctx):
+    """Which Oem.Lenovo resources Managers/1 links — Security is the ThinkEdge one."""
+    manager = ctx.get(_MANAGER) or {}
+    oem = (manager.get("Oem") or {}).get("Lenovo") or {}
+    links, scalars = {}, []
+    for key, value in sorted(oem.items()):
+        if isinstance(value, dict) and value.get("@odata.id"):
+            links[key] = value["@odata.id"]
+        elif not isinstance(value, (dict, list)):
+            scalars.append(key)
+    return {
+        "firmware_version": manager.get("FirmwareVersion"),
+        "model": manager.get("Model"),
+        "oem_lenovo_links": links,
+        "oem_lenovo_scalars": scalars,
+    }
+
+
+def _xcc_log_services(ctx):
+    """LogServices members under Systems/1 (PlatformLog vs StandardLog picks the log branch)."""
+    services = ctx.get(_LOG_SERVICES) or {}
+    return {
+        "members": [
+            member.get("@odata.id")
+            for member in _aslist(services.get("Members"))
+            if isinstance(member, dict)
+        ]
+    }
+
+
+def _xcc_collection_counts(ctx):
+    """Member count per collection with the host power state (inventory is POST-populated)."""
+    system = ctx.get(_SYSTEM) or {}
+    counts = {}
+    for label, path in XCC_COLLECTIONS:
+        payload = ctx.get(path, ok_404=True)
+        if payload is None:
+            counts[label] = "absent (404)"
+            continue
+        count = payload.get("Members@odata.count")
+        counts[label] = count if isinstance(count, int) else len(_aslist(payload.get("Members")))
+    return {"host_power_state": system.get("PowerState"), "collections": counts}
+
+
+# --- vmware discovery --------------------------------------------------------
+# The ESXi questions from plan §8 that the collectors cannot answer for
+# themselves. Each probe requests a property group with the collectors' own
+# kwargs, so the cache issues one RetrievePropertiesEx for both.
+
+
+def _host_props(ctx, paths, **options):
+    """One HostSystem property group: (props, missing paths). Unset optionals are absent."""
+    result = ctx.call(
+        "RetrievePropertiesEx",
+        type="HostSystem",
+        moids=[_HOST_MOID],
+        paths=list(paths),
+        **options,
+    )
+    for obj in (result or {}).get("objects") or []:
+        if (obj.get("obj") or {}).get("moid") == _HOST_MOID:
+            missing = [entry.get("path") for entry in obj.get("missing") or []]
+            return obj.get("props") or {}, missing
+    return {}, ["%s not in the answer" % (_HOST_MOID,)]
+
+
+def _esxi_lockdown(ctx):
+    """config.lockdownMode as the Read-only user reads it, plus vCenter membership."""
+    props, missing = _host_props(ctx, _SERVICE_PATHS)
+    services = _aslist((props.get("config.service") or {}).get("service"))
+    return {
+        "lockdown_mode": props.get("config.lockdownMode"),
+        "management_server_ip": props.get("summary.managementServerIp"),
+        "services_total": len(services),
+        "missing": missing,
+    }
+
+
+def _esxi_network_shape(ctx):
+    """PhysicalNic version leaves, live route table, proxySwitch, selectedVnic form, and
+    whether each uplink hears a CDP/LLDP far port (QueryNetworkHint connectedSwitchPort)."""
+    props, missing = _host_props(ctx, _NETWORK_PATHS)
+    network = props.get("config.network") or {}
+    pnics = [pnic for pnic in _aslist(network.get("pnic")) if isinstance(pnic, dict)]
+    manager = props.get("config.virtualNicManagerInfo") or {}
+    selected = []
+    for net_config in _aslist(manager.get("netConfig")):
+        if isinstance(net_config, dict):
+            selected.extend(_aslist(net_config.get("selectedVnic")))
+    report = {
+        "pnics": {
+            pnic.get("device"): {
+                "driver": pnic.get("driver"),
+                "driver_version_present": "driverVersion" in pnic,
+                "firmware_version_present": "firmwareVersion" in pnic,
+            }
+            for pnic in pnics
+        },
+        "vswitches": len(_aslist(network.get("vswitch"))),
+        "portgroups": len(_aslist(network.get("portgroup"))),
+        "proxy_switches": len(_aslist(network.get("proxySwitch"))),
+        "route_table_info_present": isinstance(network.get("routeTableInfo"), dict),
+        "selected_vnics": selected,
+        "network_system": (props.get("configManager.networkSystem") or {}).get("moid"),
+        "missing": missing,
+    }
+    if report["network_system"]:
+        # <device> omitted, exactly as the neighbor/vlan collectors ask.
+        hints = ctx.call("QueryNetworkHint", network_system=report["network_system"])
+        report["hints"] = {
+            hint.get("device"): {
+                "connected_switch_port": isinstance(hint.get("connectedSwitchPort"), dict),
+                "lldp_info": isinstance(hint.get("lldpInfo"), dict),
+                "subnets": len(_aslist(hint.get("subnet"))),
+                "networks": len(_aslist(hint.get("network"))),
+            }
+            for hint in _aslist(hints)
+            if isinstance(hint, dict)
+        }
+    return report
+
+
+def _esxi_health_runtime(ctx):
+    """Whether runtime.healthSystemRuntime is populated with wbem off, and which half."""
+    props, missing = _host_props(ctx, _HEALTH_PATHS)
+    runtime = props.get("runtime.healthSystemRuntime") or {}
+    sensors = _aslist((runtime.get("systemHealthInfo") or {}).get("numericSensorInfo"))
+    status = runtime.get("hardwareStatusInfo") or {}
+    halves = {
+        half: len(_aslist(status.get(half)))
+        for half in ("cpuStatusInfo", "memoryStatusInfo", "storageStatusInfo")
+    }
+    return {
+        "numeric_sensors": len(sensors),
+        "hardware_status": halves,
+        "populated": bool(sensors) or any(halves.values()),
+        "missing": missing,
+    }
+
+
+def _esxi_hardware_shape(ctx):
+    """HostPciDevice id form and whether pciPassthruInfo has a row per device or per capable one."""
+    props, missing = _host_props(ctx, _HARDWARE_PATHS)
+    pci = [
+        device for device in _aslist(props.get("hardware.pciDevice")) if isinstance(device, dict)
+    ]
+    return {
+        "pci_devices": len(pci),
+        "pci_id_sample": pci[0].get("id") if pci else None,
+        "passthru_rows": len(_aslist(props.get("config.pciPassthruInfo"))),
+        "missing": missing,
+    }
+
+
+def _esxi_option_size(ctx):
+    """config.option: OptionValue count and JSON size — what the raw cap is up against."""
+    props, missing = _host_props(ctx, _OPTION_PATHS, timeout=C.VSPHERE_BIG_CALL_TIMEOUT)
+    options = _aslist(props.get("config.option"))
+    return {
+        "options_total": len(options),
+        "json_chars": len(json.dumps(options, default=str)),
+        "missing": missing,
+    }
+
+
+# Discovery probes per platform, run best-effort before the checks; each
+# answer lands under report["discovery"][label] (an error record on failure).
+DISCOVERY_PROBES = {
+    "iosxe": (
+        ("modules", _module_inventory),
+        ("rib_names", _rib_names),
+        ("fib_instances", _fib_instances),
+    ),
+    "panos": (),
+    "xcc": (
+        ("service_root", _xcc_service_root),
+        ("manager", _xcc_manager_links),
+        ("log_services", _xcc_log_services),
+        ("collections", _xcc_collection_counts),
+    ),
+    "vmware": (
+        ("lockdown", _esxi_lockdown),
+        ("network", _esxi_network_shape),
+        ("health_runtime", _esxi_health_runtime),
+        ("hardware", _esxi_hardware_shape),
+        ("option_size", _esxi_option_size),
+    ),
+}
+
+
 class CollectorShakedown(Job):
     """Run every collector against one device and report what needs tweaking."""
 
@@ -141,16 +387,18 @@ class CollectorShakedown(Job):
         platform, driver = _map_platform(device)
         if platform is None:
             raise RuntimeError(
-                "%s: cannot map platform (%r) to iosxe or panos — set the device "
-                "platform's network_driver." % (device.name, driver)
+                "%s: cannot map platform (%r) to %s — %s."
+                % (device.name, driver, PLATFORM_NAMES, PLATFORM_HINT)
             )
         host = _device_host(device)
         username, password = creds.resolve_credentials(
-            device, "ssh" if platform == "panos" else "restconf", override_group=secrets_group
+            device, C.TRANSPORT_FOR[platform], override_group=secrets_group
         )
 
         restconf = None
         ssh = None
+        api = None
+        probe_record = None
         if platform == "iosxe":
             restconf = RestconfClient(host, username, password, logger=self.logger)
             if not restconf.ping():
@@ -161,9 +409,36 @@ class CollectorShakedown(Job):
                     % (device.name, host, probe_hint(record), record)
                 )
             ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
-        else:
+        elif platform == "panos":
             ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
             ssh.open()
+        elif platform == "xcc":
+            if not C.XCC_ENABLED:
+                raise RuntimeError(
+                    "%s: the xcc platform is disabled (constants.XCC_ENABLED is False — "
+                    "the XCCs are unreachable at the current sites)." % (device.name,)
+                )
+            restconf = RedfishClient(host, username, password, logger=self.logger)
+            if not restconf.ping():
+                record = restconf.probe_get(C.REDFISH_PROBE_SYSTEM, timeout=30)
+                restconf.close()
+                raise RuntimeError(
+                    "%s: Redfish unreachable at %s — %s (probe: %s)"
+                    % (device.name, host, redfish_probe_hint(record), record)
+                )
+        elif platform == "vmware":
+            api = VsphereClient(host, username, password, logger=self.logger)
+            try:
+                probe_record = api.probe()
+                api.login()
+            except VsphereError as exc:
+                api.close()
+                raise RuntimeError(
+                    "%s: vSphere SOAP at %s unusable — %s (%s)"
+                    % (device.name, host, vsphere_probe_hint(exc), exc)
+                ) from exc
+        else:  # unreachable: _map_platform only returns the four names above
+            raise RuntimeError("%s: no transport for platform %r" % (device.name, platform))
 
         checks = registry.checks_for(platform)
         checks = sorted(checks, key=lambda check: (check.tier, check.id))
@@ -176,22 +451,29 @@ class CollectorShakedown(Job):
             "discovery": {},
         }
         ctx = CollectorContext(
-            device.name, platform, restconf=restconf, ssh=ssh, logger=self.logger, debug=True
+            device.name,
+            platform,
+            restconf=restconf,
+            ssh=ssh,
+            api=api,
+            logger=self.logger,
+            debug=True,
         )
         needs_attention = []
         try:
+            if platform == "vmware":
+                # Answered by the SOAP probe itself: which vim25 namespace
+                # versions hostd advertised (or that the fallback SOAPAction
+                # was used), apiType, build/version, TLS mode.
+                report["discovery"]["probe"] = probe_record
+            for label, probe in DISCOVERY_PROBES[platform]:
+                try:
+                    report["discovery"][label] = probe(ctx)
+                except SoftTimeLimitExceeded:
+                    raise
+                except Exception as exc:  # discovery is best-effort: record, never abort
+                    report["discovery"][label] = {"error": str(exc)}
             if platform == "iosxe":
-                for label, probe in (
-                    ("modules", _module_inventory),
-                    ("rib_names", _rib_names),
-                    ("fib_instances", _fib_instances),
-                ):
-                    try:
-                        report["discovery"][label] = probe(ctx)
-                    except SoftTimeLimitExceeded:
-                        raise
-                    except Exception as exc:  # discovery is best-effort: record, never abort
-                        report["discovery"][label] = {"error": str(exc)}
                 modules = report["discovery"].get("modules")
                 if isinstance(modules, dict) and modules:
                     report["discovery"]["key_models"] = {
@@ -242,6 +524,12 @@ class CollectorShakedown(Job):
             )
         finally:
             ctx.close()
+
+        for transport in (restconf, api):
+            if getattr(transport, "footprint", None) is not None:
+                report.setdefault("transport", {})[transport.transport_label] = (
+                    transport.footprint()
+                )
 
         safe_device = envelope.safe_name(device.name)
         _attach_artifact(self, C.SHAKEDOWN_FILENAME.format(device=safe_device), report)
