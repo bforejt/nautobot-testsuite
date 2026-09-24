@@ -1,0 +1,46 @@
+{
+  "Cisco-IOS-XE-wireless-wlan-cfg:wlan-policy": [
+    {
+      "policy-profile-name": "PP-CORP",
+      "description": "Corp users",
+      "status": true,
+      "interface-name": "120",
+      "wlan-switching-policy": {
+        "central-switching": true,
+        "central-authentication": true,
+        "central-dhcp": true,
+        "central-assoc-enable": true
+      },
+      "wlan-flex-policy": {
+        "vlan-central-switching": false
+      }
+    },
+    {
+      "policy-profile-name": "PP-GUEST",
+      "description": "Guest, locally switched",
+      "status": true,
+      "interface-name": "GUEST-VLAN",
+      "wlan-switching-policy": {
+        "central-switching": false,
+        "central-authentication": true,
+        "central-dhcp": false,
+        "central-assoc-enable": true
+      },
+      "wlan-flex-policy": {
+        "vlan-central-switching": false
+      }
+    },
+    {
+      "policy-profile-name": "PP-IOT",
+      "description": "Things",
+      "status": false,
+      "interface-name": "140",
+      "wlan-switching-policy": {
+        "central-switching": true,
+        "central-authentication": true,
+        "central-dhcp": true,
+        "central-assoc-enable": true
+      }
+    }
+  ]
+}

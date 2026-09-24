@@ -1,0 +1,200 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:radio-oper-data": [
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "radio-slot-id": 0,
+      "slot-id": 0,
+      "radio-type": "radio-80211bg",
+      "admin-state": "enabled",
+      "oper-state": "radio-up",
+      "radio-mode": "radio-mode-local",
+      "radio-sub-mode": "radio-submode-none",
+      "current-band-id": 0,
+      "phy-ht-cfg": {
+        "cfg-data": {
+          "curr-freq": 6,
+          "chan-width": 20,
+          "phy-ht-cfg-config-type": "config-auto",
+          "rrm-channel-change-reason": "rrm-reason-none"
+        }
+      },
+      "radio-band-info": [
+        {
+          "band-id": 0,
+          "regulatory-domain": "reg-dom-b",
+          "phy-tx-pwr-cfg": {
+            "cfg-data": {
+              "phy-tx-power-config-type": "config-auto",
+              "current-tx-power-level": 3
+            }
+          },
+          "phy-tx-pwr-lvl-cfg": {
+            "cfg-data": {
+              "curr-tx-power-in-dbm": 14
+            }
+          }
+        }
+      ],
+      "station-cfg": {
+        "cfg-data": {
+          "bssid": "00:11:22:33:44:0F"
+        }
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "radio-slot-id": 1,
+      "slot-id": 1,
+      "radio-type": "radio-80211a",
+      "admin-state": "enabled",
+      "oper-state": "radio-up",
+      "radio-mode": "radio-mode-local",
+      "current-band-id": 0,
+      "phy-ht-cfg": {
+        "cfg-data": {
+          "curr-freq": 36,
+          "chan-width": 40,
+          "phy-ht-cfg-config-type": "customized"
+        }
+      },
+      "radio-band-info": [
+        {
+          "band-id": 0,
+          "regulatory-domain": "reg-dom-a",
+          "phy-tx-pwr-cfg": {
+            "cfg-data": {
+              "phy-tx-power-config-type": "customized",
+              "current-tx-power-level": 1
+            }
+          },
+          "phy-tx-pwr-lvl-cfg": {
+            "cfg-data": {
+              "curr-tx-power-in-dbm": 20
+            }
+          }
+        }
+      ],
+      "station-cfg": {
+        "cfg-data": {
+          "bssid": "00:11:22:33:44:1F"
+        }
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "radio-slot-id": 2,
+      "slot-id": 2,
+      "radio-type": "radio-80211-6ghz",
+      "admin-state": "enabled",
+      "oper-state": "radio-down",
+      "radio-mode": "radio-mode-local",
+      "current-band-id": 0,
+      "radio-band-info": [
+        {
+          "band-id": 0,
+          "regulatory-domain": "reg-dom-6ghz"
+        }
+      ]
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:10",
+      "radio-slot-id": 0,
+      "slot-id": 0,
+      "radio-type": "radio-80211bg",
+      "admin-state": "disabled",
+      "oper-state": "radio-down",
+      "radio-mode": "radio-mode-local",
+      "current-band-id": 0,
+      "phy-ht-cfg": {
+        "cfg-data": {
+          "curr-freq": 1,
+          "chan-width": 20,
+          "phy-ht-cfg-config-type": "config-auto"
+        }
+      },
+      "radio-band-info": [
+        {
+          "band-id": 0,
+          "regulatory-domain": "reg-dom-b",
+          "phy-tx-pwr-cfg": {
+            "cfg-data": {
+              "phy-tx-power-config-type": "config-auto",
+              "current-tx-power-level": 4
+            }
+          },
+          "phy-tx-pwr-lvl-cfg": {
+            "cfg-data": {
+              "curr-tx-power-in-dbm": 11
+            }
+          }
+        }
+      ]
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:10",
+      "radio-slot-id": 1,
+      "slot-id": 1,
+      "radio-type": "radio-80211a",
+      "admin-state": "enabled",
+      "oper-state": "radio-up",
+      "radio-mode": "radio-mode-local",
+      "current-band-id": 1,
+      "phy-ht-cfg": {
+        "cfg-data": {
+          "curr-freq": 149,
+          "chan-width": 80,
+          "phy-ht-cfg-config-type": "config-auto"
+        }
+      },
+      "radio-band-info": [
+        {
+          "band-id": 0,
+          "regulatory-domain": "reg-dom-a",
+          "phy-tx-pwr-cfg": {
+            "cfg-data": {
+              "phy-tx-power-config-type": "config-auto",
+              "current-tx-power-level": 5
+            }
+          },
+          "phy-tx-pwr-lvl-cfg": {
+            "cfg-data": {
+              "curr-tx-power-in-dbm": 8
+            }
+          }
+        },
+        {
+          "band-id": 1,
+          "regulatory-domain": "reg-dom-a",
+          "phy-tx-pwr-cfg": {
+            "cfg-data": {
+              "phy-tx-power-config-type": "config-auto",
+              "current-tx-power-level": 2
+            }
+          },
+          "phy-tx-pwr-lvl-cfg": {
+            "cfg-data": {
+              "curr-tx-power-in-dbm": 17
+            }
+          }
+        }
+      ]
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:99",
+      "radio-slot-id": 0,
+      "slot-id": 0,
+      "radio-type": "radio-80211bg",
+      "admin-state": "enabled",
+      "oper-state": "radio-up",
+      "radio-mode": "radio-mode-local",
+      "current-band-id": 0,
+      "phy-ht-cfg": {
+        "cfg-data": {
+          "curr-freq": 11,
+          "chan-width": 20,
+          "phy-ht-cfg-config-type": "config-auto"
+        }
+      }
+    }
+  ]
+}

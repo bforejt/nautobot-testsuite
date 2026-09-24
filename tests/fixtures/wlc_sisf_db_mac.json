@@ -1,0 +1,58 @@
+{
+  "Cisco-IOS-XE-wireless-client-oper:sisf-db-mac": [
+    {
+      "mac-addr": "aa:bb:cc:00:00:01",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.120.0.11"
+        }
+      }
+    },
+    {
+      "mac-addr": "aa:bb:cc:00:00:02",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.120.0.12"
+        }
+      }
+    },
+    {
+      "mac-addr": "aa:bb:cc:00:00:03",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.130.0.5"
+        }
+      }
+    },
+    {
+      "mac-addr": "aa:bb:cc:00:00:06",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.130.0.9"
+        }
+      }
+    },
+    {
+      "mac-addr": "aa:bb:cc:00:00:07",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.120.0.13"
+        }
+      }
+    },
+    {
+      "mac-addr": "aa:bb:cc:00:00:08",
+      "ipv4-binding": {
+        "ip-key": {
+          "zone-id": 0,
+          "ip-addr": "10.130.0.10"
+        }
+      }
+    }
+  ]
+}

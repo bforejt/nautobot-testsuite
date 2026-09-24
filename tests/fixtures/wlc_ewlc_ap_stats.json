@@ -1,0 +1,26 @@
+{
+  "Cisco-IOS-XE-wireless-ap-global-oper:ewlc-ap-stats": {
+    "stats-misconfigured-aps": 1,
+    "stats-dtls-lsc-fbk-aps": 0,
+    "stats-80211-bg-rad": {
+      "total-radios": 2,
+      "radios-up": 1,
+      "radios-down": 1
+    },
+    "stats-80211-a-rad": {
+      "total-radios": 2,
+      "radios-up": 2,
+      "radios-down": 0
+    },
+    "stats-80211-6ghz-radios": {
+      "total-radios": 1,
+      "radios-up": 0,
+      "radios-down": 1
+    },
+    "stats-80211-all-rad": {
+      "total-radios": 6,
+      "radios-up": 4,
+      "radios-down": 2
+    }
+  }
+}

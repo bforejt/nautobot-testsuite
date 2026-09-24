@@ -47,6 +47,16 @@ DATA_DEVICE_SYSTEM = (
 # serving data at all — not a single quirky model.
 DATA_YANG_LIBRARY = "/data/ietf-yang-library:modules-state?depth=1"
 
+# --- wireless (Catalyst 9800 controllers) -----------------------------------
+# Per-client rows kept in the NORMALIZED client table. Clients that are not
+# in the run state (stuck in auth / IP-learn / webauth — the migration
+# failure signature) are always emitted; run-state clients fill the rest up
+# to this cap, so a large campus controller never pushes the snapshot past
+# the 10 MB artifact limit. The raw bundle keeps rows up to WLC_CLIENT_RAW_MAX
+# and notes any truncation.
+WLC_CLIENT_TABLE_MAX = 2000
+WLC_CLIENT_RAW_MAX = 10000
+
 # --- SSH --------------------------------------------------------------------
 SSH_CONNECT_TIMEOUT = 15
 SSH_READ_TIMEOUT = 90  # several PAN-OS shows run long

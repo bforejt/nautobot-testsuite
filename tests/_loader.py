@@ -51,3 +51,9 @@ panos_xml = load("panos_xml")
 context = load("context")
 checks_iosxe = load("checks_iosxe")
 checks_panos = load("checks_panos")
+
+# Every catalog module is loaded by file name, mirroring jobs/__init__.py, so
+# a platform branch that adds jobs/checks_<platform>.py needs no edit here
+# (importlib caches modules: the explicit handles above register nothing
+# twice). tests/test_catalog_discovery.py locks the mirror in.
+CHECK_MODULES = {path.stem: load(path.stem) for path in sorted((ROOT / "jobs").glob("checks_*.py"))}

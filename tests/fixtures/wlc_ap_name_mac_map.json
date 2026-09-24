@@ -1,0 +1,19 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:ap-name-mac-map": [
+    {
+      "wtp-name": "AP-3F-EAST-01",
+      "wtp-mac": "00:11:22:33:44:00",
+      "eth-mac": "00:11:22:33:44:01"
+    },
+    {
+      "wtp-name": "AP-3F-WEST-02",
+      "wtp-mac": "00:11:22:33:44:10",
+      "eth-mac": "00:11:22:33:44:11"
+    },
+    {
+      "wtp-name": "AP-LOBBY-03",
+      "wtp-mac": "00:11:22:33:44:20",
+      "eth-mac": "00:11:22:33:44:21"
+    }
+  ]
+}

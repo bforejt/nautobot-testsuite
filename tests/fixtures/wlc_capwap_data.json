@@ -1,0 +1,164 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:capwap-data": [
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "ip-addr": "10.20.30.11",
+      "name": "AP-3F-EAST-01",
+      "country-code": "US",
+      "num-radio-slots": 3,
+      "ap-lag-enabled": false,
+      "device-detail": {
+        "static-info": {
+          "board-data": {
+            "wtp-serial-num": "FGL0000AB01",
+            "wtp-enet-mac": "00:11:22:33:44:01"
+          },
+          "ap-models": {
+            "model": "C9130AXI-B"
+          }
+        },
+        "wtp-version": {
+          "sw-version": "17.12.4.42"
+        }
+      },
+      "ap-location": {
+        "floor": "3",
+        "location": "Building A floor 3 east"
+      },
+      "tag-info": {
+        "tag-source": "tag-source-static",
+        "is-ap-misconfigured": false,
+        "resolved-tag-info": {
+          "resolved-policy-tag": "PT-HQ",
+          "resolved-site-tag": "ST-HQ-3F",
+          "resolved-rf-tag": "RF-HQ"
+        },
+        "policy-tag-info": {
+          "policy-tag-name": "PT-HQ"
+        },
+        "site-tag": {
+          "site-tag-name": "ST-HQ-3F",
+          "ap-profile": "AP-JOIN-HQ",
+          "flex-profile": "FLEX-HQ"
+        },
+        "rf-tag": {
+          "rf-tag-name": "RF-HQ"
+        }
+      },
+      "ap-state": {
+        "ap-admin-state": "adminstate-enabled",
+        "ap-operation-state": "registered"
+      },
+      "ap-mode-data": {
+        "wtp-mode": "local-mode",
+        "ap-sub-mode": "submode-none"
+      },
+      "ap-time-info": {
+        "boot-time": "2026-09-01T08:00:00+00:00",
+        "join-time": "2026-09-01T08:03:12+00:00",
+        "join-time-taken": 45
+      },
+      "reboot-stats": {
+        "reboot-reason": "reboot-reason-reload-command",
+        "reboot-type": "reboot-type-controller"
+      },
+      "disconnect-detail": {
+        "disconnect-reason": "disconnect-reason-none"
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:10",
+      "ip-addr": "10.20.30.12",
+      "name": "AP-3F-WEST-02",
+      "country-code": "US",
+      "num-radio-slots": 2,
+      "ap-lag-enabled": false,
+      "device-detail": {
+        "static-info": {
+          "board-data": {
+            "wtp-serial-num": "FGL0000AB02",
+            "wtp-enet-mac": "00:11:22:33:44:11"
+          },
+          "ap-models": {
+            "model": "C9120AXI-B"
+          }
+        },
+        "wtp-version": {
+          "sw-version": "17.12.4.42"
+        }
+      },
+      "ap-location": {
+        "floor": "3",
+        "location": "Building A floor 3 west"
+      },
+      "tag-info": {
+        "tag-source": "tag-source-default",
+        "is-ap-misconfigured": true,
+        "resolved-tag-info": {
+          "resolved-policy-tag": "default-policy-tag",
+          "resolved-site-tag": "default-site-tag",
+          "resolved-rf-tag": "default-rf-tag"
+        },
+        "policy-tag-info": {
+          "policy-tag-name": "default-policy-tag"
+        },
+        "site-tag": {
+          "site-tag-name": "default-site-tag",
+          "ap-profile": "default-ap-profile",
+          "flex-profile": "default-flex-profile"
+        },
+        "rf-tag": {
+          "rf-tag-name": "default-rf-tag"
+        }
+      },
+      "ap-state": {
+        "ap-admin-state": "adminstate-enabled",
+        "ap-operation-state": "registered"
+      },
+      "ap-mode-data": {
+        "wtp-mode": "mode-flex-connect",
+        "ap-sub-mode": "submode-none"
+      },
+      "ap-time-info": {
+        "boot-time": "2026-09-01T08:01:30+00:00",
+        "join-time": "2026-09-01T08:05:00+00:00",
+        "join-time-taken": 61
+      },
+      "reboot-stats": {
+        "reboot-reason": "reboot-reason-none",
+        "reboot-type": "reboot-type-none"
+      },
+      "disconnect-detail": {
+        "disconnect-reason": "disconnect-reason-none"
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:20",
+      "ip-addr": "10.20.30.13",
+      "name": "AP-LOBBY-03",
+      "device-detail": {
+        "static-info": {
+          "board-data": {
+            "wtp-serial-num": "FGL0000AB03",
+            "wtp-enet-mac": "00:11:22:33:44:21"
+          },
+          "ap-models": {
+            "model": "C9105AXI-B"
+          }
+        },
+        "wtp-version": {
+          "sw-version": "17.9.5.47"
+        }
+      },
+      "ap-state": {
+        "ap-admin-state": "adminstate-enabled",
+        "ap-operation-state": "downloading"
+      },
+      "ap-time-info": {
+        "boot-time": "2026-09-24T13:50:00+00:00",
+        "join-time": "2026-09-24T13:55:10+00:00",
+        "join-time-taken": 310
+      }
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "Cisco-IOS-XE-wireless-ap-global-oper:ap-join-stats": [
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "ap-disconnect-reason": "ap-disconnect-reason-none",
+      "reboot-reason": "reboot-reason-none",
+      "disconnect-reason": "disconnect-reason-none",
+      "ap-join-info": {
+        "ap-name": "AP-3F-EAST-01",
+        "ap-ethernet-mac": "00:11:22:33:44:01",
+        "is-joined": true,
+        "num-join-req-recvd": 1,
+        "num-succ-join-resp-sent": 1,
+        "num-unsucc-join-req-procn": 0,
+        "last-succ-join-atmpt-time": "2026-09-01T08:03:12+00:00",
+        "last-fail-join-atmpt-time": "1970-01-01T00:00:00+00:00",
+        "last-error-type": "join-err-none",
+        "last-error-time": "1970-01-01T00:00:00+00:00"
+      },
+      "dtls-sess-info": {
+        "ctrl-dtls-failure": 0,
+        "data-dtls-failure": 0
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:10",
+      "ap-disconnect-reason": "ap-disconnect-reason-none",
+      "reboot-reason": "reboot-reason-none",
+      "disconnect-reason": "disconnect-reason-none",
+      "ap-join-info": {
+        "ap-name": "AP-3F-WEST-02",
+        "ap-ethernet-mac": "00:11:22:33:44:11",
+        "is-joined": true,
+        "num-join-req-recvd": 3,
+        "num-succ-join-resp-sent": 2,
+        "num-unsucc-join-req-procn": 1,
+        "last-succ-join-atmpt-time": "2026-09-01T08:05:00+00:00",
+        "last-fail-join-atmpt-time": "2026-09-01T08:04:20+00:00",
+        "last-error-type": "join-timeout",
+        "last-error-time": "2026-09-01T08:04:20+00:00"
+      },
+      "dtls-sess-info": {
+        "ctrl-dtls-failure": 1,
+        "data-dtls-failure": 0
+      }
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:30",
+      "ap-disconnect-reason": "ap-disconnect-reason-none",
+      "reboot-reason": "reboot-reason-none",
+      "disconnect-reason": "disconnect-reason-heartbeat-timeout",
+      "ap-join-info": {
+        "ap-name": "AP-OLD-04",
+        "ap-ethernet-mac": "00:11:22:33:44:31",
+        "is-joined": false,
+        "num-join-req-recvd": 5,
+        "num-succ-join-resp-sent": 5,
+        "num-unsucc-join-req-procn": 0,
+        "last-succ-join-atmpt-time": "2026-08-20T11:00:00+00:00",
+        "last-error-type": "join-err-none"
+      },
+      "dtls-sess-info": {
+        "ctrl-dtls-failure": 0,
+        "data-dtls-failure": 0
+      }
+    }
+  ]
+}

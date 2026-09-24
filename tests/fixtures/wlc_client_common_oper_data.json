@@ -1,0 +1,116 @@
+{
+  "Cisco-IOS-XE-wireless-client-oper:common-oper-data": [
+    {
+      "client-mac": "aa:bb:cc:00:00:01",
+      "ap-name": "AP-3F-EAST-01",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 1,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "central",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:02",
+      "ap-name": "AP-3F-EAST-01",
+      "ms-ap-slot-id": 0,
+      "ms-radio-type": "dot11-radio-type-bg",
+      "wlan-id": 1,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "central",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:03",
+      "ap-name": "AP-3F-EAST-01",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 2,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "local",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:04",
+      "ap-name": "AP-3F-WEST-02",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 1,
+      "client-type": "dot11",
+      "co-state": "client-status-ip-learning",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "central",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:05",
+      "ap-name": "AP-3F-WEST-02",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 1,
+      "client-type": "dot11",
+      "co-state": "client-status-authenticating",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "central",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:06",
+      "ap-name": "AP-3F-WEST-02",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 2,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "local",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:07",
+      "ap-name": "AP-3F-EAST-01",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 1,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "central",
+        "central-authentication": true
+      }
+    },
+    {
+      "client-mac": "aa:bb:cc:00:00:08",
+      "ap-name": "AP-3F-WEST-02",
+      "ms-ap-slot-id": 1,
+      "ms-radio-type": "dot11-radio-type-a",
+      "wlan-id": 2,
+      "client-type": "dot11",
+      "co-state": "client-status-run",
+      "vrf-name": "",
+      "wlan-policy": {
+        "current-switching-mode": "local",
+        "central-authentication": true
+      }
+    }
+  ]
+}

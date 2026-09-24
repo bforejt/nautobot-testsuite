@@ -1,0 +1,24 @@
+Redundant System Information :
+------------------------------
+       Available system uptime = 3 weeks, 4 days, 11 hours, 49 minutes
+Switchovers system experienced = 0
+              Standby failures = 0
+        Last switchover reason = none
+
+                 Hardware Mode = Simplex
+    Configured Redundancy Mode = Non-redundant
+     Operating Redundancy Mode = Non-redundant
+              Maintenance Mode = Disabled
+                Communications = Down      Reason: Failure
+
+Current Processor Information :
+-------------------------------
+               Active Location = slot 1
+        Current Software state = ACTIVE
+       Uptime in current state = 3 weeks, 4 days, 11 hours, 48 minutes
+                 Image Version = Cisco IOS Software [Dublin], C9800-CL Software (C9800-CL-K9_IOSXE), Version 17.12.4, RELEASE SOFTWARE (fc1)
+                          BOOT = bootflash:packages.conf,12;
+                   CONFIG_FILE =
+        Configuration register = 0x2102
+
+Peer (slot: 1) information is not available because it is in 'DISABLED' state
