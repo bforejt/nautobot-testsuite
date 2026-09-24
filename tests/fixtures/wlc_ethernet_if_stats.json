@@ -1,0 +1,37 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:ethernet-if-stats": [
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "if-index": 0,
+      "if-name": "GigabitEthernet0",
+      "oper-status": "up",
+      "duplex": "full",
+      "link-speed": 1000,
+      "input-errors": 0,
+      "input-crc": 0,
+      "output-errors": 0
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:10",
+      "if-index": 0,
+      "if-name": "GigabitEthernet0",
+      "oper-status": "up",
+      "duplex": "full",
+      "link-speed": 100,
+      "input-errors": 12,
+      "input-crc": 12,
+      "output-errors": 0
+    },
+    {
+      "wtp-mac": "00:11:22:33:44:20",
+      "if-index": 0,
+      "if-name": "GigabitEthernet0",
+      "oper-status": "down",
+      "duplex": "unknown",
+      "link-speed": 0,
+      "input-errors": 0,
+      "input-crc": 0,
+      "output-errors": 0
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:cdp-cache-data": [
+    {
+      "mac-addr": "00:11:22:33:44:01",
+      "cdp-cache-device-id": "SW-HQ-3F-STACK.example.net",
+      "wtp-mac-addr": "00:11:22:33:44:00",
+      "ap-name": "AP-3F-EAST-01",
+      "cdp-cache-device-port": "GigabitEthernet1/0/12",
+      "cdp-cache-local-port": "GigabitEthernet0",
+      "cdp-cache-platform": "cisco C9300-48U",
+      "cdp-cache-ip-address-value": "10.20.30.2",
+      "cdp-cache-duplex": "full",
+      "cdp-cache-interface-speed": "1000"
+    },
+    {
+      "mac-addr": "00:11:22:33:44:11",
+      "cdp-cache-device-id": "SW-HQ-3F-STACK.example.net",
+      "wtp-mac-addr": "00:11:22:33:44:10",
+      "ap-name": "AP-3F-WEST-02",
+      "cdp-cache-device-port": "GigabitEthernet2/0/7",
+      "cdp-cache-local-port": "GigabitEthernet0",
+      "cdp-cache-platform": "cisco C9300-48U",
+      "cdp-cache-ip-address-value": "10.20.30.2",
+      "cdp-cache-duplex": "full",
+      "cdp-cache-interface-speed": "100"
+    }
+  ]
+}

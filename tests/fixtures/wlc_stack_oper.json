@@ -1,0 +1,23 @@
+{
+  "Cisco-IOS-XE-stack-oper:stack-oper-data": {
+    "stack-node": [
+      {
+        "chassis-number": 1,
+        "priority": 1,
+        "serial-number": "9ABCDEF0123",
+        "role": "role-active",
+        "node-state": "state-ready",
+        "stack-mode": "mode-active-standby",
+        "sso-ready-flag": false,
+        "mac-address": "00:1e:14:aa:bb:cc",
+        "reload-reason": "reload-reason-none",
+        "mode": "mode-non-redundant",
+        "configured-mode": "mode-non-redundant"
+      }
+    ],
+    "stack-info": {
+      "size": 1,
+      "ring-status": "ring-status-none"
+    }
+  }
+}

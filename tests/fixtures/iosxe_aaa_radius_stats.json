@@ -1,0 +1,48 @@
+{
+  "Cisco-IOS-XE-aaa-oper:aaa-radius-stats": [
+    {
+      "group-name": "ISE-GROUP",
+      "radius-server-ip": "10.50.0.11",
+      "auth-port": 1812,
+      "acct-port": 1813,
+      "is-server-radsec": false,
+      "server-detail": [
+        {
+          "aaa-inst-id": 0,
+          "inst-type": "inst-type-wncd",
+          "server-state": "aaa-server-state-alive"
+        },
+        {
+          "aaa-inst-id": 1,
+          "inst-type": "inst-type-wncd",
+          "server-state": "aaa-server-state-alive"
+        }
+      ],
+      "authen-access-accepts": 1200,
+      "authen-access-rejects": 15,
+      "authen-timeout-access-requests": 0
+    },
+    {
+      "group-name": "ISE-GROUP",
+      "radius-server-ip": "10.50.0.12",
+      "auth-port": 1812,
+      "acct-port": 1813,
+      "is-server-radsec": false,
+      "server-detail": [
+        {
+          "aaa-inst-id": 0,
+          "inst-type": "inst-type-wncd",
+          "server-state": "aaa-server-state-alive"
+        },
+        {
+          "aaa-inst-id": 1,
+          "inst-type": "inst-type-wncd",
+          "server-state": "aaa-server-state-dead"
+        }
+      ],
+      "authen-access-accepts": 300,
+      "authen-access-rejects": 2,
+      "authen-timeout-access-requests": 40
+    }
+  ]
+}

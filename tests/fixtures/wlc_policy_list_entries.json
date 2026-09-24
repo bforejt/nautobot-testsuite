@@ -1,0 +1,24 @@
+{
+  "Cisco-IOS-XE-wireless-wlan-cfg:policy-list-entry": [
+    {
+      "tag-name": "PT-HQ",
+      "description": "HQ policy tag",
+      "wlan-policies": {
+        "wlan-policy": [
+          {
+            "wlan-profile-name": "CORP",
+            "policy-profile-name": "PP-CORP"
+          },
+          {
+            "wlan-profile-name": "GUEST",
+            "policy-profile-name": "PP-GUEST"
+          }
+        ]
+      }
+    },
+    {
+      "tag-name": "default-policy-tag",
+      "description": "default policy-tag"
+    }
+  ]
+}

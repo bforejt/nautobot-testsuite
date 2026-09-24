@@ -1,0 +1,30 @@
+Redundant System Information :
+------------------------------
+       Available system uptime = 6 weeks, 2 days, 1 hour, 3 minutes
+Switchovers system experienced = 1
+              Standby failures = 0
+        Last switchover reason = user forced
+
+                 Hardware Mode = Duplex
+    Configured Redundancy Mode = sso
+     Operating Redundancy Mode = sso
+              Maintenance Mode = Disabled
+                Communications = Up
+
+Current Processor Information :
+-------------------------------
+               Active Location = slot 1
+        Current Software state = ACTIVE
+       Uptime in current state = 2 days, 4 hours, 12 minutes
+                 Image Version = Cisco IOS Software [Dublin], C9800-CL Software (C9800-CL-K9_IOSXE), Version 17.12.4, RELEASE SOFTWARE (fc1)
+                          BOOT = bootflash:packages.conf,12;
+        Configuration register = 0x2102
+
+Peer Processor Information :
+----------------------------
+              Standby Location = slot 2
+        Current Software state = STANDBY HOT
+       Uptime in current state = 2 days, 4 hours, 9 minutes
+                 Image Version = Cisco IOS Software [Dublin], C9800-CL Software (C9800-CL-K9_IOSXE), Version 17.12.4, RELEASE SOFTWARE (fc1)
+                          BOOT = bootflash:packages.conf,12;
+        Configuration register = 0x2102

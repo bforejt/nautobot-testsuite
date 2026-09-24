@@ -1,0 +1,39 @@
+{
+  "Cisco-IOS-XE-wireless-client-oper:policy-data": [
+    {
+      "mac": "aa:bb:cc:00:00:01",
+      "res-vlan-id": 120,
+      "res-vlan-name": "CORP-USERS"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:02",
+      "res-vlan-id": 120,
+      "res-vlan-name": "CORP-USERS"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:03",
+      "res-vlan-id": 130,
+      "res-vlan-name": "GUEST-VLAN"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:04",
+      "res-vlan-id": 120,
+      "res-vlan-name": "CORP-USERS"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:06",
+      "res-vlan-id": 130,
+      "res-vlan-name": "GUEST-VLAN"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:07",
+      "res-vlan-id": 120,
+      "res-vlan-name": "CORP-USERS"
+    },
+    {
+      "mac": "aa:bb:cc:00:00:08",
+      "res-vlan-id": 130,
+      "res-vlan-name": "GUEST-VLAN"
+    }
+  ]
+}

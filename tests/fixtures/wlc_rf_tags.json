@@ -1,0 +1,18 @@
+{
+  "Cisco-IOS-XE-wireless-rf-cfg:rf-tag": [
+    {
+      "tag-name": "RF-HQ",
+      "description": "HQ RF",
+      "dot11a-rf-profile-name": "HQ-5G",
+      "dot11b-rf-profile-name": "HQ-24G",
+      "dot11-6ghz-rf-prof-name": "HQ-6G"
+    },
+    {
+      "tag-name": "default-rf-tag",
+      "description": "default RF tag",
+      "dot11a-rf-profile-name": "default-rf-profile-5g",
+      "dot11b-rf-profile-name": "default-rf-profile-24g",
+      "dot11-6ghz-rf-prof-name": "default-rf-profile-6ghz"
+    }
+  ]
+}

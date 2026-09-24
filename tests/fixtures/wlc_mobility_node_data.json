@@ -1,0 +1,42 @@
+{
+  "Cisco-IOS-XE-wireless-mobility-oper:mobility-node-data": [
+    {
+      "node-ip": "10.99.0.2",
+      "nat-ip": "10.99.0.2",
+      "group-name": "HQ-MOBILITY",
+      "num-clients": 12,
+      "tunnel-plumbed": true,
+      "is-anchor": false,
+      "ulink-status": "up",
+      "ctrl-state": {
+        "peer-status": true,
+        "link-status": true,
+        "flaps-cnt": 0
+      },
+      "data-state": {
+        "peer-status": true,
+        "link-status": true,
+        "flaps-cnt": 1
+      }
+    },
+    {
+      "node-ip": "10.99.0.3",
+      "nat-ip": "203.0.113.9",
+      "group-name": "DR-MOBILITY",
+      "num-clients": 0,
+      "tunnel-plumbed": false,
+      "is-anchor": false,
+      "ulink-status": "ctrl-data-path-down",
+      "ctrl-state": {
+        "peer-status": false,
+        "link-status": false,
+        "flaps-cnt": 4
+      },
+      "data-state": {
+        "peer-status": false,
+        "link-status": false,
+        "flaps-cnt": 4
+      }
+    }
+  ]
+}

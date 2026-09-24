@@ -1,0 +1,13 @@
+{
+  "Cisco-IOS-XE-wireless-access-point-oper:lldp-neigh": [
+    {
+      "wtp-mac": "00:11:22:33:44:00",
+      "neigh-mac": "aa:aa:aa:00:00:01",
+      "port-id": "Gi1/0/12",
+      "local-port": "GigabitEthernet0",
+      "system-name": "SW-HQ-3F-STACK",
+      "port-description": "AP-3F-EAST-01 uplink",
+      "mgmt-addr": "10.20.30.2"
+    }
+  ]
+}

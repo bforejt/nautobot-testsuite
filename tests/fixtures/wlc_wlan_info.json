@@ -1,0 +1,19 @@
+{
+  "Cisco-IOS-XE-wireless-wlan-global-oper:wlan-info": [
+    {
+      "wlan-profile": "CORP",
+      "curr-clients-count": 5,
+      "per-wlan-max-client-syslog": 0
+    },
+    {
+      "wlan-profile": "GUEST",
+      "curr-clients-count": 3,
+      "per-wlan-max-client-syslog": 0
+    },
+    {
+      "wlan-profile": "IOT",
+      "curr-clients-count": 0,
+      "per-wlan-max-client-syslog": 0
+    }
+  ]
+}
