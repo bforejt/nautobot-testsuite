@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Per-VM property set, first page of two (the transport drains the token;
+     vsphere_vms_page2.xml is the continuation). VM 1 is an NFV-tuned guest:
+     three vmxnet3 adapters (one on the VGT trunk), one SR-IOV adapter, one
+     dynamic DirectPath passthrough, a 60 GB thick disk, a two-level snapshot
+     tree, latency sensitivity high with full reservations, a CPU affinity set
+     and a curated extraConfig, EFI firmware with Secure Boot, an explicit
+     boot order, vIOMMU on, hot-add off and Tools time sync off; its guest
+     reports two adapters with addresses. VM 42 is an orphaned registration:
+     hostd returns its name and a missingSet for its config. Device labels are
+     the English (locale "en") forms. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="VirtualMachine">1</obj>
+<propSet><name>config.bootOptions</name><val xsi:type="VirtualMachineBootOptions"><bootDelay>0</bootDelay><enterBIOSSetup>false</enterBIOSSetup><efiSecureBootEnabled>true</efiSecureBootEnabled><bootRetryEnabled>false</bootRetryEnabled><bootRetryDelay>10000</bootRetryDelay><bootOrder xsi:type="VirtualMachineBootOptionsBootableDiskDevice"><deviceKey>2000</deviceKey></bootOrder><bootOrder xsi:type="VirtualMachineBootOptionsBootableEthernetDevice"><deviceKey>4000</deviceKey></bootOrder><bootOrder xsi:type="VirtualMachineBootOptionsBootableCdromDevice"></bootOrder><networkBootProtocol>ipv4</networkBootProtocol></val></propSet>
+<propSet><name>config.changeVersion</name><val xsi:type="xsd:string">2026-08-30T11:02:55.417123Z</val></propSet>
+<propSet><name>config.cpuAffinity</name><val xsi:type="VirtualMachineAffinityInfo"><affinitySet>2</affinitySet><affinitySet>3</affinitySet><affinitySet>4</affinitySet><affinitySet>5</affinitySet></val></propSet>
+<propSet><name>config.cpuAllocation</name><val xsi:type="ResourceAllocationInfo"><reservation>8800</reservation><expandableReservation>false</expandableReservation><limit>-1</limit><shares><shares>8000</shares><level>high</level></shares><overheadLimit>0</overheadLimit></val></propSet>
+<propSet><name>config.extraConfig</name><val xsi:type="ArrayOfOptionValue">
+<OptionValue><key>nvram</key><value xsi:type="xsd:string">fw-a.nvram</value></OptionValue>
+<OptionValue><key>pciBridge0.present</key><value xsi:type="xsd:string">TRUE</value></OptionValue>
+<OptionValue><key>sched.cpu.latencySensitivity</key><value xsi:type="xsd:string">high</value></OptionValue>
+<OptionValue><key>sched.cpu.min</key><value xsi:type="xsd:string">8800</value></OptionValue>
+<OptionValue><key>sched.mem.min</key><value xsi:type="xsd:string">16384</value></OptionValue>
+<OptionValue><key>sched.mem.pin</key><value xsi:type="xsd:string">TRUE</value></OptionValue>
+<OptionValue><key>sched.mem.lpage.enable1GPage</key><value xsi:type="xsd:string">1</value></OptionValue>
+<OptionValue><key>numa.autosize.cookie</key><value xsi:type="xsd:string">40001</value></OptionValue>
+<OptionValue><key>numa.nodeAffinity</key><value xsi:type="xsd:string">0</value></OptionValue>
+<OptionValue><key>numa.vcpu.preferHT</key><value xsi:type="xsd:string">TRUE</value></OptionValue>
+<OptionValue><key>ethernet0.coalescingScheme</key><value xsi:type="xsd:string">disabled</value></OptionValue>
+<OptionValue><key>ethernet1.ctxPerDev</key><value xsi:type="xsd:string">1</value></OptionValue>
+<OptionValue><key>ethernet1.filter4.name</key><value xsi:type="xsd:string">dvfilter-generic-vmware</value></OptionValue>
+<OptionValue><key>ethernet0.pciSlotNumber</key><value xsi:type="xsd:string">160</value></OptionValue>
+<OptionValue><key>pciPassthru.use64bitMMIO</key><value xsi:type="xsd:string">TRUE</value></OptionValue>
+<OptionValue><key>pciPassthru.64bitMMIOSizeGB</key><value xsi:type="xsd:string">64</value></OptionValue>
+<OptionValue><key>hypervisor.cpuid.v0</key><value xsi:type="xsd:string">FALSE</value></OptionValue>
+<OptionValue><key>uuid.action</key><value xsi:type="xsd:string">keep</value></OptionValue>
+<OptionValue><key>monitor_control.disable_mmu_largepages</key><value xsi:type="xsd:string">TRUE</value></OptionValue>
+<OptionValue><key>migrate.hostLog</key><value xsi:type="xsd:string">fw-a-hostlog.log</value></OptionValue>
+</val></propSet>
+<propSet><name>config.cpuHotAddEnabled</name><val xsi:type="xsd:boolean">false</val></propSet>
+<propSet><name>config.files.vmPathName</name><val xsi:type="xsd:string">[datastore1] fw-a/fw-a.vmx</val></propSet>
+<propSet><name>config.firmware</name><val xsi:type="xsd:string">efi</val></propSet>
+<propSet><name>config.flags</name><val xsi:type="VirtualMachineFlagInfo"><disableAcceleration>false</disableAcceleration><enableLogging>true</enableLogging><useToe>false</useToe><runWithDebugInfo>false</runWithDebugInfo><monitorType>release</monitorType><htSharing>any</htSharing><snapshotDisabled>false</snapshotDisabled><snapshotLocked>false</snapshotLocked><diskUuidEnabled>false</diskUuidEnabled><virtualMmuUsage>automatic</virtualMmuUsage><virtualExecUsage>hvAuto</virtualExecUsage><snapshotPowerOffBehavior>powerOff</snapshotPowerOffBehavior><recordReplayEnabled>false</recordReplayEnabled><faultToleranceType>unset</faultToleranceType><cbrcCacheEnabled>false</cbrcCacheEnabled><vvtdEnabled>true</vvtdEnabled><vbsEnabled>false</vbsEnabled></val></propSet>
+<propSet><name>config.guestId</name><val xsi:type="xsd:string">otherLinux64Guest</val></propSet>
+<propSet><name>config.hardware.autoCoresPerSocket</name><val xsi:type="xsd:boolean">false</val></propSet>
+<propSet><name>config.hardware.device</name><val xsi:type="ArrayOfVirtualDevice">
+<VirtualDevice xsi:type="VirtualIDEController"><key>200</key><deviceInfo><label>IDE 0</label><summary>IDE 0</summary></deviceInfo><busNumber>0</busNumber></VirtualDevice>
+<VirtualDevice xsi:type="VirtualPCIController"><key>100</key><deviceInfo><label>PCI controller 0</label><summary>PCI controller 0</summary></deviceInfo><busNumber>0</busNumber><device>1000</device><device>4000</device><device>4001</device><device>4002</device><device>4003</device><device>13000</device></VirtualDevice>
+<VirtualDevice xsi:type="ParaVirtualSCSIController"><key>1000</key><deviceInfo><label>SCSI controller 0</label><summary>VMware paravirtual SCSI</summary></deviceInfo><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>16</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>3</unitNumber><busNumber>0</busNumber><device>2000</device><hotAddRemove>true</hotAddRemove><sharedBus>noSharing</sharedBus><scsiCtlrUnitNumber>7</scsiCtlrUnitNumber></VirtualDevice>
+<VirtualDevice xsi:type="VirtualDisk"><key>2000</key><deviceInfo><label>Hard disk 1</label><summary>62,914,560 KB</summary></deviceInfo><backing xsi:type="VirtualDiskFlatVer2BackingInfo"><fileName>[datastore1] fw-a/fw-a.vmdk</fileName><datastore type="Datastore">5f1e0000-aaaa-bbbb-cccc-000000000001</datastore><backingObjectId></backingObjectId><diskMode>persistent</diskMode><split>false</split><writeThrough>false</writeThrough><thinProvisioned>false</thinProvisioned><eagerlyScrub>true</eagerlyScrub><uuid>6000C29a-1234-5678-9abc-def012345678</uuid><contentId>0123456789abcdef0123456789abcdef</contentId><digestEnabled>false</digestEnabled><sharing>sharingNone</sharing></backing><controllerKey>1000</controllerKey><unitNumber>0</unitNumber><capacityInKB>62914560</capacityInKB><capacityInBytes>64424509440</capacityInBytes><shares><shares>1000</shares><level>normal</level></shares><storageIOAllocation><limit>-1</limit><shares><shares>1000</shares><level>normal</level></shares><reservation>0</reservation></storageIOAllocation><diskObjectId>2-2000</diskObjectId><nativeUnmanagedLinkedClone>false</nativeUnmanagedLinkedClone></VirtualDevice>
+<VirtualDevice xsi:type="VirtualVmxnet3"><key>4000</key><deviceInfo><label>Network adapter 1</label><summary>Management Network</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>Management Network</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-Management Network</network></backing><connectable><startConnected>true</startConnected><allowGuestControl>true</allowGuestControl><connected>true</connected><status>ok</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>160</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>7</unitNumber><addressType>generated</addressType><macAddress>00:0c:29:aa:bb:01</macAddress><wakeOnLanEnabled>true</wakeOnLanEnabled><resourceAllocation><reservation>0</reservation><share><shares>50</shares><level>normal</level></share><limit>-1</limit></resourceAllocation><uptCompatibilityEnabled>false</uptCompatibilityEnabled></VirtualDevice>
+<VirtualDevice xsi:type="VirtualVmxnet3"><key>4001</key><deviceInfo><label>Network adapter 2</label><summary>Trunk-VGT</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>Trunk-VGT</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-Trunk-VGT</network></backing><connectable><startConnected>true</startConnected><allowGuestControl>true</allowGuestControl><connected>true</connected><status>ok</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>192</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>8</unitNumber><addressType>generated</addressType><macAddress>00:0c:29:aa:bb:02</macAddress><wakeOnLanEnabled>true</wakeOnLanEnabled><uptCompatibilityEnabled>true</uptCompatibilityEnabled></VirtualDevice>
+<VirtualDevice xsi:type="VirtualVmxnet3"><key>4002</key><deviceInfo><label>Network adapter 3</label><summary>HA-Sync</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>HA-Sync</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-HA-Sync</network></backing><connectable><startConnected>true</startConnected><allowGuestControl>true</allowGuestControl><connected>true</connected><status>ok</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>224</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>9</unitNumber><addressType>generated</addressType><macAddress>00:0C:29:AA:BB:03</macAddress><wakeOnLanEnabled>true</wakeOnLanEnabled><uptCompatibilityEnabled>false</uptCompatibilityEnabled></VirtualDevice>
+<VirtualDevice xsi:type="VirtualSriovEthernetCard"><key>4003</key><deviceInfo><label>Network adapter 4</label><summary>Inside-VL10</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>Inside-VL10</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-Inside-VL10</network></backing><connectable><startConnected>true</startConnected><allowGuestControl>false</allowGuestControl><connected>true</connected><status>ok</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>256</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>10</unitNumber><addressType>generated</addressType><macAddress>00:0c:29:aa:bb:04</macAddress><wakeOnLanEnabled>false</wakeOnLanEnabled><allowGuestOSMtuChange>false</allowGuestOSMtuChange><sriovBacking><physicalFunctionBacking><id>0000:18:00.0</id></physicalFunctionBacking><virtualFunctionBacking><id>0000:18:02.0</id></virtualFunctionBacking></sriovBacking></VirtualDevice>
+<VirtualDevice xsi:type="VirtualPCIPassthrough"><key>13000</key><deviceInfo><label>PCI device 0</label><summary>Dynamic PCI device</summary></deviceInfo><backing xsi:type="VirtualPCIPassthroughDynamicBackingInfo"><allowedDevice><vendorId>-32634</vendorId><deviceId>14285</deviceId></allowedDevice><customLabel>x722-vf</customLabel><assignedId>0000:18:02.1</assignedId></backing><connectable><startConnected>true</startConnected><allowGuestControl>false</allowGuestControl><connected>true</connected><status>ok</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>1184</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>17</unitNumber></VirtualDevice>
+</val></propSet>
+<propSet><name>config.hardware.memoryMB</name><val xsi:type="xsd:int">16384</val></propSet>
+<propSet><name>config.hardware.numCPU</name><val xsi:type="xsd:int">8</val></propSet>
+<propSet><name>config.hardware.numCoresPerSocket</name><val xsi:type="xsd:int">8</val></propSet>
+<propSet><name>config.instanceUuid</name><val xsi:type="xsd:string">52400001-0000-4000-8000-000000000001</val></propSet>
+<propSet><name>config.latencySensitivity</name><val xsi:type="LatencySensitivity"><level>high</level><sensitivity>0</sensitivity></val></propSet>
+<propSet><name>config.memoryAllocation</name><val xsi:type="ResourceAllocationInfo"><reservation>16384</reservation><expandableReservation>false</expandableReservation><limit>-1</limit><shares><shares>163840</shares><level>normal</level></shares><overheadLimit>0</overheadLimit></val></propSet>
+<propSet><name>config.memoryHotAddEnabled</name><val xsi:type="xsd:boolean">false</val></propSet>
+<propSet><name>config.memoryReservationLockedToMax</name><val xsi:type="xsd:boolean">true</val></propSet>
+<propSet><name>config.modified</name><val xsi:type="xsd:dateTime">1970-01-01T00:00:00Z</val></propSet>
+<propSet><name>config.tools</name><val xsi:type="ToolsConfigInfo"><toolsVersion>2147483647</toolsVersion><toolsInstallType>guestToolsTypeOpenVMTools</toolsInstallType><afterPowerOn>true</afterPowerOn><afterResume>true</afterResume><beforeGuestStandby>true</beforeGuestStandby><beforeGuestShutdown>true</beforeGuestShutdown><beforeGuestReboot>true</beforeGuestReboot><toolsUpgradePolicy>manual</toolsUpgradePolicy><syncTimeWithHostAllowed>true</syncTimeWithHostAllowed><syncTimeWithHost>false</syncTimeWithHost></val></propSet>
+<propSet><name>config.uuid</name><val xsi:type="xsd:string">564d0001-0000-4000-8000-000000000001</val></propSet>
+<propSet><name>config.version</name><val xsi:type="xsd:string">vmx-19</val></propSet>
+<propSet><name>config.vmxConfigChecksum</name><val xsi:type="xsd:base64Binary">c2hhMjU2OmZha2UtZmluZ2VycHJpbnQtZnctYQ==</val></propSet>
+<propSet><name>guest.guestState</name><val xsi:type="xsd:string">running</val></propSet>
+<propSet><name>guest.hostName</name><val xsi:type="xsd:string">fw-a</val></propSet>
+<propSet><name>guest.net</name><val xsi:type="ArrayOfGuestNicInfo"><GuestNicInfo><network>Management Network</network><ipAddress>192.0.2.11</ipAddress><ipAddress>fe80::20c:29ff:feaa:bb01</ipAddress><macAddress>00:0c:29:aa:bb:01</macAddress><connected>true</connected><deviceConfigId>4000</deviceConfigId></GuestNicInfo><GuestNicInfo><network>HA-Sync</network><ipAddress>198.51.100.1</ipAddress><macAddress>00:0C:29:AA:BB:03</macAddress><connected>true</connected><deviceConfigId>4002</deviceConfigId></GuestNicInfo></val></propSet>
+<propSet><name>guest.toolsRunningStatus</name><val xsi:type="xsd:string">guestToolsRunning</val></propSet>
+<propSet><name>guest.toolsStatus</name><val xsi:type="VirtualMachineToolsStatus">toolsOk</val></propSet>
+<propSet><name>guest.toolsVersion</name><val xsi:type="xsd:string">2147483647</val></propSet>
+<propSet><name>guest.toolsVersionStatus2</name><val xsi:type="xsd:string">guestToolsUnmanaged</val></propSet>
+<propSet><name>name</name><val xsi:type="xsd:string">fw-a</val></propSet>
+<propSet><name>runtime.bootTime</name><val xsi:type="xsd:dateTime">2026-09-01T04:20:31.109Z</val></propSet>
+<propSet><name>runtime.connectionState</name><val xsi:type="VirtualMachineConnectionState">connected</val></propSet>
+<propSet><name>runtime.powerState</name><val xsi:type="VirtualMachinePowerState">poweredOn</val></propSet>
+<propSet><name>snapshot</name><val xsi:type="VirtualMachineSnapshotInfo"><currentSnapshot type="VirtualMachineSnapshot">3</currentSnapshot><rootSnapshotList><snapshot type="VirtualMachineSnapshot">1</snapshot><vm type="VirtualMachine">1</vm><name>pre-upgrade</name><description></description><id>1</id><createTime>2026-06-01T01:00:00Z</createTime><state>poweredOff</state><quiesced>false</quiesced><childSnapshotList><snapshot type="VirtualMachineSnapshot">2</snapshot><vm type="VirtualMachine">1</vm><name>post-upgrade</name><description></description><id>2</id><createTime>2026-06-02T01:00:00Z</createTime><state>poweredOff</state><quiesced>false</quiesced><childSnapshotList><snapshot type="VirtualMachineSnapshot">3</snapshot><vm type="VirtualMachine">1</vm><name>content-update</name><description></description><id>3</id><createTime>2026-06-03T01:00:00Z</createTime><state>poweredOn</state><quiesced>false</quiesced></childSnapshotList></childSnapshotList></rootSnapshotList></val></propSet>
+</objects>
+<objects>
+<obj type="VirtualMachine">42</obj>
+<propSet><name>name</name><val xsi:type="xsd:string">orphan-vm</val></propSet>
+<propSet><name>runtime.connectionState</name><val xsi:type="VirtualMachineConnectionState">orphaned</val></propSet>
+<propSet><name>runtime.powerState</name><val xsi:type="VirtualMachinePowerState">poweredOff</val></propSet>
+<missingSet><path>config.uuid</path><fault><fault xsi:type="SystemError"><reason>Configuration file is not accessible</reason></fault><localizedMessage>A general system error occurred: Configuration file is not accessible</localizedMessage></fault></missingSet>
+<missingSet><path>config.hardware.device</path><fault><fault xsi:type="SystemError"><reason>Configuration file is not accessible</reason></fault><localizedMessage>A general system error occurred: Configuration file is not accessible</localizedMessage></fault></missingSet>
+</objects>
+<token>1</token>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

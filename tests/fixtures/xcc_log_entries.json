@@ -1,0 +1,201 @@
+{
+  "@odata.type": "#LogEntryCollection.LogEntryCollection",
+  "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries",
+  "Name": "Log Service Collection",
+  "Description": "Collection of entries for this log service",
+  "Members@odata.count": 9,
+  "Members": [
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/5",
+      "Id": "5",
+      "Name": "Log Entry 5",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-01-12T08:00:01+00:00",
+      "EventId": "0x81070005",
+      "Message": "ENET[CIM:ep1] IPv6-LinkLocal:HstName=se350-a-xcc, IP@=fe80::a94:efff:feaa:bb01 ,Pref=64 .",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPNM4028I",
+          "Hidden": false,
+          "Source": "NetworkMgmt"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/6",
+      "Id": "6",
+      "Name": "Log Entry 6",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-01-12T08:00:02+00:00",
+      "EventId": "0x81070006",
+      "Message": "ENET[CIM:ep1] IPv6-LinkLocal:HstName=se350-a-xcc, IP@=fe80::a94:efff:feaa:bb01 ,Pref=64 .",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPNM4028I",
+          "Hidden": false,
+          "Source": "NetworkMgmt"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/7",
+      "Id": "7",
+      "Name": "Log Entry 7",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-01-12T08:03:10+00:00",
+      "EventId": "0x81070007",
+      "Message": "Host Power has been turned on via power button.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPPP4025I",
+          "Hidden": false,
+          "Source": "PowerManagement"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/120",
+      "Id": "120",
+      "Name": "Log Entry 120",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "Warning",
+      "Created": "2026-03-02T22:14:33+00:00",
+      "EventId": "0x81070078",
+      "Message": "Power supply 2 input has been lost.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPPW0003I",
+          "Hidden": false,
+          "Source": "Power",
+          "Serviceable": true
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/121",
+      "Id": "121",
+      "Name": "Log Entry 121",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-03-02T22:19:40+00:00",
+      "EventId": "0x81070079",
+      "Message": "Power supply 2 input has been restored.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPPW2003I",
+          "Hidden": false,
+          "Source": "Power"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/200",
+      "Id": "200",
+      "Name": "Log Entry 200",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "Critical",
+      "Created": "2026-06-18T10:41:07+00:00",
+      "EventId": "0x810700C8",
+      "Message": "Chassis cover was opened.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPSE0000F",
+          "Hidden": false,
+          "Source": "Security",
+          "Serviceable": false
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/201",
+      "Id": "201",
+      "Name": "Log Entry 201",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-06-18T10:52:19+00:00",
+      "EventId": "0x810700C9",
+      "Message": "Chassis cover was closed.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPSE2000I",
+          "Hidden": false,
+          "Source": "Security"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/233",
+      "Id": "233",
+      "Name": "Log Entry 233",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "OK",
+      "Created": "2026-09-24T13:55:00+00:00",
+      "EventId": "0x810700E9",
+      "Message": "NTP synchronised with 203.0.113.123.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPNM4001I",
+          "Hidden": true,
+          "Source": "NetworkMgmt"
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_4_1.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries/234",
+      "Id": "234",
+      "Name": "Log Entry 234",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "Warning",
+      "Created": "2026-09-24T13:58:12+00:00",
+      "EventId": "0x810700EA",
+      "Message": "Sensor Ambient Temp has transitioned from normal to non-critical state.",
+      "MessageArgs": [],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.LenovoLogEntryProperties",
+          "CommonEventID": "FQXSPCA0016M",
+          "Hidden": false,
+          "Source": "Cooling",
+          "Serviceable": true
+        }
+      }
+    }
+  ]
+}

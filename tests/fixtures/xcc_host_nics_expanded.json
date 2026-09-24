@@ -1,0 +1,98 @@
+{
+  "@odata.type": "#EthernetInterfaceCollection.EthernetInterfaceCollection",
+  "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces",
+  "Name": "Ethernet Interface Collection",
+  "Members@odata.count": 5,
+  "Members": [
+    {
+      "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ob-1",
+      "Id": "ob-1",
+      "Name": "Ethernet Interface",
+      "Description": "Enternal Ethernet interface for a System",
+      "InterfaceEnabled": true,
+      "LinkStatus": "LinkUp",
+      "SpeedMbps": null,
+      "FullDuplex": null,
+      "MACAddress": "08:94:EF:AA:BB:11",
+      "PermanentMACAddress": "08:94:EF:AA:BB:11",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ob-2",
+      "Id": "ob-2",
+      "Name": "Ethernet Interface",
+      "Description": "Enternal Ethernet interface for a System",
+      "InterfaceEnabled": true,
+      "LinkStatus": "LinkUp",
+      "SpeedMbps": null,
+      "FullDuplex": null,
+      "MACAddress": "08:94:EF:AA:BB:12",
+      "PermanentMACAddress": "08:94:EF:AA:BB:12",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ob-3",
+      "Id": "ob-3",
+      "Name": "Ethernet Interface",
+      "Description": "Enternal Ethernet interface for a System",
+      "InterfaceEnabled": true,
+      "LinkStatus": "NoLink",
+      "SpeedMbps": null,
+      "FullDuplex": null,
+      "MACAddress": "08:94:EF:AA:BB:13",
+      "PermanentMACAddress": "08:94:EF:AA:BB:13",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ob-4",
+      "Id": "ob-4",
+      "Name": "Ethernet Interface",
+      "Description": "Enternal Ethernet interface for a System",
+      "InterfaceEnabled": true,
+      "LinkStatus": "LinkDown",
+      "SpeedMbps": null,
+      "FullDuplex": null,
+      "MACAddress": "08:94:EF:AA:BB:14",
+      "PermanentMACAddress": "08:94:EF:AA:BB:14",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ToManager",
+      "Id": "ToManager",
+      "Name": "Host Interface to Manager",
+      "Description": "USB Redfish Host Interface",
+      "InterfaceEnabled": true,
+      "LinkStatus": "LinkUp",
+      "MACAddress": "08:94:EF:AA:BB:03",
+      "PermanentMACAddress": "08:94:EF:AA:BB:03",
+      "IPv4Addresses": [
+        {
+          "Address": "169.254.95.120",
+          "SubnetMask": "255.255.0.0",
+          "AddressOrigin": "Static"
+        }
+      ],
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ]
+}

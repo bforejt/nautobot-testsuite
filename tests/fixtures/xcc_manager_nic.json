@@ -1,0 +1,53 @@
+{
+  "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+  "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces/NIC",
+  "Id": "NIC",
+  "Name": "Manager Ethernet Interface",
+  "Description": "This resource is used to represent an Ethernet Interface for a Redfish implementation.",
+  "InterfaceEnabled": true,
+  "LinkStatus": "LinkUp",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "PermanentMACAddress": "08:94:EF:AA:BB:01",
+  "MACAddress": "08:94:EF:AA:BB:01",
+  "SpeedMbps": 1000,
+  "AutoNeg": true,
+  "FullDuplex": true,
+  "MTUSize": 1500,
+  "HostName": "se350-a-xcc",
+  "FQDN": "se350-a-xcc.example.net",
+  "NameServers": [
+    "198.51.100.53",
+    "198.51.100.54"
+  ],
+  "StaticNameServers": [],
+  "DHCPv4": {
+    "DHCPEnabled": false,
+    "UseDNSServers": false,
+    "UseGateway": false,
+    "UseNTPServers": false
+  },
+  "IPv4Addresses": [
+    {
+      "Address": "192.0.2.21",
+      "SubnetMask": "255.255.255.0",
+      "AddressOrigin": "Static",
+      "Gateway": "192.0.2.1"
+    }
+  ],
+  "IPv6Addresses": [
+    {
+      "Address": "fe80::a94:efff:feaa:bb01",
+      "PrefixLength": 64,
+      "AddressOrigin": "LinkLocal",
+      "AddressState": "Preferred"
+    }
+  ],
+  "IPv6DefaultGateway": "::",
+  "VLAN": {
+    "VLANEnable": false,
+    "VLANId": 1
+  }
+}

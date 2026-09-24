@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Continuation page of vsphere_vms.xml. VM 2 is a powered-off guest that was
+     never vCenter-managed: no instanceUuid, no snapshot, no cpuAffinity, no
+     autoCoresPerSocket (all omitted, not missingSet), sched.cpu.affinity
+     spelled "all" by the Host Client, one adapter with an ASSIGNED MAC, one
+     adapter left disconnected, a pending "moved or copied?" question, a
+     thin disk on a LSI Logic SAS controller, BIOS firmware with CPU hot-add
+     on, a Fixed DirectPath passthrough of the host's X722 function 18:00.1,
+     and no flags/bootOptions/tools/guest.net (omitted, read as null). -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<ContinueRetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="VirtualMachine">2</obj>
+<propSet><name>config.cpuAllocation</name><val xsi:type="ResourceAllocationInfo"><reservation>0</reservation><expandableReservation>false</expandableReservation><limit>-1</limit><shares><shares>4000</shares><level>normal</level></shares><overheadLimit>0</overheadLimit></val></propSet>
+<propSet><name>config.extraConfig</name><val xsi:type="ArrayOfOptionValue">
+<OptionValue><key>nvram</key><value xsi:type="xsd:string">fw-b.nvram</value></OptionValue>
+<OptionValue><key>sched.cpu.affinity</key><value xsi:type="xsd:string">all</value></OptionValue>
+<OptionValue><key>sched.swap.derivedName</key><value xsi:type="xsd:string">/vmfs/volumes/5f1e0000-aaaa-bbbb-cccc-000000000001/fw-b/fw-b-abc123.vswp</value></OptionValue>
+</val></propSet>
+<propSet><name>config.files.vmPathName</name><val xsi:type="xsd:string">[datastore1] fw-b/fw-b.vmx</val></propSet>
+<propSet><name>config.guestId</name><val xsi:type="xsd:string">otherLinux64Guest</val></propSet>
+<propSet><name>config.hardware.device</name><val xsi:type="ArrayOfVirtualDevice">
+<VirtualDevice xsi:type="VirtualPCIController"><key>100</key><deviceInfo><label>PCI controller 0</label><summary>PCI controller 0</summary></deviceInfo><busNumber>0</busNumber><device>1000</device><device>4000</device><device>4001</device><device>13000</device></VirtualDevice>
+<VirtualDevice xsi:type="VirtualLsiLogicSASController"><key>1000</key><deviceInfo><label>SCSI controller 0</label><summary>LSI Logic SAS</summary></deviceInfo><controllerKey>100</controllerKey><unitNumber>3</unitNumber><busNumber>0</busNumber><device>2000</device><hotAddRemove>true</hotAddRemove><sharedBus>noSharing</sharedBus><scsiCtlrUnitNumber>7</scsiCtlrUnitNumber></VirtualDevice>
+<VirtualDevice xsi:type="VirtualDisk"><key>2000</key><deviceInfo><label>Hard disk 1</label><summary>62,914,560 KB</summary></deviceInfo><backing xsi:type="VirtualDiskFlatVer2BackingInfo"><fileName>[datastore1] fw-b/fw-b.vmdk</fileName><datastore type="Datastore">5f1e0000-aaaa-bbbb-cccc-000000000001</datastore><diskMode>persistent</diskMode><split>false</split><writeThrough>false</writeThrough><thinProvisioned>true</thinProvisioned><eagerlyScrub>false</eagerlyScrub><uuid>6000C29b-1234-5678-9abc-def012345678</uuid><contentId>fedcba9876543210fedcba9876543210</contentId><digestEnabled>false</digestEnabled><sharing>sharingNone</sharing></backing><controllerKey>1000</controllerKey><unitNumber>0</unitNumber><capacityInKB>62914560</capacityInKB><capacityInBytes>64424509440</capacityInBytes></VirtualDevice>
+<VirtualDevice xsi:type="VirtualE1000e"><key>4000</key><deviceInfo><label>Network adapter 1</label><summary>Management Network</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>Management Network</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-Management Network</network></backing><connectable><startConnected>true</startConnected><allowGuestControl>true</allowGuestControl><connected>false</connected><status>untried</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>160</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>7</unitNumber><addressType>assigned</addressType><macAddress>00:50:56:aa:bb:11</macAddress><wakeOnLanEnabled>true</wakeOnLanEnabled></VirtualDevice>
+<VirtualDevice xsi:type="VirtualVmxnet3"><key>4001</key><deviceInfo><label>Network adapter 2</label><summary>Trunk-VGT</summary></deviceInfo><backing xsi:type="VirtualEthernetCardNetworkBackingInfo"><deviceName>Trunk-VGT</deviceName><useAutoDetect>false</useAutoDetect><network type="Network">HaNetwork-Trunk-VGT</network></backing><connectable><startConnected>false</startConnected><allowGuestControl>true</allowGuestControl><connected>false</connected><status>untried</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>192</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>8</unitNumber><addressType>generated</addressType><macAddress>00:0c:29:aa:bb:12</macAddress><wakeOnLanEnabled>true</wakeOnLanEnabled><uptCompatibilityEnabled>false</uptCompatibilityEnabled></VirtualDevice>
+<VirtualDevice xsi:type="VirtualPCIPassthrough"><key>13000</key><deviceInfo><label>PCI device 0</label><summary>PCI device 0</summary></deviceInfo><backing xsi:type="VirtualPCIPassthroughDeviceBackingInfo"><deviceName>Ethernet Controller X722 for 10GbE SFP+</deviceName><useAutoDetect>false</useAutoDetect><id>0000:18:00.1</id><deviceId>37d0</deviceId><systemId>4c4c4544-0000-4d10-8058-b4c04f303032</systemId><vendorId>-32634</vendorId></backing><connectable><startConnected>true</startConnected><allowGuestControl>false</allowGuestControl><connected>false</connected><status>untried</status></connectable><slotInfo xsi:type="VirtualDevicePciBusSlotInfo"><pciSlotNumber>1184</pciSlotNumber></slotInfo><controllerKey>100</controllerKey><unitNumber>17</unitNumber></VirtualDevice>
+</val></propSet>
+<propSet><name>config.cpuHotAddEnabled</name><val xsi:type="xsd:boolean">true</val></propSet>
+<propSet><name>config.firmware</name><val xsi:type="xsd:string">bios</val></propSet>
+<propSet><name>config.hardware.memoryMB</name><val xsi:type="xsd:int">8192</val></propSet>
+<propSet><name>config.hardware.numCPU</name><val xsi:type="xsd:int">4</val></propSet>
+<propSet><name>config.hardware.numCoresPerSocket</name><val xsi:type="xsd:int">1</val></propSet>
+<propSet><name>config.latencySensitivity</name><val xsi:type="LatencySensitivity"><level>normal</level><sensitivity>0</sensitivity></val></propSet>
+<propSet><name>config.memoryAllocation</name><val xsi:type="ResourceAllocationInfo"><reservation>0</reservation><expandableReservation>false</expandableReservation><limit>-1</limit><shares><shares>81920</shares><level>normal</level></shares><overheadLimit>0</overheadLimit></val></propSet>
+<propSet><name>config.memoryReservationLockedToMax</name><val xsi:type="xsd:boolean">false</val></propSet>
+<propSet><name>config.uuid</name><val xsi:type="xsd:string">564d0002-0000-4000-8000-000000000002</val></propSet>
+<propSet><name>config.version</name><val xsi:type="xsd:string">vmx-19</val></propSet>
+<propSet><name>guest.guestState</name><val xsi:type="xsd:string">notRunning</val></propSet>
+<propSet><name>guest.toolsRunningStatus</name><val xsi:type="xsd:string">guestToolsNotRunning</val></propSet>
+<propSet><name>guest.toolsStatus</name><val xsi:type="VirtualMachineToolsStatus">toolsNotRunning</val></propSet>
+<propSet><name>guest.toolsVersionStatus2</name><val xsi:type="xsd:string">guestToolsUnmanaged</val></propSet>
+<propSet><name>name</name><val xsi:type="xsd:string">fw-b</val></propSet>
+<propSet><name>runtime.connectionState</name><val xsi:type="VirtualMachineConnectionState">connected</val></propSet>
+<propSet><name>runtime.powerState</name><val xsi:type="VirtualMachinePowerState">poweredOff</val></propSet>
+<propSet><name>runtime.question</name><val xsi:type="VirtualMachineQuestionInfo"><id>_vmx1</id><text>msg.uuid.altered:This virtual machine might have been moved or copied.
+In order to configure certain management and networking features, VMware ESX needs to know if this virtual machine was moved or copied.
+If you don't know, answer "I Copied It".</text><choice><choiceInfo><key>0</key><label>Cancel</label><summary>Cancel</summary></choiceInfo><choiceInfo><key>1</key><label>I Moved It</label><summary>I Moved It</summary></choiceInfo><choiceInfo><key>2</key><label>I Copied It</label><summary>I Copied It</summary></choiceInfo><defaultIndex>2</defaultIndex></choice></val></propSet>
+</objects>
+</returnval></ContinueRetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

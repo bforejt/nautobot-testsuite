@@ -1,0 +1,44 @@
+{
+  "@odata.type": "#Drive.v1_6_1.Drive",
+  "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.1",
+  "Id": "Disk.1",
+  "Name": "Disk.1",
+  "Manufacturer": "Micron",
+  "Model": "MTFDDAV480TDS",
+  "Revision": "CXV10P3",
+  "SerialNumber": "M2SSD000001",
+  "PartNumber": "01GV999",
+  "CapacityBytes": 480103981056,
+  "MediaType": "SSD",
+  "Protocol": "SATA",
+  "BlockSizeBytes": 512,
+  "NegotiatedSpeedGbs": 6,
+  "FailurePredicted": true,
+  "PredictedMediaLifeLeftPercent": 71,
+  "EncryptionAbility": "SelfEncryptingDrive",
+  "EncryptionStatus": "Unlocked",
+  "HotspareType": "None",
+  "PhysicalLocation": {
+    "PartLocation": {
+      "ServiceLabel": "M.2 Bay 1",
+      "LocationType": "Bay",
+      "LocationOrdinalValue": 1
+    }
+  },
+  "Status": {
+    "State": "Enabled",
+    "Health": "Warning"
+  },
+  "Links": {
+    "Volumes": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Volumes/0"
+      }
+    ]
+  },
+  "Actions": {
+    "#Drive.SecureErase": {
+      "target": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.1/Actions/Drive.SecureErase"
+    }
+  }
+}

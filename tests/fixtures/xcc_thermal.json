@@ -1,0 +1,173 @@
+{
+  "@odata.type": "#Thermal.v1_5_1.Thermal",
+  "@odata.id": "/redfish/v1/Chassis/1/Thermal",
+  "Id": "Thermal",
+  "Name": "Thermal",
+  "Temperatures": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/0",
+      "MemberId": "0",
+      "Name": "Ambient Temp",
+      "SensorNumber": 1,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 24,
+      "UpperThresholdNonCritical": 43,
+      "UpperThresholdCritical": 46,
+      "UpperThresholdFatal": null,
+      "LowerThresholdNonCritical": null,
+      "LowerThresholdCritical": null,
+      "LowerThresholdFatal": null,
+      "PhysicalContext": "Intake",
+      "RelatedItem": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1"
+        }
+      ]
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/1",
+      "MemberId": "1",
+      "Name": "CPU Temp",
+      "SensorNumber": 2,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 61,
+      "UpperThresholdNonCritical": 95,
+      "UpperThresholdCritical": 100,
+      "PhysicalContext": "CPU",
+      "RelatedItem": [
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+        }
+      ]
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/2",
+      "MemberId": "2",
+      "Name": "DIMM Temp",
+      "SensorNumber": 3,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 44,
+      "UpperThresholdNonCritical": 85,
+      "UpperThresholdCritical": 90,
+      "PhysicalContext": "SystemBoard"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/3",
+      "MemberId": "3",
+      "Name": "DIMM Temp",
+      "SensorNumber": 4,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 45,
+      "UpperThresholdNonCritical": 85,
+      "UpperThresholdCritical": 90,
+      "PhysicalContext": "SystemBoard"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/4",
+      "MemberId": "4",
+      "Name": "Exhaust Temp",
+      "SensorNumber": 5,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 38,
+      "UpperThresholdNonCritical": null,
+      "UpperThresholdCritical": null,
+      "PhysicalContext": "Exhaust"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/5",
+      "MemberId": "5",
+      "Name": "M.2 Temp",
+      "SensorNumber": 6,
+      "Status": {
+        "State": "Absent"
+      },
+      "ReadingCelsius": null,
+      "PhysicalContext": "StorageDevice"
+    }
+  ],
+  "Fans": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0",
+      "MemberId": "0",
+      "Name": "Fan 1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Reading": 4200,
+      "ReadingUnits": "RPM",
+      "LowerThresholdCritical": 1000,
+      "PhysicalContext": "Backplane",
+      "Redundancy": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Redundancy/0"
+        }
+      ]
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1",
+      "MemberId": "1",
+      "Name": "Fan 2",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Reading": 4300,
+      "ReadingUnits": "RPM",
+      "LowerThresholdCritical": 1000,
+      "PhysicalContext": "Backplane"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2",
+      "MemberId": "2",
+      "Name": "Fan 3",
+      "Status": {
+        "State": "Enabled",
+        "Health": "Warning"
+      },
+      "Reading": 6100,
+      "ReadingUnits": "RPM",
+      "PhysicalContext": "Backplane"
+    }
+  ],
+  "Redundancy": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Redundancy/0",
+      "MemberId": "0",
+      "Name": "Fan Redundancy",
+      "Mode": "N+m",
+      "MaxNumSupported": 3,
+      "MinNumNeeded": 2,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "RedundancySet": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2"
+        }
+      ]
+    }
+  ]
+}

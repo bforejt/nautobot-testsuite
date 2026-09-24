@@ -1,0 +1,85 @@
+{
+  "@odata.type": "#ManagerNetworkProtocol.v1_4_0.ManagerNetworkProtocol",
+  "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol",
+  "Id": "NetworkProtocol",
+  "Name": "Manager Network Protocol",
+  "Description": "Manager Network Service",
+  "HostName": "se350-a-xcc",
+  "FQDN": "se350-a-xcc.example.net",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "HTTP": {
+    "ProtocolEnabled": false,
+    "Port": 80
+  },
+  "HTTPS": {
+    "ProtocolEnabled": true,
+    "Port": 443,
+    "Certificates": {
+      "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates"
+    }
+  },
+  "SSH": {
+    "ProtocolEnabled": true,
+    "Port": 22
+  },
+  "IPMI": {
+    "ProtocolEnabled": false,
+    "Port": 623
+  },
+  "SNMP": {
+    "ProtocolEnabled": true,
+    "Port": 161,
+    "EnableSNMPv3": true,
+    "EnableSNMPv1": false,
+    "CommunityStrings": [
+      {
+        "AccessMode": "Full",
+        "CommunityString": "not-a-real-community",
+        "Name": "community1"
+      }
+    ]
+  },
+  "VirtualMedia": {
+    "ProtocolEnabled": true,
+    "Port": 3900
+  },
+  "KVMIP": {
+    "ProtocolEnabled": true,
+    "Port": 3900
+  },
+  "SSDP": {
+    "ProtocolEnabled": false,
+    "Port": 1900,
+    "NotifyMulticastIntervalSeconds": 600,
+    "NotifyTTL": 2,
+    "NotifyIPv6Scope": "Site"
+  },
+  "Telnet": {
+    "ProtocolEnabled": false,
+    "Port": 23
+  },
+  "NTP": {
+    "ProtocolEnabled": true,
+    "Port": 123,
+    "NTPServers": [
+      "203.0.113.123",
+      "203.0.113.124"
+    ]
+  },
+  "Oem": {
+    "Lenovo": {
+      "DNS": {
+        "DNSEnable": true,
+        "PreferredAddressType": "IPv4",
+        "IPv4Addresses": [
+          "198.51.100.53",
+          "198.51.100.54"
+        ]
+      }
+    }
+  },
+  "Actions": {}
+}

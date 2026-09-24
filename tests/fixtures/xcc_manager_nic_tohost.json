@@ -1,0 +1,22 @@
+{
+  "@odata.type": "#EthernetInterface.v1_4_1.EthernetInterface",
+  "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces/ToHost",
+  "Id": "ToHost",
+  "Name": "Manager Ethernet Interface to Host",
+  "InterfaceEnabled": true,
+  "LinkStatus": "LinkUp",
+  "MACAddress": "08:94:EF:AA:BB:02",
+  "PermanentMACAddress": "08:94:EF:AA:BB:02",
+  "IPv4Addresses": [
+    {
+      "Address": "169.254.95.118",
+      "SubnetMask": "255.255.0.0",
+      "AddressOrigin": "Static",
+      "Gateway": "0.0.0.0"
+    }
+  ],
+  "VLAN": {
+    "VLANEnable": false,
+    "VLANId": 0
+  }
+}

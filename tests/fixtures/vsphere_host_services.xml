@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Time, services, advanced options, autostart and firewall property groups
+     in one RetrieveResult (the fake context filters them per request). Every
+     OptionValue.value IS xsi-typed (the one place hostd types leaves inside a
+     data object); summary.managementServerIp is unset on a standalone host and
+     therefore absent from the propSet, not a missingSet entry. The option list
+     is a small curated sample of the ~1 200 a real host returns, including one
+     invented credential-looking key to exercise the raw-bundle scrub. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="HostSystem">ha-host</obj>
+<propSet><name>config.autoStart</name><val xsi:type="HostAutoStartManagerConfig">
+<defaults><enabled>true</enabled><startDelay>120</startDelay><stopDelay>120</stopDelay><waitForHeartbeat>false</waitForHeartbeat><stopAction>guestShutdown</stopAction></defaults>
+<powerInfo><key type="VirtualMachine">1</key><startOrder>1</startOrder><startDelay>-1</startDelay><waitForHeartbeat>systemDefault</waitForHeartbeat><startAction>powerOn</startAction><stopDelay>-1</stopDelay><stopAction>systemDefault</stopAction></powerInfo>
+<powerInfo><key type="VirtualMachine">2</key><startOrder>2</startOrder><startDelay>60</startDelay><waitForHeartbeat>no</waitForHeartbeat><startAction>powerOn</startAction><stopDelay>-1</stopDelay><stopAction>guestShutdown</stopAction></powerInfo>
+<powerInfo><key type="VirtualMachine">77</key><startOrder>-1</startOrder><startDelay>-1</startDelay><waitForHeartbeat>systemDefault</waitForHeartbeat><startAction>none</startAction><stopDelay>-1</stopDelay><stopAction>systemDefault</stopAction></powerInfo>
+</val></propSet>
+<propSet><name>config.dateTimeInfo</name><val xsi:type="HostDateTimeInfo">
+<timeZone><key>UTC</key><name>UTC</name><description>UTC</description><gmtOffset>0</gmtOffset></timeZone>
+<systemClockProtocol>ntp</systemClockProtocol>
+<ntpConfig><server>192.0.2.123</server><configFile>restrict default kod nomodify notrap nopeer noquery</configFile><configFile>restrict 127.0.0.1</configFile><configFile>server 192.0.2.123</configFile><configFile>server 192.0.2.124</configFile><configFile>driftfile /etc/ntp.drift</configFile></ntpConfig>
+<enabled>true</enabled><disableEvents>false</disableEvents><disableFallback>false</disableFallback><lastSyncTime>2026-09-24T10:00:00.5Z</lastSyncTime><remoteNtpServer>192.0.2.123</remoteNtpServer><ntpRunTime>1234567</ntpRunTime><ptpRunTime>0</ptpRunTime><ntpDuration>1234567</ntpDuration><ptpDuration>0</ptpDuration><serviceSync>true</serviceSync>
+</val></propSet>
+<propSet><name>config.firewall</name><val xsi:type="HostFirewallInfo">
+<defaultPolicy><incomingBlocked>true</incomingBlocked><outgoingBlocked>true</outgoingBlocked></defaultPolicy>
+<ruleset><key>sshServer</key><label>SSH Server</label><required>false</required><rule><port>22</port><direction>inbound</direction><portType>dst</portType><protocol>tcp</protocol></rule><service>TSM-SSH</service><enabled>true</enabled><allowedHosts><ipAddress>192.0.2.10</ipAddress><ipNetwork><network>198.51.100.0</network><prefixLength>24</prefixLength></ipNetwork><allIp>false</allIp></allowedHosts><userControllable>true</userControllable><ipListUserConfigurable>true</ipListUserConfigurable></ruleset>
+<ruleset><key>ntpClient</key><label>NTP Client</label><required>false</required><rule><port>123</port><direction>outbound</direction><portType>dst</portType><protocol>udp</protocol></rule><service>ntpd</service><enabled>true</enabled><allowedHosts><allIp>true</allIp></allowedHosts><userControllable>true</userControllable><ipListUserConfigurable>true</ipListUserConfigurable></ruleset>
+<ruleset><key>vSphereClient</key><label>vSphere Web Client</label><required>false</required><rule><port>443</port><direction>inbound</direction><portType>dst</portType><protocol>tcp</protocol></rule><rule><port>902</port><direction>inbound</direction><portType>dst</portType><protocol>tcp</protocol></rule><enabled>true</enabled><allowedHosts><allIp>true</allIp></allowedHosts><userControllable>false</userControllable><ipListUserConfigurable>true</ipListUserConfigurable></ruleset>
+<ruleset><key>snmp</key><label>SNMP Server</label><required>false</required><rule><port>161</port><direction>inbound</direction><portType>dst</portType><protocol>udp</protocol></rule><service>snmpd</service><enabled>false</enabled><allowedHosts><allIp>true</allIp></allowedHosts><userControllable>true</userControllable><ipListUserConfigurable>true</ipListUserConfigurable></ruleset>
+<ruleset><key>syslog</key><label>syslog</label><required>false</required><rule><port>514</port><direction>outbound</direction><portType>dst</portType><protocol>udp</protocol></rule><rule><port>1514</port><direction>outbound</direction><portType>dst</portType><protocol>tcp</protocol></rule><enabled>true</enabled></ruleset>
+</val></propSet>
+<propSet><name>config.lockdownMode</name><val xsi:type="HostLockdownMode">lockdownDisabled</val></propSet>
+<propSet><name>config.option</name><val xsi:type="ArrayOfOptionValue">
+<OptionValue><key>Config.Defaults.security.host.ruissl</key><value xsi:type="xsd:boolean">true</value></OptionValue>
+<OptionValue><key>Config.HostAgent.plugins.solo.enableMob</key><value xsi:type="xsd:boolean">false</value></OptionValue>
+<OptionValue><key>Mem.AllocGuestLargePage</key><value xsi:type="xsd:int">1</value></OptionValue>
+<OptionValue><key>Mem.ShareForceSalting</key><value xsi:type="xsd:int">2</value></OptionValue>
+<OptionValue><key>Misc.BlueScreenTimeout</key><value xsi:type="xsd:int">0</value></OptionValue>
+<OptionValue><key>Net.CoalesceDefaultOn</key><value xsi:type="xsd:int">1</value></OptionValue>
+<OptionValue><key>Net.MaxNetifTxQueueLen</key><value xsi:type="xsd:int">2000</value></OptionValue>
+<OptionValue><key>Net.TcpipHeapMax</key><value xsi:type="xsd:long">1024</value></OptionValue>
+<OptionValue><key>Numa.LocalityWeightActionAffinity</key><value xsi:type="xsd:int">130</value></OptionValue>
+<OptionValue><key>Power.CpuPolicy</key><value xsi:type="xsd:string">High Performance</value></OptionValue>
+<OptionValue><key>Security.AccountLockFailures</key><value xsi:type="xsd:int">5</value></OptionValue>
+<OptionValue><key>Security.PasswordQualityControl</key><value xsi:type="xsd:string">similar=deny retry=3 min=disabled,disabled,disabled,7,7</value></OptionValue>
+<OptionValue><key>Syslog.global.logCheckSSLCerts</key><value xsi:type="xsd:boolean">true</value></OptionValue>
+<OptionValue><key>Syslog.global.logDir</key><value xsi:type="xsd:string">[] /scratch/log</value></OptionValue>
+<OptionValue><key>Syslog.global.logDirUnique</key><value xsi:type="xsd:boolean">false</value></OptionValue>
+<OptionValue><key>Syslog.global.logHost</key><value xsi:type="xsd:string">udp://192.0.2.200:514,ssl://logs.example.net:1514</value></OptionValue>
+<OptionValue><key>Syslog.global.logLevel</key><value xsi:type="xsd:string">info</value></OptionValue>
+<OptionValue><key>UserVars.ESXiShellInteractiveTimeOut</key><value xsi:type="xsd:int">0</value></OptionValue>
+<OptionValue><key>UserVars.ESXiShellTimeOut</key><value xsi:type="xsd:int">0</value></OptionValue>
+<OptionValue><key>UserVars.EsximageNetTimeout</key><value xsi:type="xsd:int">60</value></OptionValue>
+<OptionValue><key>UserVars.ExampleVendorAgent.apiToken</key><value xsi:type="xsd:string">not-a-real-token</value></OptionValue>
+<OptionValue><key>UserVars.HostClientCEIPOptIn</key><value xsi:type="xsd:int">2</value></OptionValue>
+<OptionValue><key>UserVars.SuppressShellWarning</key><value xsi:type="xsd:int">1</value></OptionValue>
+<OptionValue><key>VMkernel.Boot.execInstalledOnly</key><value xsi:type="xsd:boolean">true</value></OptionValue>
+</val></propSet>
+<propSet><name>config.service</name><val xsi:type="HostServiceInfo">
+<service><key>TSM</key><label>ESXi Shell</label><required>false</required><uninstallable>false</uninstallable><running>false</running><policy>off</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>TSM-SSH</key><label>SSH</label><required>false</required><uninstallable>false</uninstallable><running>true</running><ruleset>sshServer</ruleset><policy>off</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>lwsmd</key><label>Active Directory Service</label><required>false</required><uninstallable>false</uninstallable><running>false</running><policy>off</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>ntpd</key><label>NTP Daemon</label><required>false</required><uninstallable>false</uninstallable><running>true</running><ruleset>ntpClient</ruleset><policy>on</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>ptpd</key><label>PTP Daemon</label><required>false</required><uninstallable>false</uninstallable><running>false</running><ruleset>ptpd</ruleset><policy>off</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>snmpd</key><label>SNMP Server</label><required>false</required><uninstallable>false</uninstallable><running>false</running><ruleset>snmp</ruleset><policy>on</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>vmsyslogd</key><label>Syslog Server</label><required>true</required><uninstallable>false</uninstallable><running>true</running><policy>on</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+<service><key>vpxa</key><label>VMware vCenter Agent</label><required>false</required><uninstallable>false</uninstallable><running>false</running><ruleset>vpxHeartbeats</ruleset><policy>on</policy><sourcePackage><sourcePackageName>esx-base</sourcePackageName><description>This VIB contains all of the base functionality of vSphere ESXi.</description></sourcePackage></service>
+</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

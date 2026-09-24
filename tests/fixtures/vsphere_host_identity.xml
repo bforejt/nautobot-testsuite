@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-built from the vim25 HostSystem shapes a standalone ESXi 8.0.3 hostd
+     returns for the identity property group, including the host-state
+     properties (maintenance/power/standby, applied power policy and the
+     policies on offer, the BMC address the host holds, TPM PCR digests as
+     repeated signed-byte leaves). Sanitised: invented serial, UUID, hostname
+     and digests; RFC 5737 addresses. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="HostSystem">ha-host</obj>
+<propSet><name>config.ipmi</name><val xsi:type="HostIpmiInfo"><bmcIpAddress>192.0.2.60</bmcIpAddress><bmcMacAddress>7C:D3:0A:00:00:60</bmcMacAddress><login>USERID</login></val></propSet>
+<propSet><name>config.powerSystemCapability</name><val xsi:type="PowerSystemCapability"><availablePolicy><key>1</key><name>PowerPolicy.static.name</name><shortName>static</shortName><description>PowerPolicy.static.description</description></availablePolicy><availablePolicy><key>2</key><name>PowerPolicy.dynamic.name</name><shortName>dynamic</shortName><description>PowerPolicy.dynamic.description</description></availablePolicy><availablePolicy><key>3</key><name>PowerPolicy.low.name</name><shortName>low</shortName><description>PowerPolicy.low.description</description></availablePolicy><availablePolicy><key>4</key><name>PowerPolicy.custom.name</name><shortName>custom</shortName><description>PowerPolicy.custom.description</description></availablePolicy></val></propSet>
+<propSet><name>config.powerSystemInfo</name><val xsi:type="PowerSystemInfo"><currentPolicy><key>1</key><name>PowerPolicy.static.name</name><shortName>static</shortName><description>PowerPolicy.static.description</description></currentPolicy></val></propSet>
+<propSet><name>config.hyperThread</name><val xsi:type="HostHyperThreadScheduleInfo"><available>true</available><active>true</active><config>true</config></val></propSet>
+<propSet><name>config.product</name><val xsi:type="AboutInfo"><name>VMware ESXi</name><fullName>VMware ESXi 8.0.3 build-24022510</fullName><vendor>VMware, Inc.</vendor><version>8.0.3</version><build>24022510</build><localeVersion>INTL</localeVersion><localeBuild>000</localeBuild><osType>vmnix-x86</osType><productLineId>embeddedEsx</productLineId><apiType>HostAgent</apiType><apiVersion>8.0.3.0</apiVersion><licenseProductName>VMware ESX Server</licenseProductName><licenseProductVersion>8.0</licenseProductVersion></val></propSet>
+<propSet><name>hardware.biosInfo</name><val xsi:type="HostBIOSInfo"><biosVersion>-[HYE134C-4.20]-</biosVersion><releaseDate>2025-03-11T00:00:00Z</releaseDate><vendor>Lenovo</vendor><majorRelease>4</majorRelease><minorRelease>20</minorRelease><firmwareMajorRelease>4</firmwareMajorRelease><firmwareMinorRelease>12</firmwareMinorRelease></val></propSet>
+<propSet><name>hardware.systemInfo</name><val xsi:type="HostSystemInfo"><vendor>Lenovo</vendor><model>ThinkSystem SE350 -[7Z46CTO1WW]-</model><uuid>4c4c4544-0000-4d10-8058-b4c04f303032</uuid><otherIdentifyingInfo><identifierValue>J900ABCD</identifierValue><identifierType><label>Asset Tag</label><summary>Asset tag of the system</summary><key>AssetTag</key></identifierType></otherIdentifyingInfo><otherIdentifyingInfo><identifierValue>J900ABCD</identifierValue><identifierType><label>Service tag</label><summary>Service tag of the system</summary><key>ServiceTag</key></identifierType></otherIdentifyingInfo><otherIdentifyingInfo><identifierValue>J900ABCD</identifierValue><identifierType><label>Serial Number</label><summary>Serial number of the system</summary><key>SerialNumberTag</key></identifierType></otherIdentifyingInfo><serialNumber>J900ABCD</serialNumber></val></propSet>
+<propSet><name>runtime.bootTime</name><val xsi:type="xsd:dateTime">2026-09-01T04:12:09.417Z</val></propSet>
+<propSet><name>runtime.inMaintenanceMode</name><val xsi:type="xsd:boolean">false</val></propSet>
+<propSet><name>runtime.powerState</name><val xsi:type="HostSystemPowerState">poweredOn</val></propSet>
+<propSet><name>runtime.standbyMode</name><val xsi:type="xsd:string">none</val></propSet>
+<propSet><name>runtime.tpmPcrValues</name><val xsi:type="ArrayOfHostTpmDigestInfo"><HostTpmDigestInfo><pcrNumber>7</pcrNumber><digestMethod>SHA256</digestMethod><digestValue>-91</digestValue><digestValue>16</digestValue><digestValue>0</digestValue><digestValue>127</digestValue><objectName>PCR 7</objectName></HostTpmDigestInfo><HostTpmDigestInfo><pcrNumber>0</pcrNumber><digestMethod>SHA256</digestMethod><digestValue>1</digestValue><digestValue>-1</digestValue><digestValue>18</digestValue><digestValue>52</digestValue><objectName>PCR 0</objectName></HostTpmDigestInfo></val></propSet>
+<propSet><name>summary.config.name</name><val xsi:type="xsd:string">se350-1.example.net</val></propSet>
+<propSet><name>summary.hardware</name><val xsi:type="HostHardwareSummary"><vendor>Lenovo</vendor><model>ThinkSystem SE350 -[7Z46CTO1WW]-</model><uuid>4c4c4544-0000-4d10-8058-b4c04f303032</uuid><memorySize>137438953472</memorySize><cpuModel>Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz</cpuModel><cpuMhz>2200</cpuMhz><numCpuPkgs>1</numCpuPkgs><numCpuCores>16</numCpuCores><numCpuThreads>32</numCpuThreads><numNics>4</numNics><numHBAs>3</numHBAs></val></propSet>
+<propSet><name>summary.rebootRequired</name><val xsi:type="xsd:boolean">false</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

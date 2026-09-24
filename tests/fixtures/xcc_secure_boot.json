@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#SecureBoot.v1_0_5.SecureBoot",
+  "@odata.id": "/redfish/v1/Systems/1/SecureBoot",
+  "Id": "SecureBoot",
+  "Name": "UEFI Secure Boot",
+  "SecureBootEnable": true,
+  "SecureBootCurrentBoot": "Enabled",
+  "SecureBootMode": "DeployedMode",
+  "Actions": {
+    "#SecureBoot.ResetKeys": {
+      "target": "/redfish/v1/Systems/1/SecureBoot/Actions/SecureBoot.ResetKeys"
+    }
+  }
+}

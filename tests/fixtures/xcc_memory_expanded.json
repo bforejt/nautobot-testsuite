@@ -1,0 +1,184 @@
+{
+  "@odata.type": "#MemoryCollection.MemoryCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Memory",
+  "Name": "Memory Collection",
+  "Members@odata.count": 4,
+  "Members": [
+    {
+      "@odata.type": "#Memory.v1_7_0.Memory",
+      "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_1",
+      "@odata.etag": "\"e1\"",
+      "Id": "DIMM_1",
+      "Name": "DIMM 1",
+      "DeviceLocator": "DIMM 1",
+      "MemoryLocation": {
+        "Socket": 1,
+        "MemoryController": 1,
+        "Channel": 1,
+        "Slot": 1
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "DIMM 1",
+              "LocationType": "Slot",
+              "LocationOrdinalValue": 1
+            }
+          }
+        }
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "CapacityMiB": 32768,
+      "MemoryDeviceType": "DDR4",
+      "MemoryType": "DRAM",
+      "BaseModuleType": "RDIMM",
+      "OperatingSpeedMhz": 21333,
+      "AllowedSpeedsMHz": [
+        2666
+      ],
+      "DataWidthBits": 64,
+      "BusWidthBits": 72,
+      "ErrorCorrection": "MultiBitECC",
+      "Manufacturer": "Samsung",
+      "SerialNumber": "0DA10001",
+      "PartNumber": "M393A4K40CB2-CTD",
+      "RankCount": 2,
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_1/MemoryMetrics"
+      }
+    },
+    {
+      "@odata.type": "#Memory.v1_7_0.Memory",
+      "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_2",
+      "@odata.etag": "\"e2\"",
+      "Id": "DIMM_2",
+      "Name": "DIMM 2",
+      "DeviceLocator": "DIMM 2",
+      "MemoryLocation": {
+        "Socket": 1,
+        "MemoryController": 1,
+        "Channel": 2,
+        "Slot": 1
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "DIMM 2",
+              "LocationType": "Slot",
+              "LocationOrdinalValue": 2
+            }
+          }
+        }
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "CapacityMiB": 32768,
+      "MemoryDeviceType": "DDR4",
+      "MemoryType": "DRAM",
+      "BaseModuleType": "RDIMM",
+      "OperatingSpeedMhz": 21333,
+      "AllowedSpeedsMHz": [
+        2666
+      ],
+      "DataWidthBits": 64,
+      "BusWidthBits": 72,
+      "ErrorCorrection": "MultiBitECC",
+      "Manufacturer": "Samsung",
+      "SerialNumber": "0DA10002",
+      "PartNumber": "M393A4K40CB2-CTD",
+      "RankCount": 2,
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_2/MemoryMetrics"
+      }
+    },
+    {
+      "@odata.type": "#Memory.v1_7_0.Memory",
+      "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_3",
+      "@odata.etag": "\"e3\"",
+      "Id": "DIMM_3",
+      "Name": "DIMM 3",
+      "DeviceLocator": "DIMM 3",
+      "MemoryLocation": {
+        "Socket": 1,
+        "MemoryController": 2,
+        "Channel": 3,
+        "Slot": 1
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "DIMM 3",
+              "LocationType": "Slot",
+              "LocationOrdinalValue": 3
+            }
+          }
+        }
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "CapacityMiB": 32768,
+      "MemoryDeviceType": "DDR4",
+      "MemoryType": "DRAM",
+      "BaseModuleType": "RDIMM",
+      "OperatingSpeedMhz": 21333,
+      "AllowedSpeedsMHz": [
+        2666
+      ],
+      "DataWidthBits": 64,
+      "BusWidthBits": 72,
+      "ErrorCorrection": "MultiBitECC",
+      "Manufacturer": "Samsung",
+      "SerialNumber": "0DA10003",
+      "PartNumber": "M393A4K40CB2-CTD",
+      "RankCount": 2,
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_3/MemoryMetrics"
+      }
+    },
+    {
+      "@odata.type": "#Memory.v1_7_0.Memory",
+      "@odata.id": "/redfish/v1/Systems/1/Memory/DIMM_4",
+      "@odata.etag": "\"e4\"",
+      "Id": "DIMM_4",
+      "Name": "DIMM 4",
+      "DeviceLocator": "DIMM 4",
+      "MemoryLocation": {
+        "Socket": 1,
+        "MemoryController": 2,
+        "Channel": 4,
+        "Slot": 1
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "DIMM 4",
+              "LocationType": "Slot",
+              "LocationOrdinalValue": 4
+            }
+          }
+        }
+      },
+      "Status": {
+        "State": "Absent",
+        "Health": null
+      },
+      "CapacityMiB": null,
+      "MemoryDeviceType": null,
+      "OperatingSpeedMhz": null,
+      "Manufacturer": null,
+      "SerialNumber": null,
+      "PartNumber": null
+    }
+  ]
+}

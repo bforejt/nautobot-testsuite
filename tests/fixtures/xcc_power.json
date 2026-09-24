@@ -1,0 +1,179 @@
+{
+  "@odata.type": "#Power.v1_6_0.Power",
+  "@odata.id": "/redfish/v1/Chassis/1/Power",
+  "Id": "Power",
+  "Name": "Power",
+  "PowerControl": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/0",
+      "MemberId": "0",
+      "Name": "Server Power Control",
+      "PowerConsumedWatts": 96,
+      "PowerRequestedWatts": null,
+      "PowerAvailableWatts": null,
+      "PowerCapacityWatts": 240,
+      "PowerAllocatedWatts": null,
+      "PowerMetrics": {
+        "IntervalInMin": 1,
+        "MinConsumedWatts": 91,
+        "MaxConsumedWatts": 118,
+        "AverageConsumedWatts": 97
+      },
+      "PowerLimit": {
+        "LimitInWatts": null,
+        "LimitException": "NoAction",
+        "CorrectionInMs": null
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ],
+  "PowerSupplies": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0",
+      "MemberId": "0",
+      "Name": null,
+      "PowerSupplyType": "AC",
+      "LineInputVoltageType": "ACWideRange",
+      "LineInputVoltage": 121,
+      "PowerCapacityWatts": 240,
+      "LastPowerOutputWatts": 90,
+      "Model": "SE350-ADP-240",
+      "Manufacturer": "Lenovo",
+      "FirmwareVersion": null,
+      "SerialNumber": "ADP0000001",
+      "PartNumber": "01AV999",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "InputRanges": [
+        {
+          "InputType": "AC",
+          "MinimumVoltage": 100,
+          "MaximumVoltage": 127,
+          "OutputWattage": 240
+        },
+        {
+          "InputType": "AC",
+          "MinimumVoltage": 200,
+          "MaximumVoltage": 240,
+          "OutputWattage": 240
+        }
+      ],
+      "Redundancy": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0"
+        }
+      ]
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1",
+      "MemberId": "1",
+      "Name": null,
+      "PowerSupplyType": "AC",
+      "LineInputVoltageType": "ACWideRange",
+      "LineInputVoltage": 160,
+      "PowerCapacityWatts": 240,
+      "LastPowerOutputWatts": 0,
+      "Model": "SE350-ADP-240",
+      "Manufacturer": "Lenovo",
+      "FirmwareVersion": null,
+      "SerialNumber": "",
+      "PartNumber": "01AV999",
+      "Status": {
+        "State": "Enabled",
+        "Health": "Critical"
+      },
+      "InputRanges": [
+        {
+          "InputType": "AC",
+          "MinimumVoltage": 100,
+          "MaximumVoltage": 127,
+          "OutputWattage": 240
+        },
+        {
+          "InputType": "AC",
+          "MinimumVoltage": 200,
+          "MaximumVoltage": 240,
+          "OutputWattage": 240
+        }
+      ],
+      "Redundancy": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0"
+        }
+      ]
+    }
+  ],
+  "Redundancy": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0",
+      "MemberId": "0",
+      "Name": "PowerSupply Redundancy Group 1",
+      "Mode": "N+1",
+      "MaxNumSupported": 2,
+      "MinNumNeeded": 1,
+      "Status": {
+        "State": "Enabled",
+        "Health": "Warning"
+      },
+      "RedundancySet": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1"
+        }
+      ]
+    }
+  ],
+  "Voltages": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/0",
+      "MemberId": "0",
+      "Name": "SysBrd 12V",
+      "SensorNumber": 20,
+      "Status": {
+        "State": "Enabled"
+      },
+      "ReadingVolts": 12.1,
+      "UpperThresholdCritical": 13.4,
+      "LowerThresholdCritical": 10.5,
+      "PhysicalContext": "SystemBoard"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/1",
+      "MemberId": "1",
+      "Name": "SysBrd 3.3V",
+      "SensorNumber": 21,
+      "Status": {
+        "State": "Enabled"
+      },
+      "ReadingVolts": 3.9,
+      "UpperThresholdCritical": 3.6,
+      "LowerThresholdCritical": 2.9,
+      "PhysicalContext": "SystemBoard"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/2",
+      "MemberId": "2",
+      "Name": "CMOS Battery",
+      "SensorNumber": 22,
+      "Status": {
+        "State": "Enabled"
+      },
+      "ReadingVolts": 3.0,
+      "PhysicalContext": "SystemBoard"
+    }
+  ],
+  "Actions": {
+    "Oem": {
+      "#Power.PowerLimit": {
+        "target": "/redfish/v1/Chassis/1/Power/Actions/Oem/Power.PowerLimit"
+      }
+    }
+  }
+}

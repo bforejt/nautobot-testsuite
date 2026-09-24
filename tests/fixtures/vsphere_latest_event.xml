@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- EventManager.latestEvent: on a quiet host this is almost always the
+     suite's own UserLoginSessionEvent from the Login that opened the capture. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="EventManager">ha-eventmgr</obj>
+<propSet><name>latestEvent</name><val xsi:type="UserLoginSessionEvent"><key>1315</key><chainId>1315</chainId><createdTime>2026-09-24T10:03:10.336Z</createdTime><userName>testsuite-ro</userName><host><name>se350-1.example.net</name><host type="HostSystem">ha-host</host></host><fullFormattedMessage>User testsuite-ro@192.0.2.99 logged in as nautobot-testsuite/0.1.0-dev</fullFormattedMessage><ipAddress>192.0.2.99</ipAddress><userAgent>nautobot-testsuite/0.1.0-dev</userAgent><locale>en</locale><sessionId>52a1b2c3-d4e5-f607-1829-3a4b5c6d7e8f</sessionId></val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

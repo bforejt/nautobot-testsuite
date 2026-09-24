@@ -1,0 +1,45 @@
+{
+  "@odata.type": "#ProcessorCollection.ProcessorCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Processors",
+  "Name": "Processors Collection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.type": "#Processor.v1_5_0.Processor",
+      "@odata.id": "/redfish/v1/Systems/1/Processors/1",
+      "Id": "1",
+      "Name": "Processor 1",
+      "Socket": "CPU 1",
+      "ProcessorType": "CPU",
+      "ProcessorArchitecture": "x86",
+      "InstructionSet": "x86-64",
+      "Manufacturer": "Intel(R) Corporation",
+      "Model": "Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz",
+      "MaxSpeedMHz": 2200,
+      "CurrentClockSpeedMHz": 1900,
+      "TotalCores": 16,
+      "TotalEnabledCores": 16,
+      "TotalThreads": 32,
+      "ProcessorId": {
+        "VendorId": "GenuineIntel",
+        "IdentificationRegisters": "0x00050654",
+        "EffectiveFamily": "0x6",
+        "EffectiveModel": "0x55",
+        "Step": "0x4"
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "CPU 1"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- runtime.healthSystemRuntime as hostd renders IPMI SDR data: discrete
+     sensors carry their current state appended to the NAME after a three-dash separator,
+     numeric sensors carry currentReading scaled by 10**unitModifier. Two
+     "Drive Slot 0" sensors share a base name (different sensor ids) to
+     exercise collision suffixing. The hardwareStatusInfo half uses the
+     CAPITALISED status enum (Green/Yellow/Red/Unknown). -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="HostSystem">ha-host</obj>
+<propSet><name>runtime.healthSystemRuntime</name><val xsi:type="HealthSystemRuntime">
+<systemHealthInfo>
+<numericSensorInfo><name>Fan Redundancy --- Fully Redundant</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>other</sensorType><id>0.0.32.1:1</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Ambient Temp</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>2300</currentReading><unitModifier>-2</unitModifier><baseUnits>Degrees C</baseUnits><sensorType>temperature</sensorType><id>0.0.32.1:2</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Fan 1 Tach</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>5200</currentReading><unitModifier>0</unitModifier><baseUnits>RPM</baseUnits><sensorType>fan</sensorType><id>0.0.32.1:3</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>CPU 1 Status --- Processor Presence detected</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>processor</sensorType><id>0.0.32.1:4</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Power Supply 1 --- Presence detected</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>power</sensorType><id>0.0.32.1:5</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Power Supply 2 --- Failure detected</name><healthState><key>red</key><label>Red</label><summary>Sensor is operating under critical conditions</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>power</sensorType><id>0.0.32.1:6</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>System Board 1 Sys Pwr Monitor</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>120</currentReading><unitModifier>0</unitModifier><baseUnits>Watts</baseUnits><sensorType>power</sensorType><id>0.0.32.1:7</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>PS 1 Vout</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>1200</currentReading><unitModifier>-2</unitModifier><baseUnits>Volts</baseUnits><sensorType>voltage</sensorType><id>0.0.32.1:8</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Drive Slot 0 --- Drive Present</name><healthState><key>green</key><label>Green</label><summary>Sensor is operating under normal conditions</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>storage</sensorType><id>0.0.32.1:9</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+<numericSensorInfo><name>Drive Slot 0 --- Predictive Failure</name><healthState><key>yellow</key><label>Yellow</label><summary>Sensor is operating under conditions that are non-critical</summary></healthState><currentReading>0</currentReading><unitModifier>0</unitModifier><baseUnits></baseUnits><sensorType>storage</sensorType><id>0.0.32.1:10</id><timeStamp>2026-09-24T10:02:00Z</timeStamp></numericSensorInfo>
+</systemHealthInfo>
+<hardwareStatusInfo>
+<memoryStatusInfo><name>Memory</name><status><key>Green</key><label>Green</label><summary>Physical element is functioning as expected</summary></status></memoryStatusInfo>
+<cpuStatusInfo><name>CPU 1 Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz</name><status><key>Green</key><label>Green</label><summary>Physical element is functioning as expected</summary></status></cpuStatusInfo>
+<storageStatusInfo><name>Disk t10.NVMe____SAMSUNG_MZ1LB480HAJQ2D00007______________ABCDEF1234567890</name><status><key>Green</key><label>Green</label><summary>Physical element is functioning as expected</summary></status></storageStatusInfo>
+<storageStatusInfo><name>Disk mpx.vmhba1:C0:T0:L0</name><status><key>Unknown</key><label>Unknown</label><summary>Cannot report on the current status of the physical element</summary></status></storageStatusInfo>
+</hardwareStatusInfo>
+</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>
