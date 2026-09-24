@@ -1,0 +1,12 @@
+{
+  "@odata.type": "#LenovoSecurity.v1_0_0.LenovoSecurity",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Security",
+  "Id": "Security",
+  "Name": "Security Settings",
+  "SSLSettings": {
+    "HTTPSCertificateExpiry": "2027-01-01"
+  },
+  "SecureKeyLifecycleService": {
+    "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService"
+  }
+}

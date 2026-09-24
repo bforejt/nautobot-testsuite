@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The shared config.network fetch (plus config.virtualNicManagerInfo and the
+     HostNetworkSystem reference) that every vmware_* network check slices.
+     Shapes as hostd emits them: leaves untyped inside data objects, the bond
+     bridge polymorphic on xsi:type, an EMPTY <security/> container on a port
+     group that inherits its policy, keys of the form
+     key-vim.host.PhysicalNic-vmnic0 wherever a vSwitch references a pnic.
+     vSwitch2 has no uplinks and therefore no bridge at all; proxySwitch is
+     absent (no vCenter, no DVS). Addresses are RFC 5737 / RFC 3849. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="HostSystem">ha-host</obj>
+<propSet><name>config.network</name><val xsi:type="HostNetworkInfo">
+<vswitch>
+<name>vSwitch0</name><key>key-vim.host.VirtualSwitch-vSwitch0</key><numPorts>2560</numPorts><numPortsAvailable>2547</numPortsAvailable><mtu>1500</mtu>
+<portgroup>key-vim.host.PortGroup-Management Network</portgroup><portgroup>key-vim.host.PortGroup-VM Network</portgroup>
+<pnic>key-vim.host.PhysicalNic-vmnic0</pnic><pnic>key-vim.host.PhysicalNic-vmnic1</pnic>
+<spec><numPorts>128</numPorts>
+<bridge xsi:type="HostVirtualSwitchBondBridge"><nicDevice>vmnic0</nicDevice><nicDevice>vmnic1</nicDevice><beacon><interval>1</interval></beacon><linkDiscoveryProtocolConfig><protocol>cdp</protocol><operation>both</operation></linkDiscoveryProtocolConfig></bridge>
+<policy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic1</activeNic><activeNic>vmnic0</activeNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></policy>
+<mtu>1500</mtu></spec>
+</vswitch>
+<vswitch>
+<name>vSwitch1</name><key>key-vim.host.VirtualSwitch-vSwitch1</key><numPorts>2560</numPorts><numPortsAvailable>2551</numPortsAvailable><mtu>9000</mtu>
+<portgroup>key-vim.host.PortGroup-Trunk-VGT</portgroup><portgroup>key-vim.host.PortGroup-Inside-VL10</portgroup>
+<pnic>key-vim.host.PhysicalNic-vmnic2</pnic><pnic>key-vim.host.PhysicalNic-vmnic3</pnic>
+<spec><numPorts>1024</numPorts>
+<bridge xsi:type="HostVirtualSwitchBondBridge"><nicDevice>vmnic2</nicDevice><nicDevice>vmnic3</nicDevice><beacon><interval>1</interval></beacon><linkDiscoveryProtocolConfig><protocol>cdp</protocol><operation>listen</operation></linkDiscoveryProtocolConfig></bridge>
+<policy><security><allowPromiscuous>true</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>failover_explicit</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>true</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic2</activeNic><standbyNic>vmnic3</standbyNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></policy>
+<mtu>9000</mtu></spec>
+</vswitch>
+<vswitch>
+<name>vSwitch2</name><key>key-vim.host.VirtualSwitch-vSwitch2</key><numPorts>1536</numPorts><numPortsAvailable>1533</numPortsAvailable><mtu>1500</mtu>
+<portgroup>key-vim.host.PortGroup-HA-Sync</portgroup><portgroup>key-vim.host.PortGroup-Backup</portgroup>
+<spec><numPorts>128</numPorts>
+<policy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder/></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></policy>
+<mtu>1500</mtu></spec>
+</vswitch>
+<portgroup>
+<key>key-vim.host.PortGroup-Management Network</key>
+<port><key>key-vim.host.PortGroup.Port-33554436</key><mac>00:11:22:33:44:55</mac><type>host</type></port>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch0</vswitch>
+<computedPolicy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic0</activeNic><standbyNic>vmnic1</standbyNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>Management Network</name><vlanId>100</vlanId><vswitchName>vSwitch0</vswitchName><policy><security/><nicTeaming><nicOrder><activeNic>vmnic0</activeNic><standbyNic>vmnic1</standbyNic></nicOrder></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<portgroup>
+<key>key-vim.host.PortGroup-VM Network</key>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch0</vswitch>
+<computedPolicy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic1</activeNic><activeNic>vmnic0</activeNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>VM Network</name><vlanId>0</vlanId><vswitchName>vSwitch0</vswitchName><policy><security/><nicTeaming><failureCriteria/><nicOrder/></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<portgroup>
+<key>key-vim.host.PortGroup-Trunk-VGT</key>
+<port><key>key-vim.host.PortGroup.Port-50331652</key><mac>00:50:56:aa:bb:01</mac><type>virtualMachine</type></port>
+<port><key>key-vim.host.PortGroup.Port-50331653</key><mac>00:50:56:aa:bb:11</mac><type>virtualMachine</type></port>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch1</vswitch>
+<computedPolicy><security><allowPromiscuous>true</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>failover_explicit</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>true</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic2</activeNic><standbyNic>vmnic3</standbyNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>Trunk-VGT</name><vlanId>4095</vlanId><vswitchName>vSwitch1</vswitchName><policy><security><allowPromiscuous>true</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><failureCriteria/><nicOrder/></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<portgroup>
+<key>key-vim.host.PortGroup-Inside-VL10</key>
+<port><key>key-vim.host.PortGroup.Port-50331654</key><mac>00:50:56:aa:bb:02</mac><type>virtualMachine</type></port>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch1</vswitch>
+<computedPolicy><security><allowPromiscuous>true</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>failover_explicit</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>true</checkBeacon></failureCriteria><nicOrder><activeNic>vmnic2</activeNic><standbyNic>vmnic3</standbyNic></nicOrder></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>Inside-VL10</name><vlanId>10</vlanId><vswitchName>vSwitch1</vswitchName><policy><security/><nicTeaming><failureCriteria/><nicOrder/></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<portgroup>
+<key>key-vim.host.PortGroup-HA-Sync</key>
+<port><key>key-vim.host.PortGroup.Port-67108868</key><mac>00:50:56:aa:bb:03</mac><type>virtualMachine</type></port>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch2</vswitch>
+<computedPolicy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder/></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>HA-Sync</name><vlanId>0</vlanId><vswitchName>vSwitch2</vswitchName><policy><security/><nicTeaming><notifySwitches>false</notifySwitches><failureCriteria/><nicOrder/></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<portgroup>
+<key>key-vim.host.PortGroup-Backup</key>
+<port><key>key-vim.host.PortGroup.Port-67108869</key><mac>00:50:56:aa:bb:04</mac><type>host</type></port>
+<vswitch>key-vim.host.VirtualSwitch-vSwitch2</vswitch>
+<computedPolicy><security><allowPromiscuous>false</allowPromiscuous><macChanges>true</macChanges><forgedTransmits>true</forgedTransmits></security><nicTeaming><policy>loadbalance_srcid</policy><reversePolicy>true</reversePolicy><notifySwitches>true</notifySwitches><rollingOrder>false</rollingOrder><failureCriteria><checkSpeed>minimum</checkSpeed><speed>10</speed><checkDuplex>false</checkDuplex><fullDuplex>false</fullDuplex><checkErrorPercent>false</checkErrorPercent><percentage>0</percentage><checkBeacon>false</checkBeacon></failureCriteria><nicOrder/></nicTeaming><offloadPolicy><csumOffload>true</csumOffload><tcpSegmentation>true</tcpSegmentation><zeroCopyXmit>true</zeroCopyXmit></offloadPolicy><shapingPolicy><enabled>false</enabled></shapingPolicy></computedPolicy>
+<spec><name>Backup</name><vlanId>0</vlanId><vswitchName>vSwitch2</vswitchName><policy><security/><nicTeaming><failureCriteria/><nicOrder/></nicTeaming><offloadPolicy/><shapingPolicy/></policy></spec>
+</portgroup>
+<pnic>
+<key>key-vim.host.PhysicalNic-vmnic0</key><device>vmnic0</device><pci>0000:18:00.0</pci><driver>i40en</driver><driverVersion>2.6.0.34</driverVersion><firmwareVersion>6.01 0x800039ad 1.3131.0</firmwareVersion>
+<linkSpeed><speedMb>10000</speedMb><duplex>true</duplex></linkSpeed>
+<validLinkSpecification><speedMb>1000</speedMb><duplex>true</duplex></validLinkSpecification><validLinkSpecification><speedMb>10000</speedMb><duplex>true</duplex></validLinkSpecification>
+<spec><ip><dhcp>false</dhcp></ip><linkSpeed><speedMb>10000</speedMb><duplex>true</duplex></linkSpeed><enableEnhancedNetworkingStack>false</enableEnhancedNetworkingStack><ensInterruptEnabled>false</ensInterruptEnabled></spec>
+<wakeOnLanSupported>false</wakeOnLanSupported><mac>00:11:22:33:44:55</mac><fcoeConfiguration><priorityClass>-1</priorityClass><sourceMac>00:11:22:33:44:55</sourceMac><vlanRange><vlanLow>0</vlanLow><vlanHigh>0</vlanHigh></vlanRange><capabilities><priorityClass>false</priorityClass><sourceMacAddress>false</sourceMacAddress><vlanRange>true</vlanRange></capabilities><fcoeActive>false</fcoeActive></fcoeConfiguration><vmDirectPathGen2Supported>false</vmDirectPathGen2Supported><resourcePoolSchedulerAllowed>true</resourcePoolSchedulerAllowed><autoNegotiateSupported>true</autoNegotiateSupported><enhancedNetworkingStackSupported>true</enhancedNetworkingStackSupported><ensInterruptSupported>true</ensInterruptSupported>
+</pnic>
+<pnic>
+<key>key-vim.host.PhysicalNic-vmnic1</key><device>vmnic1</device><pci>0000:18:00.1</pci><driver>i40en</driver><driverVersion>2.6.0.34</driverVersion><firmwareVersion>6.01 0x800039ad 1.3131.0</firmwareVersion>
+<validLinkSpecification><speedMb>1000</speedMb><duplex>true</duplex></validLinkSpecification><validLinkSpecification><speedMb>10000</speedMb><duplex>true</duplex></validLinkSpecification>
+<spec><ip><dhcp>false</dhcp></ip><enableEnhancedNetworkingStack>false</enableEnhancedNetworkingStack><ensInterruptEnabled>false</ensInterruptEnabled></spec>
+<wakeOnLanSupported>false</wakeOnLanSupported><mac>00:11:22:33:44:56</mac><vmDirectPathGen2Supported>false</vmDirectPathGen2Supported><resourcePoolSchedulerAllowed>true</resourcePoolSchedulerAllowed><autoNegotiateSupported>true</autoNegotiateSupported>
+</pnic>
+<pnic>
+<key>key-vim.host.PhysicalNic-vmnic2</key><device>vmnic2</device><pci>0000:19:00.0</pci><driver>i40en</driver><driverVersion>2.6.0.34</driverVersion><firmwareVersion>6.01 0x800039ad 1.3131.0</firmwareVersion>
+<linkSpeed><speedMb>10000</speedMb><duplex>true</duplex></linkSpeed>
+<validLinkSpecification><speedMb>10000</speedMb><duplex>true</duplex></validLinkSpecification>
+<spec><ip><dhcp>false</dhcp></ip><enableEnhancedNetworkingStack>true</enableEnhancedNetworkingStack><ensInterruptEnabled>true</ensInterruptEnabled></spec>
+<wakeOnLanSupported>false</wakeOnLanSupported><mac>00:11:22:33:44:57</mac><vmDirectPathGen2Supported>false</vmDirectPathGen2Supported><resourcePoolSchedulerAllowed>true</resourcePoolSchedulerAllowed><autoNegotiateSupported>true</autoNegotiateSupported>
+</pnic>
+<pnic>
+<key>key-vim.host.PhysicalNic-vmnic3</key><device>vmnic3</device><pci>0000:19:00.1</pci><driver>i40en</driver><driverVersion>2.6.0.34</driverVersion><firmwareVersion>6.01 0x800039ad 1.3131.0</firmwareVersion>
+<linkSpeed><speedMb>10000</speedMb><duplex>true</duplex></linkSpeed>
+<validLinkSpecification><speedMb>10000</speedMb><duplex>true</duplex></validLinkSpecification>
+<spec><ip><dhcp>false</dhcp></ip><enableEnhancedNetworkingStack>true</enableEnhancedNetworkingStack><ensInterruptEnabled>true</ensInterruptEnabled></spec>
+<wakeOnLanSupported>false</wakeOnLanSupported><mac>00:11:22:33:44:58</mac><vmDirectPathGen2Supported>false</vmDirectPathGen2Supported><resourcePoolSchedulerAllowed>true</resourcePoolSchedulerAllowed><autoNegotiateSupported>true</autoNegotiateSupported>
+</pnic>
+<vnic>
+<device>vmk0</device><key>key-vim.host.VirtualNic-vmk0</key><portgroup>Management Network</portgroup>
+<spec><ip><dhcp>false</dhcp><ipAddress>192.0.2.11</ipAddress><subnetMask>255.255.255.0</subnetMask><ipV6Config><ipV6Address><ipAddress>fe80::211:22ff:fe33:4455</ipAddress><prefixLength>64</prefixLength><origin>linklayer</origin><dadState>preferred</dadState></ipV6Address><ipV6Address><ipAddress>2001:db8:1::11</ipAddress><prefixLength>64</prefixLength><origin>manual</origin><dadState>preferred</dadState></ipV6Address><autoConfigurationEnabled>false</autoConfigurationEnabled><dhcpV6Enabled>false</dhcpV6Enabled></ipV6Config></ip><mac>00:11:22:33:44:55</mac><portgroup>Management Network</portgroup><mtu>1500</mtu><tsoEnabled>true</tsoEnabled><netStackInstanceKey>defaultTcpipStack</netStackInstanceKey><systemOwned>false</systemOwned></spec>
+<port>key-vim.host.PortGroup.Port-33554436</port>
+</vnic>
+<vnic>
+<device>vmk1</device><key>key-vim.host.VirtualNic-vmk1</key><portgroup>Backup</portgroup>
+<spec><ip><dhcp>true</dhcp><ipAddress>198.51.100.7</ipAddress><subnetMask>255.255.255.0</subnetMask><ipV6Config><ipV6Address><ipAddress>fe80::250:56ff:feaa:bb04</ipAddress><prefixLength>64</prefixLength><origin>linklayer</origin><dadState>preferred</dadState></ipV6Address><autoConfigurationEnabled>false</autoConfigurationEnabled><dhcpV6Enabled>false</dhcpV6Enabled></ipV6Config></ip><mac>00:50:56:aa:bb:04</mac><portgroup>Backup</portgroup><mtu>9000</mtu><tsoEnabled>true</tsoEnabled><netStackInstanceKey>vmotion</netStackInstanceKey><systemOwned>false</systemOwned></spec>
+<port>key-vim.host.PortGroup.Port-67108869</port>
+</vnic>
+<dnsConfig><dhcp>false</dhcp><hostName>se350-1</hostName><domainName>example.net</domainName><address>192.0.2.53</address><address>192.0.2.54</address><searchDomain>example.net</searchDomain></dnsConfig>
+<ipRouteConfig><defaultGateway>192.0.2.1</defaultGateway><gatewayDevice>vmk0</gatewayDevice><ipV6DefaultGateway>2001:db8:1::1</ipV6DefaultGateway><ipV6GatewayDevice>vmk0</ipV6GatewayDevice></ipRouteConfig>
+<routeTableInfo>
+<ipRoute><network>0.0.0.0</network><prefixLength>0</prefixLength><gateway>192.0.2.1</gateway><deviceName>vmk0</deviceName></ipRoute>
+<ipRoute><network>192.0.2.0</network><prefixLength>24</prefixLength><gateway>0.0.0.0</gateway><deviceName>vmk0</deviceName></ipRoute>
+<ipv6Route><network>::</network><prefixLength>0</prefixLength><gateway>2001:db8:1::1</gateway><deviceName>vmk0</deviceName></ipv6Route>
+<ipv6Route><network>2001:db8:1::</network><prefixLength>64</prefixLength><gateway>::</gateway><deviceName>vmk0</deviceName></ipv6Route>
+<ipv6Route><network>fe80::</network><prefixLength>64</prefixLength><gateway>::</gateway><deviceName>vmk0</deviceName></ipv6Route>
+</routeTableInfo>
+<ipV6Enabled>true</ipV6Enabled><atBootIpV6Enabled>true</atBootIpV6Enabled>
+<netStackInstance>
+<key>defaultTcpipStack</key><name>defaultTcpipStack</name>
+<dnsConfig><dhcp>false</dhcp><hostName>se350-1</hostName><domainName>example.net</domainName><address>192.0.2.53</address><address>192.0.2.54</address><searchDomain>example.net</searchDomain></dnsConfig>
+<ipRouteConfig><defaultGateway>192.0.2.1</defaultGateway><gatewayDevice>vmk0</gatewayDevice><ipV6DefaultGateway>2001:db8:1::1</ipV6DefaultGateway><ipV6GatewayDevice>vmk0</ipV6GatewayDevice></ipRouteConfig>
+<requestedMaxNumberOfConnections>11000</requestedMaxNumberOfConnections><congestionControlAlgorithm>newreno</congestionControlAlgorithm><ipV6Enabled>true</ipV6Enabled>
+<routeTableConfig>
+<ipRoute><changeOperation>ignore</changeOperation><route><network>0.0.0.0</network><prefixLength>0</prefixLength><gateway>192.0.2.1</gateway><deviceName>vmk0</deviceName></route></ipRoute>
+<ipRoute><changeOperation>ignore</changeOperation><route><network>192.0.2.0</network><prefixLength>24</prefixLength><gateway>0.0.0.0</gateway><deviceName>vmk0</deviceName></route></ipRoute>
+<ipRoute><changeOperation>ignore</changeOperation><route><network>203.0.113.0</network><prefixLength>24</prefixLength><gateway>192.0.2.254</gateway><deviceName>vmk0</deviceName></route></ipRoute>
+<ipv6Route><changeOperation>ignore</changeOperation><route><network>::</network><prefixLength>0</prefixLength><gateway>2001:db8:1::1</gateway><deviceName>vmk0</deviceName></route></ipv6Route>
+<ipv6Route><changeOperation>ignore</changeOperation><route><network>2001:db8:1::</network><prefixLength>64</prefixLength><gateway>::</gateway><deviceName>vmk0</deviceName></route></ipv6Route>
+</routeTableConfig>
+</netStackInstance>
+<netStackInstance>
+<key>vmotion</key><name>vmotion</name>
+<dnsConfig><dhcp>false</dhcp><hostName>se350-1</hostName><domainName>example.net</domainName></dnsConfig>
+<ipRouteConfig><defaultGateway>198.51.100.1</defaultGateway><gatewayDevice>vmk1</gatewayDevice></ipRouteConfig>
+<requestedMaxNumberOfConnections>11000</requestedMaxNumberOfConnections><congestionControlAlgorithm>newreno</congestionControlAlgorithm><ipV6Enabled>true</ipV6Enabled>
+<routeTableConfig>
+<ipRoute><changeOperation>ignore</changeOperation><route><network>0.0.0.0</network><prefixLength>0</prefixLength><gateway>198.51.100.1</gateway><deviceName>vmk1</deviceName></route></ipRoute>
+<ipRoute><changeOperation>ignore</changeOperation><route><network>198.51.100.0</network><prefixLength>24</prefixLength><gateway>0.0.0.0</gateway><deviceName>vmk1</deviceName></route></ipRoute>
+</routeTableConfig>
+</netStackInstance>
+<netStackInstance>
+<key>vSphereProvisioning</key><name>vSphereProvisioning</name>
+<dnsConfig><dhcp>false</dhcp><hostName>se350-1</hostName><domainName>example.net</domainName></dnsConfig>
+<ipRouteConfig/>
+<requestedMaxNumberOfConnections>11000</requestedMaxNumberOfConnections><congestionControlAlgorithm>newreno</congestionControlAlgorithm><ipV6Enabled>true</ipV6Enabled>
+<routeTableConfig/>
+</netStackInstance>
+</val></propSet>
+<propSet><name>config.virtualNicManagerInfo</name><val xsi:type="HostVirtualNicManagerInfo">
+<netConfig><nicType>faultToleranceLogging</nicType><multiSelectAllowed>false</multiSelectAllowed><candidateVnic><device>vmk0</device><key>key-vim.host.VirtualNic-vmk0</key><portgroup>Management Network</portgroup><spec><ip><dhcp>false</dhcp><ipAddress>192.0.2.11</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:11:22:33:44:55</mac><mtu>1500</mtu></spec></candidateVnic><candidateVnic><device>vmk1</device><key>key-vim.host.VirtualNic-vmk1</key><portgroup>Backup</portgroup><spec><ip><dhcp>true</dhcp><ipAddress>198.51.100.7</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:50:56:aa:bb:04</mac><mtu>9000</mtu></spec></candidateVnic></netConfig>
+<netConfig><nicType>management</nicType><multiSelectAllowed>true</multiSelectAllowed><candidateVnic><device>vmk0</device><key>key-vim.host.VirtualNic-vmk0</key><portgroup>Management Network</portgroup><spec><ip><dhcp>false</dhcp><ipAddress>192.0.2.11</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:11:22:33:44:55</mac><mtu>1500</mtu></spec></candidateVnic><candidateVnic><device>vmk1</device><key>key-vim.host.VirtualNic-vmk1</key><portgroup>Backup</portgroup><spec><ip><dhcp>true</dhcp><ipAddress>198.51.100.7</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:50:56:aa:bb:04</mac><mtu>9000</mtu></spec></candidateVnic><selectedVnic>management.key-vim.host.VirtualNic-vmk0</selectedVnic></netConfig>
+<netConfig><nicType>vSphereBackupNFC</nicType><multiSelectAllowed>true</multiSelectAllowed><candidateVnic><device>vmk1</device><key>key-vim.host.VirtualNic-vmk1</key><portgroup>Backup</portgroup><spec><ip><dhcp>true</dhcp><ipAddress>198.51.100.7</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:50:56:aa:bb:04</mac><mtu>9000</mtu></spec></candidateVnic><selectedVnic>vSphereBackupNFC.key-vim.host.VirtualNic-vmk1</selectedVnic></netConfig>
+<netConfig><nicType>vmotion</nicType><multiSelectAllowed>true</multiSelectAllowed><candidateVnic><device>vmk1</device><key>key-vim.host.VirtualNic-vmk1</key><portgroup>Backup</portgroup><spec><ip><dhcp>true</dhcp><ipAddress>198.51.100.7</ipAddress><subnetMask>255.255.255.0</subnetMask></ip><mac>00:50:56:aa:bb:04</mac><mtu>9000</mtu></spec></candidateVnic><selectedVnic>vmotion.key-vim.host.VirtualNic-vmk1</selectedVnic></netConfig>
+</val></propSet>
+<propSet><name>configManager.networkSystem</name><val type="HostNetworkSystem" xsi:type="ManagedObjectReference">networkSystem</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

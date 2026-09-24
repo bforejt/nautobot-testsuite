@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Datastore objects (summary + info) for the two datastores the host lists.
+     info is polymorphic: VmfsDatastoreInfo carries the VMFS uuid and local/ssd
+     flags, NasDatastoreInfo carries the export identity instead. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="Datastore">5f1e0000-aaaa-bbbb-cccc-000000000001</obj>
+<propSet><name>info</name><val xsi:type="VmfsDatastoreInfo"><name>datastore1</name><url>ds:///vmfs/volumes/5f1e0000-aaaa-bbbb-cccc-000000000001/</url><freeSpace>301000000000</freeSpace><maxFileSize>70368744177664</maxFileSize><maxVirtualDiskCapacity>68169720922112</maxVirtualDiskCapacity><maxMemoryFileSize>70368744177664</maxMemoryFileSize><timestamp>2026-09-24T10:03:11.482Z</timestamp><vmfs><type>VMFS</type><name>datastore1</name><capacity>479600000000</capacity><blockSizeMb>1</blockSizeMb><blockSize>1024</blockSize><unmapGranularity>1048576</unmapGranularity><unmapPriority>low</unmapPriority><maxBlocks>64000000</maxBlocks><majorVersion>6</majorVersion><version>6.82</version><uuid>5f1e0000-aaaa-bbbb-cccc-000000000001</uuid><extent><diskName>t10.NVMe____SAMSUNG_MZ1LB480HAJQ2D00007______________ABCDEF1234567890</diskName><partition>3</partition></extent><vmfsUpgradable>false</vmfsUpgradable><ssd>true</ssd><local>true</local><scsiDiskType>native512</scsiDiskType></vmfs></val></propSet>
+<propSet><name>summary</name><val xsi:type="DatastoreSummary"><datastore type="Datastore">5f1e0000-aaaa-bbbb-cccc-000000000001</datastore><name>datastore1</name><url>ds:///vmfs/volumes/5f1e0000-aaaa-bbbb-cccc-000000000001/</url><capacity>479600000000</capacity><freeSpace>301000000000</freeSpace><uncommitted>0</uncommitted><accessible>true</accessible><multipleHostAccess>false</multipleHostAccess><type>VMFS</type><maintenanceMode>normal</maintenanceMode></val></propSet>
+</objects>
+<objects>
+<obj type="Datastore">8e2c1b3c-a1234567</obj>
+<propSet><name>info</name><val xsi:type="NasDatastoreInfo"><name>nfs-backup</name><url>ds:///vmfs/volumes/8e2c1b3c-a1234567/</url><freeSpace>1099511627776</freeSpace><maxFileSize>70368744177664</maxFileSize><timestamp>2026-09-24T10:03:11.482Z</timestamp><nas><type>NFS</type><name>nfs-backup</name><capacity>2199023255552</capacity><remoteHost>203.0.113.50</remoteHost><remotePath>/export/backup</remotePath><securityType>AUTH_SYS</securityType><protocolVersion>3</protocolVersion></nas></val></propSet>
+<propSet><name>summary</name><val xsi:type="DatastoreSummary"><datastore type="Datastore">8e2c1b3c-a1234567</datastore><name>nfs-backup</name><url>ds:///vmfs/volumes/8e2c1b3c-a1234567/</url><capacity>2199023255552</capacity><freeSpace>1099511627776</freeSpace><accessible>true</accessible><multipleHostAccess>true</multipleHostAccess><type>NFS</type><maintenanceMode>normal</maintenanceMode></val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

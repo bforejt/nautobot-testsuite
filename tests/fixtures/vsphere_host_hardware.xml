@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hardware inventory property group. PCI vendor/device/class ids are
+     xsd:short on the wire and arrive SIGNED (0x8086 = -32634); HostSriovInfo
+     is the polymorphic pciPassthruInfo entry. The VF at 0000:18:02.0 is what a
+     SR-IOV-enabled port fans out into. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="HostSystem">ha-host</obj>
+<propSet><name>config.pciPassthruInfo</name><val xsi:type="ArrayOfHostPciPassthruInfo">
+<HostPciPassthruInfo xsi:type="HostSriovInfo"><id>0000:18:00.0</id><dependentDevice>0000:18:00.0</dependentDevice><passthruEnabled>false</passthruEnabled><passthruCapable>true</passthruCapable><passthruActive>false</passthruActive><sriovEnabled>true</sriovEnabled><sriovCapable>true</sriovCapable><sriovActive>true</sriovActive><numVirtualFunctionRequested>2</numVirtualFunctionRequested><numVirtualFunction>2</numVirtualFunction><maxVirtualFunctionSupported>32</maxVirtualFunctionSupported></HostPciPassthruInfo>
+<HostPciPassthruInfo xsi:type="HostSriovInfo"><id>0000:18:00.1</id><dependentDevice>0000:18:00.1</dependentDevice><passthruEnabled>false</passthruEnabled><passthruCapable>true</passthruCapable><passthruActive>false</passthruActive><sriovEnabled>false</sriovEnabled><sriovCapable>true</sriovCapable><sriovActive>false</sriovActive><numVirtualFunctionRequested>0</numVirtualFunctionRequested><numVirtualFunction>0</numVirtualFunction><maxVirtualFunctionSupported>32</maxVirtualFunctionSupported></HostPciPassthruInfo>
+<HostPciPassthruInfo><id>0000:18:02.0</id><dependentDevice>0000:18:00.0</dependentDevice><passthruEnabled>true</passthruEnabled><passthruCapable>true</passthruCapable><passthruActive>true</passthruActive></HostPciPassthruInfo>
+<HostPciPassthruInfo><id>0000:18:02.1</id><dependentDevice>0000:18:00.0</dependentDevice><passthruEnabled>true</passthruEnabled><passthruCapable>true</passthruCapable><passthruActive>true</passthruActive></HostPciPassthruInfo>
+<HostPciPassthruInfo><id>0000:5e:00.0</id><dependentDevice>0000:5e:00.0</dependentDevice><passthruEnabled>false</passthruEnabled><passthruCapable>true</passthruCapable><passthruActive>false</passthruActive></HostPciPassthruInfo>
+</val></propSet>
+<propSet><name>hardware.cpuPkg</name><val xsi:type="ArrayOfHostCpuPackage">
+<HostCpuPackage><index>0</index><vendor>intel</vendor><hz>2200000000</hz><busHz>100000000</busHz><description>Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz</description><threadId>0</threadId><threadId>1</threadId><threadId>2</threadId><threadId>3</threadId><cpuFeature><level>0</level><vendor>intel</vendor><eax>0000:0000:0000:0000:0000:0000:0001:0110</eax><ebx>0111:0101:0110:1110:0110:0101:0100:0111</ebx><ecx>0110:1100:0110:0101:0111:0100:0110:1110</ecx><edx>0100:1001:0110:0101:0110:1110:0110:1001</edx></cpuFeature><cpuFeature><level>1</level><vendor>intel</vendor><eax>0000:0000:0000:0101:0000:0110:0101:0100</eax><ebx>0000:0000:1000:0000:0000:0010:0000:0000</ebx><ecx>0111:1111:1111:1010:1111:1011:1111:1111</ecx><edx>1011:1111:1110:1011:1111:1011:1111:1111</edx></cpuFeature></HostCpuPackage>
+</val></propSet>
+<propSet><name>hardware.memorySize</name><val xsi:type="xsd:long">137438953472</val></propSet>
+<propSet><name>hardware.numaInfo</name><val xsi:type="HostNumaInfo"><type>NUMA</type><numNodes>1</numNodes><numaNode><typeId>0</typeId><cpuID>0</cpuID><cpuID>1</cpuID><cpuID>2</cpuID><cpuID>3</cpuID><memoryRangeBegin>0</memoryRangeBegin><memoryRangeLength>137438953472</memoryRangeLength></numaNode></val></propSet>
+<propSet><name>hardware.pciDevice</name><val xsi:type="ArrayOfHostPciDevice">
+<HostPciDevice><id>0000:00:00.0</id><classId>1536</classId><bus>0</bus><slot>0</slot><function>0</function><vendorId>-32634</vendorId><subVendorId>6058</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>8272</deviceId><subDeviceId>1104</subDeviceId><deviceName>Sky Lake-E DMI3 Registers</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:17:00.0</id><classId>1540</classId><bus>23</bus><slot>0</slot><function>0</function><vendorId>-32634</vendorId><subVendorId>0</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>8304</deviceId><subDeviceId>0</subDeviceId><deviceName>Sky Lake-E PCI Express Root Port A</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:18:00.0</id><classId>512</classId><bus>24</bus><slot>0</slot><function>0</function><vendorId>-32634</vendorId><subVendorId>6058</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>14288</deviceId><subDeviceId>1140</subDeviceId><parentBridge>0000:17:00.0</parentBridge><deviceName>Ethernet Connection X722 for 10GbE SFP+</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:18:00.1</id><classId>512</classId><bus>24</bus><slot>0</slot><function>1</function><vendorId>-32634</vendorId><subVendorId>6058</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>14288</deviceId><subDeviceId>1140</subDeviceId><parentBridge>0000:17:00.0</parentBridge><deviceName>Ethernet Connection X722 for 10GbE SFP+</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:18:02.0</id><classId>512</classId><bus>24</bus><slot>2</slot><function>0</function><vendorId>-32634</vendorId><subVendorId>6058</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>14285</deviceId><subDeviceId>0</subDeviceId><parentBridge>0000:17:00.0</parentBridge><deviceName>Ethernet Virtual Function 700 Series</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:18:02.1</id><classId>512</classId><bus>24</bus><slot>2</slot><function>1</function><vendorId>-32634</vendorId><subVendorId>6058</subVendorId><vendorName>Intel Corporation</vendorName><deviceId>14285</deviceId><subDeviceId>0</subDeviceId><parentBridge>0000:17:00.0</parentBridge><deviceName>Ethernet Virtual Function 700 Series</deviceName></HostPciDevice>
+<HostPciDevice><id>0000:5e:00.0</id><classId>264</classId><bus>94</bus><slot>0</slot><function>0</function><vendorId>5197</vendorId><subVendorId>5197</subVendorId><vendorName>Samsung Electronics Co Ltd</vendorName><deviceId>-22520</deviceId><subDeviceId>-22520</subDeviceId><parentBridge>0000:5d:00.0</parentBridge><deviceName>NVMe SSD Controller PM1725b</deviceName></HostPciDevice>
+</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

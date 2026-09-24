@@ -1,0 +1,30 @@
+{
+  "@odata.type": "#LogService.v1_1_2.LogService",
+  "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog",
+  "Id": "PlatformLog",
+  "Name": "Platform Event Log",
+  "Description": "This resource represents the platform event log.",
+  "ServiceEnabled": true,
+  "MaxNumberOfRecords": 1024,
+  "OverWritePolicy": "WrapsWhenFull",
+  "DateTime": "2026-09-24T14:02:11+00:00",
+  "DateTimeLocalOffset": "+00:00",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/PlatformLog/Entries"
+  },
+  "Actions": {
+    "#LogService.ClearLog": {
+      "target": "/redfish/v1/Systems/1/LogServices/PlatformLog/Actions/LogService.ClearLog"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "FirstSeqNum": 5,
+      "LastSeqNum": 234
+    }
+  }
+}

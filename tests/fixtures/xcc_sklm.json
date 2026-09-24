@@ -1,0 +1,12 @@
+{
+  "@odata.type": "#LenovoSecureKeyLifecycleService.v1_0_0.LenovoSecureKeyLifecycleService",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService",
+  "Id": "SecureKeyLifecycleService",
+  "Name": "Secure Key Lifecycle Service",
+  "KeyManagementType": "Local",
+  "KeyRepoServers": [],
+  "Status": {
+    "State": "Enabled"
+  },
+  "ClientCertificatePassword": "not-a-real-password"
+}

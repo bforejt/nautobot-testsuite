@@ -1,0 +1,81 @@
+{
+  "@odata.type": "#Chassis.v1_9_0.Chassis",
+  "@odata.id": "/redfish/v1/Chassis/1",
+  "@odata.etag": "\"ch1\"",
+  "Id": "1",
+  "Name": "Chassis",
+  "ChassisType": "RackMount",
+  "Manufacturer": "Lenovo",
+  "Model": "7Z46CTO1WW",
+  "SerialNumber": "J3001ABC",
+  "PartNumber": "SB27A55555",
+  "AssetTag": "",
+  "IndicatorLED": "Off",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "Location": {
+    "Info": "Rack A / Row 1 / U3",
+    "InfoFormat": "Rack Row Unit",
+    "PostalAddress": {
+      "Country": "US",
+      "City": "Example City",
+      "Building": "HQ",
+      "Room": "Comms room 6B",
+      "Name": "Example Site"
+    },
+    "Placement": {
+      "Rack": "A",
+      "RackOffset": 3,
+      "RackOffsetUnits": "EIA_310",
+      "Row": "1"
+    }
+  },
+  "PhysicalSecurity": {
+    "IntrusionSensorNumber": 42,
+    "IntrusionSensor": "Normal",
+    "IntrusionSensorReArm": "Automatic"
+  },
+  "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal"
+  },
+  "Power": {
+    "@odata.id": "/redfish/v1/Chassis/1/Power"
+  },
+  "PCIeDevices": {
+    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices"
+  },
+  "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters"
+  },
+  "Links": {
+    "ComputerSystems": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ]
+  },
+  "Actions": {
+    "#Chassis.Reset": {
+      "target": "/redfish/v1/Chassis/1/Actions/Chassis.Reset"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "LEDs": {
+        "@odata.id": "/redfish/v1/Chassis/1/LEDs"
+      },
+      "Slots": {
+        "@odata.id": "/redfish/v1/Chassis/1/Slots"
+      }
+    }
+  }
+}

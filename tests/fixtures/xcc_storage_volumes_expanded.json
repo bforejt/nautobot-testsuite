@@ -1,0 +1,39 @@
+{
+  "@odata.type": "#VolumeCollection.VolumeCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Volumes",
+  "Name": "Storage Volume Collection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.type": "#Volume.v1_3_1.Volume",
+      "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Volumes/0",
+      "Id": "0",
+      "Name": "ESXi_boot",
+      "RAIDType": "RAID1",
+      "VolumeType": "Mirrored",
+      "CapacityBytes": 479559942144,
+      "Encrypted": false,
+      "BlockSizeBytes": 512,
+      "OptimumIOSizeBytes": 65536,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Links": {
+        "Drives": [
+          {
+            "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.1"
+          }
+        ]
+      },
+      "Actions": {
+        "#Volume.Initialize": {
+          "target": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Volumes/0/Actions/Volume.Initialize"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- QueryNetworkHint with <device> omitted: one returnval per pnic. vmnic0 hears
+     CDP from an upstream switch and two VLANs of broadcast; vmnic1 is link-down
+     and hears nothing; vmnic2 hears CDP plus several VLANs; vmnic3 hears
+     broadcast on one VLAN but no CDP (the far port does not advertise). -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<QueryNetworkHintResponse xmlns="urn:vim25">
+<returnval>
+<device>vmnic0</device>
+<subnet><ipSubnet>192.0.2.0</ipSubnet><vlanId>100</vlanId></subnet>
+<subnet><ipSubnet>203.0.113.0</ipSubnet><vlanId>101</vlanId></subnet>
+<connectedSwitchPort><cdpVersion>2</cdpVersion><timeout>0</timeout><ttl>143</ttl><samples>21</samples><devId>core-a.example.net</devId><address>192.0.2.2</address><portId>TwentyFiveGigE1/0/1</portId><deviceCapability><router>true</router><transparentBridge>false</transparentBridge><sourceRouteBridge>false</sourceRouteBridge><networkSwitch>true</networkSwitch><host>false</host><igmpEnabled>true</igmpEnabled><repeater>false</repeater></deviceCapability><softwareVersion>Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.12.6</softwareVersion><hardwarePlatform>cisco C9500-24Y4C</hardwarePlatform><ipPrefix>0.0.0.0</ipPrefix><ipPrefixLen>0</ipPrefixLen><vlan>100</vlan><fullDuplex>true</fullDuplex><mtu>9198</mtu><systemName></systemName><systemOID></systemOID><mgmtAddr>192.0.2.2</mgmtAddr><location></location></connectedSwitchPort>
+</returnval>
+<returnval>
+<device>vmnic1</device>
+</returnval>
+<returnval>
+<device>vmnic2</device>
+<subnet><ipSubnet>10.10.10.0</ipSubnet><vlanId>10</vlanId></subnet>
+<subnet><ipSubnet>10.10.20.0</ipSubnet><vlanId>20</vlanId></subnet>
+<subnet><ipSubnet>10.10.30.0</ipSubnet><vlanId>30</vlanId></subnet>
+<subnet><ipSubnet>10.10.10.0</ipSubnet><vlanId>10</vlanId></subnet>
+<connectedSwitchPort><cdpVersion>2</cdpVersion><timeout>0</timeout><ttl>171</ttl><samples>19</samples><devId>core-b.example.net</devId><address>192.0.2.3</address><portId>TwentyFiveGigE1/0/2</portId><deviceCapability><router>true</router><transparentBridge>false</transparentBridge><sourceRouteBridge>false</sourceRouteBridge><networkSwitch>true</networkSwitch><host>false</host><igmpEnabled>true</igmpEnabled><repeater>false</repeater></deviceCapability><softwareVersion>Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.12.6</softwareVersion><hardwarePlatform>cisco C9500-24Y4C</hardwarePlatform><ipPrefix>0.0.0.0</ipPrefix><ipPrefixLen>0</ipPrefixLen><vlan>1</vlan><fullDuplex>true</fullDuplex><mtu>9198</mtu><systemName></systemName><systemOID></systemOID><mgmtAddr>192.0.2.3</mgmtAddr><location></location></connectedSwitchPort>
+</returnval>
+<returnval>
+<device>vmnic3</device>
+<subnet><ipSubnet>10.10.10.0</ipSubnet><vlanId>10</vlanId></subnet>
+</returnval>
+</QueryNetworkHintResponse>
+</soapenv:Body>
+</soapenv:Envelope>

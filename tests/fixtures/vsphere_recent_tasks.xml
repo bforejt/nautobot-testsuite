@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TaskManager.recentTask with a TraversalSpec into Task.info: one round trip
+     returns the manager object AND the Task objects it references. The first
+     task is a completed storage refresh issued by an operator (TaskReasonUser),
+     the second a still-running system-initiated power-on (TaskReasonSystem). -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="TaskManager">ha-taskmgr</obj>
+<propSet><name>recentTask</name><val xsi:type="ArrayOfManagedObjectReference"><ManagedObjectReference type="Task" xsi:type="ManagedObjectReference">haTask-ha-host-vim.host.StorageSystem.refreshStorageSystem-123456789</ManagedObjectReference><ManagedObjectReference type="Task" xsi:type="ManagedObjectReference">haTask-1-vim.VirtualMachine.powerOn-987654</ManagedObjectReference></val></propSet>
+</objects>
+<objects>
+<obj type="Task">haTask-ha-host-vim.host.StorageSystem.refreshStorageSystem-123456789</obj>
+<propSet><name>info</name><val xsi:type="TaskInfo"><key>haTask-ha-host-vim.host.StorageSystem.refreshStorageSystem-123456789</key><task type="Task">haTask-ha-host-vim.host.StorageSystem.refreshStorageSystem-123456789</task><descriptionId>vim.host.StorageSystem.refreshStorageSystem</descriptionId><entity type="HostSystem">ha-host</entity><entityName>se350-1.example.net</entityName><state>success</state><cancelled>false</cancelled><cancelable>false</cancelable><reason xsi:type="TaskReasonUser"><userName>root</userName></reason><queueTime>2026-09-24T09:58:01.204Z</queueTime><startTime>2026-09-24T09:58:01.205Z</startTime><completeTime>2026-09-24T09:58:03.881Z</completeTime><eventChainId>1201</eventChainId></val></propSet>
+</objects>
+<objects>
+<obj type="Task">haTask-1-vim.VirtualMachine.powerOn-987654</obj>
+<propSet><name>info</name><val xsi:type="TaskInfo"><key>haTask-1-vim.VirtualMachine.powerOn-987654</key><task type="Task">haTask-1-vim.VirtualMachine.powerOn-987654</task><descriptionId>VirtualMachine.powerOn</descriptionId><entity type="VirtualMachine">1</entity><entityName>fw-a</entityName><state>running</state><cancelled>false</cancelled><cancelable>false</cancelable><progress>40</progress><reason xsi:type="TaskReasonSystem"/><queueTime>2026-09-24T10:03:40.001Z</queueTime><startTime>2026-09-24T10:03:40.002Z</startTime><eventChainId>1210</eventChainId></val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

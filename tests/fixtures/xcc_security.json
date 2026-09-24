@@ -1,0 +1,26 @@
+{
+  "@odata.type": "#LenovoSecurity.v1_0_0.LenovoSecurity",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Security",
+  "Id": "Security",
+  "Name": "Security Settings",
+  "SystemLockdown": {
+    "LockdownMode": "Inactive",
+    "LockdownControl": "ThinkShieldPortal"
+  },
+  "MotionDetection": "Enabled",
+  "MotionDetectionSettings": {
+    "Sensitivity": "Medium",
+    "Orientation": "Horizontal"
+  },
+  "ChassisIntrusionDetection": "Enabled",
+  "HostShutdown": "Disabled",
+  "SED": {
+    "EncryptionEnabled": true,
+    "SED_AK": "***never sent by a healthy firmware, scrubbed if it were***"
+  },
+  "Actions": {
+    "#LenovoSecurity.ActivateSystem": {
+      "target": "/redfish/v1/Managers/1/Oem/Lenovo/Security/Actions/LenovoSecurity.ActivateSystem"
+    }
+  }
+}

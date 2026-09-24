@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LicenseManager.licenses on a host: one LicenseManagerLicenseInfo whose
+     properties[] is a KeyAnyValue list (typed values, repeated "feature"
+     entries whose value is a KeyValue). The key is invented. -->
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval>
+<objects>
+<obj type="LicenseManager">ha-license-manager</obj>
+<propSet><name>licenses</name><val xsi:type="ArrayOfLicenseManagerLicenseInfo">
+<LicenseManagerLicenseInfo><licenseKey>AAAAA-BBBBB-CCCCC-DDDDD-EEEEE</licenseKey><editionKey>esx.enterprisePlus.cpuPackageCoreLimited</editionKey><name>VMware vSphere 8 Enterprise Plus</name><total>1</total><used>1</used><costUnit>cpuPackage:32core</costUnit><properties><key>ProductName</key><value xsi:type="xsd:string">VMware ESX Server</value></properties><properties><key>ProductVersion</key><value xsi:type="xsd:string">8.0</value></properties><properties><key>count_disallowed</key><value xsi:type="xsd:boolean">false</value></properties><properties><key>feature</key><value xsi:type="KeyValue"><key>vsmp</key><value>Unlimited virtual SMP</value></value></properties><properties><key>feature</key><value xsi:type="KeyValue"><key>dvfilter</key><value>vSphere Distributed Switch (and 3rd party vDS)</value></value></properties><properties><key>feature</key><value xsi:type="KeyValue"><key>sriov</key><value>SR-IOV</value></value></properties><properties><key>expirationDate</key><value xsi:type="xsd:dateTime">2027-01-31T00:00:00Z</value></properties><properties><key>expirationHours</key><value xsi:type="xsd:long">3067</value></properties></LicenseManagerLicenseInfo>
+</val></propSet>
+</objects>
+</returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

@@ -28,6 +28,52 @@ class _FakeRestconf:
         self.closed = True
 
 
+class _FakeApi:
+    """Duck-typed api-slot client: canned answers, records calls, labels its trace."""
+
+    transport_label = "fake-api"
+
+    def __init__(self):
+        self.calls = []
+        self.closed = False
+
+    def call(self, operation, **kwargs):
+        self.calls.append((operation, kwargs))
+        if operation == "Boom":
+            raise RuntimeError("bad operation")
+        if operation == "Nothing":
+            return None
+        return {"operation": operation, "kwargs": kwargs}
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeRedfish(_FakeRestconf):
+    """A restconf-slot client that labels its own trace entries and offers a budget."""
+
+    transport_label = "redfish"
+
+    def __init__(self):
+        super().__init__()
+        self.budgets = []
+
+    def budget(self, label, max_gets):
+        self.budgets.append((label, max_gets))
+        return _Budget()
+
+
+class _Budget:
+    entered = False
+
+    def __enter__(self):
+        self.entered = True
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
 class _FakeSsh:
     def __init__(self):
         self.closed = False
@@ -46,6 +92,9 @@ class TestContextTrace(unittest.TestCase):
         return context.CollectorContext(
             "dev1", "iosxe", restconf=_FakeRestconf(), ssh=_FakeSsh(), debug=debug
         )
+
+    def _api_ctx(self, debug=False):
+        return context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=debug)
 
     def test_get_caches_and_traces(self):
         ctx = self._ctx()
@@ -93,11 +142,154 @@ class TestContextTrace(unittest.TestCase):
             ctx.run_ssh("show x")
         self.assertFalse(ctx.has_ssh)
 
-    def test_close_closes_both_transports(self):
-        ctx = self._ctx()
+    def test_close_closes_every_transport(self):
+        ctx = context.CollectorContext(
+            "dev1", "vmware", restconf=_FakeRestconf(), ssh=_FakeSsh(), api=_FakeApi()
+        )
         ctx.close()
         self.assertTrue(ctx.restconf.closed)
         self.assertTrue(ctx.ssh.closed)
+        self.assertTrue(ctx.api.closed)
+
+    def test_close_survives_a_transport_that_raises(self):
+        class _Angry:
+            def close(self):
+                raise RuntimeError("no")
+
+        ctx = context.CollectorContext(
+            "dev1", "vmware", restconf=_Angry(), ssh=_FakeSsh(), api=_FakeApi()
+        )
+        ctx.close()  # must not raise
+        self.assertTrue(ctx.ssh.closed)
+        self.assertTrue(ctx.api.closed)
+
+    def test_default_trace_label_is_restconf(self):
+        # The original RestconfClient predates transport_label; the trace
+        # must keep reading "restconf" for it.
+        ctx = self._ctx()
+        ctx.get("/a")
+        self.assertEqual(ctx.trace[0]["transport"], "restconf")
+
+    def test_duck_typed_get_client_labels_its_trace(self):
+        ctx = context.CollectorContext("xcc1", "xcc", restconf=_FakeRedfish())
+        ctx.get("/a")
+        ctx.get("/a")
+        self.assertEqual([e["transport"] for e in ctx.trace], ["redfish", "redfish"])
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
+
+    def test_budget_delegates_to_a_transport_that_offers_one(self):
+        ctx = context.CollectorContext("xcc1", "xcc", restconf=_FakeRedfish())
+        with ctx.budget("xcc_inventory", 16) as budget:
+            self.assertTrue(budget.entered)
+        self.assertEqual(ctx.restconf.budgets, [("xcc_inventory", 16)])
+        # ...and is a harmless null context everywhere else, so collectors
+        # can declare a budget unconditionally.
+        with self._ctx().budget("iosxe_arp", 3):
+            pass
+        with context.CollectorContext("dev1", "panos").budget("panos_arp", 3):
+            pass
+
+
+class TestContextCall(unittest.TestCase):
+    def _ctx(self, debug=False):
+        return context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=debug)
+
+    def test_call_caches_and_traces_with_the_client_label(self):
+        ctx = self._ctx()
+        first = ctx.call("RetrievePropertiesEx", type="HostSystem", moids=["ha-host"])
+        second = ctx.call("RetrievePropertiesEx", type="HostSystem", moids=["ha-host"])
+        self.assertIs(first, second)
+        self.assertEqual(len(ctx.api.calls), 1)
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
+        self.assertEqual(ctx.trace[0]["transport"], "fake-api")
+        self.assertEqual(ctx.trace[0]["target"], "RetrievePropertiesEx")
+        self.assertEqual(ctx.trace[0]["kwargs"], {"type": "HostSystem", "moids": ["ha-host"]})
+        self.assertIn("elapsed_ms", ctx.trace[0])
+        self.assertNotIn("payload", ctx.trace[0])
+        # The client receives the kwargs as given (lists stay lists).
+        self.assertEqual(
+            ctx.api.calls[0], ("RetrievePropertiesEx", {"type": "HostSystem", "moids": ["ha-host"]})
+        )
+
+    def test_list_and_dict_kwargs_are_cacheable(self):
+        # Regression: a list-valued pathSet used to raise TypeError: unhashable
+        # type on the cache-key build (first vmware collector hit it).
+        ctx = self._ctx()
+        kwargs = {
+            "type": "HostSystem",
+            "moids": ["ha-host"],
+            "paths": ["config.network", "config.option"],
+            "traverse": {"path": "vm", "type": "VirtualMachine", "paths": ["name"]},
+            "tags": {"b", "a"},
+        }
+        ctx.call("RetrievePropertiesEx", **kwargs)
+        # Same content in a different container/ordering is the same fetch.
+        ctx.call(
+            "RetrievePropertiesEx",
+            paths=("config.network", "config.option"),
+            moids=("ha-host",),
+            type="HostSystem",
+            traverse={"paths": ["name"], "type": "VirtualMachine", "path": "vm"},
+            tags=frozenset({"a", "b"}),
+        )
+        self.assertEqual(len(ctx.api.calls), 1)
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
+        # Different path ORDER is a different key: builders sort, but the
+        # cache must never guess at equivalence the client did not declare.
+        ctx.call(
+            "RetrievePropertiesEx",
+            type="HostSystem",
+            moids=["ha-host"],
+            paths=["config.option", "config.network"],
+            traverse=kwargs["traverse"],
+            tags={"a", "b"},
+        )
+        self.assertEqual(len(ctx.api.calls), 2)
+
+    def test_canonical_kwargs_helper(self):
+        self.assertEqual(
+            context.canonical_kwargs({"b": [1, {"y": 2, "x": [3]}], "a": {"s", "r"}}),
+            (("a", ("r", "s")), ("b", (1, (("x", (3,)), ("y", 2))))),
+        )
+        hash(context.canonical_kwargs({"paths": ["a", "b"], "opts": {"k": [1]}}))
+
+    def test_none_answer_is_not_found_and_cached(self):
+        ctx = self._ctx()
+        self.assertIsNone(ctx.call("Nothing"))
+        self.assertIsNone(ctx.call("Nothing"))
+        self.assertEqual(len(ctx.api.calls), 1)
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["not-found", "cache-hit"])
+
+    def test_errors_are_traced_and_reraised(self):
+        ctx = self._ctx()
+        with self.assertRaises(RuntimeError):
+            ctx.call("Boom")
+        self.assertEqual(ctx.trace[0]["outcome"], "error")
+        self.assertIn("bad operation", ctx.trace[0]["error"])
+        # An error is never cached: the next call reaches the client again.
+        with self.assertRaises(RuntimeError):
+            ctx.call("Boom")
+        self.assertEqual(len(ctx.api.calls), 2)
+
+    def test_debug_captures_payload(self):
+        ctx = self._ctx(debug=True)
+        ctx.call("QueryNetworkHint", network_system="networkSystem")
+        self.assertEqual(ctx.trace[0]["payload"]["operation"], "QueryNetworkHint")
+
+    def test_missing_api_raises_and_has_api(self):
+        ctx = context.CollectorContext("dev1", "iosxe")
+        self.assertFalse(ctx.has_api)
+        with self.assertRaises(RuntimeError):
+            ctx.call("RetrievePropertiesEx")
+        self.assertTrue(self._ctx().has_api)
+
+    def test_get_and_call_caches_do_not_collide(self):
+        ctx = context.CollectorContext("dev1", "vmware", restconf=_FakeRestconf(), api=_FakeApi())
+        ctx.get("/x")
+        ctx.call("/x")
+        self.assertEqual(len(ctx.restconf.calls), 1)
+        self.assertEqual(len(ctx.api.calls), 1)
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "ok"])
 
 
 class TestShakedownAdvice(unittest.TestCase):

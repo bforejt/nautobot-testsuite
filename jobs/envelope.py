@@ -60,6 +60,10 @@ INTERPRETATION_GUIDE = [
     "change_id tags every capture belonging to one change; kind records which "
     "side of the change (pre/post/rollback/adhoc) this capture was taken on; "
     "change_description is the operator's statement of what the change is.",
+    "transport (when present) is the suite's own footprint on the device — the "
+    "account used, login/logout outcome, API call or GET counts — so the tool's "
+    "own session events in the device's logs are attributable to the capture "
+    "and never mistaken for an operator's.",
 ]
 
 
@@ -79,6 +83,17 @@ def new_envelope(device_info, change_id, kind, package, check_ids, job_info, cha
         "requested_checks": sorted(check_ids),
         "checks": {},
     }
+
+
+def record_transport(envelope, label, footprint):
+    """Self-declare the suite's own footprint on the device (schema 1.1, additive).
+
+    ``envelope["transport"][label]`` — e.g. the vSphere account, login/logout
+    outcome and SOAP call count, or the Redfish GET count — so an auditor
+    reading the host's own logs can attribute the tool's session events to
+    the capture. Only set for transports that report one.
+    """
+    envelope.setdefault("transport", {})[label] = dict(footprint or {})
 
 
 def record_check(

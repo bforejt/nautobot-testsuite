@@ -1,0 +1,64 @@
+{
+  "@odata.type": "#Manager.v1_5_0.Manager",
+  "@odata.id": "/redfish/v1/Managers/1",
+  "@odata.etag": "\"0badf00d\"",
+  "Id": "1",
+  "Name": "Manager",
+  "ManagerType": "BMC",
+  "Model": "Lenovo XClarity Controller",
+  "UUID": "9A8B7C6D-5E4F-4A3B-2C1D-0E9F8A7B6C5D",
+  "FirmwareVersion": "TEI3E4D-4.12",
+  "DateTime": "2026-09-24T14:02:11+00:00",
+  "DateTimeLocalOffset": "+00:00",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces"
+  },
+  "NetworkProtocol": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol"
+  },
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Managers/1/LogServices"
+  },
+  "Links": {
+    "ManagerForServers": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1"
+      }
+    ],
+    "ManagerForChassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1"
+      }
+    ]
+  },
+  "Actions": {
+    "#Manager.Reset": {
+      "target": "/redfish/v1/Managers/1/Actions/Manager.Reset",
+      "ResetType@Redfish.AllowableValues": [
+        "GracefulRestart"
+      ]
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoManager.v1_0_0.LenovoManagerProperties",
+      "Security": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Security"
+      },
+      "SecureKeyLifecycleService": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService"
+      },
+      "FoD": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD"
+      },
+      "BMCSettings": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/BMCSettings"
+      }
+    }
+  }
+}

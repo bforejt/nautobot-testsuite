@@ -1,0 +1,125 @@
+{
+  "@odata.type": "#ComputerSystem.v1_10_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/1",
+  "@odata.etag": "\"deadbeef\"",
+  "Id": "1",
+  "Name": "system",
+  "Description": "This resource is used to represent a system for a Redfish implementation.",
+  "SystemType": "Physical",
+  "AssetTag": "",
+  "Manufacturer": "Lenovo",
+  "Model": "7Z46CTO1WW",
+  "SKU": "7Z46CTO1WW",
+  "SerialNumber": "J3001ABC",
+  "PartNumber": "SB27A55555",
+  "UUID": "3C7F1E2A-5B6C-4D8E-9F01-23456789ABCD",
+  "HostName": "se350-esxi-a",
+  "IndicatorLED": "Off",
+  "PowerState": "On",
+  "BiosVersion": "HYE134C-2.31",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "Boot": {
+    "BootSourceOverrideEnabled": "Disabled",
+    "BootSourceOverrideTarget": "None",
+    "BootSourceOverrideMode": "UEFI",
+    "BootSourceOverrideTarget@Redfish.AllowableValues": [
+      "None",
+      "Pxe",
+      "Cd",
+      "Usb",
+      "Hdd",
+      "BiosSetup",
+      "Diags",
+      "UefiTarget"
+    ],
+    "UefiTargetBootSourceOverride": null
+  },
+  "ProcessorSummary": {
+    "Count": 1,
+    "Model": "Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz",
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK",
+      "HealthRollup": "OK"
+    }
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 128,
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK",
+      "HealthRollup": "OK"
+    }
+  },
+  "TrustedModules": [
+    {
+      "FirmwareVersion": "7.2.2.0",
+      "InterfaceType": "TPM2_0",
+      "Status": {
+        "State": "Enabled"
+      }
+    }
+  ],
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/1/Processors"
+  },
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/1/Memory"
+  },
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces"
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage"
+  },
+  "SecureBoot": {
+    "@odata.id": "/redfish/v1/Systems/1/SecureBoot"
+  },
+  "Bios": {
+    "@odata.id": "/redfish/v1/Systems/1/Bios"
+  },
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+  },
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ]
+  },
+  "Actions": {
+    "#ComputerSystem.Reset": {
+      "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
+      "ResetType@Redfish.AllowableValues": [
+        "On",
+        "ForceOff",
+        "GracefulShutdown",
+        "ForceRestart",
+        "Nmi",
+        "GracefulRestart"
+      ]
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoComputerSystem.v1_0_0.LenovoComputerSystemProperties",
+      "SystemStatus": "BootingOSOrInUndetectedOS",
+      "NumberOfReboots": 27,
+      "TotalPowerOnHours": 9137,
+      "FrontPanelUSB": {
+        "Mode": "Server"
+      },
+      "SystemPowerRestorePolicy": "Restore"
+    }
+  }
+}

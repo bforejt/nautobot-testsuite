@@ -1,0 +1,75 @@
+{
+  "@odata.type": "#PCIeDeviceCollection.PCIeDeviceCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices",
+  "Name": "PCIe Device Collection",
+  "Members@odata.count": 3,
+  "Members": [
+    {
+      "@odata.type": "#PCIeDevice.v1_3_0.PCIeDevice",
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1",
+      "Id": "ob_1",
+      "Name": "Intel X722 LOM",
+      "Manufacturer": "Intel Corporation",
+      "Model": "Intel Ethernet Connection X722 for 10GbE SFP+",
+      "DeviceType": "SingleFunction",
+      "FirmwareVersion": "4.10 0x80001a5e",
+      "SerialNumber": null,
+      "PartNumber": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1/PCIeFunctions"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Location": {
+            "PartLocation": {
+              "ServiceLabel": "Onboard 1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "@odata.type": "#PCIeDevice.v1_3_0.PCIeDevice",
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_1",
+      "Id": "slot_1",
+      "Name": "M.2 Mirroring Adapter",
+      "Manufacturer": "Lenovo",
+      "Model": "ThinkSystem M.2 Mirroring Enablement Kit",
+      "DeviceType": "SingleFunction",
+      "FirmwareVersion": "2.3.10.1193",
+      "SerialNumber": "M2K0000001",
+      "PartNumber": "01PE999",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "Slot 1"
+          }
+        }
+      }
+    },
+    {
+      "@odata.type": "#PCIeDevice.v1_3_0.PCIeDevice",
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_2",
+      "Id": "slot_2",
+      "Name": null,
+      "Manufacturer": "Intel Corporation",
+      "Model": "Intel I350 Gigabit Network Connection",
+      "DeviceType": "MultiFunction",
+      "FirmwareVersion": "1.63",
+      "SerialNumber": null,
+      "PartNumber": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ]
+}

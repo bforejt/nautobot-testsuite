@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#EthernetInterfaceCollection.EthernetInterfaceCollection",
+  "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces",
+  "Name": "Ethernet Network Interface Collection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces/ToHost"
+    },
+    {
+      "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces/NIC"
+    }
+  ],
+  "Members@odata.count": 2
+}

@@ -39,8 +39,12 @@ from . import creds, envelope, registry
 from .context import CollectorContext
 from .panos_xml import PanosParseError
 from .registry import CollectError, SkipCheck
+from .transport_redfish import RedfishClient, RedfishError
+from .transport_redfish import probe_hint as redfish_probe_hint
 from .transport_restconf import RestconfClient, RestconfError, probe_hint
 from .transport_ssh import SshCommandRefused, SshRunner
+from .transport_vsphere import VsphereClient, VsphereError
+from .transport_vsphere import probe_hint as vsphere_probe_hint
 
 # Jobs-UI grouping header (house convention).
 name = C.UI_GROUP
@@ -48,11 +52,24 @@ name = C.UI_GROUP
 KINDS = (("pre", "pre"), ("post", "post"), ("rollback", "rollback"), ("adhoc", "adhoc"))
 
 
+PLATFORM_NAMES = "iosxe, panos, vmware or xcc"
+PLATFORM_HINT = (
+    "set the device platform's network_driver to a cisco, panos/paloalto, "
+    "vmware/esxi or xcc/redfish/lenovo value"
+)
+
+
 def _map_platform(device):
-    """Map a Device to ("iosxe"|"panos"|None, driver_string).
+    """Map a Device to ("iosxe"|"panos"|"vmware"|"xcc"|None, driver_string).
 
     Uses platform.network_driver, falling back to slug/name (older records),
-    lowercased. None platform means the device cannot be snapshotted.
+    lowercased. None platform means the device cannot be snapshotted. Order
+    matters — panos > vmware/esxi > xcc/redfish/lenovo > cisco: the firewall
+    and the hypervisor are tested before the BMC vendor token, so a platform
+    named "Lenovo ThinkSystem SE350 ESXi" maps to vmware (not to the BMC) and
+    "PAN-OS VM-Series on VMware" stays panos; the two NFV platforms are
+    tested before the bare "cisco" substring, so "Cisco UCS ESXi" maps to
+    vmware. The BMC record ("Lenovo XCC") still matches on its own tokens.
     """
     platform = getattr(device, "platform", None)
     driver = ""
@@ -66,6 +83,10 @@ def _map_platform(device):
     driver = str(driver).lower()
     if "panos" in driver or "paloalto" in driver:
         return "panos", driver
+    if "vmware" in driver or "esxi" in driver:
+        return "vmware", driver
+    if "xcc" in driver or "redfish" in driver or "lenovo" in driver:
+        return "xcc", driver
     if "cisco" in driver:
         return "iosxe", driver
     return None, driver
@@ -171,8 +192,9 @@ class CaptureSnapshot(Job):
         required=False,
         default=False,
         description=(
-            "Attach a `debug_*.json` transport trace per device: every RESTCONF "
-            "path and SSH command with timing, outcome, and the FULL payload — "
+            "Attach a `debug_*.json` transport trace per device: every RESTCONF/"
+            "Redfish path, SSH command and SOAP operation with timing, outcome, and "
+            "the FULL payload — "
             "so a failed check keeps its evidence. Payload-heavy; use on one or "
             "two devices at a time, not a fleet."
         ),
@@ -184,8 +206,9 @@ class CaptureSnapshot(Job):
             "Collects a read-only operational snapshot from each selected device and "
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
             "`raw_*.json` evidence bundle per device. The device platform picks the "
-            "transport (RESTCONF for IOS-XE, SSH for PAN-OS — both structurally "
-            "read-only), every check the platform supports runs by doctrine — features "
+            "transport (RESTCONF for IOS-XE, SSH for PAN-OS, Redfish for Lenovo XCC — "
+            "all GET/show-only — and a six-operation read-only SOAP allowlist for "
+            "VMware ESXi), every check the platform supports runs by doctrine — features "
             "not in use record loudly as not-present — and each records a normalized "
             "view alongside its raw evidence. Run once as `pre` before the change and "
             "once as `post` after it, with the same change id, then download the "
@@ -324,11 +347,11 @@ class CaptureSnapshot(Job):
         platform, driver = _map_platform(device)
         if platform is None:
             self.logger.error(
-                "%s: cannot map platform (network_driver/slug/name gave %r) to iosxe "
-                "or panos — set the device platform's network_driver to a cisco or "
-                "panos/paloalto value.",
+                "%s: cannot map platform (network_driver/slug/name gave %r) to %s — %s.",
                 device.name,
                 driver,
+                PLATFORM_NAMES,
+                PLATFORM_HINT,
                 extra=log_extra,
             )
             return False
@@ -336,9 +359,7 @@ class CaptureSnapshot(Job):
 
         try:
             username, password = creds.resolve_credentials(
-                device,
-                "ssh" if platform == "panos" else "restconf",
-                override_group=secrets_group,
+                device, C.TRANSPORT_FOR[platform], override_group=secrets_group
             )
         except creds.CredentialsError as exc:
             self.logger.error("%s: %s", device.name, exc, extra=log_extra)
@@ -346,6 +367,7 @@ class CaptureSnapshot(Job):
 
         restconf = None
         ssh = None
+        api = None
         if platform == "iosxe":
             restconf = RestconfClient(host, username, password, logger=self.logger)
             if not restconf.ping():
@@ -366,7 +388,7 @@ class CaptureSnapshot(Job):
             # Unopened on purpose: only the SSH-based rollup check pays the
             # connect cost, with the same credentials.
             ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
-        else:
+        elif platform == "panos":
             ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
             try:
                 ssh.open()
@@ -380,6 +402,53 @@ class CaptureSnapshot(Job):
                     extra=log_extra,
                 )
                 return False
+        elif platform == "xcc":
+            if not C.XCC_ENABLED:
+                self.logger.error(
+                    "%s: the xcc platform is disabled (constants.XCC_ENABLED is False — "
+                    "the XCCs are unreachable at the current sites); nothing captured.",
+                    device.name,
+                    extra=log_extra,
+                )
+                return False
+            # Redfish duck-types the restconf slot: same get() contract, same
+            # per-run cache, so Managers/1 is fetched once for every xcc_* check.
+            restconf = RedfishClient(host, username, password, logger=self.logger)
+            if not restconf.ping():
+                record = restconf.probe_get(C.REDFISH_PROBE_SYSTEM, timeout=30)
+                restconf.close()
+                self.logger.error(
+                    "%s: Redfish unreachable at %s:%s — %s (probe: %s)",
+                    device.name,
+                    host,
+                    C.REDFISH_PORT,
+                    redfish_probe_hint(record),
+                    record,
+                    extra=log_extra,
+                )
+                return False
+        elif platform == "vmware":
+            # probe() refuses a vCenter answering; login() is the one Login of
+            # this capture and fails the device early exactly like ssh.open().
+            api = VsphereClient(host, username, password, logger=self.logger)
+            try:
+                api.probe()
+                api.login()
+            except VsphereError as exc:
+                api.close()
+                self.logger.error(
+                    "%s: vSphere SOAP at %s%s unusable — %s (%s)",
+                    device.name,
+                    host,
+                    C.VSPHERE_SDK_PATH,
+                    vsphere_probe_hint(exc),
+                    exc,
+                    extra=log_extra,
+                )
+                return False
+        else:  # unreachable: _map_platform only returns the four names above
+            self.logger.error("%s: no transport for platform %r", device.name, platform)
+            return False
 
         if override_ids is not None:
             checks = registry.checks_for(platform, override_ids)
@@ -396,10 +465,9 @@ class CaptureSnapshot(Job):
                 platform,
                 extra=log_extra,
             )
-            if restconf is not None:
-                restconf.close()
-            if ssh is not None:
-                ssh.close()
+            for transport in (restconf, ssh, api):
+                if transport is not None:
+                    transport.close()
             return False
 
         env = envelope.new_envelope(
@@ -425,7 +493,13 @@ class CaptureSnapshot(Job):
         failed_checks = 0
         soft_timeout = False
         ctx = CollectorContext(
-            device.name, platform, restconf=restconf, ssh=ssh, logger=self.logger, debug=debug
+            device.name,
+            platform,
+            restconf=restconf,
+            ssh=ssh,
+            api=api,
+            logger=self.logger,
+            debug=debug,
         )
         try:
             if dryrun:
@@ -514,7 +588,14 @@ class CaptureSnapshot(Job):
                     failed_checks += 1
                     soft_timeout = True
                     break
-                except (CollectError, RestconfError, SshCommandRefused, PanosParseError) as exc:
+                except (
+                    CollectError,
+                    RestconfError,
+                    RedfishError,
+                    VsphereError,
+                    SshCommandRefused,
+                    PanosParseError,
+                ) as exc:
                     envelope.record_check(
                         env,
                         check,
@@ -551,6 +632,13 @@ class CaptureSnapshot(Job):
                     failed_checks += 1
         finally:
             ctx.close()
+
+        # After close(), so the vSphere logout outcome is final: the suite's own
+        # footprint (account, login/logout, call and GET counts) rides in the
+        # envelope for whoever audits the host's session log.
+        for transport in (restconf, api):
+            if getattr(transport, "footprint", None) is not None:
+                envelope.record_transport(env, transport.transport_label, transport.footprint())
 
         safe_device = envelope.safe_name(device.name)
         safe_change = envelope.safe_name(change_id)

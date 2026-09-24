@@ -121,6 +121,34 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
         )
 
 
+class TestTransportFootprint(unittest.TestCase):
+    def test_record_transport_is_additive_and_labelled(self):
+        env = envelope.new_envelope(
+            device_info={"name": "se350-1", "platform": "vmware-esxi"},
+            change_id="CHG1",
+            kind="pre",
+            package="full",
+            check_ids=[],
+            job_info={},
+        )
+        self.assertNotIn("transport", env)  # only set for transports that report one
+        envelope.record_transport(
+            env, "vsphere", {"account": "ro", "login_ok": True, "logout_ok": True, "calls": 9}
+        )
+        envelope.record_transport(env, "redfish", {"account": "ro", "gets": 41})
+        self.assertEqual(
+            env["transport"],
+            {
+                "vsphere": {"account": "ro", "login_ok": True, "logout_ok": True, "calls": 9},
+                "redfish": {"account": "ro", "gets": 41},
+            },
+        )
+        envelope.record_transport(env, "redfish", None)
+        self.assertEqual(env["transport"]["redfish"], {})
+        # The guide tells the reader what the block is.
+        self.assertTrue(any("transport" in line for line in env["guide"]))
+
+
 class TestReport(unittest.TestCase):
     def _pre_post(self):
         pre = envelope.new_envelope(

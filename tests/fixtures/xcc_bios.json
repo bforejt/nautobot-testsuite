@@ -1,0 +1,54 @@
+{
+  "@odata.type": "#Bios.v1_0_6.Bios",
+  "@odata.id": "/redfish/v1/Systems/1/Bios",
+  "@odata.etag": "\"bios1\"",
+  "Id": "Bios",
+  "Name": "BIOS Configuration Current Settings",
+  "AttributeRegistry": "BiosAttributeRegistryHYE134C-2.31",
+  "Attributes": {
+    "BootModes_SystemBootMode": "UEFIMode",
+    "BootModes_LegacyBootOrder": "Disable",
+    "Devices_and_IO_Ports_IntelVTforDirectedIOVTd": "Enable",
+    "Devices_and_IO_Ports_SRIOV": "Enable",
+    "Devices_and_IO_Ports_MMConfigBase": "2GB",
+    "Devices_and_IO_Ports_Above4GBMMIO": "Enable",
+    "Devices_and_IO_Ports_ConsoleRedirection": "Disable",
+    "Memory_MemoryMode": "Independent",
+    "Memory_MirrorMode": "Disable",
+    "OperatingModes_ChooseOperatingMode": "MaximumPerformance",
+    "Power_PowerPerformanceBias": "PlatformControlled",
+    "Processors_HyperThreading": "Enable",
+    "Processors_TurboMode": "Enable",
+    "Processors_CStates": "Disable",
+    "Processors_C1EnhancedMode": "Disable",
+    "Processors_EnergyEfficientTurbo": "Disable",
+    "Processors_ExecuteDisableBit": "Enable",
+    "Processors_HardwarePrefetcher": "Enable",
+    "Processors_IntelVirtualizationTechnology": "Enable",
+    "Processors_UncoreFrequencyScaling": "Disable",
+    "Processors_SNC": "Disable",
+    "SecureBootConfiguration_SecureBootSetting": "Enable",
+    "SystemSecurity_TPMSetting": "Enable",
+    "SystemSecurity_PhysicalPresencePolicyConfiguration": "Enable",
+    "SystemSecurity_AdminPassword": "",
+    "Q00001_Password": "",
+    "SystemInformation_MachineTypeModel": "7Z46CTO1WW",
+    "SystemInformation_SerialNumber": "J3001ABC",
+    "DevicesandIOPorts_OnboardSATAMode": "AHCI"
+  },
+  "Actions": {
+    "#Bios.ResetBios": {
+      "target": "/redfish/v1/Systems/1/Bios/Actions/Bios.ResetBios"
+    }
+  },
+  "Links": {
+    "ActiveSoftwareImage": {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/UEFI"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "ChangePasswordPending": false
+    }
+  }
+}

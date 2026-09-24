@@ -1,0 +1,337 @@
+{
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+  "Name": "Firmware Inventory Collection",
+  "Members@odata.count": 15,
+  "Members": [
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary",
+      "@odata.etag": "\"TEI3E4D-4.12\"",
+      "Id": "BMC-Primary",
+      "Name": "BMC-Primary",
+      "Description": "Firmware inventory for BMC-Primary",
+      "Version": "TEI3E4D-4.12",
+      "SoftwareId": "TEI3E4D",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "BMC"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Backup",
+      "@odata.etag": "\"TEI3E4B-4.10\"",
+      "Id": "BMC-Backup",
+      "Name": "BMC-Backup",
+      "Description": "Firmware inventory for BMC-Backup",
+      "Version": "TEI3E4B-4.10",
+      "SoftwareId": "TEI3E4B",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "StandbyOffline"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "BMC"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/UEFI",
+      "@odata.etag": "\"HYE134C-2.31\"",
+      "Id": "UEFI",
+      "Name": "UEFI",
+      "Description": "Firmware inventory for UEFI",
+      "Version": "HYE134C-2.31",
+      "SoftwareId": "HYE134C",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPM",
+      "@odata.etag": "\"PDL122M-2.06\"",
+      "Id": "LXPM",
+      "Name": "LXPM",
+      "Description": "Firmware inventory for LXPM",
+      "Version": "PDL122M-2.06",
+      "SoftwareId": "PDL122M",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPMLinuxDriver",
+      "@odata.etag": "\"PDL212F-2.08\"",
+      "Id": "LXPMLinuxDriver",
+      "Name": "LXPM Linux Driver",
+      "Description": "Firmware inventory for LXPM Linux Driver",
+      "Version": "PDL212F-2.08",
+      "SoftwareId": "PDL212F",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPMWindowsDriver",
+      "@odata.etag": "\"PDL312G-2.09\"",
+      "Id": "LXPMWindowsDriver",
+      "Name": "LXPM Windows Driver",
+      "Description": "Firmware inventory for LXPM Windows Driver",
+      "Version": "PDL312G-2.09",
+      "SoftwareId": "PDL312G",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Ob_1.0",
+      "@odata.etag": "\"4.10 0x80001a5e\"",
+      "Id": "Ob_1.0",
+      "Name": "Intel X722 LOM",
+      "Description": "Firmware inventory for Intel X722 LOM",
+      "Version": "4.10 0x80001a5e",
+      "SoftwareId": "10.0.X722",
+      "Updateable": false,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Slot_1.0",
+      "@odata.etag": "\"2.3.10.1193\"",
+      "Id": "Slot_1.0",
+      "Name": "ThinkSystem M.2 Mirroring Kit",
+      "Description": "Firmware inventory for ThinkSystem M.2 Mirroring Kit",
+      "Version": "2.3.10.1193",
+      "SoftwareId": "M2MIRROR",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Slot_1.0.Bundle",
+      "@odata.etag": "\"2.3.10.1193-BUNDLE\"",
+      "Id": "Slot_1.0.Bundle",
+      "Name": "M.2 Mirroring Kit Bundle",
+      "Description": "Firmware inventory for M.2 Mirroring Kit Bundle",
+      "Version": "2.3.10.1193-BUNDLE",
+      "SoftwareId": "M2MIRROR.Bundle",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Slot_2.0",
+      "@odata.etag": "\"1.63\"",
+      "Id": "Slot_2.0",
+      "Name": "Intel I350",
+      "Description": "Firmware inventory for Intel I350",
+      "Version": "1.63",
+      "SoftwareId": "10.0.I350",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Slot_2.0.Bundle",
+      "@odata.etag": "\"1.63-BUNDLE\"",
+      "Id": "Slot_2.0.Bundle",
+      "Name": "Intel I350 Bundle",
+      "Description": "Firmware inventory for Intel I350 Bundle",
+      "Version": "1.63-BUNDLE",
+      "SoftwareId": "10.0.I350.Bundle",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LOM.Bundle",
+      "@odata.etag": "\"4.10-BUNDLE\"",
+      "Id": "LOM.Bundle",
+      "Name": "LOM Bundle",
+      "Description": "Firmware inventory for LOM Bundle",
+      "Version": "4.10-BUNDLE",
+      "SoftwareId": "10.0.X722.Bundle",
+      "Updateable": true,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/TPM",
+      "@odata.etag": "\"7.2.2.0\"",
+      "Id": "TPM",
+      "Name": "TPM",
+      "Description": "Firmware inventory for TPM",
+      "Version": "7.2.2.0",
+      "SoftwareId": "TPM2",
+      "Updateable": false,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/M.2-Disk.0",
+      "@odata.etag": "\"CXV10P3\"",
+      "Id": "M.2-Disk.0",
+      "Name": "M.2 SSD 0",
+      "Description": "Firmware inventory for M.2 SSD 0",
+      "Version": "CXV10P3",
+      "SoftwareId": "M2SSD",
+      "Updateable": false,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_2_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/M.2-Disk.1",
+      "@odata.etag": "\"CXV10P3\"",
+      "Id": "M.2-Disk.1",
+      "Name": "M.2 SSD 1",
+      "Description": "Firmware inventory for M.2 SSD 1",
+      "Version": "CXV10P3",
+      "SoftwareId": "M2SSD",
+      "Updateable": false,
+      "ReleaseDate": "2025-11-03T00:00:00Z",
+      "LowestSupportedVersion": null,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "Category": "Other"
+        }
+      }
+    }
+  ]
+}

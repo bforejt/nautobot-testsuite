@@ -1,0 +1,59 @@
+{
+  "@odata.type": "#StorageCollection.StorageCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Storage",
+  "Name": "Storage Collection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.type": "#Storage.v1_7_1.Storage",
+      "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1",
+      "Id": "RAID_Slot1",
+      "Name": "ThinkSystem M.2 Mirroring Enablement Kit",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "StorageControllers": [
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1#/StorageControllers/0",
+          "MemberId": "0",
+          "Name": "M.2 Mirroring",
+          "Manufacturer": "Marvell",
+          "Model": "ThinkSystem M.2 with Mirroring Enablement Kit",
+          "FirmwareVersion": "2.3.10.1193",
+          "SerialNumber": "M2K0000001",
+          "SupportedRAIDTypes": [
+            "RAID1"
+          ],
+          "SupportedDeviceProtocols": [
+            "SATA"
+          ],
+          "Status": {
+            "State": "Enabled",
+            "Health": "OK"
+          }
+        }
+      ],
+      "Drives": [
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.0"
+        },
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Drives/Disk.1"
+        }
+      ],
+      "Drives@odata.count": 2,
+      "Volumes": {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot1/Volumes"
+      },
+      "Links": {
+        "Enclosures": [
+          {
+            "@odata.id": "/redfish/v1/Chassis/1"
+          }
+        ]
+      }
+    }
+  ]
+}

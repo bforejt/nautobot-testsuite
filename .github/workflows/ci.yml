@@ -24,13 +24,84 @@ jobs:
       # GET-only / config-free. compileall and the stdlib test battery never
       # import the transports, so without this grep a write verb would merge
       # with green CI. Keep this pattern identical to the one in README.md.
+      # The pattern covers the requests verbs, Session.send of a prepared
+      # request, and the stdlib request paths (urlopen, http.client).
+      # jobs/transport_vsphere.py — that exact path, not any file of that
+      # basename — is the one declared exception (SOAP is POST by protocol)
+      # and is covered by the "SOAP operation guard" step below.
       - name: Read-only guard
         run: |
-          matches=$(grep -rniE 'send_config|config_mode|\.(patch|post|put|delete|request)\(' jobs/ || true)
+          matches=$(grep -rniE --include='*.py' 'send_config|config_mode|\.(patch|post|put|delete|request|send)\(|urlopen\(|http\.client|PreparedRequest' jobs/ | grep -v '^jobs/transport_vsphere\.py:' || true)
           if [ -n "$matches" ]; then
             echo "$matches"
             echo "ERROR: write-verb pattern found in jobs/ — the read-only guarantee is broken."
             exit 1
+          fi
+
+      # The Redfish client is GET-only, and every GET passes the path fence.
+      # The transports are never imported by the test battery, so pin the
+      # wiring lexically: _send fences the path, and it is the only place a
+      # request forms (exactly one session.get call site).
+      - name: Redfish fence guard
+        run: |
+          set -e
+          f=jobs/transport_redfish.py
+          grep -q 'fenced = fence_path(path)' "$f" || { echo "ERROR: $f no longer fences the path before sending"; exit 1; }
+          gets=$(grep -c 'self.session.get(' "$f")
+          if [ "$gets" != "1" ]; then
+            echo "ERROR: expected exactly one self.session.get( call site in $f, found $gets"; exit 1
+          fi
+
+      # The vSphere transport speaks SOAP, which is HTTP POST by protocol. Its
+      # read-only guarantee is an operation allowlist rather than a verb ban,
+      # and this step pins every structural part of it:
+      #  1. the other write verbs (and the stdlib/prepared-request paths)
+      #     stay banned in that file;
+      #  2. exactly one POST call site exists, inside _post_envelope, which
+      #     is defined once and called from exactly one place (_invoke) —
+      #     and _invoke is the one caller of vsphere_soap.build_envelope, so
+      #     every envelope that reaches the wire was formed by the builder
+      #     and checked against its allowlist (a hand-built envelope has no
+      #     path to session.post);
+      #  3. only vsphere_soap.py (the envelope builder/parser, where the SOAP
+      #     body namespace lives) and transport_vsphere.py (whose docstring
+      #     names the SOAPAction header form) may spell the vim25 namespace —
+      #     so no third module can grow its own SOAP path to a host;
+      #  4. the OPERATIONS frozenset that the builder checks against exists;
+      #  5. neither file mentions a state-changing vim25 operation, even in a
+      #     comment — the whole refusal corpus under tests/ plus any
+      #     "<Name>_Task" spelling (every vim25 long-running mutation ends
+      #     that way; the six read operations do not).
+      - name: SOAP operation guard
+        run: |
+          set -e
+          f=jobs/transport_vsphere.py
+          verbs=$(grep -niE '\.(patch|put|delete|request|send)\(|urlopen\(|http\.client|PreparedRequest' "$f" || true)
+          if [ -n "$verbs" ]; then
+            echo "$verbs"; echo "ERROR: non-POST write verb in $f"; exit 1
+          fi
+          posts=$(grep -oiE '\.post\(' "$f" | wc -l)
+          if [ "$posts" != "1" ]; then
+            echo "ERROR: expected exactly one .post( call site in $f, found $posts"; exit 1
+          fi
+          envelopes=$(grep -c '_post_envelope(' "$f")
+          if [ "$envelopes" != "2" ]; then
+            echo "ERROR: expected _post_envelope( exactly twice in $f (the def and its one caller), found $envelopes"; exit 1
+          fi
+          builders=$(grep -c 'S\.build_envelope(' "$f")
+          if [ "$builders" != "1" ]; then
+            echo "ERROR: expected exactly one S.build_envelope( call site in $f, found $builders"; exit 1
+          fi
+          expected=$(printf 'jobs/transport_vsphere.py\njobs/vsphere_soap.py\n')
+          actual=$(grep -rl --include='*.py' 'urn:vim25' jobs/ | sort)
+          if [ "$actual" != "$expected" ]; then
+            echo "$actual"; echo "ERROR: the vim25 namespace may appear only in the two vSphere modules"; exit 1
+          fi
+          grep -q '^OPERATIONS = frozenset' jobs/vsphere_soap.py || { echo "ERROR: OPERATIONS frozenset missing"; exit 1; }
+          banned='ReconfigVM_Task|PowerOnVM|PowerOffVM|ResetVM|UpdateNetworkConfig|UpdateOptions|EnableRuleset|DisableRuleset|CreateContainerView|DestroyView|ClearLog|RebootHost|ShutdownHost|EnterMaintenanceMode|ExitMaintenanceMode|Destroy_Task|UpdateDateTimeConfig|UpdateServicePolicy|StartService|StopService|RestartService|CreateSnapshot|RegisterVM|[A-Za-z]+_Task|PATCH'
+          hits=$(grep -nE "$banned" jobs/vsphere_soap.py jobs/transport_vsphere.py || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"; echo "ERROR: state-changing operation name in the vSphere modules"; exit 1
           fi
 
       - name: Format check
@@ -42,8 +113,9 @@ jobs:
       - name: Compile check
         run: python -m compileall -q .
 
-      # The pure test battery: exercises diffcore/envelope/panos_xml/registry
-      # and the _normalize_*/_parse_* functions against fixtures. Stdlib only.
+      # The pure test battery: exercises diffcore/envelope/panos_xml/registry,
+      # the Redfish path fence, the vim25 envelope builder/parser and the
+      # _normalize_*/_parse_* functions against fixtures. Stdlib only.
       # -t . imports test modules as the tests package so the battery's
       # relative _loader import resolves.
       - name: Unit tests
