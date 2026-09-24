@@ -101,6 +101,15 @@ VSPHERE_MAX_PAGES = 50
 # creds._access_types cascades any non-ssh label through RESTCONF/HTTP/REST/
 # GENERIC, so the two HTTPS platforms need no creds.py change.
 TRANSPORT_FOR = {"iosxe": "restconf", "panos": "ssh", "vmware": "https", "xcc": "https"}
+# --- wireless (Catalyst 9800 controllers) -----------------------------------
+# Per-client rows kept in the NORMALIZED client table. Clients that are not
+# in the run state (stuck in auth / IP-learn / webauth — the migration
+# failure signature) are always emitted; run-state clients fill the rest up
+# to this cap, so a large campus controller never pushes the snapshot past
+# the 10 MB artifact limit. The raw bundle keeps rows up to WLC_CLIENT_RAW_MAX
+# and notes any truncation.
+WLC_CLIENT_TABLE_MAX = 2000
+WLC_CLIENT_RAW_MAX = 10000
 
 # --- SSH --------------------------------------------------------------------
 SSH_CONNECT_TIMEOUT = 15

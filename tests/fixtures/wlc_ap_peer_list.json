@@ -1,0 +1,9 @@
+{
+  "Cisco-IOS-XE-wireless-mobility-oper:ap-peer-list": [
+    {
+      "peer-ip": "10.99.0.2",
+      "ap-count": 40,
+      "source": "source-mobility"
+    }
+  ]
+}

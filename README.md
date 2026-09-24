@@ -214,6 +214,51 @@ change worth seeing. Subsets happen at **analysis time**, in the engineer's
 test-plan prompt ("for this change, focus on the session matrix and routes").
 `override_checks` remains as a development tool for running a single check.
 
+## Catalyst 9800 wireless controllers
+
+A 9800 is IOS-XE, so a controller runs under the same `iosxe` platform, job,
+RESTCONF client and credential cascade as the switches — and gets the switch
+catalog (routes, ARP, interfaces, NTP, syslog, boot time, crash files) for
+free. The wireless checks live in `jobs/checks_iosxe_wireless.py` and decide
+for themselves whether they landed on a controller: a chassis model naming a
+9800 is one outright; otherwise one cached read of the AP name/MAC map decides
+(joined APs present = a controller, which also covers embedded controllers on
+switches). On an ordinary switch every wireless check records `not-present`
+at the cost of that single GET. On a controller a 404 for wireless data is a
+**failed read** — the wireless process is not serving data — never an unused
+feature, while a positively read empty AP roster is real data and records as
+zero APs with `ap_count: 0` in context.
+
+| Check id | Tier | Description |
+| --- | --- | --- |
+| `wlc_ap_inventory` | 1 | Joined-AP roster: identity, software, mode, admin/oper state and resolved policy/site/RF tags |
+| `wlc_ap_radios` | 1 | Per-AP radio state: band, admin/oper, channel, width, power and whether RRM or a human set them |
+| `wlc_ap_uplinks` | 2 | AP-to-switch-port map (CDP/LLDP seen from the AP) and AP Ethernet link, speed, duplex |
+| `wlc_ap_join_stats` | 3 | AP join history: boot/join times, join counters, disconnect and reboot reasons |
+| `wlc_clients_summary` | 1 | Client counts per WLAN, AP, band and landed VLAN, evaluated as capability (the session-matrix analogue) |
+| `wlc_client_table` | 3 | Per-client rows: AP, WLAN/SSID, state, resolved VLAN, learned IP — non-run clients always, run-state rows capped |
+| `wlc_wlan_config` | 2 | WLAN, policy-profile and policy-tag configuration (PSK/WEP keys scrubbed) |
+| `wlc_tag_config` | 2 | Site/RF tags, FlexConnect profiles with VLAN maps, static per-AP tag assignments |
+| `wlc_mobility` | 1 | Mobility group identity and per-peer control/data tunnel state and flap counts |
+| `wlc_platform` | 3 | Controller identity, wireless management interface, chassis roles, `show redundancy` |
+| `iosxe_aaa_servers` | 1 | RADIUS server state per group/server — generic IOS-XE, not gated on the controller (switches doing 802.1X have the same failure mode) |
+
+Every list is read with a RESTCONF `fields` filter (an unfiltered
+`capwap-data` measures ~10 KB per AP); a release that rejects a filter gets
+one unfiltered retry, noted in raw. Client usernames and device hostnames are
+never requested, and WLAN/flex configuration is scrubbed of PSK, WEP and
+password leaves before it reaches normalized or raw. Paths and leaf names
+were checked against the published 17.12.1 YANG models — the AP roster, radio
+and stack-oper reads are bench-verified on a 9800-CL by nautobot-upgrades —
+so run the shakedown against the controller first: its module inventory lists
+the wireless models the image serves, and its trace is the fixture harvest
+that replaces the synthetic `tests/fixtures/wlc_*` captures.
+
+Catalog modules are discovered by file name (`jobs/checks_*.py`) by both
+`jobs/__init__.py` and the test loader, so a new platform is one new module
+and no shared file edit — several platform branches merge without touching
+the same line.
+
 ## Read-only guarantee
 
 The guarantee is structural, not procedural. The RESTCONF client

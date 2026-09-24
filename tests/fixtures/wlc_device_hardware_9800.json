@@ -1,0 +1,23 @@
+{
+  "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+    "device-hardware": {
+      "device-inventory": [
+        {
+          "hw-type": "hw-type-chassis",
+          "hw-dev-index": 1,
+          "version": "V01",
+          "part-number": "C9800-CL-K9",
+          "serial-number": "9ABCDEF0123",
+          "hw-description": "Cisco Catalyst 9800-CL Wireless Controller for Cloud"
+        }
+      ],
+      "device-system-data": {
+        "combined-power-capacity": 0,
+        "current-time": "2026-09-24T14:00:00+00:00",
+        "boot-time": "2026-08-30T02:11:09+00:00",
+        "software-version": "Cisco IOS XE Software, Version 17.12.04",
+        "rommon-version": "17.3.1r"
+      }
+    }
+  }
+}

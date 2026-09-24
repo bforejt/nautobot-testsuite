@@ -19,8 +19,8 @@ from nautobot.apps.jobs import Job, ObjectVar
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
+from . import checks_iosxe_wireless, creds, envelope, registry
 from . import constants as C
-from . import creds, envelope, registry
 from .checks_vmware import (
     _HARDWARE_PATHS,
     _HEALTH_PATHS,
@@ -476,8 +476,12 @@ class CollectorShakedown(Job):
             if platform == "iosxe":
                 modules = report["discovery"].get("modules")
                 if isinstance(modules, dict) and modules:
+                    # Each catalog module names the models its collectors read;
+                    # the wireless list rides beside the switch list so a 9800
+                    # shakedown shows at once which wireless collectors CAN work.
+                    key_models = IOSXE_KEY_MODELS + checks_iosxe_wireless.KEY_MODELS
                     report["discovery"]["key_models"] = {
-                        model: modules.get(model) for model in IOSXE_KEY_MODELS
+                        model: modules.get(model) for model in key_models
                     }
 
             for index, check in enumerate(checks, 1):

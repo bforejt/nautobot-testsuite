@@ -1,0 +1,18 @@
+{
+  "Cisco-IOS-XE-wireless-site-cfg:site-tag-config": [
+    {
+      "site-tag-name": "ST-HQ-3F",
+      "description": "HQ 3rd floor",
+      "flex-profile": "FLEX-HQ",
+      "ap-join-profile": "AP-JOIN-HQ",
+      "is-local-site": true
+    },
+    {
+      "site-tag-name": "default-site-tag",
+      "description": "default site tag",
+      "flex-profile": "default-flex-profile",
+      "ap-join-profile": "default-ap-profile",
+      "is-local-site": true
+    }
+  ]
+}

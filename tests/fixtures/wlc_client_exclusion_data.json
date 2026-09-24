@@ -1,0 +1,11 @@
+{
+  "Cisco-IOS-XE-wireless-client-oper:exclusion-data": [
+    {
+      "client-mac": "dd:ee:ff:00:00:01",
+      "exclude-reason": "exclude-dot1x-auth-fail",
+      "wlan-id": 1,
+      "ap-name": "AP-3F-WEST-02",
+      "vlan-id": 120
+    }
+  ]
+}

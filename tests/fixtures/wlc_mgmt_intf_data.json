@@ -1,0 +1,10 @@
+{
+  "Cisco-IOS-XE-wireless-general-oper:mgmt-intf-data": {
+    "intf-name": "Vlan10",
+    "intf-type": "intf-type-vlan",
+    "intf-id": 10,
+    "mgmt-ip": "10.10.10.5",
+    "net-mask": "255.255.255.0",
+    "mgmt-mac": "00:1e:14:aa:bb:cc"
+  }
+}

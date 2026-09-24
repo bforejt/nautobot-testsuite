@@ -1,0 +1,42 @@
+{
+  "Cisco-IOS-XE-wireless-flex-cfg:flex-policy-entry": [
+    {
+      "policy-name": "FLEX-HQ",
+      "description": "HQ flex",
+      "native-vlan-id": 1,
+      "vlan-enable": true,
+      "is-local-roaming-enable": false,
+      "radius-server-group-name": "ISE-GROUP",
+      "if-name-vlan-ids": {
+        "if-name-vlan-id": [
+          {
+            "interface-name": "CORP-USERS",
+            "vlan-id": 120,
+            "acl-name": ""
+          },
+          {
+            "interface-name": "GUEST-VLAN",
+            "vlan-id": 130,
+            "acl-name": ""
+          }
+        ]
+      },
+      "local-auth-users": {
+        "local-auth-user": [
+          {
+            "user-name": "svc-flex",
+            "password": "hunter2",
+            "password-type": "clear"
+          }
+        ]
+      }
+    },
+    {
+      "policy-name": "default-flex-profile",
+      "description": "default flex profile",
+      "native-vlan-id": 1,
+      "vlan-enable": false,
+      "is-local-roaming-enable": false
+    }
+  ]
+}

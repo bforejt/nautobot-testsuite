@@ -42,10 +42,12 @@ formatted, or that counters were excluded — the `guide` and per-check
 
 A ready-to-use, maintained version of this prompt lives in
 [prompts/firewall-cutover.md](prompts/firewall-cutover.md) — the start of a
-per-change-type prompt library; copy and adapt per change. The second entry,
+per-change-type prompt library; copy and adapt per change. A second prompt,
+[prompts/site-migration.md](prompts/site-migration.md), covers a wireless
+site moving to new switching or a new Catalyst 9800 controller. A third,
 [prompts/nfv-core-move.md](prompts/nfv-core-move.md), covers a physical move
-of NFV compute (ESXi on SE350s with their XCCs, the VM-Series on top, and the
-core switches around them) and shows the pattern for a change that spans four
+of NFV compute (ESXi on SE350s, the VM-Series on top, and the core switches
+around them) and shows the pattern for a change that spans several
 platforms: the collectors stay generic, the prompt carries every
 change-specific ranking and expected difference.
 

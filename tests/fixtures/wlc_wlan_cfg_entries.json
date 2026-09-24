@@ -1,0 +1,63 @@
+{
+  "Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-entry": [
+    {
+      "profile-name": "CORP",
+      "wlan-id": 1,
+      "description": "Corporate",
+      "security-wpa": true,
+      "webauth-enabled": false,
+      "dot11-auth-type": "open-system",
+      "wep-enabled": false,
+      "apf-vap-id-data": {
+        "ssid": "Corp-WiFi",
+        "wlan-status": true,
+        "broadcast-ssid": true
+      },
+      "auth-key-mgmt-dot1x": true,
+      "auth-key-mgmt-psk": false,
+      "psk": "s3cret-psk",
+      "psk-type": "ascii",
+      "mpsk-keys": {
+        "mpsk-key": [
+          {
+            "mpsk-key": "mpsk-s3cret",
+            "mpsk-key-type": "ascii"
+          }
+        ]
+      },
+      "wep-key": "deadbeef00",
+      "wep-key-size": 40
+    },
+    {
+      "profile-name": "GUEST",
+      "wlan-id": 2,
+      "description": "Guest portal",
+      "security-wpa": false,
+      "webauth-enabled": true,
+      "dot11-auth-type": "open-system",
+      "wep-enabled": false,
+      "apf-vap-id-data": {
+        "ssid": "Guest-WiFi",
+        "wlan-status": true,
+        "broadcast-ssid": true
+      }
+    },
+    {
+      "profile-name": "IOT",
+      "wlan-id": 3,
+      "description": "Things",
+      "security-wpa": true,
+      "webauth-enabled": false,
+      "dot11-auth-type": "open-system",
+      "wep-enabled": false,
+      "apf-vap-id-data": {
+        "ssid": "IoT-Things",
+        "wlan-status": false,
+        "broadcast-ssid": false
+      },
+      "auth-key-mgmt-psk": true,
+      "psk": "iot-s3cret",
+      "psk-type": "ascii"
+    }
+  ]
+}

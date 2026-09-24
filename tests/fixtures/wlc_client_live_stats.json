@@ -1,0 +1,11 @@
+{
+  "Cisco-IOS-XE-wireless-client-global-oper:client-live-stats": {
+    "auth-state-clients": 1,
+    "mobility-state-clients": 0,
+    "iplearn-state-clients": 1,
+    "webauth-state-clients": 0,
+    "run-state-clients": 6,
+    "delete-state-clients": 0,
+    "random-mac-clients": 3
+  }
+}

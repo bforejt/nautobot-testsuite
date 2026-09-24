@@ -504,14 +504,22 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_port_channels",
     }
 
+    # Other catalog modules (checks_iosxe_wireless) register under platform
+    # "iosxe" too, so these assertions scope to the checks THIS module owns.
     def test_all_registered_once(self):
         registered = {
-            check_id for check_id, check in registry.CHECKS.items() if check.platform == "iosxe"
+            check_id
+            for check_id, check in registry.CHECKS.items()
+            if check.platform == "iosxe" and check.collector.__module__ == checks.__name__
         }
         self.assertEqual(registered, self.EXPECTED_IDS)
 
     def test_checks_for_filters_by_platform(self):
-        ids = {check.id for check in registry.checks_for("iosxe")}
+        ids = {
+            check.id
+            for check in registry.checks_for("iosxe")
+            if check.collector.__module__ == checks.__name__
+        }
         self.assertEqual(ids, self.EXPECTED_IDS)
 
     def test_every_check_has_collector_and_valid_mode(self):

@@ -1,0 +1,7 @@
+{
+  "Cisco-IOS-XE-wireless-mobility-cfg:mobility-config": {
+    "local-group": "HQ-MOBILITY",
+    "local-mcast-addr-enabled": false,
+    "local-multicast-address": "0.0.0.0"
+  }
+}
