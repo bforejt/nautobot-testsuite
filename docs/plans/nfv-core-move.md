@@ -1,6 +1,8 @@
 # Plan: the NFV core move (floors 6 → 5) and the VMware/SE350 test bundle
 
-Status: **proposal** — nothing here is implemented yet. This document is the
+Status: **partly implemented.** The `vmware` platform shipped. The `xcc` platform
+shipped switched off (`constants.XCC_ENABLED`). The sibling IOS-XE/PAN-OS checks
+and the expectations wiring in §6–§7 are still proposals. This document is the
 output of a research-and-design pass (repo readers, VMware/Lenovo/Palo Alto
 source research, three independent transport designs judged through three
 lenses, a drafted check catalog with every check adversarially verified for
@@ -13,9 +15,15 @@ established; anything marked *shakedown* is settled only by the first live run.
 - **Plan A accepted**: the CI read-only guard gains the `transport_vsphere.py`
   carve-out and a SOAP-operation guard step (§2c).
 - Environment facts, for prompts and runbooks only: SE350s believed **gen-1**;
-  VM-Series on **vmxnet3** in **L2 passthrough** mode with **HA peers on
-  separate SE350s**, PAN-OS **11.2.7+**; the **management subnet moves** with
-  the floor; **CDP is on** between the SE350 vSwitches and the switches.
+  VM-Series on **vmxnet3** with **HA peers on separate SE350s**, PAN-OS
+  **11.2.7+**; **CDP is on** between the SE350 vSwitches and the switches.
+- **Scope of the move (corrected 2026-09-24)**: a like-for-like physical
+  relocation whose goal is full restoration of service. There is **no
+  re-addressing** and no configuration change, and success is judged against
+  the pre capture. Earlier drafts recorded the VM-Series as "L2 passthrough"
+  and the management subnet as moving with the floor. Neither was confirmed,
+  and the move depends on neither. The re-address provisions in §4, §6 and
+  §10 stay as conditional capability for other moves.
 - **XCC tabled (later the same day)**: the XCCs are unreachable at the current
   sites. The `xcc` platform is built, tested and switched off by
   `constants.XCC_ENABLED = False` (both jobs refuse an xcc device with an
@@ -480,8 +488,9 @@ evidence exists first. The battery stays green at every step.
 
 0. **Decisions day (before code)**: Plan A carve-out vs Plan B; SE350
    generation / Security Pack / LOM / adapter count per site; re-addressing
-   yes or no; floor-5 port map and the declared-removal manifest frozen in
-   Nautobot; TPM recovery key and SED-AK backup gates run by hand.
+   yes or no (decided for this move: no, see §0); floor-5 port map and the
+   declared-removal manifest frozen in Nautobot; TPM recovery key and SED-AK
+   backup gates run by hand.
 1. **Framework plumbing PR** (no platform behaviour yet): `_map_platform`
    branches, `TRANSPORT_FOR`, explicit `elif panos`, `CollectorContext` api
    slot + `call()` with tuple-canonicalised kwargs (regression test for the
@@ -515,7 +524,7 @@ evidence exists first. The battery stays green at every step.
 8. **Expectations wiring**: `--expectations <json>` in `tools/diff_snapshots.py`
    with a unit test; a manifest → expectations generator under `tools/` (port
    map, re-address deltas, boot-time changes, `xcc_event_log` CommonEventID
-   globs, thermal/power bands, access/AP removals); `docs/prompts/nfv-core-move.md`
+   globs, thermal/power bands, access/AP removals); `docs/prompts/floor-consolidation.md`
    with the EXPECTED DIFFERENCES block generated from the same manifest text
    used in `change_description`. Also spec the IOS-XE/PAN-OS side of a
    re-address (SVI addresses, `ip route`, management IP, syslog/NTP targets)
@@ -533,6 +542,11 @@ evidence exists first. The battery stays green at every step.
     (declared).
 
 ### The analysis prompt, ranked
+
+*Superseded:* the prompt drafted from this ranking (`docs/prompts/nfv-core-move.md`)
+is retired. The move uses [../prompts/floor-consolidation.md](../prompts/floor-consolidation.md),
+which judges restoration against the pre capture and relies only on checks that
+exist today. The ranking below stays as the design record for the NFV checks.
 
 The prompt pairs, per host, `snapshot_<esxi>`, `snapshot_<esxi>-xcc`,
 `snapshot_<vmseries>` and the 9500/9300 files. What matters most, in order:
@@ -604,8 +618,11 @@ on a 1-NUMA SE350 after consolidation).
 - Are the VM-Series data interfaces vmxnet3 on a vSwitch, SR-IOV VFs, or full
   passthrough on the X722 ports? L3 (OSPF to the core) or L2/vwire? Are the
   two HA peers on different SE350s? Which PAN-OS version (ESXi 8.0 needs
-  11.1.6-h4+ / 11.2.6+)? Which other VNFs share the hosts?
+  11.1.6-h4+ / 11.2.6+)? Which other VNFs share the hosts? *(Partly answered
+  in §0: vmxnet3, peers on separate hosts, 11.2.7+. A like-for-like move does
+  not need the forwarding mode, because the pre capture is the contract.)*
 - Will the management subnet (vmk0, XCC) be re-addressed with the floor?
+  *Answered: no. See §0.*
 - Do the SE350 uplinks land on the 9500s or the 9300s, trunk or access, and
   will CDP be set to `both` on the vSwitches (or `iosxe_mac_table` carries
   the placement proof alone)?
