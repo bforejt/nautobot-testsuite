@@ -1,17 +1,19 @@
 Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address
 Mac persistency wait time: Indefinite
                                              H/W   Current
-Switch#   Role    Mac Address     Priority Version  State 
+Switch#   Role    Mac Address     Priority Version  State
 -------------------------------------------------------------------------------------
-*1       Active   00a1.b2c3.0100     15     V02     Ready               
- 2       Standby  00a1.b2c3.0200     14     V02     Ready               
- 3       Member   00a1.b2c3.0300     1      V02     Ready               
+*1       Active   00a1.b2c3.0100     15     V02     Ready
+ 2       Standby  00a1.b2c3.0200     12     V02     Ready
+ 3       Member   00a1.b2c3.0300     9      V02     Ready
+ 4       Member   00a1.b2c3.0400     6      V02     Ready
 
 
 
-         Stack Port Status             Neighbors     
-Switch#  Port 1     Port 2           Port 1   Port 2 
+         Stack Port Status             Neighbors
+Switch#  Port 1     Port 2           Port 1   Port 2
 --------------------------------------------------------
-  1         OK         OK               3        2 
-  2         OK         OK               1        3 
-  3         OK         OK               2        1 
+  1         OK         OK               2        4
+  2         OK         OK               3        1
+  3         OK         OK               4        2
+  4         OK         OK               1        3
