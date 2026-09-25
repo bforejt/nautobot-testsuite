@@ -1,10 +1,12 @@
-"""Catalyst 9500 (IOS-XE 17.12 RESTCONF) check catalog.
+"""Catalyst 9500 / 9300 (IOS-XE 17.x) check catalog.
 
 Collectors reach the device only through the CollectorContext (``ctx.get`` /
 ``ctx.run_ssh``); this module imports nothing but stdlib and the jobs
 package's pure modules, so the CI test battery can import it and drive every
 ``_normalize_*`` / ``_parse_*`` function directly with fixture payloads.
-RESTCONF paths were verified against the published 17.12.1 YANG set.
+RESTCONF paths were verified against the published 17.12.1 YANG set; the
+CLI-backed checks (optics, errdisable, port-channels, switch stacks, ...)
+ride the read-only ``show`` allowlist over SSH.
 
 The full-RIB fetch is deliberately shared: iosxe_routes_rib and
 iosxe_route_rollups call ``ctx.get`` with the identical path and kwargs, so
@@ -1164,6 +1166,30 @@ def _parse_crash_dir(cli_output, now, recent_days):
     return recent, older
 
 
+def _dir_listed(output):
+    """True when a `dir` answered with a listing — not a refusal or an open error."""
+    lowered = (output or "").lower()
+    if _cli_rejected(output):
+        return False
+    return not ("error" in lowered and "directory" not in lowered)
+
+
+def _crash_listing(ctx, command, side, now, raw, normalized):
+    """List one crashinfo filesystem into raw/normalized; (listed, older_count).
+
+    An absent filesystem (no standby, a removed or provisioned member) answers
+    with an open error: recorded in raw, nothing normalized, never a failure.
+    """
+    output = ctx.run_ssh(command)
+    raw[command] = output
+    if not _dir_listed(output):
+        return False, 0
+    recent, older = _parse_crash_dir(output, now, C.CRASH_RECENT_DAYS)
+    for name, value in recent.items():
+        normalized["%s|%s" % (side, name)] = value
+    return True, older
+
+
 def _collect_crash_files(ctx, now=None):
     if not ctx.has_ssh:
         raise SkipCheck("no SSH transport")
@@ -1172,26 +1198,54 @@ def _collect_crash_files(ctx, now=None):
     raw = {}
     normalized = {}
     older_total = 0
-    listings = 0
-    for command in ("dir crashinfo:", "dir stby-crashinfo:"):
-        output = ctx.run_ssh(command)
-        raw[command] = output
-        lowered = (output or "").lower()
-        if "invalid input" in lowered or "error" in lowered and "directory" not in lowered:
-            continue  # standby filesystem absent on non-SVL; recorded in raw
-        listings += 1
-        side = "stby" if "stby" in command else "active"
-        recent, older = _parse_crash_dir(output, now, C.CRASH_RECENT_DAYS)
+    listed = []
+    # The two role aliases: crashinfo: is the active member's own
+    # crashinfo-<N>:, stby-crashinfo: the standby's.
+    alias_listed = {}
+    for command, side in (("dir crashinfo:", "active"), ("dir stby-crashinfo:", "stby")):
+        ok, older = _crash_listing(ctx, command, side, now, raw, normalized)
+        alias_listed[side] = ok
         older_total += older
-        for name, value in recent.items():
-            normalized["%s|%s" % (side, name)] = value
-    if listings == 0:
+        if ok:
+            listed.append(command.split(None, 1)[1])
+
+    # Every other stack member keeps its own filesystem, reachable only by
+    # number; the roster comes from `show switch detail` (rejected on
+    # platforms that do not stack — recorded in raw, nothing more to list).
+    # A member an alias already listed is never listed again by number; a
+    # member whose alias listing failed falls back to its own filesystem.
+    detail = ctx.run_ssh("show switch detail")
+    raw["show switch detail"] = detail
+    members = {} if _cli_rejected(detail) else _parse_switch_detail(detail)[1]
+    roles = {number: str(facts.get("role") or "").lower() for number, facts in members.items()}
+    not_listed = []
+    for number in sorted(members, key=int):
+        if roles[number] == "active" and alias_listed["active"]:
+            continue
+        if roles[number] == "standby" and alias_listed["stby"]:
+            continue
+        ok, older = _crash_listing(
+            ctx, "dir crashinfo-%s:" % (number,), "member%s" % (number,), now, raw, normalized
+        )
+        older_total += older
+        if ok:
+            listed.append("crashinfo-%s:" % (number,))
+        else:
+            not_listed.append(int(number))
+    if not listed:
         raise SkipCheck("crashinfo filesystems not listable on this platform")
-    return {
-        "raw": raw,
-        "normalized": normalized,
-        "context": {"older_files_ignored": older_total, "recent_window_days": C.CRASH_RECENT_DAYS},
+    context = {
+        "older_files_ignored": older_total,
+        "recent_window_days": C.CRASH_RECENT_DAYS,
+        "filesystems_listed": listed,
     }
+    for fact, role in (("active_member", "active"), ("standby_member", "standby")):
+        holders = [int(number) for number, held in roles.items() if held == role]
+        if len(holders) == 1:
+            context[fact] = holders[0]
+    if not_listed:
+        context["members_not_listed"] = not_listed
+    return {"raw": raw, "normalized": normalized, "context": context}
 
 
 register(
@@ -1211,12 +1265,13 @@ register(
     CheckDef(
         id="iosxe_crash_files",
         platform="iosxe",
-        description="Crash/system-report files within the recency window",
+        description="Crash/system-report files within the recency window, on every stack member",
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A crash or system-report file appeared during the window — something on "
-            "the chassis crashed even if it recovered before anyone looked."
+            "that chassis or stack member crashed even if it recovered before anyone "
+            "looked."
         ),
         collector=_collect_crash_files,
         tags=("platform",),
@@ -1327,5 +1382,273 @@ register(
         ),
         collector=_collect_port_channels,
         tags=("interfaces",),
+    )
+)
+
+
+# --- iosxe_switch_stack (Catalyst 9300 StackWise) -----------------------------
+# A stack's membership, roles, and ring are invisible everywhere else in the
+# catalog: a member that reloaded and rejoined, a stack port that flapped, or
+# an active/standby swap all read as "everything up" in the interface and
+# routing checks. The CLI forms are the operator's own view — `show switch
+# detail` for members plus port topology, `show switch stack-ports summary`
+# for per-port link health — enriched with each member's model and serial
+# from the hardware inventory (chassis entries carry hw-dev-index == switch
+# number; field-verified roster source in nautobot-upgrades) and the
+# structured stack-oper payload kept as raw evidence. Always asked by
+# doctrine: platforms that do not stack reject the command and record as
+# not-present; a standalone switch or an SVL pair answers with one or two
+# members.
+
+_STACK_OPER_PATH = "/data/Cisco-IOS-XE-stack-oper:stack-oper-data"
+
+_MAC = r"[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}"
+# "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address"
+_STACK_MAC_LINE = re.compile(
+    r"^Switch/Stack Mac Address\s*:\s*(%s)(?:\s*-\s*(\w+) Mac Address)?" % (_MAC,), re.IGNORECASE
+)
+_STACK_PERSIST_LINE = re.compile(r"^Mac persistency wait time\s*:\s*(.+?)\s*$", re.IGNORECASE)
+# "*1  Active  00a1.b2c3.0100  15  V02  Ready" — the leading * marks the switch
+# the session is on. The tail after priority is "<hw-version> <state...>";
+# the state can be several words ("Version Mismatch", "HA Sync in Progress")
+# and a provisioned-but-absent member may print no hardware version at all.
+_STACK_MEMBER_LINE = re.compile(
+    r"^\*?\s*(\d+)\s+(\S+)\s+(%s)\s+(\d+)\s+(.+?)\s*$" % (_MAC,), re.IGNORECASE
+)
+# "  1/1  OK  3  50cm  Yes  Yes  Yes  1  No" — cable length may be two words
+# ("No cable"), hence the lazy middle group bounded by the Yes/No columns.
+_STACK_PORT_SUMMARY_LINE = re.compile(
+    r"^(\d+)/(\d+)\s+(\S+)\s+(\S+)\s+(.+?)\s+(Yes|No)\s+(Yes|No)\s+(Yes|No)\s+(\d+)\s+(Yes|No)$",
+    re.IGNORECASE,
+)
+
+
+def _cli_rejected(output):
+    """True when IOS-XE refused the command form rather than answering it."""
+    lowered = (output or "").lower()
+    return "invalid input" in lowered or "incomplete command" in lowered
+
+
+def _yes(token):
+    return str(token).strip().lower() == "yes"
+
+
+def _neighbor_value(token):
+    """Peer switch number as int; the device's literal token ('None') otherwise."""
+    token = str(token).strip()
+    return int(token) if token.isdigit() else token
+
+
+def _parse_switch_detail(cli_output):
+    """(stack, members, ports) from ``show switch detail``.
+
+    stack: header scalars (mac, mac_origin local/foreign, mac_persistency);
+    members: '<n>' -> role/state/priority/mac (+ hw_version when printed);
+    ports: '<n>/<p>' -> status/neighbor from the Stack Port Status table,
+    which lists every port's status followed by the same number of neighbor
+    columns (two ports per member on StackWise; the split is by count, so a
+    platform with more ports parses unchanged).
+    """
+    stack = {}
+    members = {}
+    ports = {}
+    section = "members"
+    for line in (cli_output or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        mac_match = _STACK_MAC_LINE.match(stripped)
+        if mac_match:
+            stack["mac"] = mac_match.group(1).lower()
+            if mac_match.group(2):
+                stack["mac_origin"] = mac_match.group(2).lower()
+            continue
+        persist_match = _STACK_PERSIST_LINE.match(stripped)
+        if persist_match:
+            stack["mac_persistency"] = persist_match.group(1)
+            continue
+        if "stack port status" in stripped.lower():
+            section = "ports"
+            continue
+        if section == "members":
+            match = _STACK_MEMBER_LINE.match(stripped)
+            if not match:
+                continue
+            number, role, mac, priority, tail = match.groups()
+            tail_tokens = tail.split(None, 1)
+            entry = {"role": role, "priority": int(priority), "mac": mac.lower()}
+            if len(tail_tokens) == 2:
+                entry["hw_version"] = tail_tokens[0]
+                entry["state"] = tail_tokens[1].strip()
+            else:
+                entry["state"] = tail_tokens[0]
+            members[number] = entry
+            continue
+        tokens = stripped.split()
+        if len(tokens) < 3 or not tokens[0].isdigit() or len(tokens) % 2 == 0:
+            continue
+        half = (len(tokens) - 1) // 2
+        statuses, neighbors = tokens[1 : 1 + half], tokens[1 + half :]
+        if not all(tok.isalpha() for tok in statuses):
+            continue
+        if not all(tok.isdigit() or tok.lower() == "none" for tok in neighbors):
+            continue
+        for index, (status, neighbor) in enumerate(zip(statuses, neighbors), 1):
+            ports["%s/%d" % (tokens[0], index)] = {
+                "status": status.upper(),
+                "neighbor": _neighbor_value(neighbor),
+            }
+    return stack, members, ports
+
+
+def _parse_stack_ports_summary(cli_output):
+    """'<n>/<p>' -> per-port link facts from ``show switch stack-ports summary``.
+
+    link_ok_changes is the device's '#Changes to LinkOK' column: a
+    link-transition count, not a traffic counter — identical across healthy
+    captures, it moves only when the stack link bounced.
+    """
+    ports = {}
+    for line in (cli_output or "").splitlines():
+        match = _STACK_PORT_SUMMARY_LINE.match(line.strip())
+        if not match:
+            continue
+        switch, port, status, neighbor, cable, link_ok, active, sync_ok, changes, loop = (
+            match.groups()
+        )
+        ports["%s/%s" % (switch, port)] = {
+            "status": status.upper(),
+            "neighbor": _neighbor_value(neighbor),
+            "cable": cable.strip(),
+            "link_ok": _yes(link_ok),
+            "link_active": _yes(active),
+            "sync_ok": _yes(sync_ok),
+            "link_ok_changes": int(changes),
+            "loopback": _yes(loop),
+        }
+    return ports
+
+
+def _chassis_inventory(hardware_payload):
+    """'<hw-dev-index>' -> {model, serial} for chassis entries of device-inventory.
+
+    On a stack every member is a chassis entry whose hw-dev-index is its
+    switch number (the roster source nautobot-upgrades gates member rejoin
+    on); power supplies, fans and modules are skipped.
+    """
+    container = (
+        _container(hardware_payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") or {}
+    )
+    hardware = container.get("device-hardware")
+    hardware = hardware if isinstance(hardware, dict) else {}
+    chassis = {}
+    for entry in _aslist(hardware.get("device-inventory")):
+        if not isinstance(entry, dict):
+            continue
+        if "chassis" not in str(entry.get("hw-type") or "").lower():
+            continue
+        index = entry.get("hw-dev-index")
+        if index is None:
+            continue
+        facts = {}
+        if entry.get("part-number"):
+            facts["model"] = str(entry["part-number"]).strip()
+        if entry.get("serial-number"):
+            facts["serial"] = str(entry["serial-number"]).strip()
+        chassis[str(index)] = facts
+    return chassis
+
+
+def _collect_switch_stack(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    raw = {}
+    notes = []
+    detail_command = "show switch detail"
+    detail = ctx.run_ssh(detail_command)
+    raw[detail_command] = detail
+    if _cli_rejected(detail):
+        raise SkipCheck("switch stacking commands rejected (platform does not stack)")
+    stack, members, ports = _parse_switch_detail(detail)
+    if not members:
+        lowered = (detail or "").lower()
+        if "switch/stack mac address" in lowered or "switch#" in lowered:
+            raise CollectError(
+                "'show switch detail' printed a member table but no member rows parsed — "
+                "format needs shakedown"
+            )
+        first_line = next((ln.strip() for ln in (detail or "").splitlines() if ln.strip()), "")
+        raise SkipCheck("no stack member table in 'show switch detail' output: %s" % (first_line,))
+
+    summary_command = "show switch stack-ports summary"
+    summary = ctx.run_ssh(summary_command)
+    raw[summary_command] = summary
+    if _cli_rejected(summary):
+        notes.append("stack-ports summary rejected (no physical stack ports on this platform)")
+    else:
+        summary_ports = _parse_stack_ports_summary(summary)
+        if not summary_ports:
+            notes.append("stack-ports summary answered but no port rows parsed — needs shakedown")
+        for key, facts in summary_ports.items():
+            ports.setdefault(key, {}).update(facts)
+
+    # Member model/serial ride on the hardware inventory the platform-health
+    # check also reads — identical path and kwargs, so the per-run cache
+    # issues one GET for both.
+    hardware = ctx.get(_HW_PATH)
+    chassis = _chassis_inventory(hardware)
+    raw["device-inventory chassis"] = chassis
+    unmatched = sorted(set(chassis) - set(members), key=lambda k: (len(k), k))
+    if unmatched:
+        notes.append("chassis inventory indexes with no member row: %s" % (", ".join(unmatched),))
+
+    # Structured supplement, raw only: the model's presence and leaf spellings
+    # on stacking platforms are unverified, so it is evidence for the
+    # shakedown, never the source of the normalized view.
+    try:
+        stack_oper = ctx.get(_STACK_OPER_PATH, ok_404=True)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        stack_oper = None
+        notes.append("stack-oper supplement failed: %s" % (exc,))
+    raw["stack-oper"] = stack_oper
+    if stack_oper is None:
+        notes.append("stack-oper data not served on this release (supplement skipped)")
+
+    normalized = {}
+    if stack:
+        normalized["stack"] = stack
+    for number, facts in members.items():
+        entry = dict(facts)
+        entry.update(chassis.get(number, {}))
+        normalized["switch|%s" % (number,)] = entry
+    for key, facts in ports.items():
+        normalized["stack-port|%s" % (key,)] = facts
+    context = {
+        "members_total": len(members),
+        "members_ready": sum(1 for m in members.values() if m.get("state", "").lower() == "ready"),
+        "stack_ports_total": len(ports),
+        "stack_ports_ok": sum(1 for p in ports.values() if p.get("status") == "OK"),
+    }
+    if notes:
+        raw["note"] = "; ".join(notes)
+    return {"raw": raw, "normalized": normalized, "context": context}
+
+
+register(
+    CheckDef(
+        id="iosxe_switch_stack",
+        platform="iosxe",
+        description="Switch stack members (role, state, model, serial) and stack-port ring health",
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A stack member changed role or state, vanished, or was replaced, or a stack "
+            "port went DOWN / flapped — the ring degraded or a member reloaded during the "
+            "window, which every other check reads as merely 'up'."
+        ),
+        collector=_collect_switch_stack,
+        tags=("platform", "stack"),
     )
 )

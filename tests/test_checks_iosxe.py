@@ -502,6 +502,7 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_crash_files",
         "iosxe_errdisable",
         "iosxe_port_channels",
+        "iosxe_switch_stack",
     }
 
     # Other catalog modules (checks_iosxe_wireless) register under platform
@@ -659,6 +660,126 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(recent["system-report_1_20260822.tar.gz"]["modified"], "2026-08-22")
         self.assertEqual(older, 1)
 
+    def test_crash_files_stack_lists_every_other_member(self):
+        # Members 1 (active) and 2 (standby) are the crashinfo:/stby-crashinfo:
+        # aliases and must never be listed again by number; member 3 has its
+        # own filesystem. An old dump on member 3 is counted, never keyed.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        ctx = _StackCtx(
+            {
+                "dir crashinfo:": _dir_listing(
+                    "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
+                ),
+                "dir stby-crashinfo:": _dir_listing("stby-crashinfo:"),
+                "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-3:": _dir_listing(
+                    "crashinfo-3:",
+                    ("system-report_3_20260823.tar.gz", "Aug 23 2026"),
+                    ("crashinfo_RP_00_00_20240102-030000-UTC.txt", "Jan 02 2024"),
+                ),
+            }
+        )
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(
+            ctx.commands,
+            ["dir crashinfo:", "dir stby-crashinfo:", "show switch detail", "dir crashinfo-3:"],
+        )
+        self.assertEqual(
+            result["normalized"],
+            {
+                "active|system-report_1_20260822.tar.gz": {"modified": "2026-08-22"},
+                "member3|system-report_3_20260823.tar.gz": {"modified": "2026-08-23"},
+            },
+        )
+        self.assertEqual(
+            result["context"],
+            {
+                "older_files_ignored": 1,
+                "recent_window_days": 7,
+                "filesystems_listed": ["crashinfo:", "stby-crashinfo:", "crashinfo-3:"],
+                "active_member": 1,
+                "standby_member": 2,
+            },
+        )
+        self.assertIn("show switch detail", result["raw"])
+
+    def test_crash_files_alias_failure_falls_back_to_the_member_filesystem(self):
+        # stby-crashinfo: errors, so the standby's own crashinfo-2: is listed
+        # instead; a provisioned member's filesystem does not exist and is
+        # recorded in raw plus context, never a failure.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        detail = (
+            "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "*1       Active   00a1.b2c3.0100     15     V02     Ready\n"
+            " 2       Standby  00a1.b2c3.0200     14     V02     Ready\n"
+            " 3       Member   00a1.b2c3.0300     1      V02     Ready\n"
+            " 4       Member   0000.0000.0000     1              Provisioned\n"
+        )
+        ctx = _StackCtx(
+            {
+                "dir crashinfo:": _dir_listing("crashinfo:"),
+                "dir stby-crashinfo:": "%Error opening stby-crashinfo:/ (No such device)",
+                "show switch detail": detail,
+                "dir crashinfo-2:": _dir_listing(
+                    "crashinfo-2:", ("system-report_2_20260823.tar.gz", "Aug 23 2026")
+                ),
+                "dir crashinfo-3:": _dir_listing("crashinfo-3:"),
+                "dir crashinfo-4:": "%Error opening crashinfo-4:/ (No such device)",
+            }
+        )
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(
+            ctx.commands[2:],
+            ["show switch detail", "dir crashinfo-2:", "dir crashinfo-3:", "dir crashinfo-4:"],
+        )
+        self.assertEqual(
+            result["normalized"],
+            {"member2|system-report_2_20260823.tar.gz": {"modified": "2026-08-23"}},
+        )
+        self.assertEqual(
+            result["context"]["filesystems_listed"], ["crashinfo:", "crashinfo-2:", "crashinfo-3:"]
+        )
+        self.assertEqual(result["context"]["members_not_listed"], [4])
+        self.assertEqual(result["context"]["standby_member"], 2)
+
+    def test_crash_files_non_stack_platform_lists_only_the_aliases(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        ctx = _StackCtx(
+            {
+                "dir crashinfo:": _dir_listing(
+                    "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
+                ),
+                "dir stby-crashinfo:": _dir_listing("stby-crashinfo:"),
+                "show switch detail": "% Invalid input detected at '^' marker.",
+            }
+        )
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(
+            ctx.commands, ["dir crashinfo:", "dir stby-crashinfo:", "show switch detail"]
+        )
+        self.assertEqual(list(result["normalized"]), ["active|system-report_1_20260822.tar.gz"])
+        self.assertEqual(result["context"]["filesystems_listed"], ["crashinfo:", "stby-crashinfo:"])
+        self.assertNotIn("active_member", result["context"])
+        self.assertNotIn("members_not_listed", result["context"])
+
+    def test_crash_files_nothing_listable_is_not_present(self):
+        ctx = _StackCtx(
+            {
+                "dir crashinfo:": "% Invalid input detected at '^' marker.",
+                "dir stby-crashinfo:": "% Invalid input detected at '^' marker.",
+                "show switch detail": "% Invalid input detected at '^' marker.",
+            }
+        )
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_crash_files(ctx)
+
 
 class TestErrdisableAndPortChannels(unittest.TestCase):
     def test_errdisable_parse_and_healthy_empty(self):
@@ -683,6 +804,305 @@ class TestErrdisableAndPortChannels(unittest.TestCase):
         self.assertEqual(normalized["Po1"]["flags"], "SU")
         self.assertEqual(normalized["Po1"]["members"]["Te1/0/48"], "P")
         self.assertEqual(normalized["Po2"]["members"], {"Te2/0/1": "s", "Te2/0/2": "D"})
+
+
+class _StackCtx:
+    """Fake CollectorContext: canned SSH output per command, RESTCONF payload per path."""
+
+    has_ssh = True
+
+    def __init__(self, outputs, payloads=None, raise_for=None):
+        self.outputs = outputs
+        self.payloads = payloads or {}
+        self.raise_for = raise_for or {}
+        self.commands = []
+        self.paths = []
+
+    def run_ssh(self, command, **kwargs):
+        self.commands.append(command)
+        return self.outputs[command]
+
+    def get(self, path, **kwargs):
+        self.paths.append(path)
+        if path in self.raise_for:
+            raise self.raise_for[path]
+        return self.payloads.get(path)
+
+
+# A 3-member stack's hardware inventory: chassis entries carry hw-dev-index ==
+# switch number; the PSU entry must be ignored.
+_STACK_HARDWARE = {
+    "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+        "device-hardware": {
+            "device-inventory": [
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 1,
+                    "part-number": "C9300-48P",
+                    "serial-number": "FOC0000A0A1 ",
+                },
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 2,
+                    "part-number": "C9300-48P",
+                    "serial-number": "FOC0000A0A2",
+                },
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 3,
+                    "part-number": "C9300-48U",
+                    "serial-number": "FOC0000A0A3",
+                },
+                {
+                    "hw-type": "hw-type-power-supply",
+                    "hw-dev-index": 1,
+                    "part-number": "PWR-C1-715WAC",
+                    "serial-number": "DTN0000A0A1",
+                },
+            ]
+        }
+    }
+}
+
+
+def _dir_listing(filesystem, *entries):
+    """A `dir <filesystem>` listing; entries are (name, 'Mon DD YYYY') pairs."""
+    lines = ["Directory of %s/" % (filesystem,)]
+    for index, (name, date) in enumerate(entries, 14):
+        lines.append("  %d  -rw-  1234567   %s 18:22:11 +00:00  %s" % (index, date, name))
+    lines += ["", "11353194496 bytes total (10000000000 bytes free)"]
+    return "\n".join(lines)
+
+
+class TestSwitchStack(unittest.TestCase):
+    def setUp(self):
+        self.detail = _loader.fixture_text("iosxe_show_switch_detail.txt")
+        self.summary = _loader.fixture_text("iosxe_show_switch_stack_ports_summary.txt")
+
+    def test_detail_parses_header_members_and_ports(self):
+        stack, members, ports = checks._parse_switch_detail(self.detail)
+        self.assertEqual(
+            stack,
+            {"mac": "00a1.b2c3.0100", "mac_origin": "local", "mac_persistency": "Indefinite"},
+        )
+        self.assertEqual(sorted(members), ["1", "2", "3"])
+        # The leading * (the switch the session is on) is not a fact.
+        self.assertEqual(
+            members["1"],
+            {
+                "role": "Active",
+                "state": "Ready",
+                "priority": 15,
+                "hw_version": "V02",
+                "mac": "00a1.b2c3.0100",
+            },
+        )
+        self.assertEqual(members["3"]["role"], "Member")
+        self.assertEqual(members["3"]["priority"], 1)
+        self.assertEqual(len(ports), 6)
+        self.assertEqual(ports["1/1"], {"status": "OK", "neighbor": 3})
+        self.assertEqual(ports["3/2"], {"status": "OK", "neighbor": 1})
+
+    def test_detail_degraded_states_and_missing_hw_version(self):
+        # Multi-word state, a foreign stack MAC after a switchover, a
+        # provisioned member printing no hardware version, and a DOWN port
+        # whose neighbor is the literal None.
+        output = (
+            "Switch/Stack Mac Address : 00a1.b2c3.0200 - Foreign Mac Address\n"
+            "Mac persistency wait time: 4 mins\n"
+            "                                             H/W   Current\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "----------------------------------------------------------------\n"
+            "*1       Active   00a1.b2c3.0100     15     V02     Ready\n"
+            " 2       Member   00a1.b2c3.0200     14     V02     Version Mismatch\n"
+            " 3       Member   0000.0000.0000     1              Provisioned\n"
+            "\n"
+            "         Stack Port Status             Neighbors     \n"
+            "Switch#  Port 1     Port 2           Port 1   Port 2 \n"
+            "--------------------------------------------------------\n"
+            "  1         OK       DOWN               2     None \n"
+            "  2       DOWN         OK            None        1 \n"
+        )
+        stack, members, ports = checks._parse_switch_detail(output)
+        self.assertEqual(stack["mac_origin"], "foreign")
+        self.assertEqual(stack["mac_persistency"], "4 mins")
+        self.assertEqual(members["2"]["state"], "Version Mismatch")
+        self.assertEqual(members["2"]["hw_version"], "V02")
+        self.assertEqual(members["3"]["state"], "Provisioned")
+        self.assertNotIn("hw_version", members["3"])
+        self.assertEqual(ports["1/2"], {"status": "DOWN", "neighbor": "None"})
+        self.assertEqual(ports["2/1"], {"status": "DOWN", "neighbor": "None"})
+        self.assertEqual(ports["2/2"], {"status": "OK", "neighbor": 1})
+
+    def test_stack_ports_summary_parse(self):
+        ports = checks._parse_stack_ports_summary(self.summary)
+        self.assertEqual(len(ports), 6)
+        self.assertEqual(
+            ports["2/2"],
+            {
+                "status": "OK",
+                "neighbor": 3,
+                "cable": "1m",
+                "link_ok": True,
+                "link_active": True,
+                "sync_ok": True,
+                "link_ok_changes": 1,
+                "loopback": False,
+            },
+        )
+
+    def test_stack_ports_summary_down_port_with_two_word_cable_length(self):
+        output = (
+            "Sw#/Port#  Port      Neighbor   Cable    Link  Link    Sync  #Changes  In\n"
+            "           Status               Length   OK    Active  OK    to LinkOK Loopback\n"
+            "-----------------------------------------------------------------------------\n"
+            "  1/1       OK        2          50cm     Yes   Yes     Yes   1         No\n"
+            "  1/2       DOWN      None       No cable No    No      No    3         No\n"
+        )
+        ports = checks._parse_stack_ports_summary(output)
+        self.assertEqual(ports["1/2"]["status"], "DOWN")
+        self.assertEqual(ports["1/2"]["neighbor"], "None")
+        self.assertEqual(ports["1/2"]["cable"], "No cable")
+        self.assertFalse(ports["1/2"]["link_ok"])
+        self.assertEqual(ports["1/2"]["link_ok_changes"], 3)
+        self.assertEqual(checks._parse_stack_ports_summary("Sw#/Port#  Port\n"), {})
+
+    def test_chassis_inventory_skips_non_chassis_and_strips_serials(self):
+        chassis = checks._chassis_inventory(_STACK_HARDWARE)
+        self.assertEqual(sorted(chassis), ["1", "2", "3"])
+        self.assertEqual(chassis["1"], {"model": "C9300-48P", "serial": "FOC0000A0A1"})
+        self.assertEqual(checks._chassis_inventory({}), {})
+
+    def test_collector_merges_cli_views_and_inventory(self):
+        ctx = _StackCtx(
+            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
+            payloads={checks._HW_PATH: _STACK_HARDWARE, checks._STACK_OPER_PATH: {"x": 1}},
+        )
+        result = checks._collect_switch_stack(ctx)
+        normalized = result["normalized"]
+        self.assertEqual(
+            normalized["stack"],
+            {"mac": "00a1.b2c3.0100", "mac_origin": "local", "mac_persistency": "Indefinite"},
+        )
+        self.assertEqual(
+            normalized["switch|3"],
+            {
+                "role": "Member",
+                "state": "Ready",
+                "priority": 1,
+                "hw_version": "V02",
+                "mac": "00a1.b2c3.0300",
+                "model": "C9300-48U",
+                "serial": "FOC0000A0A3",
+            },
+        )
+        # Detail's status/neighbor plus the summary's link facts, one key per port.
+        self.assertEqual(
+            normalized["stack-port|1/1"],
+            {
+                "status": "OK",
+                "neighbor": 3,
+                "cable": "50cm",
+                "link_ok": True,
+                "link_active": True,
+                "sync_ok": True,
+                "link_ok_changes": 1,
+                "loopback": False,
+            },
+        )
+        self.assertEqual(len([k for k in normalized if k.startswith("stack-port|")]), 6)
+        self.assertEqual(
+            result["context"],
+            {
+                "members_total": 3,
+                "members_ready": 3,
+                "stack_ports_total": 6,
+                "stack_ports_ok": 6,
+            },
+        )
+        raw = result["raw"]
+        self.assertEqual(raw["show switch detail"], self.detail)
+        self.assertEqual(raw["show switch stack-ports summary"], self.summary)
+        self.assertEqual(raw["stack-oper"], {"x": 1})
+        self.assertNotIn("note", raw)
+        # The inventory read shares platform_health's exact path (per-run cache).
+        self.assertIn(checks._HW_PATH, ctx.paths)
+
+    def test_collector_skips_when_platform_does_not_stack(self):
+        ctx = _StackCtx({"show switch detail": "% Invalid input detected at '^' marker."})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_switch_stack(ctx)
+        self.assertEqual(ctx.commands, ["show switch detail"])
+
+    def test_collector_fails_loudly_on_unparsed_member_table(self):
+        garbled = (
+            "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            " one      Active  not-a-mac          15     V02     Ready\n"
+        )
+        ctx = _StackCtx({"show switch detail": garbled})
+        with self.assertRaises(checks.CollectError):
+            checks._collect_switch_stack(ctx)
+
+    def test_collector_without_member_table_is_not_present(self):
+        ctx = _StackCtx({"show switch detail": "Switch stacking is not supported on this chassis"})
+        with self.assertRaises(checks.SkipCheck):
+            checks._collect_switch_stack(ctx)
+
+    def test_summary_rejected_keeps_detail_ports_and_notes_it(self):
+        ctx = _StackCtx(
+            {
+                "show switch detail": self.detail,
+                "show switch stack-ports summary": "% Invalid input detected at '^' marker.",
+            },
+            payloads={checks._HW_PATH: _STACK_HARDWARE},
+        )
+        result = checks._collect_switch_stack(ctx)
+        self.assertEqual(result["normalized"]["stack-port|2/1"], {"status": "OK", "neighbor": 1})
+        self.assertIn("stack-ports summary rejected", result["raw"]["note"])
+        # No stack-oper payload (404) is a note, never a failure.
+        self.assertIn("stack-oper data not served", result["raw"]["note"])
+        self.assertIsNone(result["raw"]["stack-oper"])
+
+    def test_inventory_without_matching_member_is_noted_not_applied(self):
+        hardware = {
+            "device-hardware-data": {
+                "device-hardware": {
+                    "device-inventory": [
+                        {"hw-type": "hw-type-chassis", "hw-dev-index": 9, "serial-number": "X"}
+                    ]
+                }
+            }
+        }
+        ctx = _StackCtx(
+            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
+            payloads={checks._HW_PATH: hardware},
+        )
+        result = checks._collect_switch_stack(ctx)
+        self.assertNotIn("serial", result["normalized"]["switch|1"])
+        self.assertIn("no member row: 9", result["raw"]["note"])
+
+    def test_stack_oper_transport_failure_is_a_note(self):
+        ctx = _StackCtx(
+            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
+            payloads={checks._HW_PATH: _STACK_HARDWARE},
+            raise_for={checks._STACK_OPER_PATH: RuntimeError("HTTP 500")},
+        )
+        result = checks._collect_switch_stack(ctx)
+        self.assertEqual(len(result["normalized"]), 10)
+        self.assertIn("stack-oper supplement failed: HTTP 500", result["raw"]["note"])
+
+    def test_stack_oper_never_swallows_the_celery_abort_signal(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        ctx = _StackCtx(
+            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
+            payloads={checks._HW_PATH: _STACK_HARDWARE},
+            raise_for={checks._STACK_OPER_PATH: SoftTimeLimitExceeded()},
+        )
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_switch_stack(ctx)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ config, that makes every op command return the same XML the API would — so
 parsers written against SSH transport port unchanged to the XML API later.
 """
 
+import re
+
 from netmiko import ConnectHandler
 
 from . import constants as C
@@ -19,11 +21,12 @@ from . import constants as C
 # broader verbs are traps — PAN-OS "test vpn ike-sa/ipsec-sa" INITIATES SA
 # negotiation (a state change), so a bare "test " prefix would break the
 # read-only guarantee. Future probe checks must add narrowly vetted entries
-# to ALLOWED_EXACT (or a full-command prefix like "test security-policy-match ")
-# — never a bare verb. "request license info" is a pure display command
-# despite the verb (verified against PA KB); no other "request" form is
-# permitted. (Field lesson: `check` is not a CLI command at all on 11.2 —
-# a once-allowlisted "check pending-changes" entry was removed dead.)
+# to ALLOWED_EXACT, an anchored full-command shape to ALLOWED_PATTERNS, or a
+# full-command prefix like "test security-policy-match " — never a bare verb.
+# "request license info" is a pure display command despite the verb (verified
+# against PA KB); no other "request" form is permitted. (Field lesson: `check`
+# is not a CLI command at all on 11.2 — a once-allowlisted "check
+# pending-changes" entry was removed dead.)
 ALLOWED_PREFIXES = {
     "paloalto_panos": ("show ",),
     "cisco_xe": ("show ",),
@@ -35,6 +38,18 @@ ALLOWED_EXACT = {
     # crash-files collector until these exact commands were allowlisted).
     # The bare `dir ` verb stays banned like every other non-show verb.
     "cisco_xe": ("dir crashinfo:", "dir stby-crashinfo:"),
+}
+# Vetted command SHAPES — full-command regexes anchored at both ends — for the
+# one read an exact list cannot spell out: a stack member's own crashinfo
+# filesystem, `dir crashinfo-<N>:` with N the switch number. crashinfo: and
+# stby-crashinfo: are aliases of the active's and the standby's; a third or
+# later Catalyst 9300 stack member is reachable only by number. The shape
+# admits a numeric member suffix and nothing else — no other filesystem, no
+# path, no pipe or option — so the bare `dir ` verb stays banned like every
+# other non-show verb. Locked in by tests/test_transport_allowlist.py.
+ALLOWED_PATTERNS = {
+    "paloalto_panos": (),
+    "cisco_xe": (re.compile(r"^dir crashinfo-\d+:$"),),
 }
 # Session-scoped presentation settings sent once after connect. Safe: they
 # alter this CLI session's output format only.
@@ -102,6 +117,8 @@ class SshRunner:
         if cmd in SESSION_PREP[self.device_type]:
             return True
         if cmd in ALLOWED_EXACT[self.device_type]:
+            return True
+        if any(pattern.match(cmd) for pattern in ALLOWED_PATTERNS[self.device_type]):
             return True
         return cmd.startswith(ALLOWED_PREFIXES[self.device_type])
 

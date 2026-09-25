@@ -4,7 +4,9 @@ jobs/__init__.py imports Nautobot (absent in CI), so we register a synthetic
 ``jobs`` package whose ``__path__`` points at the real package directory and
 import submodules through it. Only pure modules may be loaded this way —
 snapshot_job / compare_job / creds / transport_* import third-party packages
-and must never be touched here.
+and must never be touched here — with one sanctioned exception:
+test_transport_allowlist stubs netmiko in sys.modules and loads transport_ssh
+so the read-only command allowlist is locked in by CI.
 
 Checks modules register CheckDefs into the shared registry at import time.
 Loading them exactly once, here, at loader-import time — and having every
