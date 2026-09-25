@@ -1131,9 +1131,13 @@ _MONTHS = {
     "Nov": 11,
     "Dec": 12,
 }
-# `dir` listing line: "  14  -rw-  123456   Aug 24 2026 18:22:11 +00:00  name"
+# `dir` listing line: "  14  -rw-  123456   Aug 24 2026 18:22:11 +00:00  name".
+# The permissions column is captured so directories ("drwx") can be told
+# apart from files: field-verified on a 9300 stack, crashinfo:tracelogs is a
+# directory rewritten by routine logging and read as a same-day "crash" on
+# every member until directories were excluded.
 _DIR_LINE = re.compile(
-    r"^\s*\d+\s+\S+\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+(\d{4})\s+[\d:]+\s+\S*\s*(\S+)\s*$"
+    r"^\s*\d+\s+(\S+)\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+(\d{4})\s+[\d:]+\s+\S*\s*(\S+)\s*$"
 )
 
 
@@ -1142,8 +1146,11 @@ def _parse_crash_dir(cli_output, now, recent_days):
 
     Only files inside the recency window become normalized keys — a fresh
     crash during a change window must surface as an ADDED key, while ancient
-    dumps must never create diff noise (operator requirement). Unparseable
-    dates fail safe: included as recent with the raw date string.
+    dumps must never create diff noise (operator requirement). Directories
+    are neither keyed nor counted: crash dumps and system reports are files,
+    while a directory's date moves whenever anything inside it is written
+    (tracelogs/ on every member). Unparseable dates fail safe: included as
+    recent with the raw date string.
     """
     recent = {}
     older = 0
@@ -1151,7 +1158,9 @@ def _parse_crash_dir(cli_output, now, recent_days):
         match = _DIR_LINE.match(line)
         if not match:
             continue
-        month, day, year, name = match.groups()
+        perms, month, day, year, name = match.groups()
+        if perms.lower().startswith("d"):
+            continue
         if name.lower() in ("core", "crashinfo:", ".", ".."):
             continue
         month_num = _MONTHS.get(month)
@@ -1433,10 +1442,26 @@ def _yes(token):
     return str(token).strip().lower() == "yes"
 
 
-def _neighbor_value(token):
-    """Peer switch number as int; the device's literal token ('None') otherwise."""
+_NEIGHBOR_PORT = re.compile(r"^(\d+)/(\d+)$")
+
+
+def _neighbor_facts(token):
+    """{'neighbor': peer switch number[, 'neighbor_port': '<switch>/<port>']}.
+
+    Field-verified on a 4-member 9300: the stack-ports summary prints the far
+    end as a switch/port pair ('2/2'), not a bare switch number. Both forms
+    yield the same int 'neighbor', so the value never changes type between
+    captures when one of the two commands fails to parse; the pair rides
+    along as neighbor_port. Anything else (the literal 'None' on a port with
+    no neighbor) stays the device's own token.
+    """
     token = str(token).strip()
-    return int(token) if token.isdigit() else token
+    if token.isdigit():
+        return {"neighbor": int(token)}
+    pair = _NEIGHBOR_PORT.match(token)
+    if pair:
+        return {"neighbor": int(pair.group(1)), "neighbor_port": token}
+    return {"neighbor": token}
 
 
 def _parse_switch_detail(cli_output):
@@ -1491,13 +1516,14 @@ def _parse_switch_detail(cli_output):
         statuses, neighbors = tokens[1 : 1 + half], tokens[1 + half :]
         if not all(tok.isalpha() for tok in statuses):
             continue
-        if not all(tok.isdigit() or tok.lower() == "none" for tok in neighbors):
+        if not all(
+            tok.isdigit() or tok.lower() == "none" or _NEIGHBOR_PORT.match(tok) for tok in neighbors
+        ):
             continue
         for index, (status, neighbor) in enumerate(zip(statuses, neighbors), 1):
-            ports["%s/%d" % (tokens[0], index)] = {
-                "status": status.upper(),
-                "neighbor": _neighbor_value(neighbor),
-            }
+            entry = {"status": status.upper()}
+            entry.update(_neighbor_facts(neighbor))
+            ports["%s/%d" % (tokens[0], index)] = entry
     return stack, members, ports
 
 
@@ -1506,7 +1532,9 @@ def _parse_stack_ports_summary(cli_output):
 
     link_ok_changes is the device's '#Changes to LinkOK' column: a
     link-transition count, not a traffic counter — identical across healthy
-    captures, it moves only when the stack link bounced.
+    captures, it moves only when the stack link bounced. Field-verified on a
+    4-member 9300: the neighbor column prints the far-end switch/port ('2/2')
+    and a 1 m cable prints as '100cm'.
     """
     ports = {}
     for line in (cli_output or "").splitlines():
@@ -1516,16 +1544,19 @@ def _parse_stack_ports_summary(cli_output):
         switch, port, status, neighbor, cable, link_ok, active, sync_ok, changes, loop = (
             match.groups()
         )
-        ports["%s/%s" % (switch, port)] = {
-            "status": status.upper(),
-            "neighbor": _neighbor_value(neighbor),
-            "cable": cable.strip(),
-            "link_ok": _yes(link_ok),
-            "link_active": _yes(active),
-            "sync_ok": _yes(sync_ok),
-            "link_ok_changes": int(changes),
-            "loopback": _yes(loop),
-        }
+        entry = {"status": status.upper()}
+        entry.update(_neighbor_facts(neighbor))
+        entry.update(
+            {
+                "cable": cable.strip(),
+                "link_ok": _yes(link_ok),
+                "link_active": _yes(active),
+                "sync_ok": _yes(sync_ok),
+                "link_ok_changes": int(changes),
+                "loopback": _yes(loop),
+            }
+        )
+        ports["%s/%s" % (switch, port)] = entry
     return ports
 
 

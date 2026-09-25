@@ -660,10 +660,62 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(recent["system-report_1_20260822.tar.gz"]["modified"], "2026-08-22")
         self.assertEqual(older, 1)
 
+    def test_crash_dir_skips_directories(self):
+        # Field finding (9300 stack): crashinfo:tracelogs is a directory that
+        # routine logging rewrites daily, so it read as a same-day "crash" on
+        # every member. Directories are neither keyed nor counted as older.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 9, 24, tzinfo=timezone.utc)
+        output = (
+            "Directory of crashinfo:/\n"
+            "30177  drwx             4096  Sep 24 2026 22:40:12 +00:00  tracelogs\n"
+            "   11  drwx             4096  Jan 02 2024 03:00:00 +00:00  core\n"
+            "   13  drwx             4096  Mar 03 2025 09:00:00 +00:00  old_subdir\n"
+            "   12  -rw-                0  Nov 01 2019 10:00:00 +00:00  koops.dat\n"
+            "   14  -rw-          1234567  Sep 23 2026 18:22:11 +00:00  "
+            "system-report_1_20260923.tar.gz\n"
+        )
+        recent, older = checks._parse_crash_dir(output, now, 7)
+        self.assertEqual(recent, {"system-report_1_20260923.tar.gz": {"modified": "2026-09-23"}})
+        self.assertEqual(older, 1)  # koops.dat only; old_subdir is a directory
+
+    def test_crash_files_healthy_stack_with_tracelogs_everywhere_is_empty(self):
+        # The field scenario end to end: every member's filesystem holds only a
+        # freshly written tracelogs/ directory (the 4-member 9300 in the field),
+        # which is the healthy state.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 9, 24, tzinfo=timezone.utc)
+
+        def listing(filesystem):
+            return (
+                "Directory of %s/\n"
+                "30177  drwx             4096  Sep 24 2026 22:40:12 +00:00  tracelogs\n"
+                "\n11353194496 bytes total (10000000000 bytes free)" % (filesystem,)
+            )
+
+        ctx = _StackCtx(
+            {
+                "dir crashinfo:": listing("crashinfo:"),
+                "dir stby-crashinfo:": listing("stby-crashinfo:"),
+                "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-3:": listing("crashinfo-3:"),
+                "dir crashinfo-4:": listing("crashinfo-4:"),
+            }
+        )
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(
+            result["context"]["filesystems_listed"],
+            ["crashinfo:", "stby-crashinfo:", "crashinfo-3:", "crashinfo-4:"],
+        )
+        self.assertEqual(result["context"]["older_files_ignored"], 0)
+
     def test_crash_files_stack_lists_every_other_member(self):
         # Members 1 (active) and 2 (standby) are the crashinfo:/stby-crashinfo:
-        # aliases and must never be listed again by number; member 3 has its
-        # own filesystem. An old dump on member 3 is counted, never keyed.
+        # aliases and must never be listed again by number; members 3 and 4 have
+        # their own filesystems. An old dump on member 3 is counted, never keyed.
         from datetime import datetime, timezone
 
         now = datetime(2026, 8, 24, tzinfo=timezone.utc)
@@ -679,12 +731,19 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
                     ("system-report_3_20260823.tar.gz", "Aug 23 2026"),
                     ("crashinfo_RP_00_00_20240102-030000-UTC.txt", "Jan 02 2024"),
                 ),
+                "dir crashinfo-4:": _dir_listing("crashinfo-4:"),
             }
         )
         result = checks._collect_crash_files(ctx, now=now)
         self.assertEqual(
             ctx.commands,
-            ["dir crashinfo:", "dir stby-crashinfo:", "show switch detail", "dir crashinfo-3:"],
+            [
+                "dir crashinfo:",
+                "dir stby-crashinfo:",
+                "show switch detail",
+                "dir crashinfo-3:",
+                "dir crashinfo-4:",
+            ],
         )
         self.assertEqual(
             result["normalized"],
@@ -698,7 +757,12 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
             {
                 "older_files_ignored": 1,
                 "recent_window_days": 7,
-                "filesystems_listed": ["crashinfo:", "stby-crashinfo:", "crashinfo-3:"],
+                "filesystems_listed": [
+                    "crashinfo:",
+                    "stby-crashinfo:",
+                    "crashinfo-3:",
+                    "crashinfo-4:",
+                ],
                 "active_member": 1,
                 "standby_member": 2,
             },
@@ -829,7 +893,7 @@ class _StackCtx:
         return self.payloads.get(path)
 
 
-# A 3-member stack's hardware inventory: chassis entries carry hw-dev-index ==
+# A 4-member stack's hardware inventory: chassis entries carry hw-dev-index ==
 # switch number; the PSU entry must be ignored.
 _STACK_HARDWARE = {
     "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
@@ -852,6 +916,12 @@ _STACK_HARDWARE = {
                     "hw-dev-index": 3,
                     "part-number": "C9300-48U",
                     "serial-number": "FOC0000A0A3",
+                },
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 4,
+                    "part-number": "C9300-48P",
+                    "serial-number": "FOC0000A0A4",
                 },
                 {
                     "hw-type": "hw-type-power-supply",
@@ -885,7 +955,7 @@ class TestSwitchStack(unittest.TestCase):
             stack,
             {"mac": "00a1.b2c3.0100", "mac_origin": "local", "mac_persistency": "Indefinite"},
         )
-        self.assertEqual(sorted(members), ["1", "2", "3"])
+        self.assertEqual(sorted(members), ["1", "2", "3", "4"])
         # The leading * (the switch the session is on) is not a fact.
         self.assertEqual(
             members["1"],
@@ -898,10 +968,10 @@ class TestSwitchStack(unittest.TestCase):
             },
         )
         self.assertEqual(members["3"]["role"], "Member")
-        self.assertEqual(members["3"]["priority"], 1)
-        self.assertEqual(len(ports), 6)
-        self.assertEqual(ports["1/1"], {"status": "OK", "neighbor": 3})
-        self.assertEqual(ports["3/2"], {"status": "OK", "neighbor": 1})
+        self.assertEqual(members["3"]["priority"], 9)
+        self.assertEqual(len(ports), 8)
+        self.assertEqual(ports["1/1"], {"status": "OK", "neighbor": 2})
+        self.assertEqual(ports["3/2"], {"status": "OK", "neighbor": 2})
 
     def test_detail_degraded_states_and_missing_hw_version(self):
         # Multi-word state, a foreign stack MAC after a switchover, a
@@ -935,14 +1005,17 @@ class TestSwitchStack(unittest.TestCase):
         self.assertEqual(ports["2/2"], {"status": "OK", "neighbor": 1})
 
     def test_stack_ports_summary_parse(self):
+        # Field-verified shape (4-member 9300): the neighbor column is the far
+        # end's switch/port and a 1 m cable prints as '100cm'.
         ports = checks._parse_stack_ports_summary(self.summary)
-        self.assertEqual(len(ports), 6)
+        self.assertEqual(len(ports), 8)
         self.assertEqual(
-            ports["2/2"],
+            ports["1/2"],
             {
                 "status": "OK",
-                "neighbor": 3,
-                "cable": "1m",
+                "neighbor": 4,
+                "neighbor_port": "4/1",
+                "cable": "100cm",
                 "link_ok": True,
                 "link_active": True,
                 "sync_ok": True,
@@ -950,6 +1023,29 @@ class TestSwitchStack(unittest.TestCase):
                 "loopback": False,
             },
         )
+
+    def test_neighbor_facts_forms(self):
+        # Every form yields an int 'neighbor', so the value never changes type
+        # between captures when only one of the two commands parses.
+        self.assertEqual(checks._neighbor_facts("2/2"), {"neighbor": 2, "neighbor_port": "2/2"})
+        self.assertEqual(checks._neighbor_facts(" 4/1 "), {"neighbor": 4, "neighbor_port": "4/1"})
+        self.assertEqual(checks._neighbor_facts("3"), {"neighbor": 3})
+        self.assertEqual(checks._neighbor_facts("None"), {"neighbor": "None"})
+
+    def test_detail_accepts_switch_port_neighbors(self):
+        output = (
+            "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "*1       Active   00a1.b2c3.0100     15     V02     Ready\n"
+            " 2       Standby  00a1.b2c3.0200     14     V02     Ready\n"
+            "         Stack Port Status             Neighbors     \n"
+            "Switch#  Port 1     Port 2           Port 1   Port 2 \n"
+            "  1         OK         OK             2/2      2/1 \n"
+            "  2         OK         OK             1/2      1/1 \n"
+        )
+        _stack, _members, ports = checks._parse_switch_detail(output)
+        self.assertEqual(ports["1/1"], {"status": "OK", "neighbor": 2, "neighbor_port": "2/2"})
+        self.assertEqual(ports["2/2"], {"status": "OK", "neighbor": 1, "neighbor_port": "1/1"})
 
     def test_stack_ports_summary_down_port_with_two_word_cable_length(self):
         output = (
@@ -969,7 +1065,7 @@ class TestSwitchStack(unittest.TestCase):
 
     def test_chassis_inventory_skips_non_chassis_and_strips_serials(self):
         chassis = checks._chassis_inventory(_STACK_HARDWARE)
-        self.assertEqual(sorted(chassis), ["1", "2", "3"])
+        self.assertEqual(sorted(chassis), ["1", "2", "3", "4"])
         self.assertEqual(chassis["1"], {"model": "C9300-48P", "serial": "FOC0000A0A1"})
         self.assertEqual(checks._chassis_inventory({}), {})
 
@@ -989,19 +1085,21 @@ class TestSwitchStack(unittest.TestCase):
             {
                 "role": "Member",
                 "state": "Ready",
-                "priority": 1,
+                "priority": 9,
                 "hw_version": "V02",
                 "mac": "00a1.b2c3.0300",
                 "model": "C9300-48U",
                 "serial": "FOC0000A0A3",
             },
         )
-        # Detail's status/neighbor plus the summary's link facts, one key per port.
+        # Detail's status/neighbor plus the summary's link facts, one key per port;
+        # both views agree the far end is switch 2, and the summary names its port.
         self.assertEqual(
             normalized["stack-port|1/1"],
             {
                 "status": "OK",
-                "neighbor": 3,
+                "neighbor": 2,
+                "neighbor_port": "2/2",
                 "cable": "50cm",
                 "link_ok": True,
                 "link_active": True,
@@ -1010,14 +1108,14 @@ class TestSwitchStack(unittest.TestCase):
                 "loopback": False,
             },
         )
-        self.assertEqual(len([k for k in normalized if k.startswith("stack-port|")]), 6)
+        self.assertEqual(len([k for k in normalized if k.startswith("stack-port|")]), 8)
         self.assertEqual(
             result["context"],
             {
-                "members_total": 3,
-                "members_ready": 3,
-                "stack_ports_total": 6,
-                "stack_ports_ok": 6,
+                "members_total": 4,
+                "members_ready": 4,
+                "stack_ports_total": 8,
+                "stack_ports_ok": 8,
             },
         )
         raw = result["raw"]
@@ -1058,7 +1156,7 @@ class TestSwitchStack(unittest.TestCase):
             payloads={checks._HW_PATH: _STACK_HARDWARE},
         )
         result = checks._collect_switch_stack(ctx)
-        self.assertEqual(result["normalized"]["stack-port|2/1"], {"status": "OK", "neighbor": 1})
+        self.assertEqual(result["normalized"]["stack-port|2/1"], {"status": "OK", "neighbor": 3})
         self.assertIn("stack-ports summary rejected", result["raw"]["note"])
         # No stack-oper payload (404) is a note, never a failure.
         self.assertIn("stack-oper data not served", result["raw"]["note"])
@@ -1089,7 +1187,8 @@ class TestSwitchStack(unittest.TestCase):
             raise_for={checks._STACK_OPER_PATH: RuntimeError("HTTP 500")},
         )
         result = checks._collect_switch_stack(ctx)
-        self.assertEqual(len(result["normalized"]), 10)
+        # 'stack' + 4 'switch|' + 8 'stack-port|' keys: the full view survives.
+        self.assertEqual(len(result["normalized"]), 13)
         self.assertIn("stack-oper supplement failed: HTTP 500", result["raw"]["note"])
 
     def test_stack_oper_never_swallows_the_celery_abort_signal(self):
