@@ -45,11 +45,12 @@ A ready-to-use, maintained version of this prompt lives in
 per-change-type prompt library; copy and adapt per change. A second prompt,
 [prompts/site-migration.md](prompts/site-migration.md), covers a wireless
 site moving to new switching or a new Catalyst 9800 controller. A third,
-[prompts/nfv-core-move.md](prompts/nfv-core-move.md), covers a physical move
-of NFV compute (ESXi on SE350s, the VM-Series on top, and the core switches
-around them) and shows the pattern for a change that spans several
-platforms: the collectors stay generic, the prompt carries every
-change-specific ranking and expected difference.
+[prompts/floor-consolidation.md](prompts/floor-consolidation.md), covers a
+physical move of an office's network core (the core switch, the ESXi/SE350
+NFV hosts and the VM-Series on them, and the wireless controller's view of
+the APs) and shows the pattern for a change that spans several platforms:
+the collectors stay generic, the prompt carries every change-specific
+ranking and expected difference.
 
 > You are a senior network engineer reviewing a completed change using
 > before/after operational snapshots (attached JSON files; each file explains
@@ -100,3 +101,7 @@ what it found. The files stay authoritative; the prompt is yours.
 - Big tables (full RIBs) are where LLM attention is weakest. That is what
   the optional `tools/diff_snapshots.py` index is for — deterministic set
   math the LLM interprets instead of performs.
+- This repository is public: keep real device names, sites and addresses
+  out of committed prompts. Refer to devices by role labels (CORE, NFV-1,
+  ...) with a DEVICES block the engineer fills in when pasting, as
+  [prompts/floor-consolidation.md](prompts/floor-consolidation.md) does.
