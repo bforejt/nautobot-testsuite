@@ -29,15 +29,16 @@ Two jobs, both under the **Test Suite** grouping:
   harvested (sanitize captures before committing). Check failures do not fail
   the JobResult — surfacing them is the point.
 
-Platforms today: Catalyst 9500 / IOS-XE 17.x (RESTCONF), PAN-OS firewalls (SSH,
-XML op-command output), standalone VMware ESXi 8.x hosts set up as NFV compute
-(vim25 SOAP, read-only operation allowlist) and — built, tested and currently
-**switched off** by `constants.XCC_ENABLED` because the BMCs are unreachable at
-the current sites — their Lenovo XClarity Controllers, the ThinkSystem SE350
-BMC (Redfish, GET-only). The two NFV platforms are modelled as "ESXi set up as
-NFV compute" in general, never as a host for one particular change: every
-check is always-on, and a feature that is not in use records loudly as
-`not-present`.
+Platforms today: Catalyst 9500 StackWise Virtual pairs and Catalyst 9300 StackWise
+stacks on IOS-XE 17.x (RESTCONF plus allowlisted read-only SSH commands), PAN-OS
+firewalls (SSH, XML op-command output), standalone VMware ESXi 8.x hosts set up
+as NFV compute (vim25 SOAP, read-only operation allowlist) and — built, tested
+and currently **switched off** by `constants.XCC_ENABLED` because the BMCs are
+unreachable at the current sites — their Lenovo XClarity Controllers, the
+ThinkSystem SE350 BMC (Redfish, GET-only). The two NFV platforms are modelled
+as "ESXi set up as NFV compute" in general, never as a host for one particular
+change: every check is always-on, and a feature that is not in use records
+loudly as `not-present`.
 
 ## Installation
 
@@ -157,9 +158,10 @@ the humans reading the report.
 | `panos_ospf_neighbors` | panos | 1 | OSPF adjacencies, engine-aware (the firewall's view of the core) |
 | `panos_crash_files` | panos | 1 | Core/crash files within the recency window |
 | `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
-| `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window |
+| `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window, on every stack member's filesystem |
 | `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason |
 | `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
+| `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, model, serial) and stack-port ring health (not-present when the platform does not stack) |
 | `panos_jobs` | panos | 1 | Unfinished commit/config jobs (history counts in context) |
 | `panos_chassis_ready` | panos | 1 | Dataplane readiness (show chassis-ready) |
 | `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
@@ -270,15 +272,19 @@ can change device state; the Redfish client additionally fences every path
 would decode `%41ctions` to `Actions` after the check) before a request is
 formed, and uses Basic auth so no BMC session is ever created; a `Redfish
 fence guard` CI step pins that wiring (the fence call and the single
-`session.get` site in `_send`). The SSH runner
-(`jobs/transport_ssh.py`) refuses any command that does not match a
-per-platform read-only allowlist (the `show ` prefix, plus the display-only
-`request license info` on PAN-OS — deliberately not `test`/`ping`, since e.g.
-PAN-OS `test vpn ike-sa` *initiates* SA negotiation; future probe commands get
-individually vetted entries) and never enters config mode. Collectors reach
-devices exclusively through the `CollectorContext`, so no check can smuggle in
-its own transport. It is grep-auditable, and **CI enforces it** — the
-`Read-only guard` step fails the build if this ever matches anything:
+`session.get` site in `_send`). The SSH runner (`jobs/transport_ssh.py`)
+refuses any command that does not match a per-platform read-only allowlist
+(the `show ` prefix; the display-only `request license info` on PAN-OS; and on
+IOS-XE the crashinfo `dir` listings — `dir crashinfo:` and
+`dir stby-crashinfo:` as exact commands, `dir crashinfo-<N>:` per stack member
+as an anchored, numeric-only shape, the bare `dir` verb still banned —
+deliberately not `test`/`ping`, since e.g. PAN-OS `test vpn ike-sa` *initiates*
+SA negotiation; future probe commands get individually vetted entries, and
+`tests/test_transport_allowlist.py` locks the allowlist in CI) and never enters
+config mode. Collectors reach devices exclusively through the
+`CollectorContext`, so no check can smuggle in its own transport. It is
+grep-auditable, and **CI enforces it** — the `Read-only guard` step fails the
+build if this ever matches anything:
 
 ```sh
 grep -rniE --include='*.py' 'send_config|config_mode|\.(patch|post|put|delete|request|send)\(|urlopen\(|http\.client|PreparedRequest' jobs/ | grep -v '^jobs/transport_vsphere\.py:'

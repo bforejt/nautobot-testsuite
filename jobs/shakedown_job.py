@@ -77,6 +77,9 @@ IOSXE_KEY_MODELS = (
     "Cisco-IOS-XE-environment-oper",
     "Cisco-IOS-XE-matm-oper",
     "Cisco-IOS-XE-switch-cp-svl-oper",
+    # Read raw-only by iosxe_switch_stack; its presence here tells a 9300
+    # shakedown whether a structured stack view is available to refine into.
+    "Cisco-IOS-XE-stack-oper",
 )
 
 

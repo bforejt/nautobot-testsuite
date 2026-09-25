@@ -290,9 +290,17 @@ SEMANTICS = {
     "iosxe_crash_files": (
         "Crash and system-report files WITHIN the recency window (context notes the "
         "window and how many older files were ignored — ancient dumps never alarm). "
-        "Keys 'active|<file>' / 'stby|<file>'. A key ADDED between captures means "
-        "something on the chassis crashed during the change window, even if it "
-        "recovered before anyone looked. Empty is the healthy state."
+        "Keys 'active|<file>' / 'stby|<file>' for the active and standby members' "
+        "filesystems (the crashinfo: / stby-crashinfo: aliases) and "
+        "'member<N>|<file>' for every other stack member's own crashinfo-<N>: "
+        "filesystem, so a crash on a third or later 9300 stack member is captured "
+        "too; context lists the filesystems actually listed, the active/standby "
+        "member numbers behind the aliases, and any member whose filesystem could "
+        "not be listed. A key ADDED between captures means something on that "
+        "chassis or member crashed during the change window, even if it recovered "
+        "before anyone looked; across a switchover a file can move between the "
+        "active| and stby| keys — the switch-stack check names the role change. "
+        "Empty is the healthy state."
     ),
     "panos_ospf_neighbors": (
         "The firewall's OSPF adjacencies keyed 'ospf|<neighbor-id>' with state and "
@@ -363,6 +371,26 @@ SEMANTICS = {
         "replacement risk), and last-hit recency shows which rules actually carry "
         "traffic. Counts reset on a replacement device — compare activity, not "
         "absolutes."
+    ),
+    "iosxe_switch_stack": (
+        "Catalyst StackWise membership and ring, from `show switch detail` and "
+        "`show switch stack-ports summary`. Key 'stack': the stack MAC, whether it "
+        "is the current active's own (mac_origin local) or inherited from a "
+        "departed active (foreign), and the MAC persistency setting. Keys "
+        "'switch|<n>': role (Active/Standby/Member), state (Ready is healthy; "
+        "Provisioned, Removed, Version Mismatch are not), priority, hardware "
+        "version, member MAC, plus model and serial when the hardware inventory "
+        "names that switch number — across a member REPLACEMENT the serial and MAC "
+        "of that slot change by design and nothing else should. Keys "
+        "'stack-port|<n>/<p>': status (OK/DOWN), neighbor (peer switch number, or "
+        "the literal 'None' when the port has none), cable length, link_ok/"
+        "link_active/sync_ok flags, loopback, and link_ok_changes — a "
+        "link-transition COUNT, not a traffic counter: identical across healthy "
+        "captures, it increments only when the stack link bounced, so a delta means "
+        "the ring flapped during the window (expected only beside a member that was "
+        "reloaded or replaced by design). Context carries member and port totals. "
+        "Not-present on platforms that do not stack; a standalone switch or a "
+        "StackWise Virtual pair records its one or two members."
     ),
     # --- vmware: standalone ESXi set up as NFV compute (vim25 SOAP) ------------
     "vmware_host_identity": (
