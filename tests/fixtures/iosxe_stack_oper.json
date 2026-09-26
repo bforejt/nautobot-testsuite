@@ -1,0 +1,213 @@
+{
+  "Cisco-IOS-XE-stack-oper:stack-oper-data": {
+    "stack-info": {
+      "ring-speed": "480",
+      "ring-status": "full-ring",
+      "size": 4,
+      "stack-boottime": "2025-10-16T02:00:00+00:00",
+      "stack-mac-address": "00:a1:b2:c3:01:00"
+    },
+    "stack-node": [
+      {
+        "chassis-number": 1,
+        "interface-mtu": 1500,
+        "keepalive-counters": {
+          "consecutive-losses": "0",
+          "receive-failure": "0",
+          "received": "0",
+          "sent": "0",
+          "sent-failure": "0"
+        },
+        "latency": 0,
+        "mac-address": "00:a1:b2:c3:01:00",
+        "node-state": "state-ready",
+        "priority": 15,
+        "reload-reason": "Image Install",
+        "role": "role-active",
+        "serial-number": "FOC0000A001",
+        "sso-ready-flag": false,
+        "stack-mode": "mode-stackwise-rear",
+        "stack-ports": [
+          {
+            "port-num": 1,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "150000000001",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "130000000001",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 2
+          },
+          {
+            "port-num": 2,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "170000000002",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "190000000002",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 4
+          }
+        ]
+      },
+      {
+        "chassis-number": 2,
+        "interface-mtu": 1500,
+        "keepalive-counters": {
+          "consecutive-losses": "0",
+          "receive-failure": "0",
+          "received": "0",
+          "sent": "0",
+          "sent-failure": "0"
+        },
+        "latency": 0,
+        "mac-address": "00:a1:b2:c3:02:00",
+        "node-state": "state-ready",
+        "priority": 12,
+        "reload-reason": "Image Install",
+        "role": "role-standby",
+        "serial-number": "FOC0000A002",
+        "sso-ready-flag": false,
+        "stack-mode": "mode-stackwise-rear",
+        "stack-ports": [
+          {
+            "port-num": 1,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "150000000001",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "130000000001",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 3
+          },
+          {
+            "port-num": 2,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "170000000002",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "190000000002",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 1
+          }
+        ]
+      },
+      {
+        "chassis-number": 3,
+        "interface-mtu": 1500,
+        "keepalive-counters": {
+          "consecutive-losses": "0",
+          "receive-failure": "0",
+          "received": "0",
+          "sent": "0",
+          "sent-failure": "0"
+        },
+        "latency": 0,
+        "mac-address": "00:a1:b2:c3:03:00",
+        "node-state": "state-ready",
+        "priority": 9,
+        "reload-reason": "Image Install",
+        "role": "role-member",
+        "serial-number": "FOC0000A003",
+        "sso-ready-flag": false,
+        "stack-mode": "mode-stackwise-rear",
+        "stack-ports": [
+          {
+            "port-num": 1,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "150000000001",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "130000000001",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 4
+          },
+          {
+            "port-num": 2,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "170000000002",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "190000000002",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 2
+          }
+        ]
+      },
+      {
+        "chassis-number": 4,
+        "interface-mtu": 1500,
+        "keepalive-counters": {
+          "consecutive-losses": "0",
+          "receive-failure": "0",
+          "received": "0",
+          "sent": "0",
+          "sent-failure": "0"
+        },
+        "latency": 0,
+        "mac-address": "00:a1:b2:c3:04:00",
+        "node-state": "state-ready",
+        "priority": 6,
+        "reload-reason": "Image Install",
+        "role": "role-member",
+        "serial-number": "FOC0000A004",
+        "sso-ready-flag": false,
+        "stack-mode": "mode-stackwise-rear",
+        "stack-ports": [
+          {
+            "port-num": 1,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "150000000001",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "130000000001",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 1
+          },
+          {
+            "port-num": 2,
+            "port-state": "link-up",
+            "sp-stats": {
+              "rac-copied": "170000000002",
+              "rac-data-crc-err": "0",
+              "rac-inserted": "190000000002",
+              "rac-invalid-ringword-err": "0",
+              "rac-pcs-codeword-err": "0",
+              "rac-rwcrc-err": "0"
+            },
+            "sp-stats-time": "2026-09-25T04:00:00.000000+00:00",
+            "switch-nbr-port": 3
+          }
+        ]
+      }
+    ]
+  }
+}

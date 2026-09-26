@@ -1,0 +1,26 @@
+NAME: "Chassis 1", DESCR: "Cisco Catalyst 9500 Series Chassis"
+PID: C9500-48Y4C       , VID: V02  , SN: FCW0000A0AA
+
+NAME: "Chassis 1 Power Supply Module 0", DESCR: "Cisco Catalyst 9500 Series 650W AC Power Supply"
+PID: C9K-PWR-650WAC-R  , VID: V01  , SN: ART0000A001
+
+NAME: "Chassis 1 Power Supply Module 1", DESCR: "Cisco Catalyst 9500 Series 650W AC Power Supply"
+PID: C9K-PWR-650WAC-R  , VID: V01  , SN: ART0000A002
+
+NAME: "Chassis 1 Fan Tray", DESCR: "Cisco Catalyst 9500 Series Fan Tray"
+PID: C9K-T1-FANTRAY    , VID:      , SN:
+
+NAME: "TwentyFiveGigE1/0/1", DESCR: "SFP-10GBase-SR"
+PID: SFP-10G-SR          , VID: V03  , SN: AGD0000C101
+
+NAME: "Chassis 2", DESCR: "Cisco Catalyst 9500 Series Chassis"
+PID: C9500-48Y4C       , VID: V02  , SN: FCW0000A0BB
+
+NAME: "Chassis 2 Power Supply Module 0", DESCR: "Cisco Catalyst 9500 Series 650W AC Power Supply"
+PID: C9K-PWR-650WAC-R  , VID: V01  , SN: ART0000A003
+
+NAME: "Chassis 2 Fan Tray", DESCR: "Cisco Catalyst 9500 Series Fan Tray"
+PID: C9K-T1-FANTRAY    , VID:      , SN:
+
+NAME: "TwentyFiveGigE2/0/1", DESCR: "SFP-10GBase-SR"
+PID: SFP-10G-SR          , VID: V03  , SN: AGD0000C201
