@@ -681,25 +681,29 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(older, 1)  # koops.dat only; old_subdir is a directory
 
     def test_crash_files_healthy_stack_with_tracelogs_everywhere_is_empty(self):
-        # The field scenario end to end: every member's filesystem holds only a
-        # freshly written tracelogs/ directory (the 4-member 9300 in the field),
-        # which is the healthy state.
+        # The field scenario end to end (the 4-member 9300 in the field): every
+        # member's filesystem holds a freshly written tracelogs/ and
+        # license_evlog/ directory plus a zero-byte koops.dat from 2019, which
+        # is the healthy state. crashinfo-1: on the active answers with the
+        # alias's own "Directory of crashinfo:/" header.
         from datetime import datetime, timezone
 
-        now = datetime(2026, 9, 24, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 25, tzinfo=timezone.utc)
 
-        def listing(filesystem):
+        def listing(header):
             return (
-                "Directory of %s/\n"
-                "30177  drwx             4096  Sep 24 2026 22:40:12 +00:00  tracelogs\n"
-                "\n11353194496 bytes total (10000000000 bytes free)" % (filesystem,)
+                "Directory of %s/\n\n"
+                "70993  drwx            16384  Sep 24 2026 23:28:44 -04:00  tracelogs\n"
+                "78881  drwx             4096  Oct 15 2025 22:01:40 -04:00  license_evlog\n"
+                "   11  -rw-                0  Jul 31 2019 00:59:17 -04:00  koops.dat\n"
+                "\n1651314688 bytes total (1517166592 bytes free)" % (header,)
             )
 
         ctx = _StackCtx(
             {
-                "dir crashinfo:": listing("crashinfo:"),
-                "dir stby-crashinfo:": listing("stby-crashinfo:"),
                 "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-1:": listing("crashinfo:"),
+                "dir crashinfo-2:": listing("crashinfo-2:"),
                 "dir crashinfo-3:": listing("crashinfo-3:"),
                 "dir crashinfo-4:": listing("crashinfo-4:"),
             }
@@ -708,24 +712,25 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(result["normalized"], {})
         self.assertEqual(
             result["context"]["filesystems_listed"],
-            ["crashinfo:", "stby-crashinfo:", "crashinfo-3:", "crashinfo-4:"],
+            ["crashinfo-1:", "crashinfo-2:", "crashinfo-3:", "crashinfo-4:"],
         )
-        self.assertEqual(result["context"]["older_files_ignored"], 0)
+        self.assertEqual(result["context"]["older_files_ignored"], 4)
 
-    def test_crash_files_stack_lists_every_other_member(self):
-        # Members 1 (active) and 2 (standby) are the crashinfo:/stby-crashinfo:
-        # aliases and must never be listed again by number; members 3 and 4 have
-        # their own filesystems. An old dump on member 3 is counted, never keyed.
+    def test_crash_files_stack_lists_every_member_by_number(self):
+        # Every member, the active and standby included, is listed on its own
+        # crashinfo-<N>: and keyed member<N>; the role aliases are never asked
+        # when the numbered filesystems answer. An old dump is counted, never
+        # keyed.
         from datetime import datetime, timezone
 
         now = datetime(2026, 8, 24, tzinfo=timezone.utc)
         ctx = _StackCtx(
             {
-                "dir crashinfo:": _dir_listing(
+                "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-1:": _dir_listing(
                     "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
                 ),
-                "dir stby-crashinfo:": _dir_listing("stby-crashinfo:"),
-                "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-2:": _dir_listing("crashinfo-2:"),
                 "dir crashinfo-3:": _dir_listing(
                     "crashinfo-3:",
                     ("system-report_3_20260823.tar.gz", "Aug 23 2026"),
@@ -738,9 +743,9 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(
             ctx.commands,
             [
-                "dir crashinfo:",
-                "dir stby-crashinfo:",
                 "show switch detail",
+                "dir crashinfo-1:",
+                "dir crashinfo-2:",
                 "dir crashinfo-3:",
                 "dir crashinfo-4:",
             ],
@@ -748,7 +753,7 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         self.assertEqual(
             result["normalized"],
             {
-                "active|system-report_1_20260822.tar.gz": {"modified": "2026-08-22"},
+                "member1|system-report_1_20260822.tar.gz": {"modified": "2026-08-22"},
                 "member3|system-report_3_20260823.tar.gz": {"modified": "2026-08-23"},
             },
         )
@@ -758,20 +763,54 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
                 "older_files_ignored": 1,
                 "recent_window_days": 7,
                 "filesystems_listed": [
-                    "crashinfo:",
-                    "stby-crashinfo:",
+                    "crashinfo-1:",
+                    "crashinfo-2:",
                     "crashinfo-3:",
                     "crashinfo-4:",
                 ],
                 "active_member": 1,
                 "standby_member": 2,
+                # No payload canned for the supplement: the fake answers None,
+                # which is how the context reads an ok_404 miss.
+                "q_filesystem": {"status": "not served (404)"},
             },
         )
         self.assertIn("show switch detail", result["raw"])
+        self.assertIsNone(result["raw"]["q-filesystem"])
+        self.assertNotIn("note", result["raw"])
 
-    def test_crash_files_alias_failure_falls_back_to_the_member_filesystem(self):
-        # stby-crashinfo: errors, so the standby's own crashinfo-2: is listed
-        # instead; a provisioned member's filesystem does not exist and is
+    def test_crash_files_keys_survive_a_switchover(self):
+        # The same old-but-recent file on member 1, captured before and after
+        # a switchover that made member 2 active: the key must not move.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        before = _loader.fixture_text("iosxe_show_switch_detail.txt")
+        after = before.replace("*1       Active ", "*1       Standby").replace(
+            " 2       Standby", " 2       Active "
+        )
+        views = []
+        for detail in (before, after):
+            ctx = _StackCtx(
+                {
+                    "show switch detail": detail,
+                    "dir crashinfo-1:": _dir_listing(
+                        "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
+                    ),
+                    "dir crashinfo-2:": _dir_listing("crashinfo-2:"),
+                    "dir crashinfo-3:": _dir_listing("crashinfo-3:"),
+                    "dir crashinfo-4:": _dir_listing("crashinfo-4:"),
+                }
+            )
+            views.append(checks._collect_crash_files(ctx, now=now))
+        self.assertEqual(views[0]["normalized"], views[1]["normalized"])
+        self.assertEqual(views[1]["context"]["active_member"], 2)
+        self.assertEqual(views[1]["context"]["standby_member"], 1)
+
+    def test_crash_files_numbered_failure_falls_back_to_the_role_alias(self):
+        # crashinfo-1: and crashinfo-2: do not answer, so the active and standby
+        # fall back to crashinfo: / stby-crashinfo: — still keyed by member
+        # number. A provisioned member's filesystem does not exist and is
         # recorded in raw plus context, never a failure.
         from datetime import datetime, timezone
 
@@ -784,32 +823,80 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
             " 3       Member   00a1.b2c3.0300     1      V02     Ready\n"
             " 4       Member   0000.0000.0000     1              Provisioned\n"
         )
+        missing = "%%Error opening %s/ (No such device)"
         ctx = _StackCtx(
             {
-                "dir crashinfo:": _dir_listing("crashinfo:"),
-                "dir stby-crashinfo:": "%Error opening stby-crashinfo:/ (No such device)",
                 "show switch detail": detail,
-                "dir crashinfo-2:": _dir_listing(
-                    "crashinfo-2:", ("system-report_2_20260823.tar.gz", "Aug 23 2026")
+                "dir crashinfo-1:": missing % ("crashinfo-1:",),
+                "dir crashinfo:": _dir_listing("crashinfo:"),
+                "dir crashinfo-2:": missing % ("crashinfo-2:",),
+                "dir stby-crashinfo:": _dir_listing(
+                    "stby-crashinfo:", ("system-report_2_20260823.tar.gz", "Aug 23 2026")
                 ),
                 "dir crashinfo-3:": _dir_listing("crashinfo-3:"),
-                "dir crashinfo-4:": "%Error opening crashinfo-4:/ (No such device)",
+                "dir crashinfo-4:": missing % ("crashinfo-4:",),
             }
         )
         result = checks._collect_crash_files(ctx, now=now)
         self.assertEqual(
-            ctx.commands[2:],
-            ["show switch detail", "dir crashinfo-2:", "dir crashinfo-3:", "dir crashinfo-4:"],
+            ctx.commands,
+            [
+                "show switch detail",
+                "dir crashinfo-1:",
+                "dir crashinfo:",
+                "dir crashinfo-2:",
+                "dir stby-crashinfo:",
+                "dir crashinfo-3:",
+                "dir crashinfo-4:",
+            ],
         )
         self.assertEqual(
             result["normalized"],
             {"member2|system-report_2_20260823.tar.gz": {"modified": "2026-08-23"}},
         )
         self.assertEqual(
-            result["context"]["filesystems_listed"], ["crashinfo:", "crashinfo-2:", "crashinfo-3:"]
+            result["context"]["filesystems_listed"],
+            ["crashinfo:", "stby-crashinfo:", "crashinfo-3:"],
         )
         self.assertEqual(result["context"]["members_not_listed"], [4])
         self.assertEqual(result["context"]["standby_member"], 2)
+
+    def test_dir_listed_keys_on_the_listing_header(self):
+        # The open-error spelling carries the word "directory"; it once passed
+        # for a listing. A real listing may hold a file named like an error.
+        self.assertFalse(
+            checks._dir_listed("%Error opening crashinfo-1:/ (No such file or directory)")
+        )
+        self.assertFalse(checks._dir_listed("%Error opening crashinfo-4:/ (No such device)"))
+        self.assertFalse(checks._dir_listed("% Invalid input detected at '^' marker."))
+        self.assertFalse(checks._dir_listed(""))
+        self.assertFalse(checks._dir_listed(None))
+        self.assertTrue(checks._dir_listed(_dir_listing("crashinfo-3:")))
+        self.assertTrue(
+            checks._dir_listed(_dir_listing("crashinfo:", ("error_report.txt", "Aug 22 2026")))
+        )
+
+    def test_crash_files_no_such_file_or_directory_falls_back_to_the_alias(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        ctx = _StackCtx(
+            {
+                "show switch detail": _loader.fixture_text("iosxe_show_switch_detail.txt"),
+                "dir crashinfo-1:": "%Error opening crashinfo-1:/ (No such file or directory)",
+                "dir crashinfo:": _dir_listing(
+                    "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
+                ),
+                "dir crashinfo-2:": _dir_listing("crashinfo-2:"),
+                "dir crashinfo-3:": _dir_listing("crashinfo-3:"),
+                "dir crashinfo-4:": _dir_listing("crashinfo-4:"),
+            }
+        )
+        result = checks._collect_crash_files(ctx, now=now)
+        self.assertEqual(ctx.commands[1:3], ["dir crashinfo-1:", "dir crashinfo:"])
+        self.assertEqual(list(result["normalized"]), ["member1|system-report_1_20260822.tar.gz"])
+        self.assertEqual(result["context"]["filesystems_listed"][0], "crashinfo:")
+        self.assertNotIn("members_not_listed", result["context"])
 
     def test_crash_files_non_stack_platform_lists_only_the_aliases(self):
         from datetime import datetime, timezone
@@ -817,21 +904,34 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         now = datetime(2026, 8, 24, tzinfo=timezone.utc)
         ctx = _StackCtx(
             {
+                "show switch detail": "% Invalid input detected at '^' marker.",
                 "dir crashinfo:": _dir_listing(
                     "crashinfo:", ("system-report_1_20260822.tar.gz", "Aug 22 2026")
                 ),
                 "dir stby-crashinfo:": _dir_listing("stby-crashinfo:"),
-                "show switch detail": "% Invalid input detected at '^' marker.",
             }
         )
         result = checks._collect_crash_files(ctx, now=now)
         self.assertEqual(
-            ctx.commands, ["dir crashinfo:", "dir stby-crashinfo:", "show switch detail"]
+            ctx.commands, ["show switch detail", "dir crashinfo:", "dir stby-crashinfo:"]
         )
         self.assertEqual(list(result["normalized"]), ["active|system-report_1_20260822.tar.gz"])
         self.assertEqual(result["context"]["filesystems_listed"], ["crashinfo:", "stby-crashinfo:"])
         self.assertNotIn("active_member", result["context"])
         self.assertNotIn("members_not_listed", result["context"])
+
+    def test_crash_files_ignore_removals(self):
+        # A file that ages out of the recency window between captures reads
+        # as REMOVED; only an ADDED file means a crash, so removals never diff.
+        diffcore = _loader.diffcore
+        compare = registry.CHECKS["iosxe_crash_files"].compare
+        aged = {"member1|system-report_1_20260818.tar.gz": {"modified": "2026-08-18"}}
+        diff = diffcore.diff_check(aged, {}, compare)
+        self.assertEqual(diff["result"], "pass")
+        self.assertEqual(diff["removed"], [])
+        self.assertEqual(len(diff["removed_ignored"]), 1)
+        fresh = {"member3|system-report_3_20260825.tar.gz": {"modified": "2026-08-25"}}
+        self.assertEqual(diffcore.diff_check(aged, fresh, compare)["result"], "diffs")
 
     def test_crash_files_nothing_listable_is_not_present(self):
         ctx = _StackCtx(
@@ -843,6 +943,605 @@ class TestOpticsAndCrashFiles(unittest.TestCase):
         )
         with self.assertRaises(checks.SkipCheck):
             checks._collect_crash_files(ctx)
+        # The dir listings alone decide presence: the q-filesystem supplement
+        # is never read for a check that is not present.
+        self.assertEqual(ctx.paths, [])
+
+    def test_crash_dir_dates_are_utc_from_the_listing_offset(self):
+        # Field format (4-member 9300): `dir` prints the device's local time
+        # with its offset, -04:00. 22:15 local is 02:15 UTC the next day, and
+        # the window is cut on UTC dates, so a file whose printed local date
+        # is just outside the 7-day window can be inside it. A line printed
+        # without an offset keeps its printed date, and its name is never
+        # split.
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        output = (
+            "Directory of crashinfo-2:/\n\n"
+            "70993  drwx    16384  Aug 23 2026 23:28:44 -04:00  tracelogs\n"
+            "   14  -rw-  1234567  Aug 22 2026 22:15:03 -04:00  "
+            "system-report_2_20260823-021503-UTC.tar.gz\n"
+            "   15  -rw-     2048  Aug 16 2026 21:30:00 -04:00  crashinfo_RP_00_00_20260817\n"
+            "   16  -rw-     2048  Aug 16 2026 19:59:59 -04:00  crashinfo_RP_00_00_20260816\n"
+            "   11  -rw-        0  Jul 31 2019 00:59:17 -04:00  koops.dat\n"
+            "   17  -rw-      512  Aug 23 2026 10:00:00  printed_without_offset.txt\n"
+            "\n1651314688 bytes total (1517166592 bytes free)"
+        )
+        recent, older = checks._parse_crash_dir(output, now, 7)
+        self.assertEqual(
+            recent,
+            {
+                "system-report_2_20260823-021503-UTC.tar.gz": {"modified": "2026-08-23"},
+                "crashinfo_RP_00_00_20260817": {"modified": "2026-08-17"},
+                "printed_without_offset.txt": {"modified": "2026-08-23"},
+            },
+        )
+        self.assertEqual(older, 2)  # the 19:59:59 local file (UTC Aug 16) and koops.dat
+
+
+class TestCrashFilesQFilesystem(unittest.TestCase):
+    """iosxe_crash_files' q-filesystem supplement, and the shakedown's summary of it.
+
+    Both q-filesystem fixtures are SYNTHETIC, shaped per the 17.9.1 YANG
+    (Cisco-IOS-XE-platform-software-oper, revision 2022-07-01), and NOT field
+    captures: iosxe_q_filesystem_model_shape.json is the check's narrowed read
+    and iosxe_q_filesystem_full_model_shape.json the shakedown's full list
+    read. Which locations, partitions and core files a 9300 really reports is
+    what the next shakedown settles; sanitized captures replace them then.
+    """
+
+    REPORT = "system-report_1_20260823-021503-UTC.tar.gz"
+    REPORT_KEY = "member1|" + REPORT
+    CORE_KEY = "member3|linux_iosd-imag_3_RP_0_4242_20260823-101010-UTC.core.gz"
+
+    @staticmethod
+    def _now():
+        from datetime import datetime, timezone
+
+        return datetime(2026, 8, 24, tzinfo=timezone.utc)
+
+    @classmethod
+    def _member1_listing(cls):
+        # crashinfo-1: on the active answers with the alias's own header, and
+        # prints local time: 22:15:03 at -04:00 is 02:15:03 UTC on Aug 23.
+        return (
+            "Directory of crashinfo:/\n\n"
+            "70993  drwx    16384  Aug 23 2026 21:04:12 -04:00  tracelogs\n"
+            "   14  -rw-  1234567  Aug 22 2026 22:15:03 -04:00  %s\n"
+            "\n1651314688 bytes total (1517166592 bytes free)" % (cls.REPORT,)
+        )
+
+    @classmethod
+    def _stack_ctx(cls, detail=None, member1=None, payloads=None, raise_for=None, ctx_class=None):
+        if detail is None:
+            detail = _loader.fixture_text("iosxe_show_switch_detail.txt")
+        outputs = {
+            "show switch detail": detail,
+            "dir crashinfo-1:": cls._member1_listing() if member1 is None else member1,
+            "dir crashinfo:": _dir_listing("crashinfo:"),
+            "dir crashinfo-2:": _dir_listing("crashinfo-2:"),
+            "dir crashinfo-3:": _dir_listing("crashinfo-3:"),
+            "dir crashinfo-4:": _dir_listing("crashinfo-4:"),
+        }
+        return (ctx_class or _StackCtx)(outputs, payloads=payloads, raise_for=raise_for)
+
+    @staticmethod
+    def _one_location(chassis, *core_files):
+        return {
+            "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+                "q-filesystem": [
+                    {
+                        "fru": "fru-rp",
+                        "slot": 0,
+                        "bay": 0,
+                        "chassis": chassis,
+                        "partitions": [{"name": "bootflash:"}],
+                        "core-files": list(core_files),
+                    }
+                ]
+            }
+        }
+
+    def test_core_files_merge_with_dir_keys_and_shared_files_collapse(self):
+        """Model-shaped fixture, NOT a field capture: chassis N read as switch N.
+
+        The chassis-1 system report is also on member 1's dir listing, so the
+        two sources collapse into one key with one value; member 3's core sits
+        in core/, which the dir listing never descends into, so only the model
+        keys it. Old cores (chassis 1 and 4) are counted, never keyed.
+        """
+        payload = _loader.fixture_json("iosxe_q_filesystem_model_shape.json")
+        ctx = self._stack_ctx(payloads={checks._Q_FS_PATH: payload})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(ctx.paths, [checks._Q_FS_PATH])
+        self.assertEqual(
+            ctx.commands,
+            [
+                "show switch detail",
+                "dir crashinfo-1:",
+                "dir crashinfo-2:",
+                "dir crashinfo-3:",
+                "dir crashinfo-4:",
+            ],
+        )
+        self.assertEqual(
+            result["normalized"],
+            {
+                self.REPORT_KEY: {"modified": "2026-08-23"},
+                self.CORE_KEY: {"modified": "2026-08-23"},
+            },
+        )
+        both = ["bootflash:", "crashinfo:"]
+        self.assertEqual(
+            result["context"]["q_filesystem"],
+            {
+                "status": "served",
+                "locations": {
+                    "fru-rp/0/0/1": {"core_files": 2, "partitions": both, "member": 1},
+                    "fru-rp/0/0/2": {"core_files": 0, "partitions": both, "member": 2},
+                    "fru-rp/0/0/3": {"core_files": 1, "partitions": both, "member": 3},
+                    "fru-rp/0/0/4": {"core_files": 1, "partitions": ["crashinfo:"], "member": 4},
+                },
+                "core_files_keyed": 2,
+                "core_files_older": 2,
+                "keys_also_listed_by_dir": 1,
+                "keys_from_model_only": 1,
+                "dates_disagreeing_with_dir": 0,
+            },
+        )
+        self.assertEqual(result["context"]["older_files_ignored"], 0)
+        self.assertEqual(result["raw"]["q-filesystem"], payload)
+        self.assertNotIn("note", result["raw"])
+
+    def test_a_shared_key_keeps_the_dir_value_and_counts_the_date_disagreement(self):
+        # Both sources name member 1's system report, but the model dates it a
+        # UTC day before the dir listing's mtime: the dir listing, the
+        # field-verified source, keeps its value, and the disagreement is
+        # counted as evidence about what the model's time leaf means.
+        payload = self._one_location(
+            1, {"filename": self.REPORT, "time": "2026-08-22T01:00:00+00:00"}
+        )
+        ctx = self._stack_ctx(payloads={checks._Q_FS_PATH: payload})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+        q_filesystem = result["context"]["q_filesystem"]
+        self.assertEqual(q_filesystem["keys_also_listed_by_dir"], 1)
+        self.assertEqual(q_filesystem["keys_from_model_only"], 0)
+        self.assertEqual(q_filesystem["dates_disagreeing_with_dir"], 1)
+
+    def test_entries_meeting_on_one_key_resolve_alike_in_any_listed_order(self):
+        # Two locations share chassis 1 and one file name: whichever order the
+        # device lists them in, the key keeps the value of the location whose
+        # text sorts first (fru-fp before fru-rp). One name in two directories
+        # resolves by filename order the same way. core_files_keyed counts
+        # every in-window entry, the ones that met another on a key included.
+        rp = {
+            "fru": "fru-rp",
+            "slot": 0,
+            "bay": 0,
+            "chassis": 1,
+            "partitions": [{"name": "crashinfo:"}, {"name": "bootflash:"}],
+            "core-files": [
+                {"filename": "/crashinfo/core/shared.core.gz", "time": "2026-08-23T10:00:00Z"},
+                {"filename": "/crashinfo/core/dup.core.gz", "time": "2026-08-22T10:00:00Z"},
+                {"filename": "/bootflash/core/dup.core.gz", "time": "2026-08-21T10:00:00Z"},
+                # The colon spellings key by the file's own name too.
+                {"filename": "crashinfo:core/colon_path.core.gz", "time": "2026-08-23T00:00:00Z"},
+                {"filename": "crashinfo:colon_top.core.gz", "time": "2026-08-23T00:00:00Z"},
+            ],
+        }
+        fp = {
+            "fru": "fru-fp",
+            "slot": 0,
+            "bay": 0,
+            "chassis": 1,
+            "partitions": {"name": "bootflash:"},
+            "core-files": {
+                "filename": "/bootflash/core/shared.core.gz",
+                "time": "2026-08-20T10:00:00Z",
+            },
+        }
+        results = [
+            checks._q_filesystem_core_files(
+                {
+                    "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+                        "q-filesystem": order
+                    }
+                },
+                {"1"},
+                self._now(),
+                7,
+            )
+            for order in ([rp, fp], [fp, rp])
+        ]
+        self.assertEqual(results[0], results[1])
+        recent, locations, keyed, older = results[0]
+        self.assertEqual(
+            recent,
+            {
+                "member1|colon_path.core.gz": {"modified": "2026-08-23"},
+                "member1|colon_top.core.gz": {"modified": "2026-08-23"},
+                "member1|dup.core.gz": {"modified": "2026-08-21"},
+                "member1|shared.core.gz": {"modified": "2026-08-20"},
+            },
+        )
+        self.assertEqual((keyed, older), (6, 0))
+        self.assertEqual(
+            locations,
+            {
+                "fru-fp/0/0/1": {"core_files": 1, "partitions": ["bootflash:"], "member": 1},
+                "fru-rp/0/0/1": {
+                    "core_files": 5,
+                    "partitions": ["bootflash:", "crashinfo:"],
+                    "member": 1,
+                },
+            },
+        )
+
+    def test_the_check_reads_only_the_narrowed_fields_and_tolerates_404(self):
+        # The one guard against an unbounded read: partition-content lists
+        # every file on every partition, so the check's read is pinned to the
+        # location keys, core-files and partition names, asked with ok_404.
+        # The full list path belongs to the shakedown alone.
+        self.assertEqual(
+            checks._Q_FS_PATH,
+            "/data/Cisco-IOS-XE-platform-software-oper:cisco-platform-software"
+            "?fields=q-filesystem(fru;slot;bay;chassis;core-files;partitions(name))",
+        )
+        self.assertNotIn("partition-content", checks._Q_FS_PATH)
+
+        class _KwargsCtx(_StackCtx):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.get_kwargs = []
+
+            def get(self, path, **kwargs):
+                self.get_kwargs.append(kwargs)
+                return super().get(path, **kwargs)
+
+        ctx = self._stack_ctx(ctx_class=_KwargsCtx)
+        checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(ctx.paths, [checks._Q_FS_PATH])
+        self.assertEqual(ctx.get_kwargs, [{"ok_404": True}])
+
+    def test_location_keys_when_chassis_is_not_a_roster_member(self):
+        core = {
+            "filename": "/crashinfo/core/fed_RP_0_99_20260823-101010-UTC.core.gz",
+            "time": "2026-08-23T10:10:10+00:00",
+        }
+        # A roster, but none of its member numbers is the location's chassis.
+        ctx = self._stack_ctx(payloads={checks._Q_FS_PATH: self._one_location(-1, core)})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(
+            result["normalized"],
+            {
+                self.REPORT_KEY: {"modified": "2026-08-23"},
+                "core@fru-rp/0/0/-1|fed_RP_0_99_20260823-101010-UTC.core.gz": {
+                    "modified": "2026-08-23"
+                },
+            },
+        )
+        self.assertEqual(
+            result["context"]["q_filesystem"]["locations"],
+            {"fru-rp/0/0/-1": {"core_files": 1, "partitions": ["bootflash:"]}},
+        )
+        # No roster at all: even chassis 1 keys by the location, beside the
+        # role-keyed alias listings.
+        ctx = _StackCtx(
+            {
+                "show switch detail": "% Invalid input detected at '^' marker.",
+                "dir crashinfo:": _dir_listing("crashinfo:"),
+                "dir stby-crashinfo:": _dir_listing("stby-crashinfo:"),
+            },
+            payloads={checks._Q_FS_PATH: self._one_location(1, core)},
+        )
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(
+            list(result["normalized"]),
+            ["core@fru-rp/0/0/1|fed_RP_0_99_20260823-101010-UTC.core.gz"],
+        )
+
+    def test_core_file_window_is_utc_and_unreadable_times_fail_safe(self):
+        # The bare list-read shape, with its one entry as a bare object.
+        payload = {
+            "Cisco-IOS-XE-platform-software-oper:q-filesystem": {
+                "fru": "fru-rp",
+                "slot": 0,
+                "bay": 0,
+                "chassis": 1,
+                "core-files": [
+                    {"filename": "a_inside.core.gz", "time": "2026-08-17T01:30:00+00:00"},
+                    {"filename": "b_outside.core.gz", "time": "2026-08-16T23:59:59Z"},
+                    # 21:30 at -04:00 is 01:30 UTC on Aug 17: inside.
+                    {"filename": "c_offset.core.gz", "time": "2026-08-16T21:30:00-04:00"},
+                    {"filename": "d_unreadable.core.gz", "time": "yesterday"},
+                    {"filename": "e_no_time.core.gz"},
+                ],
+            }
+        }
+        recent, locations, keyed, older = checks._q_filesystem_core_files(
+            payload, {"1", "2"}, self._now(), 7
+        )
+        self.assertEqual(
+            recent,
+            {
+                "member1|a_inside.core.gz": {"modified": "2026-08-17"},
+                "member1|c_offset.core.gz": {"modified": "2026-08-17"},
+                "member1|d_unreadable.core.gz": {"modified": "yesterday"},
+                # A string like every other value: never a type change when
+                # the dir listing dates the same key in another capture.
+                "member1|e_no_time.core.gz": {"modified": "unknown"},
+            },
+        )
+        self.assertEqual((keyed, older), (4, 1))
+        self.assertEqual(
+            locations, {"fru-rp/0/0/1": {"core_files": 5, "partitions": [], "member": 1}}
+        )
+
+    def test_model_not_served_leaves_the_dir_view_untouched(self):
+        ctx = self._stack_ctx()
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(ctx.paths, [checks._Q_FS_PATH])
+        self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+        context = dict(result["context"])
+        self.assertEqual(context.pop("q_filesystem"), {"status": "not served (404)"})
+        self.assertEqual(
+            context,
+            {
+                "older_files_ignored": 0,
+                "recent_window_days": 7,
+                "filesystems_listed": [
+                    "crashinfo-1:",
+                    "crashinfo-2:",
+                    "crashinfo-3:",
+                    "crashinfo-4:",
+                ],
+                "active_member": 1,
+                "standby_member": 2,
+            },
+        )
+        self.assertIsNone(result["raw"]["q-filesystem"])
+        self.assertNotIn("note", result["raw"])
+
+    def test_transport_error_is_a_note_and_the_check_still_succeeds(self):
+        failure = ConnectionError("read timed out")
+        ctx = self._stack_ctx(raise_for={checks._Q_FS_PATH: failure})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+        self.assertEqual(result["context"]["q_filesystem"], {"status": "read failed"})
+        self.assertIsNone(result["raw"]["q-filesystem"])
+        self.assertIn("q-filesystem supplement failed: read timed out", result["raw"]["note"])
+
+    def test_rejected_narrowed_read_is_recorded_and_never_retried_unnarrowed(self):
+        class RestconfError(Exception):
+            def __init__(self, message, status_code=None):
+                super().__init__(message)
+                self.status_code = status_code
+
+        rejection = RestconfError("GET %s: HTTP 400" % (checks._Q_FS_PATH,), status_code=400)
+        ctx = self._stack_ctx(raise_for={checks._Q_FS_PATH: rejection})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(ctx.paths, [checks._Q_FS_PATH])
+        self.assertEqual(result["context"]["q_filesystem"], {"status": "rejected (HTTP 400)"})
+        self.assertIn("not retried unnarrowed", result["raw"]["note"])
+        self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+
+        # Only a 400 is a verdict on the fields filter (how a release refuses
+        # one): an auth refusal, a DMI backend 5xx or a non-JSON 2xx is a
+        # failed read, never reported as a rejected narrowing.
+        for status_code, status in (
+            (403, "read failed (HTTP 403)"),
+            (500, "read failed (HTTP 500)"),
+            (200, "read failed"),
+        ):
+            failure = RestconfError(
+                "GET %s: HTTP %d" % (checks._Q_FS_PATH, status_code), status_code=status_code
+            )
+            ctx = self._stack_ctx(raise_for={checks._Q_FS_PATH: failure})
+            result = checks._collect_crash_files(ctx, now=self._now())
+            self.assertEqual(ctx.paths, [checks._Q_FS_PATH])
+            self.assertEqual(result["context"]["q_filesystem"], {"status": status})
+            self.assertEqual(
+                result["raw"]["note"], "q-filesystem supplement failed: %s" % (failure,)
+            )
+            self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+
+    def test_boundary_year_times_fail_safe_and_never_fail_the_check(self):
+        # A time its offset shifts past the calendar's edge raises
+        # OverflowError, not ValueError. The dir listing keeps the printed
+        # date (year 1 is old, year 9999 recent), an absurd day fails safe as
+        # recent with its raw text, and the model's time counts as
+        # unparseable: recent, with its raw text. Nothing fails the check.
+        member1 = (
+            "Directory of crashinfo:/\n\n"
+            "   14  -rw-  1234  Jan 01 0001 00:00:00 +05:00  year_one.bin\n"
+            "   15  -rw-  1234  Dec 31 9999 23:00:00 -05:00  year_max.bin\n"
+            "   16  -rw-  1234  Aug 99999999999999999999 2026 10:00:00 -04:00  huge_day.bin\n"
+            "\n1651314688 bytes total (1517166592 bytes free)"
+        )
+        payload = self._one_location(
+            1,
+            {"filename": "year_one.core.gz", "time": "0001-01-01T00:00:00+05:00"},
+            {"filename": "year_max.core.gz", "time": "9999-12-31T23:00:00-05:00"},
+        )
+        ctx = self._stack_ctx(member1=member1, payloads={checks._Q_FS_PATH: payload})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(
+            result["normalized"],
+            {
+                "member1|year_max.bin": {"modified": "9999-12-31"},
+                "member1|huge_day.bin": {"modified": "Aug 99999999999999999999 2026"},
+                "member1|year_one.core.gz": {"modified": "0001-01-01T00:00:00+05:00"},
+                "member1|year_max.core.gz": {"modified": "9999-12-31T23:00:00-05:00"},
+            },
+        )
+        self.assertEqual(result["context"]["older_files_ignored"], 1)  # year_one.bin
+        self.assertEqual(result["context"]["q_filesystem"]["status"], "served")
+        self.assertEqual(result["context"]["q_filesystem"]["core_files_keyed"], 2)
+
+    def test_a_parse_failure_is_a_status_and_the_dir_view_survives(self):
+        # Parsing unverified device data never fails the check either. A bare
+        # JSON Infinity decodes to a float that int() refuses with
+        # OverflowError: the supplement records the failure beside its
+        # payload, and the dir view stands as it would without the model.
+        payload = self._one_location(float("inf"), {"filename": "x.core.gz"})
+        ctx = self._stack_ctx(payloads={checks._Q_FS_PATH: payload})
+        result = checks._collect_crash_files(ctx, now=self._now())
+        self.assertEqual(result["normalized"], {self.REPORT_KEY: {"modified": "2026-08-23"}})
+        self.assertEqual(result["context"]["q_filesystem"], {"status": "parse failed"})
+        self.assertIs(result["raw"]["q-filesystem"], payload)
+        self.assertTrue(
+            result["raw"]["note"].startswith(
+                "q-filesystem supplement could not be parsed: OverflowError:"
+            )
+        )
+
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        class AbortingEntry(dict):
+            # The Celery abort signal is asynchronous and can land mid-parse;
+            # the parse guard re-raises it like the read's.
+            def get(self, key, default=None):
+                raise SoftTimeLimitExceeded()
+
+        aborting = {
+            "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+                "q-filesystem": [AbortingEntry()]
+            }
+        }
+        ctx = self._stack_ctx(payloads={checks._Q_FS_PATH: aborting})
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_crash_files(ctx, now=self._now())
+
+    def test_supplement_never_swallows_the_celery_abort_signal(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        ctx = self._stack_ctx(raise_for={checks._Q_FS_PATH: SoftTimeLimitExceeded()})
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_crash_files(ctx, now=self._now())
+
+    def test_keys_hold_across_a_switchover_and_whichever_source_answered(self):
+        payload = _loader.fixture_json("iosxe_q_filesystem_model_shape.json")
+        before = _loader.fixture_text("iosxe_show_switch_detail.txt")
+        after = before.replace("*1       Active ", "*1       Standby").replace(
+            " 2       Standby", " 2       Active "
+        )
+        views = [
+            checks._collect_crash_files(
+                self._stack_ctx(detail=detail, payloads={checks._Q_FS_PATH: payload}),
+                now=self._now(),
+            )["normalized"]
+            for detail in (before, after)
+        ]
+        self.assertEqual(views[0], views[1])
+
+        # The shared file's key and value are the same whether only the dir
+        # listing saw it (model not served) or only the model did (member 1's
+        # filesystems not listable), so the two captures diff to nothing.
+        missing = "%Error opening crashinfo:/ (No such device)"
+        dir_only = self._stack_ctx()
+        dir_only_view = checks._collect_crash_files(dir_only, now=self._now())["normalized"]
+        model_only = self._stack_ctx(
+            member1=missing,
+            payloads={
+                checks._Q_FS_PATH: self._one_location(
+                    1, {"filename": self.REPORT, "time": "2026-08-23T02:15:03+00:00"}
+                )
+            },
+        )
+        model_only.outputs["dir crashinfo:"] = missing
+        model_only_result = checks._collect_crash_files(model_only, now=self._now())
+        self.assertEqual(model_only_result["context"]["members_not_listed"], [1])
+        self.assertEqual(model_only_result["normalized"], dir_only_view)
+        compare = registry.CHECKS["iosxe_crash_files"].compare
+        diff = _loader.diffcore.diff_check(dir_only_view, model_only_result["normalized"], compare)
+        self.assertEqual(diff["result"], "pass")
+
+    def test_shakedown_summary_of_the_full_read(self):
+        """Model-shaped fixture, NOT a field capture: the shakedown's full list read."""
+        summary = checks._summarize_q_filesystem(
+            _loader.fixture_json("iosxe_q_filesystem_full_model_shape.json")
+        )
+        self.assertTrue(summary["served"])
+        self.assertEqual(sorted(summary["locations"]), ["fru-rp/0/0/1", "fru-rp/0/0/2"])
+        first = summary["locations"]["fru-rp/0/0/1"]
+        self.assertEqual(
+            first["partitions"],
+            {
+                "bootflash:": {"file": 2, "other": 1, "directory": 3},
+                "crashinfo:": {"directory": 2, "file": 3},
+            },
+        )
+        # Matched on the entry's own name: crashinfo's tracelogs/ files sit
+        # under a path containing "crash" and are never echoed.
+        self.assertEqual(
+            [item["full-path"] for item in first["crash_related"]],
+            [
+                "/bootflash/core",
+                "/bootflash/core/fed_1_RP_0_31337_20250102-030000-UTC.core.gz",
+                "/crashinfo/koops.dat",
+                "/crashinfo/system-report_1_20260823-021503-UTC.tar.gz",
+            ],
+        )
+        self.assertEqual(
+            first["crash_related"][2],
+            {
+                "partition": "crashinfo:",
+                "full-path": "/crashinfo/koops.dat",
+                "size": "0",
+                "type": "file",
+                "modified-time": "2019-07-31T04:59:17+00:00",
+            },
+        )
+        self.assertEqual(first["crash_related_total"], 4)
+        self.assertEqual(first["core_files"], 1)
+        self.assertEqual(
+            first["core_files_sample"],
+            [
+                {
+                    "filename": "/bootflash/core/fed_1_RP_0_31337_20250102-030000-UTC.core.gz",
+                    "time": "2025-01-02T03:00:00+00:00",
+                }
+            ],
+        )
+        # A partition with no partition-content, given as a bare object.
+        self.assertEqual(
+            summary["locations"]["fru-rp/0/0/2"],
+            {
+                "partitions": {"crashinfo:": {}},
+                "crash_related": [],
+                "crash_related_total": 0,
+                "core_files": 0,
+                "core_files_sample": [],
+            },
+        )
+
+    def test_shakedown_summary_caps_echoed_entries_and_reads_absence(self):
+        self.assertEqual(checks._summarize_q_filesystem(None), {"served": False})
+        cores = [
+            {"full-path": "/crashinfo/core/proc_%02d.core.gz" % (n,), "type": "file"}
+            for n in range(25)
+        ]
+        payload = {
+            "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+                "q-filesystem": {
+                    "fru": "fru-rp",
+                    "slot": 0,
+                    "bay": 0,
+                    "chassis": 1,
+                    "partitions": {"name": "crashinfo:", "partition-content": cores},
+                    "core-files": [{"filename": "proc_%02d.core.gz" % (n,)} for n in range(25)],
+                }
+            }
+        }
+        location = checks._summarize_q_filesystem(payload)["locations"]["fru-rp/0/0/1"]
+        self.assertEqual(len(location["crash_related"]), checks._Q_FS_SAMPLE_MAX)
+        self.assertEqual(location["crash_related_total"], 25)
+        self.assertEqual(location["core_files"], 25)
+        self.assertEqual(len(location["core_files_sample"]), checks._Q_FS_SAMPLE_MAX)
 
 
 class TestErrdisableAndPortChannels(unittest.TestCase):

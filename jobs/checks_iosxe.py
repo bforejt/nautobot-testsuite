@@ -1131,14 +1131,54 @@ _MONTHS = {
     "Nov": 11,
     "Dec": 12,
 }
-# `dir` listing line: "  14  -rw-  123456   Aug 24 2026 18:22:11 +00:00  name".
+# `dir` listing line: "  14  -rw-  123456   Aug 24 2026 18:22:11 -04:00  name".
 # The permissions column is captured so directories ("drwx") can be told
 # apart from files: field-verified on a 9300 stack, crashinfo:tracelogs is a
 # directory rewritten by routine logging and read as a same-day "crash" on
-# every member until directories were excluded.
+# every member until directories were excluded. The clock and the UTC offset
+# are captured too: the field stack prints its local time ("-04:00"), and a
+# file's date is keyed in UTC so both crash-file sources date it alike. The
+# offset is optional, and a name is never split when it is missing.
 _DIR_LINE = re.compile(
-    r"^\s*\d+\s+(\S+)\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+(\d{4})\s+[\d:]+\s+\S*\s*(\S+)\s*$"
+    r"^\s*\d+\s+(\S+)\s+\d+\s+([A-Z][a-z]{2})\s+(\d+)\s+(\d{4})\s+([\d:]+)(?:\.\d+)?\s+"
+    r"(?:(\S+)\s+)?(\S+)\s*$"
 )
+
+
+def _dir_modified(month, day, year, clock, offset):
+    """UTC moment of one `dir` timestamp; None when its date does not parse.
+
+    The printed wall-clock time is the device's local time and converts with
+    the listing's own offset. A clock or offset of any other shape (or none)
+    leaves the printed date standing as a UTC date, which is how every listing
+    was read before offsets were honoured; so does a moment the offset would
+    shift past the calendar's edge (year 1 or 9999 raises OverflowError, not
+    ValueError, and must never fail the check).
+    """
+    month_num = _MONTHS.get(month)
+    if month_num is None:
+        return None
+    try:
+        printed = datetime(int(year), month_num, int(day), tzinfo=timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+    stamp = "%s %s %s" % (printed.strftime("%Y-%m-%d"), clock, offset or "")
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S %z").astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return printed
+
+
+def _window_date(moment, now, recent_days):
+    """(UTC date 'YYYY-MM-DD', inside the recency window) for an aware moment.
+
+    The cut compares UTC midnights, the window arithmetic the dir parser has
+    always used, so the dir listings and the q-filesystem model place one file
+    identically.
+    """
+    utc = moment.astimezone(timezone.utc)
+    midnight = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    return midnight.strftime("%Y-%m-%d"), (now - midnight).days <= recent_days
 
 
 def _parse_crash_dir(cli_output, now, recent_days):
@@ -1149,8 +1189,9 @@ def _parse_crash_dir(cli_output, now, recent_days):
     dumps must never create diff noise (operator requirement). Directories
     are neither keyed nor counted: crash dumps and system reports are files,
     while a directory's date moves whenever anything inside it is written
-    (tracelogs/ on every member). Unparseable dates fail safe: included as
-    recent with the raw date string.
+    (tracelogs/ on every member). Dates are UTC (see _dir_modified), and so
+    is the window. Unparseable dates fail safe: included as recent with the
+    raw date string.
     """
     recent = {}
     older = 0
@@ -1158,29 +1199,36 @@ def _parse_crash_dir(cli_output, now, recent_days):
         match = _DIR_LINE.match(line)
         if not match:
             continue
-        perms, month, day, year, name = match.groups()
+        perms, month, day, year, clock, offset, name = match.groups()
         if perms.lower().startswith("d"):
             continue
         if name.lower() in ("core", "crashinfo:", ".", ".."):
             continue
-        month_num = _MONTHS.get(month)
-        if month_num is None:
+        moment = _dir_modified(month, day, year, clock, offset)
+        if moment is None:
             recent[name] = {"modified": "%s %s %s" % (month, day, year)}
             continue
-        modified = datetime(int(year), month_num, int(day), tzinfo=timezone.utc)
-        if (now - modified).days <= recent_days:
-            recent[name] = {"modified": modified.strftime("%Y-%m-%d")}
+        modified, is_recent = _window_date(moment, now, recent_days)
+        if is_recent:
+            recent[name] = {"modified": modified}
         else:
             older += 1
     return recent, older
 
 
 def _dir_listed(output):
-    """True when a `dir` answered with a listing — not a refusal or an open error."""
-    lowered = (output or "").lower()
+    """True when a `dir` answered with a listing — not a refusal or an open error.
+
+    A listing always opens with its "Directory of <fs>/" header, and an open
+    error never carries it. Keying on the header, not on the word "error",
+    matters both ways: "%Error opening crashinfo-1:/ (No such file or
+    directory)" contains "directory" and once passed for a listing (skipping
+    the alias fallback and hiding the member from members_not_listed), while
+    a real listing may hold a file whose name contains "error".
+    """
     if _cli_rejected(output):
         return False
-    return not ("error" in lowered and "directory" not in lowered)
+    return "directory of" in (output or "").lower()
 
 
 def _crash_listing(ctx, command, side, now, raw, normalized):
@@ -1199,6 +1247,254 @@ def _crash_listing(ctx, command, side, now, raw, normalized):
     return True, older
 
 
+# The q-filesystem list of Cisco-IOS-XE-platform-software-oper (17.9.1
+# revision 2022-07-01, advertised by the 9300; unchanged in 17.12.1 but for
+# the yang-version) is a second crash-file source, and a BEST GUESS until a
+# shakedown settles it. The model keys one entry per internal location
+# (fru/slot/bay/chassis) and gives each a core-files list (filename + time,
+# described only as "Core file information"), its partitions, and under each
+# partition a partition-content list of every file on it. What a 9300 fills
+# in is unverified: whether chassis is the stack member number, whether
+# core-files holds system reports and crashinfo files or only the process
+# and kernel cores IOS-XE writes into a core/ subdirectory (which the dir
+# listings never descend into), and whether filename is a name or a path.
+# The check reads it narrowed to the location keys, core files and partition
+# names — partition-content is unbounded and never read here; the shakedown
+# reads the full list (_summarize_q_filesystem).
+_Q_FS_PATH = (
+    "/data/Cisco-IOS-XE-platform-software-oper:cisco-platform-software"
+    "?fields=q-filesystem(fru;slot;bay;chassis;core-files;partitions(name))"
+)
+_Q_FS_LIST_PATH = "/data/Cisco-IOS-XE-platform-software-oper:cisco-platform-software/q-filesystem"
+
+# yang:date-and-time ("2026-09-25T03:28:44+00:00", fractions of any length).
+_YANG_TIME = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}:\d{2})(?:\.\d+)?\s*([Zz]|[+-]\d{2}:?\d{2})?$"
+)
+
+# Shakedown summary: entry names that look crash-related, and the cap on how
+# many entries of a list are echoed per location.
+_Q_FS_CRASH_TOKENS = ("crash", "core", "system-report", "koops")
+_Q_FS_SAMPLE_MAX = 20
+
+
+def _yang_moment(value):
+    """UTC moment of a yang:date-and-time leaf; None when absent or unparseable.
+
+    A moment UTC cannot hold (year 1 or 9999 shifted past the calendar's
+    edge) is unparseable too, never an OverflowError out of the check.
+    """
+    match = _YANG_TIME.match(str(value).strip()) if value is not None else None
+    if match is None:
+        return None
+    date, clock, offset = match.groups()
+    stamp = "%s %s %s" % (date, clock, (offset or "+00:00").upper())
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S %z").astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def _basename(path):
+    """A file's own name from either path spelling ('/crashinfo/core/x', 'crashinfo:x')."""
+    return str(path or "").rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+
+
+def _q_filesystem_entries(payload):
+    """q-filesystem list entries from the container read or the bare list read."""
+    container = _container(payload, "Cisco-IOS-XE-platform-software-oper:cisco-platform-software")
+    if isinstance(container, dict):
+        entries = container.get("q-filesystem")
+    else:
+        entries = _container(payload, "Cisco-IOS-XE-platform-software-oper:q-filesystem")
+    return [entry for entry in _aslist(entries) if isinstance(entry, dict)]
+
+
+def _fs_location(entry):
+    """'<fru>/<slot>/<bay>/<chassis>': the entry's own list keys, verbatim."""
+    return "/".join(str(entry.get(leaf)) for leaf in ("fru", "slot", "bay", "chassis"))
+
+
+def _q_filesystem_core_files(payload, member_numbers, now, recent_days):
+    """(recent {key: {modified}}, per-location summary, keyed, older) from q-filesystem.
+
+    A location whose chassis is a roster member number keys its files
+    'member<N>|<name>' — the best guess that chassis is the switch number, so
+    a file the dir listings also see collapses into their key. Any other
+    location keys 'core@<fru>/<slot>/<bay>/<chassis>|<name>', stable by
+    construction (the model's own list keys). Names are basenames, whatever
+    form filename takes. The window is the dir parser's, in UTC; a time that
+    does not parse fails safe as recent, keeping the raw text ("unknown" when
+    the leaf is absent — a string like every other value, so a key's value
+    never changes type with the source that answered). keyed/older count
+    core-file entries in and outside it. Locations are read in the order of
+    their location text and each one's files in filename order, so when two
+    entries meet on one key (two locations sharing a chassis number, or one
+    name in two directories) the value kept never depends on the order the
+    device listed them in.
+    """
+    recent = {}
+    locations = {}
+    keyed = older = 0
+    for entry in sorted(_q_filesystem_entries(payload), key=_fs_location):
+        location = _fs_location(entry)
+        chassis = _to_int(entry.get("chassis"))
+        member = chassis if chassis is not None and str(chassis) in member_numbers else None
+        prefix = "core@%s" % (location,) if member is None else "member%d" % (member,)
+        files = [item for item in _aslist(entry.get("core-files")) if isinstance(item, dict)]
+        partitions = [p for p in _aslist(entry.get("partitions")) if isinstance(p, dict)]
+        summary = {
+            "core_files": len(files),
+            "partitions": sorted(str(partition.get("name")) for partition in partitions),
+        }
+        if member is not None:
+            summary["member"] = member
+        locations[location] = summary
+        for item in sorted(files, key=lambda core: str(core.get("filename"))):
+            name = _basename(item.get("filename"))
+            if not name:
+                continue
+            moment = _yang_moment(item.get("time"))
+            if moment is None:
+                leaf = item.get("time")
+                value = {"modified": "unknown" if leaf is None else str(leaf)}
+            else:
+                modified, is_recent = _window_date(moment, now, recent_days)
+                if not is_recent:
+                    older += 1
+                    continue
+                value = {"modified": modified}
+            keyed += 1
+            recent.setdefault("%s|%s" % (prefix, name), value)
+    return recent, locations, keyed, older
+
+
+def _read_q_filesystem(ctx):
+    """(payload, status, note) of the one best-effort narrowed q-filesystem read.
+
+    Follows the stack-oper supplement: a 404 is "not served", a transport
+    failure is a note, and neither ever fails or skips the check. HTTP 400 is
+    how a release refuses a fields filter (checks_iosxe_wireless._fetch), so
+    only a 400 records the narrowed read as rejected; it is never retried
+    unnarrowed, because the full list carries partition-content, whose size
+    is unknown and unbounded. Any other HTTP error (401/403, a 5xx from the
+    DMI backend) is a failed read with its status code, not a verdict on the
+    fields expression.
+    """
+    try:
+        payload = ctx.get(_Q_FS_PATH, ok_404=True)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        status_code = getattr(exc, "status_code", None)
+        if status_code == 400:
+            note = (
+                "q-filesystem narrowed read rejected (HTTP 400), not retried unnarrowed "
+                "(partition-content is unbounded): %s" % (exc,)
+            )
+            return None, "rejected (HTTP 400)", note
+        status = "read failed"
+        if isinstance(status_code, int) and status_code >= 400:
+            status = "read failed (HTTP %d)" % (status_code,)
+        return None, status, "q-filesystem supplement failed: %s" % (exc,)
+    if payload is None:
+        return None, "not served (404)", None
+    return payload, "served", None
+
+
+def _merge_q_filesystem(ctx, member_numbers, now, raw, normalized):
+    """The q-filesystem context summary, once its keys are merged into normalized.
+
+    The model's keys merge in without displacing a dir key — a file both
+    sources see keeps the dir listing's value — and how often the two met (or
+    disagreed on the date), and how many keys only the model produced, is
+    counted: evidence for the chassis-is-member guess, and for reading an
+    ADDED key when the model answered on one side only. Nothing here fails the
+    check: parsing unverified device data under a best guess is guarded like
+    the read, and a failure is a status plus a raw note, the dir view intact.
+    """
+    payload, status, note = _read_q_filesystem(ctx)
+    raw["q-filesystem"] = payload
+    summary = {"status": status}
+    if payload is not None:
+        try:
+            found, locations, keyed, older = _q_filesystem_core_files(
+                payload, member_numbers, now, C.CRASH_RECENT_DAYS
+            )
+        except Exception as exc:  # best guess over unverified device data
+            if type(exc).__name__ == "SoftTimeLimitExceeded":
+                raise  # the Celery abort signal is never a note
+            summary["status"] = "parse failed"
+            note = "q-filesystem supplement could not be parsed: %s: %s" % (
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            shared = disagreeing = 0
+            for key, value in found.items():
+                if key not in normalized:
+                    normalized[key] = value
+                    continue
+                shared += 1
+                if normalized[key] != value:
+                    disagreeing += 1
+            summary.update(
+                {
+                    "locations": locations,
+                    "core_files_keyed": keyed,
+                    "core_files_older": older,
+                    "keys_also_listed_by_dir": shared,
+                    "keys_from_model_only": len(found) - shared,
+                    "dates_disagreeing_with_dir": disagreeing,
+                }
+            )
+    if note:
+        raw["note"] = note
+    return summary
+
+
+def _summarize_q_filesystem(payload):
+    """Per-location shape of a FULL q-filesystem read, for the Collector Shakedown.
+
+    Answers what the check's narrowed read cannot see: per location, every
+    partition's partition-content entry counts by type ({} when the partition
+    lists nothing), the entries whose own name looks crash-related (the first
+    _Q_FS_SAMPLE_MAX, verbatim, with the partition they sit on, plus the total),
+    and the core-files count with the first entries verbatim. Names, not full
+    paths, are matched: crashinfo's tracelogs/ holds hundreds of files under a
+    path containing "crash", and they would crowd out everything else.
+    """
+    if payload is None:
+        return {"served": False}
+    locations = {}
+    for entry in _q_filesystem_entries(payload):
+        partitions = {}
+        crash_related = []
+        for partition in _aslist(entry.get("partitions")):
+            if not isinstance(partition, dict):
+                continue
+            name = str(partition.get("name"))
+            counts = {}
+            for item in _aslist(partition.get("partition-content")):
+                if not isinstance(item, dict):
+                    continue
+                kind = str(item.get("type") or "unknown")
+                counts[kind] = counts.get(kind, 0) + 1
+                own_name = _basename(item.get("full-path")).lower()
+                if any(token in own_name for token in _Q_FS_CRASH_TOKENS):
+                    crash_related.append({"partition": name, **item})
+            partitions[name] = counts
+        core_files = [item for item in _aslist(entry.get("core-files")) if isinstance(item, dict)]
+        locations[_fs_location(entry)] = {
+            "partitions": partitions,
+            "crash_related": crash_related[:_Q_FS_SAMPLE_MAX],
+            "crash_related_total": len(crash_related),
+            "core_files": len(core_files),
+            "core_files_sample": core_files[:_Q_FS_SAMPLE_MAX],
+        }
+    return {"served": True, "locations": locations}
+
+
 def _collect_crash_files(ctx, now=None):
     if not ctx.has_ssh:
         raise SkipCheck("no SSH transport")
@@ -1208,41 +1504,54 @@ def _collect_crash_files(ctx, now=None):
     normalized = {}
     older_total = 0
     listed = []
-    # The two role aliases: crashinfo: is the active member's own
-    # crashinfo-<N>:, stby-crashinfo: the standby's.
-    alias_listed = {}
-    for command, side in (("dir crashinfo:", "active"), ("dir stby-crashinfo:", "stby")):
-        ok, older = _crash_listing(ctx, command, side, now, raw, normalized)
-        alias_listed[side] = ok
-        older_total += older
-        if ok:
-            listed.append(command.split(None, 1)[1])
 
-    # Every other stack member keeps its own filesystem, reachable only by
-    # number; the roster comes from `show switch detail` (rejected on
-    # platforms that do not stack — recorded in raw, nothing more to list).
-    # A member an alias already listed is never listed again by number; a
-    # member whose alias listing failed falls back to its own filesystem.
+    # The roster comes first: `show switch detail` is rejected on platforms
+    # that do not stack (recorded in raw, nothing more to learn from it).
     detail = ctx.run_ssh("show switch detail")
     raw["show switch detail"] = detail
     members = {} if _cli_rejected(detail) else _parse_switch_detail(detail)[1]
     roles = {number: str(facts.get("role") or "").lower() for number, facts in members.items()}
+
+    # Keys carry the member NUMBER, never the role: a switchover or stack
+    # reload between captures swaps which member answers crashinfo: and
+    # stby-crashinfo:, and a role-keyed file would read as removed on one
+    # side and added on the other with nothing new on flash. Field-verified
+    # on a 4-member 9300: crashinfo-<N>: answers for the active and standby
+    # members too, so every member is listed by number; the two role aliases
+    # (crashinfo: the active's own filesystem, stby-crashinfo: the standby's)
+    # are the fallback when a member's numbered filesystem does not answer.
     not_listed = []
     for number in sorted(members, key=int):
-        if roles[number] == "active" and alias_listed["active"]:
-            continue
-        if roles[number] == "standby" and alias_listed["stby"]:
-            continue
-        ok, older = _crash_listing(
-            ctx, "dir crashinfo-%s:" % (number,), "member%s" % (number,), now, raw, normalized
-        )
+        side = "member%s" % (number,)
+        filesystem = "crashinfo-%s:" % (number,)
+        ok, older = _crash_listing(ctx, "dir " + filesystem, side, now, raw, normalized)
+        alias = {"active": "crashinfo:", "standby": "stby-crashinfo:"}.get(roles[number])
+        if not ok and alias:
+            filesystem = alias
+            ok, older = _crash_listing(ctx, "dir " + alias, side, now, raw, normalized)
         older_total += older
         if ok:
-            listed.append("crashinfo-%s:" % (number,))
+            listed.append(filesystem)
         else:
             not_listed.append(int(number))
+
+    # No roster (a router, or a chassis switch with dual supervisors): only
+    # the role aliases exist, and there is no member number to key by.
+    if not members:
+        for filesystem, side in (("crashinfo:", "active"), ("stby-crashinfo:", "stby")):
+            ok, older = _crash_listing(ctx, "dir " + filesystem, side, now, raw, normalized)
+            older_total += older
+            if ok:
+                listed.append(filesystem)
+
     if not listed:
         raise SkipCheck("crashinfo filesystems not listable on this platform")
+
+    # The q-filesystem supplement (the best guess described at _Q_FS_PATH)
+    # runs once the dir listings answered: they alone decide whether the
+    # check is present.
+    q_filesystem = _merge_q_filesystem(ctx, set(members), now, raw, normalized)
+
     context = {
         "older_files_ignored": older_total,
         "recent_window_days": C.CRASH_RECENT_DAYS,
@@ -1254,6 +1563,7 @@ def _collect_crash_files(ctx, now=None):
             context[fact] = holders[0]
     if not_listed:
         context["members_not_listed"] = not_listed
+    context["q_filesystem"] = q_filesystem
     return {"raw": raw, "normalized": normalized, "context": context}
 
 
@@ -1276,7 +1586,7 @@ register(
         platform="iosxe",
         description="Crash/system-report files within the recency window, on every stack member",
         tier=1,
-        compare={"mode": "equality_set"},
+        compare={"mode": "equality_set", "ignore_removed": True},
         miss_meaning=(
             "A crash or system-report file appeared during the window — something on "
             "that chassis or stack member crashed even if it recovered before anyone "

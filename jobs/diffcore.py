@@ -16,6 +16,12 @@ A *compare config* declares how a check's normalized views are compared::
     {"mode": "equality_set",
      "fields": {"installed_prefixes": {"tolerance": {"abs": 3}}}}
 
+equality_set also takes ``"ignore_removed": True`` for views where only an
+ADDED key means anything — a recency-windowed listing (crash files) whose
+entries age out of the window between captures. Removed keys then land in a
+``removed_ignored`` bucket, kept as evidence, and never make the result
+"diffs".
+
 Modes: equality_set, equality_scalar, tolerance, presence_only, capability,
 info_only. ("activity" — counters that must advance across two post samples —
 is reserved and not yet wired.)
@@ -148,8 +154,11 @@ def _diff_equality_set(pre, post, compare):
                 changed.append({"key": key, "field": fld, "old": a, "new": b})
         else:
             changed.append({"key": key, "field": None, "old": old_val, "new": new_val})
-    result = "diffs" if (added or removed or changed) else "pass"
-    return {"result": result, "added": added, "removed": removed, "changed": changed}
+    diff = {"added": added, "removed": removed, "changed": changed}
+    if (compare or {}).get("ignore_removed"):
+        diff["removed_ignored"], diff["removed"] = removed, []
+    diff["result"] = "diffs" if (added or diff["removed"] or changed) else "pass"
+    return diff
 
 
 def _diff_equality_scalar(pre, post):

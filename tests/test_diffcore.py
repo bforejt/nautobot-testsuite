@@ -26,6 +26,17 @@ class TestEqualitySet(unittest.TestCase):
         self.assertEqual(diff["result"], "diffs")
         self.assertEqual(diff["added"], [{"key": "a", "value": 3}, {"key": "c", "value": 4}])
         self.assertEqual(diff["removed"], [{"key": "z", "value": 2}])
+        self.assertNotIn("removed_ignored", diff)
+
+    def test_ignore_removed_keeps_evidence_but_never_diffs(self):
+        compare = {"mode": "equality_set", "ignore_removed": True}
+        diff = diffcore.diff_check({"b": 1, "z": 2}, {"b": 1}, compare)
+        self.assertEqual(diff["result"], "pass")
+        self.assertEqual(diff["removed"], [])
+        self.assertEqual(diff["removed_ignored"], [{"key": "z", "value": 2}])
+        diff = diffcore.diff_check({"z": 2}, {"a": 3}, compare)
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual(diff["added"], [{"key": "a", "value": 3}])
 
     def test_changed_dict_values_per_field(self):
         pre = {"peer1": {"state": "Established", "installed_prefixes": 100}}

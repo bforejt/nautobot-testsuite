@@ -1552,7 +1552,7 @@ register(
         platform="panos",
         description="Core/crash files within the recency window",
         tier=1,
-        compare={"mode": "equality_set"},
+        compare={"mode": "equality_set", "ignore_removed": True},
         miss_meaning=(
             "A core file appeared during the window — a dataplane or management "
             "process crashed even if it recovered before anyone looked."
