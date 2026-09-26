@@ -1400,14 +1400,27 @@ register(
 # catalog: a member that reloaded and rejoined, a stack port that flapped, or
 # an active/standby swap all read as "everything up" in the interface and
 # routing checks. The CLI forms are the operator's own view — `show switch
-# detail` for members plus port topology, `show switch stack-ports summary`
-# for per-port link health — enriched with each member's model and serial
-# from the hardware inventory (chassis entries carry hw-dev-index == switch
-# number; field-verified roster source in nautobot-upgrades) and the
-# structured stack-oper payload kept as raw evidence. Always asked by
-# doctrine: platforms that do not stack reject the command and record as
-# not-present; a standalone switch or an SVL pair answers with one or two
-# members.
+# detail` for the member roster plus port topology, `show switch stack-ports
+# summary` for per-port link health. Each member's identity joins on its
+# switch number only where the device itself keys by it: stack-oper's
+# stack-node list is keyed by chassis-number (the switch number) and carries
+# the member's serial and a reload reason (leaf spellings field-verified on
+# a 4-member 9300), and the model is the part number of the device-inventory
+# chassis entry carrying that SERIAL. device-inventory's hw-dev-index is not
+# a switch number: the YANG calls it only "the physical index of the
+# inventory item", and the field stack's four chassis entries carry 1, 8, 15
+# and 20 — joined on it, members 2-4 had no identity and a replaced member
+# went unnoticed. Not every stack-node leaf is the member's own: the field
+# release repeats identical sp-stats and sp-stats-time on every node seen,
+# and the YANG describes reload-reason as "Reload reason for all stack
+# members" (the field's "Image Install" on members 1, 3 and 4 cannot tell
+# per-member from stack-wide), so a serial repeated across stack-nodes
+# names none of them.
+# Where stack-oper is not served or misses a member (older releases; an SVL
+# pair may not serve it), `show inventory` names each member's chassis, and
+# a lone member pairs with a lone chassis entry. Always asked by doctrine:
+# platforms that do not stack reject the command and record as not-present;
+# a standalone switch or an SVL pair answers with one or two members.
 
 _STACK_OPER_PATH = "/data/Cisco-IOS-XE-stack-oper:stack-oper-data"
 
@@ -1563,9 +1576,10 @@ def _parse_stack_ports_summary(cli_output):
 def _chassis_inventory(hardware_payload):
     """'<hw-dev-index>' -> {model, serial} for chassis entries of device-inventory.
 
-    On a stack every member is a chassis entry whose hw-dev-index is its
-    switch number (the roster source nautobot-upgrades gates member rejoin
-    on); power supplies, fans and modules are skipped.
+    Keyed by hw-dev-index for the raw evidence only: the index is the item's
+    physical inventory index, not its switch number (a field-verified
+    4-member 9300 carries 1, 8, 15 and 20), so members find their chassis
+    entry by serial. Power supplies, fans and modules are skipped.
     """
     container = (
         _container(hardware_payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") or {}
@@ -1588,6 +1602,222 @@ def _chassis_inventory(hardware_payload):
             facts["serial"] = str(entry["serial-number"]).strip()
         chassis[str(index)] = facts
     return chassis
+
+
+def _stack_leaf(node, name):
+    """A leaf of a stack-node (or any entry) as stripped text; None when absent or blank."""
+    value = node.get(name) if isinstance(node, dict) else None
+    text = "" if value is None else str(value).strip()
+    return text or None
+
+
+def _stack_nodes(stack_oper_payload):
+    """'<chassis-number>' -> stack-node entry of stack-oper-data; {} when not served.
+
+    Field-verified on a 4-member 9300: one entry per member, chassis-number
+    equal to the switch number, carrying serial-number, role, node-state,
+    priority, mac-address, reload-reason and the stack-ports list.
+    """
+    container = _container(stack_oper_payload, "Cisco-IOS-XE-stack-oper:stack-oper-data")
+    container = container if isinstance(container, dict) else {}
+    nodes = {}
+    for node in _aslist(container.get("stack-node")):
+        if not isinstance(node, dict):
+            continue
+        number = _to_int(node.get("chassis-number"))
+        if number is not None:
+            nodes[str(number)] = node
+    return nodes
+
+
+# `show inventory` prints every item as a NAME/DESCR line followed by its
+# PID/VID/SN line; empty fields print as nothing before the next comma.
+#   NAME: "Switch 2", DESCR: "C9300-48UXM"
+#   PID: C9300-48UXM       , VID: V02  , SN: FOC0000A002
+_INVENTORY_NAME_LINE = re.compile(r'^NAME:\s*"([^"]*)"', re.IGNORECASE)
+_INVENTORY_PID_LINE = re.compile(
+    r"^PID:\s*(.*?)\s*,\s*VID:\s*(.*?)\s*,\s*SN:\s*(.*?)\s*$", re.IGNORECASE
+)
+# A member's own chassis: "Switch <n>" in a 9300 stack, "Chassis <n>" in an
+# SVL pair. Anchored, so the stack-level "c93xx Stack" entry (a repeat of the
+# active's PID and SN) and sub-items such as "Switch 1 - Power Supply A" or
+# "Chassis 1 Fan Tray" never match.
+_INVENTORY_MEMBER_NAME = re.compile(r"^(?:Switch|Chassis)\s+(\d+)$", re.IGNORECASE)
+
+
+def _parse_show_inventory(cli_output):
+    """'<n>' -> {model, serial} from the member chassis entries of ``show inventory``.
+
+    model is the PID and serial the SN, each only when printed. A switch
+    number listed twice with different facts maps to None: ambiguous, so it
+    names no member.
+    """
+    entries = {}
+    name = None
+    for line in (cli_output or "").splitlines():
+        stripped = line.strip()
+        name_match = _INVENTORY_NAME_LINE.match(stripped)
+        if name_match:
+            name = name_match.group(1).strip()
+            continue
+        pid_match = _INVENTORY_PID_LINE.match(stripped)
+        if pid_match is None or name is None:
+            continue
+        member = _INVENTORY_MEMBER_NAME.match(name)
+        name = None
+        if member is None:
+            continue
+        facts = {}
+        if pid_match.group(1):
+            facts["model"] = pid_match.group(1)
+        if pid_match.group(3):
+            facts["serial"] = pid_match.group(3)
+        number = str(int(member.group(1)))
+        entries[number] = facts if entries.get(number, facts) == facts else None
+    return entries
+
+
+# serial_source value for the last-resort pairing of a lone roster member
+# with the lone chassis entry of the hardware inventory.
+_LONE_CHASSIS = "device-inventory lone chassis"
+
+
+def _member_identity(members, nodes, chassis, inventory_output=None, inventory_failed=False):
+    """Each roster member's serial and model, with their sources; (identity, notes).
+
+    identity: '<n>' -> {serial, model, serial_source, model_source}, None where
+    unresolved. serial: the member's stack-oper stack-node (keyed by
+    chassis-number, the switch number); else — once ``show inventory`` was
+    consulted (its output given, or inventory_failed) — its 'Switch <n>' /
+    'Chassis <n>' entry; else, for a lone member beside a lone device-inventory
+    chassis entry, that chassis. A serial names one chassis: one stack-oper
+    repeats across stack-nodes names none of them, and one that still lands
+    on two members is withdrawn from both. Serials read upper-cased, as the
+    join compares them, so a change of source never flips the spelling.
+    model: the part number of the device-inventory chassis entry carrying the
+    serial; else show inventory's PID when its entry for the member carries
+    the same SN. hw-dev-index plays no part. notes say why a member has no
+    serial or model, and name the chassis serials no member carries (a member
+    whose serial differs between the sources, or inventory beyond the roster).
+    """
+    by_serial = {}
+    for facts in chassis.values():
+        if facts.get("serial"):
+            by_serial.setdefault(facts["serial"].upper(), facts)
+    consulted = inventory_failed or inventory_output is not None
+    rejected = _cli_rejected(inventory_output)
+    listed = {} if rejected else _parse_show_inventory(inventory_output)
+    # One member beside one chassis is unambiguous only when every chassis
+    # entry carries that serial: a repeated entry is still one chassis, one
+    # without a serial could be the member's own.
+    lone_serial = None
+    if len(members) == 1 and len(by_serial) == 1 and all(f.get("serial") for f in chassis.values()):
+        lone_serial = next(iter(by_serial.values()))["serial"]
+    oper_serials = {key: _stack_leaf(node, "serial-number") for key, node in nodes.items()}
+    holders = {}
+    for key, serial in oper_serials.items():
+        if serial is not None:
+            holders.setdefault(serial.upper(), []).append(key)
+    repeated = {serial: keys for serial, keys in holders.items() if len(keys) > 1}
+    notes = [
+        "stack-oper repeats serial-number %s on chassis-number %s: used for none of them"
+        % (serial, ", ".join(sorted(keys, key=int)))
+        for serial, keys in sorted(repeated.items())
+    ]
+    identity = {}
+    whys = {}
+    for number in sorted(members, key=int):
+        key = str(int(number))
+        facts = dict.fromkeys(("serial", "model", "serial_source", "model_source"))
+        serial_why, model_why = [], []
+        # show inventory's own entry for this member, or why it cannot serve.
+        entry = listed.get(key) or {}
+        if not consulted:
+            miss = "show inventory not consulted"
+        elif inventory_failed:
+            miss = "show inventory failed"
+        elif rejected:
+            miss = "show inventory rejected"
+        elif key not in listed:
+            miss = "show inventory names no Switch/Chassis entry for it"
+        elif listed[key] is None:
+            miss = "show inventory lists it twice, differently"
+        else:
+            miss = None
+
+        serial = oper_serials.get(key)
+        if serial is None:
+            serial_why.append("no stack-oper serial-number")
+        elif serial.upper() in repeated:
+            serial_why.append("its stack-oper serial-number repeats on another stack-node")
+        else:
+            facts.update(serial=serial, serial_source="stack-oper")
+        if facts["serial"] is None:
+            if miss is None and entry.get("serial"):
+                facts.update(serial=entry["serial"], serial_source="show inventory")
+            else:
+                serial_why.append(miss or "its show inventory entry has no SN")
+                if consulted and lone_serial is not None:
+                    facts.update(serial=lone_serial, serial_source=_LONE_CHASSIS)
+                elif consulted:
+                    serial_why.append("not a lone member beside a lone chassis entry")
+
+        if facts["serial"] is not None:
+            facts["serial"] = facts["serial"].upper()
+            model = (by_serial.get(facts["serial"]) or {}).get("model")
+            if model:
+                facts.update(model=model, model_source="device-inventory")
+            else:
+                model_why.append("no device-inventory chassis part-number for its serial")
+                listed_serial = str(entry.get("serial") or "").upper()
+                if miss is not None:
+                    model_why.append(miss)
+                elif not listed_serial:
+                    model_why.append("its show inventory entry has no SN")
+                elif listed_serial != facts["serial"]:
+                    model_why.append("its show inventory entry carries another SN")
+                elif not entry.get("model"):
+                    model_why.append("its show inventory entry has no PID")
+                else:
+                    facts.update(model=entry["model"], model_source="show inventory")
+        identity[number] = facts
+        whys[number] = (serial_why, model_why)
+
+    # A serial still on two members (the sources contradict each other, or
+    # show inventory repeats an SN) identifies neither: withdrawn from both.
+    carriers = {}
+    for number, facts in identity.items():
+        if facts["serial"] is not None:
+            carriers.setdefault(facts["serial"], []).append(number)
+    for serial, numbers in carriers.items():
+        if len(numbers) > 1:
+            for number in numbers:
+                identity[number] = dict.fromkeys(identity[number])
+                whys[number] = (["one serial for more than one member: %s" % (serial,)], [])
+
+    gaps = {}
+    for number, facts in identity.items():
+        serial_why, model_why = whys[number]
+        if facts["serial"] is None:
+            gap = ("no serial or model", tuple(serial_why))
+        elif facts["model"] is None:
+            gap = ("no model", tuple(model_why))
+        else:
+            continue
+        gaps.setdefault(gap, []).append(number)
+    notes.extend(
+        "switch %s: %s (%s)" % (", ".join(numbers), label, "; ".join(why))
+        for (label, why), numbers in gaps.items()
+    )
+    carried = {facts["serial"] for facts in identity.values() if facts["serial"]}
+    unclaimed = [
+        "%s (hw-dev-index %s)" % (facts["serial"], index)
+        for index, facts in sorted(chassis.items(), key=lambda item: (len(item[0]), item[0]))
+        if facts.get("serial") and facts["serial"].upper() not in carried
+    ]
+    if unclaimed:
+        notes.append("device-inventory chassis serials on no member: %s" % (", ".join(unclaimed),))
+    return identity, notes
 
 
 def _collect_switch_stack(ctx):
@@ -1623,44 +1853,99 @@ def _collect_switch_stack(ctx):
         for key, facts in summary_ports.items():
             ports.setdefault(key, {}).update(facts)
 
-    # Member model/serial ride on the hardware inventory the platform-health
+    # Member models come from the hardware inventory the platform-health
     # check also reads — identical path and kwargs, so the per-run cache
-    # issues one GET for both.
+    # issues one GET for both — found by serial, never by hw-dev-index.
     hardware = ctx.get(_HW_PATH)
     chassis = _chassis_inventory(hardware)
     raw["device-inventory chassis"] = chassis
-    unmatched = sorted(set(chassis) - set(members), key=lambda k: (len(k), k))
-    if unmatched:
-        notes.append("chassis inventory indexes with no member row: %s" % (", ".join(unmatched),))
 
-    # Structured supplement, raw only: the model's presence and leaf spellings
-    # on stacking platforms are unverified, so it is evidence for the
-    # shakedown, never the source of the normalized view.
+    # stack-oper serves each member's serial and reload reason by switch
+    # number. The read stays best-effort: where it is not served (older
+    # releases; an SVL pair may not serve it) serials fall back to show
+    # inventory below, never to a failed check. How the read went rides in
+    # context: reload_reason vanishing from every member is then readable as
+    # "not read this time", never as a reload.
     try:
         stack_oper = ctx.get(_STACK_OPER_PATH, ok_404=True)
     except Exception as exc:  # best-effort read; transport failure modes vary
         if type(exc).__name__ == "SoftTimeLimitExceeded":
             raise  # the Celery abort signal is never a note
         stack_oper = None
-        notes.append("stack-oper supplement failed: %s" % (exc,))
+        stack_oper_read = "read failed"
+        notes.append(
+            "stack-oper read failed (%s): no reload reasons, member serials from the fallbacks"
+            % (exc,)
+        )
+    else:
+        stack_oper_read = "served"
+        if stack_oper is None:
+            stack_oper_read = "not served"
+            notes.append(
+                "stack-oper not served on this release: no reload reasons, member serials "
+                "from the fallbacks"
+            )
     raw["stack-oper"] = stack_oper
-    if stack_oper is None:
-        notes.append("stack-oper data not served on this release (supplement skipped)")
+    nodes = _stack_nodes(stack_oper)
+    if stack_oper is not None and not nodes:
+        stack_oper_read = "served without stack-node entries"
+        notes.append("stack-oper answered without stack-node entries")
+    strays = sorted(set(nodes) - {str(int(number)) for number in members}, key=int)
+    if strays:
+        notes.append("stack-oper chassis-numbers with no roster member: %s" % (", ".join(strays),))
+
+    identity, identity_notes = _member_identity(members, nodes, chassis)
+    if any(facts["serial"] is None or facts["model"] is None for facts in identity.values()):
+        # Only when stack-oper and the hardware inventory leave a member
+        # without serial or model: its 'Switch <n>' / 'Chassis <n>' entry.
+        # Best-effort like stack-oper: a failed fallback costs members their
+        # identity (the lone-chassis rule still applies), never the roster
+        # and ring.
+        inventory_command = "show inventory"
+        try:
+            inventory = ctx.run_ssh(inventory_command)
+        except Exception as exc:  # best-effort read; transport failure modes vary
+            if type(exc).__name__ == "SoftTimeLimitExceeded":
+                raise  # the Celery abort signal is never a note
+            notes.append("show inventory failed (%s)" % (exc,))
+            identity, identity_notes = _member_identity(
+                members, nodes, chassis, inventory_failed=True
+            )
+        else:
+            raw[inventory_command] = inventory
+            identity, identity_notes = _member_identity(members, nodes, chassis, inventory)
+    notes.extend(identity_notes)
 
     normalized = {}
     if stack:
         normalized["stack"] = stack
     for number, facts in members.items():
         entry = dict(facts)
-        entry.update(chassis.get(number, {}))
+        for field in ("model", "serial"):
+            if identity[number][field] is not None:
+                entry[field] = identity[number][field]
+        # The reload reason stack-oper reports on the member's stack-node,
+        # only where served. It holds until a reload, so a reload between
+        # captures need not read unchanged; whether it is the member's own
+        # or the stack's is unverified (see the section comment).
+        reload_reason = _stack_leaf(nodes.get(str(int(number))), "reload-reason")
+        if reload_reason is not None:
+            entry["reload_reason"] = reload_reason
         normalized["switch|%s" % (number,)] = entry
     for key, facts in ports.items():
         normalized["stack-port|%s" % (key,)] = facts
+    order = sorted(members, key=int)
     context = {
         "members_total": len(members),
         "members_ready": sum(1 for m in members.values() if m.get("state", "").lower() == "ready"),
         "stack_ports_total": len(ports),
         "stack_ports_ok": sum(1 for p in ports.values() if p.get("status") == "OK"),
+        # Which source served each member's serial and model (None: none did),
+        # and how the stack-oper read went. Context, never normalized: the
+        # source may differ between captures while the value does not.
+        "serial_source": {number: identity[number]["serial_source"] for number in order},
+        "model_source": {number: identity[number]["model_source"] for number in order},
+        "stack_oper": stack_oper_read,
     }
     if notes:
         raw["note"] = "; ".join(notes)
@@ -1671,7 +1956,10 @@ register(
     CheckDef(
         id="iosxe_switch_stack",
         platform="iosxe",
-        description="Switch stack members (role, state, model, serial) and stack-port ring health",
+        description=(
+            "Switch stack members (role, state, model, serial, reload reason) and stack-port "
+            "ring health"
+        ),
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(

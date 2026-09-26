@@ -893,46 +893,100 @@ class _StackCtx:
         return self.payloads.get(path)
 
 
-# A 4-member stack's hardware inventory: chassis entries carry hw-dev-index ==
-# switch number; the PSU entry must be ignored.
-_STACK_HARDWARE = {
-    "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
-        "device-hardware": {
-            "device-inventory": [
-                {
-                    "hw-type": "hw-type-chassis",
-                    "hw-dev-index": 1,
-                    "part-number": "C9300-48P",
-                    "serial-number": "FOC0000A0A1 ",
-                },
-                {
-                    "hw-type": "hw-type-chassis",
-                    "hw-dev-index": 2,
-                    "part-number": "C9300-48P",
-                    "serial-number": "FOC0000A0A2",
-                },
-                {
-                    "hw-type": "hw-type-chassis",
-                    "hw-dev-index": 3,
-                    "part-number": "C9300-48U",
-                    "serial-number": "FOC0000A0A3",
-                },
-                {
-                    "hw-type": "hw-type-chassis",
-                    "hw-dev-index": 4,
-                    "part-number": "C9300-48P",
-                    "serial-number": "FOC0000A0A4",
-                },
-                {
-                    "hw-type": "hw-type-power-supply",
-                    "hw-dev-index": 1,
-                    "part-number": "PWR-C1-715WAC",
-                    "serial-number": "DTN0000A0A1",
-                },
-            ]
+# A 4-member stack's hardware inventory, shaped like the field capture: the
+# chassis entries carry hw-dev-index 1, 8, 15 and 20 — physical inventory
+# indexes, NOT switch numbers — so members find theirs by serial. Serials are
+# synthetic (one keeps the trailing blank the parser strips); the PEM entry
+# shares index 1 with a chassis and must be ignored.
+_STACK_INVENTORY = (
+    {
+        "hw-type": "hw-type-chassis",
+        "hw-dev-index": 1,
+        "part-number": "C9300-48UXM",
+        "serial-number": "FOC0000A001 ",
+    },
+    {
+        "hw-type": "hw-type-chassis",
+        "hw-dev-index": 8,
+        "part-number": "C9300-48UXM",
+        "serial-number": "FOC0000A002",
+    },
+    {
+        "hw-type": "hw-type-chassis",
+        "hw-dev-index": 15,
+        "part-number": "C9300-48U",
+        "serial-number": "FOC0000A003",
+    },
+    {
+        "hw-type": "hw-type-chassis",
+        "hw-dev-index": 20,
+        "part-number": "C9300-24UX",
+        "serial-number": "FOC0000A004",
+    },
+    {
+        "hw-type": "hw-type-pem",
+        "hw-dev-index": 1,
+        "part-number": "PWR-C1-1100WAC-P",
+        "serial-number": "DTN0000A001",
+    },
+)
+
+
+def _hardware(entries):
+    """A device-hardware-data payload whose device-inventory lists ``entries``."""
+    return {
+        "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+            "device-hardware": {"device-inventory": [dict(entry) for entry in entries]}
         }
     }
-}
+
+
+_STACK_HARDWARE = _hardware(_STACK_INVENTORY)
+
+
+class _StackIdentityCtx(_StackCtx):
+    """_StackCtx that also records each GET's kwargs and fails SSH commands on cue.
+
+    raise_for may name a command as well as a path; gets lists (path, kwargs)
+    in call order, so a test pins each read's exact per-run cache key.
+    """
+
+    def __init__(self, outputs, payloads=None, raise_for=None):
+        super().__init__(outputs, payloads=payloads, raise_for=raise_for)
+        self.gets = []
+
+    def run_ssh(self, command, **kwargs):
+        if command in self.raise_for:
+            self.commands.append(command)
+            raise self.raise_for[command]
+        return super().run_ssh(command, **kwargs)
+
+    def get(self, path, **kwargs):
+        self.gets.append((path, dict(kwargs)))
+        return super().get(path, **kwargs)
+
+
+def _stack_members():
+    """The 'switch|<n>' entries every healthy capture of the standard stack yields."""
+    roster = (
+        ("1", "Active", 15, "C9300-48UXM"),
+        ("2", "Standby", 12, "C9300-48UXM"),
+        ("3", "Member", 9, "C9300-48U"),
+        ("4", "Member", 6, "C9300-24UX"),
+    )
+    return {
+        "switch|%s" % (number,): {
+            "role": role,
+            "state": "Ready",
+            "priority": priority,
+            "hw_version": "V02",
+            "mac": "00a1.b2c3.0%s00" % (number,),
+            "model": model,
+            "serial": "FOC0000A00%s" % (number,),
+            "reload_reason": "Image Install",
+        }
+        for number, role, priority, model in roster
+    }
 
 
 def _dir_listing(filesystem, *entries):
@@ -948,6 +1002,54 @@ class TestSwitchStack(unittest.TestCase):
     def setUp(self):
         self.detail = _loader.fixture_text("iosxe_show_switch_detail.txt")
         self.summary = _loader.fixture_text("iosxe_show_switch_stack_ports_summary.txt")
+        # Shaped exactly like the field capture of a 4-member 9300 (leaf
+        # spellings, value types, one stack-node per member keyed by
+        # chassis-number), with synthetic serials, MACs, counters and times.
+        # Every node repeats one set of sp-stats and one sp-stats-time, as each
+        # field node seen does: not every stack-node leaf is the member's own.
+        # chassis-number 2 was not in the field photos; it follows the roster.
+        self.stack_oper = _loader.fixture_json("iosxe_stack_oper.json")
+        # Synthetic, not field-captured: the standard IOS-XE layout.
+        self.inventory = _loader.fixture_text("iosxe_show_inventory_9300_stack.txt")
+
+    def _collect(
+        self,
+        stack_oper=True,
+        hardware=_STACK_HARDWARE,
+        inventory=None,
+        detail=None,
+        summary=None,
+        raise_for=None,
+    ):
+        """Run the collector on canned answers; (ctx, result).
+
+        stack_oper True serves the field-shaped fixture, None answers 404, a
+        dict is served as given. raise_for maps a path or a command to the
+        exception it raises. `show inventory` answers only when inventory is
+        given (or raise_for names it): running it otherwise fails the test,
+        which pins that the collector never needed it — the fake's KeyError
+        alone would not, as the collector turns a failed show inventory into
+        a note.
+        """
+        outputs = {
+            "show switch detail": self.detail if detail is None else detail,
+            "show switch stack-ports summary": self.summary if summary is None else summary,
+        }
+        if inventory is not None:
+            outputs["show inventory"] = inventory
+        if stack_oper is True:
+            stack_oper = self.stack_oper
+        payloads = {checks._HW_PATH: hardware}
+        if stack_oper is not None:
+            payloads[checks._STACK_OPER_PATH] = stack_oper
+        ctx = _StackIdentityCtx(outputs, payloads=payloads, raise_for=raise_for)
+        result = checks._collect_switch_stack(ctx)
+        unasked = [c for c in ctx.commands if c not in outputs and c not in ctx.raise_for]
+        self.assertEqual(unasked, [], "commands the collector had no need to run")
+        return ctx, result
+
+    def _nodes(self):
+        return self.stack_oper["Cisco-IOS-XE-stack-oper:stack-oper-data"]["stack-node"]
 
     def test_detail_parses_header_members_and_ports(self):
         stack, members, ports = checks._parse_switch_detail(self.detail)
@@ -1063,34 +1165,110 @@ class TestSwitchStack(unittest.TestCase):
         self.assertEqual(ports["1/2"]["link_ok_changes"], 3)
         self.assertEqual(checks._parse_stack_ports_summary("Sw#/Port#  Port\n"), {})
 
-    def test_chassis_inventory_skips_non_chassis_and_strips_serials(self):
+    def test_chassis_inventory_keys_by_hw_dev_index_as_evidence_only(self):
+        # The index is the device's physical inventory index (1, 8, 15, 20 in
+        # the field), kept for raw; the PEM entry is skipped, serials stripped.
         chassis = checks._chassis_inventory(_STACK_HARDWARE)
-        self.assertEqual(sorted(chassis), ["1", "2", "3", "4"])
-        self.assertEqual(chassis["1"], {"model": "C9300-48P", "serial": "FOC0000A0A1"})
+        self.assertEqual(sorted(chassis, key=int), ["1", "8", "15", "20"])
+        self.assertEqual(chassis["1"], {"model": "C9300-48UXM", "serial": "FOC0000A001"})
+        self.assertEqual(chassis["8"], {"model": "C9300-48UXM", "serial": "FOC0000A002"})
         self.assertEqual(checks._chassis_inventory({}), {})
 
-    def test_collector_merges_cli_views_and_inventory(self):
-        ctx = _StackCtx(
-            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
-            payloads={checks._HW_PATH: _STACK_HARDWARE, checks._STACK_OPER_PATH: {"x": 1}},
+    def test_stack_nodes_keyed_by_chassis_number(self):
+        nodes = checks._stack_nodes(self.stack_oper)
+        self.assertEqual(sorted(nodes), ["1", "2", "3", "4"])
+        self.assertEqual(nodes["3"]["serial-number"], "FOC0000A003")
+        self.assertEqual(nodes["3"]["reload-reason"], "Image Install")
+        # One node may arrive as a bare object, the container without its
+        # module prefix, and chassis-number string-ified.
+        single = {"stack-oper-data": {"stack-node": {"chassis-number": "2", "serial-number": "X"}}}
+        self.assertEqual(list(checks._stack_nodes(single)), ["2"])
+        self.assertEqual(checks._stack_nodes(None), {})
+        self.assertEqual(checks._stack_nodes({}), {})
+        # Leaves are read stripped; blank or missing reads as unserved.
+        padded = {"serial-number": " FOC0000A003 ", "reload-reason": "  "}
+        self.assertEqual(checks._stack_leaf(padded, "serial-number"), "FOC0000A003")
+        self.assertIsNone(checks._stack_leaf(padded, "reload-reason"))
+        self.assertIsNone(checks._stack_leaf(None, "serial-number"))
+
+    def test_show_inventory_member_entries_of_a_9300_stack(self):
+        # Only 'Switch <n>' counts: the stack-level 'c93xx Stack' entry (the
+        # active's PID/SN again), power supplies, uplink modules and optics
+        # never name a member.
+        self.assertEqual(
+            checks._parse_show_inventory(self.inventory),
+            {
+                "1": {"model": "C9300-48UXM", "serial": "FOC0000A001"},
+                "2": {"model": "C9300-48UXM", "serial": "FOC0000A002"},
+                "3": {"model": "C9300-48U", "serial": "FOC0000A003"},
+                "4": {"model": "C9300-24UX", "serial": "FOC0000A004"},
+            },
         )
-        result = checks._collect_switch_stack(ctx)
+
+    def test_show_inventory_member_entries_of_an_svl_pair(self):
+        # 'Chassis <n>' on a StackWise Virtual pair; 'Chassis 1 Fan Tray' (an
+        # item with blank VID and SN) is a sub-item, not a member.
+        output = _loader.fixture_text("iosxe_show_inventory_9500_svl.txt")
+        self.assertEqual(
+            checks._parse_show_inventory(output),
+            {
+                "1": {"model": "C9500-48Y4C", "serial": "FCW0000A0AA"},
+                "2": {"model": "C9500-48Y4C", "serial": "FCW0000A0BB"},
+            },
+        )
+
+    def test_show_inventory_blank_serial_and_ambiguous_member(self):
+        output = (
+            'NAME: "Switch 1", DESCR: "C9300-48UXM"\n'
+            "PID: C9300-48UXM       , VID: V02  , SN:\n"
+            'NAME: "Switch 2", DESCR: "C9300-48UXM"\n'
+            "PID: C9300-48UXM       , VID: V02  , SN: FOC0000A002\n"
+            'NAME: "Switch 2", DESCR: "C9300-48UXM"\n'
+            "PID: C9300-48UXM       , VID: V02  , SN: FOC0000A0F2\n"
+        )
+        self.assertEqual(
+            checks._parse_show_inventory(output), {"1": {"model": "C9300-48UXM"}, "2": None}
+        )
+        self.assertEqual(checks._parse_show_inventory(""), {})
+
+    def test_member_identity_pairs_a_lone_member_only_after_show_inventory(self):
+        # Pairing is the last resort: before show inventory was consulted the
+        # member stays unresolved, so the collector asks show inventory first.
+        members = {"1": {"role": "Active"}}
+        chassis = {"1": {"model": "C9500-24Y4C", "serial": "FCW0000A0CC"}}
+        identity, _notes = checks._member_identity(members, {}, chassis)
+        self.assertIsNone(identity["1"]["serial"])
+        unnumbered = (
+            'NAME: "Chassis", DESCR: "Cisco Catalyst 9500 Series Chassis"\n'
+            "PID: C9500-24Y4C       , VID: V01  , SN: FCW0000A0CC\n"
+        )
+        identity, notes = checks._member_identity(members, {}, chassis, unnumbered)
+        paired = {
+            "serial": "FCW0000A0CC",
+            "model": "C9500-24Y4C",
+            "serial_source": "device-inventory lone chassis",
+            "model_source": "device-inventory",
+        }
+        self.assertEqual(identity["1"], paired)
+        self.assertEqual(notes, [])
+        # A show inventory that failed outright was consulted too: the pairing
+        # still stands, being unambiguous without it.
+        identity, notes = checks._member_identity(members, {}, chassis, inventory_failed=True)
+        self.assertEqual(identity["1"], paired)
+        self.assertEqual(notes, [])
+
+    def test_collector_joins_every_member_by_serial(self):
+        # The field bug: the chassis entries carry hw-dev-index 1, 8, 15 and
+        # 20, so a join on the index named member 1 alone. Joined by serial,
+        # every member carries its own serial and model, stack-oper adds each
+        # member's reload reason, and show inventory is never needed.
+        ctx, result = self._collect()
         normalized = result["normalized"]
+        for key, expected in _stack_members().items():
+            self.assertEqual(normalized[key], expected, key)
         self.assertEqual(
             normalized["stack"],
             {"mac": "00a1.b2c3.0100", "mac_origin": "local", "mac_persistency": "Indefinite"},
-        )
-        self.assertEqual(
-            normalized["switch|3"],
-            {
-                "role": "Member",
-                "state": "Ready",
-                "priority": 9,
-                "hw_version": "V02",
-                "mac": "00a1.b2c3.0300",
-                "model": "C9300-48U",
-                "serial": "FOC0000A0A3",
-            },
         )
         # Detail's status/neighbor plus the summary's link facts, one key per port;
         # both views agree the far end is switch 2, and the summary names its port.
@@ -1109,6 +1287,7 @@ class TestSwitchStack(unittest.TestCase):
             },
         )
         self.assertEqual(len([k for k in normalized if k.startswith("stack-port|")]), 8)
+        self.assertEqual(len(normalized), 13)
         self.assertEqual(
             result["context"],
             {
@@ -1116,15 +1295,560 @@ class TestSwitchStack(unittest.TestCase):
                 "members_ready": 4,
                 "stack_ports_total": 8,
                 "stack_ports_ok": 8,
+                "serial_source": dict.fromkeys(("1", "2", "3", "4"), "stack-oper"),
+                "model_source": dict.fromkeys(("1", "2", "3", "4"), "device-inventory"),
+                "stack_oper": "served",
             },
         )
         raw = result["raw"]
         self.assertEqual(raw["show switch detail"], self.detail)
         self.assertEqual(raw["show switch stack-ports summary"], self.summary)
-        self.assertEqual(raw["stack-oper"], {"x": 1})
+        self.assertIs(raw["stack-oper"], self.stack_oper)
+        # hw-dev-index stays in raw as the device's own evidence.
+        self.assertEqual(sorted(raw["device-inventory chassis"], key=int), ["1", "8", "15", "20"])
         self.assertNotIn("note", raw)
-        # The inventory read shares platform_health's exact path (per-run cache).
-        self.assertIn(checks._HW_PATH, ctx.paths)
+        self.assertNotIn("show inventory", ctx.commands)
+        # Each read keeps its per-run cache key: the inventory platform_health's
+        # (path, no kwargs), stack-oper the wireless platform check's (path and
+        # ok_404 alike).
+        self.assertEqual(
+            ctx.gets, [(checks._HW_PATH, {}), (checks._STACK_OPER_PATH, {"ok_404": True})]
+        )
+
+    def test_join_ignores_inventory_order_and_index_values(self):
+        # Re-indexed so no index lines up with a switch number (member 2's
+        # chassis now sits at index 1, where an index join would hand it to
+        # member 1) and listed in reverse: identity follows the serial alone.
+        reindex = {"FOC0000A001 ": 20, "FOC0000A002": 1, "FOC0000A003": 8, "FOC0000A004": 15}
+        shuffled = []
+        for entry in reversed(_STACK_INVENTORY):
+            index = reindex.get(entry["serial-number"], entry["hw-dev-index"])
+            shuffled.append(dict(entry, **{"hw-dev-index": index}))
+        _ctx, result = self._collect(hardware=_hardware(shuffled))
+        for key, expected in _stack_members().items():
+            self.assertEqual(result["normalized"][key], expected, key)
+        self.assertNotIn("note", result["raw"])
+
+    def test_stack_oper_absent_falls_back_to_show_inventory(self):
+        # A release that does not serve stack-oper (404): the 'Switch <n>'
+        # entries of show inventory give each member's serial, and the model
+        # still comes from the hardware inventory by that serial. Without
+        # stack-oper there is no reload reason to record.
+        ctx, result = self._collect(stack_oper=None, inventory=self.inventory)
+        self.assertEqual(ctx.commands[-1], "show inventory")
+        for key, expected in _stack_members().items():
+            del expected["reload_reason"]
+            self.assertEqual(result["normalized"][key], expected, key)
+        context = result["context"]
+        self.assertEqual(
+            context["serial_source"], dict.fromkeys(("1", "2", "3", "4"), "show inventory")
+        )
+        self.assertEqual(
+            context["model_source"], dict.fromkeys(("1", "2", "3", "4"), "device-inventory")
+        )
+        self.assertEqual(context["stack_oper"], "not served")
+        raw = result["raw"]
+        self.assertEqual(raw["show inventory"], self.inventory)
+        self.assertIsNone(raw["stack-oper"])
+        self.assertEqual(
+            raw["note"],
+            "stack-oper not served on this release: no reload reasons, member serials from "
+            "the fallbacks",
+        )
+
+    def test_svl_pair_falls_back_to_show_inventory_chassis_entries(self):
+        # A 9500 StackWise Virtual pair that does not serve stack-oper: show
+        # inventory names its members 'Chassis 1' / 'Chassis 2'. The hardware
+        # inventory's indexes are arbitrary here; only the serial joins.
+        detail = (
+            "Switch/Stack Mac Address : 00a1.b2c3.1100 - Local Mac Address\n"
+            "Mac persistency wait time: Indefinite\n"
+            "                                             H/W   Current\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "-------------------------------------------------------------------------------------\n"
+            "*1       Active   00a1.b2c3.1100     15     V02     Ready\n"
+            " 2       Standby  00a1.b2c3.2200     10     V02     Ready\n"
+        )
+        hardware = _hardware(
+            (
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 1,
+                    "part-number": "C9500-48Y4C",
+                    "serial-number": "FCW0000A0AA",
+                },
+                {
+                    "hw-type": "hw-type-chassis",
+                    "hw-dev-index": 9,
+                    "part-number": "C9500-48Y4C",
+                    "serial-number": "FCW0000A0BB",
+                },
+                {
+                    "hw-type": "hw-type-pem",
+                    "hw-dev-index": 1,
+                    "part-number": "C9K-PWR-650WAC-R",
+                    "serial-number": "ART0000A001",
+                },
+            )
+        )
+        _ctx, result = self._collect(
+            stack_oper=None,
+            hardware=hardware,
+            inventory=_loader.fixture_text("iosxe_show_inventory_9500_svl.txt"),
+            detail=detail,
+            summary="% Invalid input detected at '^' marker.",
+        )
+        normalized = result["normalized"]
+        self.assertEqual(normalized["switch|1"]["serial"], "FCW0000A0AA")
+        self.assertEqual(
+            normalized["switch|2"],
+            {
+                "role": "Standby",
+                "state": "Ready",
+                "priority": 10,
+                "hw_version": "V02",
+                "mac": "00a1.b2c3.2200",
+                "model": "C9500-48Y4C",
+                "serial": "FCW0000A0BB",
+            },
+        )
+        self.assertEqual(
+            result["context"]["serial_source"], {"1": "show inventory", "2": "show inventory"}
+        )
+        self.assertNotIn("no serial", result["raw"]["note"])
+        self.assertNotIn("on no member", result["raw"]["note"])
+
+    def test_stack_oper_missing_a_member_consults_show_inventory_for_it(self):
+        # stack-oper serves members 1-3 only: member 4's serial comes from its
+        # 'Switch 4' entry and it alone goes without a reload reason.
+        del self._nodes()[3]
+        ctx, result = self._collect(inventory=self.inventory)
+        self.assertIn("show inventory", ctx.commands)
+        expected = _stack_members()
+        del expected["switch|4"]["reload_reason"]
+        for key, facts in expected.items():
+            self.assertEqual(result["normalized"][key], facts, key)
+        self.assertEqual(
+            result["context"]["serial_source"],
+            {"1": "stack-oper", "2": "stack-oper", "3": "stack-oper", "4": "show inventory"},
+        )
+        self.assertNotIn("note", result["raw"])
+
+    def test_model_falls_back_to_the_show_inventory_pid(self):
+        # The hardware inventory lists no chassis for member 4: its model is
+        # show inventory's PID, taken because that entry's SN is the member's
+        # stack-oper serial.
+        hardware = _hardware(_STACK_INVENTORY[:3] + _STACK_INVENTORY[4:])
+        ctx, result = self._collect(hardware=hardware, inventory=self.inventory)
+        self.assertIn("show inventory", ctx.commands)
+        self.assertEqual(result["normalized"]["switch|4"], _stack_members()["switch|4"])
+        self.assertEqual(result["context"]["serial_source"]["4"], "stack-oper")
+        self.assertEqual(result["context"]["model_source"]["4"], "show inventory")
+        self.assertNotIn("note", result["raw"])
+
+    def test_show_inventory_entry_with_another_serial_never_lends_its_pid(self):
+        hardware = _hardware(_STACK_INVENTORY[:3] + _STACK_INVENTORY[4:])
+        inventory = self.inventory.replace("SN: FOC0000A004", "SN: FOC0000A0F4")
+        self.assertNotEqual(inventory, self.inventory)
+        _ctx, result = self._collect(hardware=hardware, inventory=inventory)
+        entry = result["normalized"]["switch|4"]
+        self.assertEqual(entry["serial"], "FOC0000A004")
+        self.assertNotIn("model", entry)
+        self.assertIsNone(result["context"]["model_source"]["4"])
+        self.assertEqual(
+            result["raw"]["note"],
+            "switch 4: no model (no device-inventory chassis part-number for its serial; "
+            "its show inventory entry carries another SN)",
+        )
+
+    def test_lone_member_pairs_with_the_only_chassis(self):
+        # A single-member roster on a release serving neither stack-oper nor a
+        # numbered chassis entry (this show inventory names it plain
+        # 'Chassis'): one member beside one chassis serial is unambiguous.
+        detail = (
+            "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address\n"
+            "Mac persistency wait time: Indefinite\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "*1       Active   00a1.b2c3.0100     1      V01     Ready\n"
+        )
+        inventory = (
+            'NAME: "Chassis", DESCR: "Cisco Catalyst 9500 Series Chassis"\n'
+            "PID: C9500-24Y4C       , VID: V01  , SN: FCW0000A0CC\n"
+        )
+        lone = {
+            "hw-type": "hw-type-chassis",
+            "hw-dev-index": 1,
+            "part-number": "C9500-24Y4C",
+            "serial-number": "FCW0000A0CC",
+        }
+        _ctx, result = self._collect(
+            stack_oper=None,
+            hardware=_hardware((lone,)),
+            inventory=inventory,
+            detail=detail,
+            summary="% Invalid input detected at '^' marker.",
+        )
+        entry = result["normalized"]["switch|1"]
+        self.assertEqual((entry["serial"], entry["model"]), ("FCW0000A0CC", "C9500-24Y4C"))
+        self.assertEqual(result["context"]["serial_source"], {"1": "device-inventory lone chassis"})
+        self.assertEqual(result["context"]["model_source"], {"1": "device-inventory"})
+
+        # A second chassis serial makes the pairing ambiguous: nothing is
+        # guessed, and the note says why and names both chassis.
+        second = dict(lone, **{"hw-dev-index": 2, "serial-number": "FCW0000A0DD"})
+        _ctx, result = self._collect(
+            stack_oper=None,
+            hardware=_hardware((lone, second)),
+            inventory=inventory,
+            detail=detail,
+            summary="% Invalid input detected at '^' marker.",
+        )
+        entry = result["normalized"]["switch|1"]
+        self.assertNotIn("serial", entry)
+        self.assertNotIn("model", entry)
+        note = result["raw"]["note"]
+        self.assertIn(
+            "switch 1: no serial or model (no stack-oper serial-number; show inventory names "
+            "no Switch/Chassis entry for it; not a lone member beside a lone chassis entry)",
+            note,
+        )
+        self.assertIn(
+            "device-inventory chassis serials on no member: FCW0000A0CC (hw-dev-index 1), "
+            "FCW0000A0DD (hw-dev-index 2)",
+            note,
+        )
+
+        # The same chassis listed twice is still one chassis, and pairs; an
+        # extra chassis entry without a serial could be the member's own, and
+        # blocks the pairing.
+        repeat = dict(lone, **{"hw-dev-index": 2})
+        blank = {"hw-type": "hw-type-chassis", "hw-dev-index": 2, "part-number": "C9500-24Y4C"}
+        for extra, pairs in ((repeat, True), (blank, False)):
+            _ctx, result = self._collect(
+                stack_oper=None,
+                hardware=_hardware((lone, extra)),
+                inventory=inventory,
+                detail=detail,
+                summary="% Invalid input detected at '^' marker.",
+            )
+            self.assertEqual("serial" in result["normalized"]["switch|1"], pairs, extra)
+
+    def test_lone_chassis_never_pairs_with_one_of_two_members(self):
+        # A pair serving neither stack-oper nor show inventory, beside a
+        # hardware inventory naming a single chassis: nothing says which
+        # member it is, so neither gets it.
+        detail = (
+            "Switch/Stack Mac Address : 00a1.b2c3.1100 - Local Mac Address\n"
+            "Switch#   Role    Mac Address     Priority Version  State \n"
+            "*1       Active   00a1.b2c3.1100     15     V02     Ready\n"
+            " 2       Standby  00a1.b2c3.2200     10     V02     Ready\n"
+        )
+        _ctx, result = self._collect(
+            stack_oper=None,
+            hardware=_hardware(_STACK_INVENTORY[:1]),
+            inventory="% Invalid input detected at '^' marker.",
+            detail=detail,
+            summary="% Invalid input detected at '^' marker.",
+        )
+        for number in ("1", "2"):
+            entry = result["normalized"]["switch|%s" % (number,)]
+            self.assertNotIn("serial", entry)
+            self.assertNotIn("model", entry)
+        self.assertEqual(result["context"]["serial_source"], {"1": None, "2": None})
+        self.assertIn(
+            "switch 1, 2: no serial or model (no stack-oper serial-number; show inventory "
+            "rejected; not a lone member beside a lone chassis entry)",
+            result["raw"]["note"],
+        )
+
+    def test_provisioned_member_has_no_serial_or_model(self):
+        # Member 4 is configured but absent: the roster lists it Provisioned
+        # with no hardware version, its stack-node carries an empty serial and
+        # no reload reason, and neither inventory knows it. Its entry keeps
+        # what the roster says and nothing else; the note says why.
+        detail = self.detail.replace(
+            " 4       Member   00a1.b2c3.0400     6      V02     Ready",
+            " 4       Member   0000.0000.0000     6              Provisioned",
+        )
+        self.assertNotEqual(detail, self.detail)
+        node = self._nodes()[3]
+        node.update(
+            {
+                "serial-number": "",
+                "node-state": "state-provisioned",
+                "mac-address": "00:00:00:00:00:00",
+            }
+        )
+        del node["reload-reason"]
+        inventory = self.inventory.split('NAME: "Switch 4"')[0]
+        hardware = _hardware(_STACK_INVENTORY[:3] + _STACK_INVENTORY[4:])
+        ctx, result = self._collect(hardware=hardware, inventory=inventory, detail=detail)
+        self.assertIn("show inventory", ctx.commands)
+        self.assertEqual(
+            result["normalized"]["switch|4"],
+            {"role": "Member", "state": "Provisioned", "priority": 6, "mac": "0000.0000.0000"},
+        )
+        self.assertEqual(result["normalized"]["switch|3"], _stack_members()["switch|3"])
+        context = result["context"]
+        self.assertIsNone(context["serial_source"]["4"])
+        self.assertIsNone(context["model_source"]["4"])
+        self.assertEqual(context["serial_source"]["3"], "stack-oper")
+        self.assertEqual(context["members_ready"], 3)
+        self.assertEqual(
+            result["raw"]["note"],
+            "switch 4: no serial or model (no stack-oper serial-number; show inventory names "
+            "no Switch/Chassis entry for it; not a lone member beside a lone chassis entry)",
+        )
+
+    def test_replaced_member_is_a_serial_diff(self):
+        # Member 3 swapped for a new chassis of the same model: its serial,
+        # MAC and reload reason change, and nothing else about the members.
+        # Joined by hw-dev-index, member 3 carried no serial at all and the
+        # swap read as a MAC change only.
+        diffcore = _loader.diffcore
+        compare = registry.CHECKS["iosxe_switch_stack"].compare
+        _ctx, pre = self._collect()
+        post_oper = _loader.fixture_json("iosxe_stack_oper.json")
+        post_oper["Cisco-IOS-XE-stack-oper:stack-oper-data"]["stack-node"][2].update(
+            {
+                "serial-number": "FOC0000A0B3",
+                "mac-address": "00:a1:b2:c3:03:01",
+                "reload-reason": "Reload Command",
+            }
+        )
+        swapped = [
+            dict(entry, **{"hw-dev-index": 22, "serial-number": "FOC0000A0B3"})
+            if entry["serial-number"] == "FOC0000A003"
+            else entry
+            for entry in _STACK_INVENTORY
+        ]
+        detail = self.detail.replace("00a1.b2c3.0300", "00a1.b2c3.0301")
+        _ctx, post = self._collect(stack_oper=post_oper, hardware=_hardware(swapped), detail=detail)
+        diff = diffcore.diff_check(pre["normalized"], post["normalized"], compare)
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual((diff["added"], diff["removed"]), ([], []))
+        self.assertEqual(
+            diff["changed"],
+            [
+                {
+                    "key": "switch|3",
+                    "field": "mac",
+                    "old": "00a1.b2c3.0300",
+                    "new": "00a1.b2c3.0301",
+                },
+                {
+                    "key": "switch|3",
+                    "field": "reload_reason",
+                    "old": "Image Install",
+                    "new": "Reload Command",
+                },
+                {"key": "switch|3", "field": "serial", "old": "FOC0000A003", "new": "FOC0000A0B3"},
+            ],
+        )
+
+    def test_two_captures_of_an_unchanged_stack_diff_to_nothing(self):
+        # Nothing changed on the device, but everything volatile in stack-oper
+        # moved between the captures — port statistics and their timestamp,
+        # keepalive counters, latency — and none of it may reach the diff.
+        diffcore = _loader.diffcore
+        compare = registry.CHECKS["iosxe_switch_stack"].compare
+        _ctx, first = self._collect()
+        self.stack_oper = _loader.fixture_json("iosxe_stack_oper.json")
+        for node in self._nodes():
+            node["latency"] = 120
+            node["keepalive-counters"].update({"received": "4411", "sent": "4412"})
+            for port in node["stack-ports"]:
+                stats = port["sp-stats"]
+                for counter in ("rac-copied", "rac-inserted"):
+                    stats[counter] = str(int(stats[counter]) + 987654)
+                port["sp-stats-time"] = "2026-09-26T04:00:00.000000+00:00"
+        self.assertNotEqual(self.stack_oper, _loader.fixture_json("iosxe_stack_oper.json"))
+        _ctx, second = self._collect()
+        self.assertEqual(
+            diffcore.diff_check(first["normalized"], second["normalized"], compare),
+            {"result": "pass", "added": [], "removed": [], "changed": []},
+        )
+        self.assertEqual(first["context"], second["context"])
+
+    def test_a_serial_source_change_moves_no_serial_or_model(self):
+        # One capture from stack-oper, the next from show inventory after a
+        # stack-oper outage: the sources differ (context only), the serials
+        # and models do not; only the reload reasons go unmeasured, and
+        # context's stack_oper says so.
+        diffcore = _loader.diffcore
+        compare = registry.CHECKS["iosxe_switch_stack"].compare
+        _ctx, first = self._collect()
+        _ctx, second = self._collect(stack_oper=None, inventory=self.inventory)
+        diff = diffcore.diff_check(first["normalized"], second["normalized"], compare)
+        self.assertEqual((diff["added"], diff["removed"]), ([], []))
+        self.assertEqual(
+            {(change["key"], change["field"], change["new"]) for change in diff["changed"]},
+            {("switch|%d" % (number,), "reload_reason", None) for number in range(1, 5)},
+        )
+        self.assertNotEqual(first["context"]["serial_source"], second["context"]["serial_source"])
+        self.assertEqual(
+            (first["context"]["stack_oper"], second["context"]["stack_oper"]),
+            ("served", "not served"),
+        )
+
+    def test_chassis_serial_on_no_member_is_noted(self):
+        # A chassis entry no roster member carries (index 27): named by serial
+        # and index in the note, never attached to a member.
+        extra = _STACK_INVENTORY + (
+            {
+                "hw-type": "hw-type-chassis",
+                "hw-dev-index": 27,
+                "part-number": "C9300-48P",
+                "serial-number": "FOC0000A009",
+            },
+        )
+        ctx, result = self._collect(hardware=_hardware(extra))
+        self.assertNotIn("show inventory", ctx.commands)
+        for key, expected in _stack_members().items():
+            self.assertEqual(result["normalized"][key], expected, key)
+        self.assertEqual(
+            result["raw"]["note"],
+            "device-inventory chassis serials on no member: FOC0000A009 (hw-dev-index 27)",
+        )
+
+    def test_stack_oper_node_without_roster_member_is_noted(self):
+        nodes = self._nodes()
+        nodes.append(dict(nodes[3], **{"chassis-number": 5, "serial-number": "FOC0000A005"}))
+        _ctx, result = self._collect()
+        self.assertNotIn("switch|5", result["normalized"])
+        self.assertEqual(
+            result["raw"]["note"], "stack-oper chassis-numbers with no roster member: 5"
+        )
+
+    def test_show_inventory_rejected_leaves_identity_absent_and_says_why(self):
+        _ctx, result = self._collect(
+            stack_oper=None, inventory="% Invalid input detected at '^' marker."
+        )
+        for number in ("1", "2", "3", "4"):
+            entry = result["normalized"]["switch|%s" % (number,)]
+            self.assertNotIn("serial", entry)
+            self.assertNotIn("model", entry)
+        self.assertEqual(result["context"]["serial_source"], dict.fromkeys(("1", "2", "3", "4")))
+        note = result["raw"]["note"]
+        self.assertIn(
+            "switch 1, 2, 3, 4: no serial or model (no stack-oper serial-number; show inventory "
+            "rejected; not a lone member beside a lone chassis entry)",
+            note,
+        )
+        self.assertIn(
+            "device-inventory chassis serials on no member: FOC0000A001 (hw-dev-index 1), "
+            "FOC0000A002 (hw-dev-index 8), FOC0000A003 (hw-dev-index 15), "
+            "FOC0000A004 (hw-dev-index 20)",
+            note,
+        )
+
+    def test_repeated_stack_oper_serial_names_no_member(self):
+        # A release copying the active's serial-number onto every stack-node,
+        # as the field release copies sp-stats: that serial names none of
+        # them, so show inventory serves each member's own and a replacement
+        # stays visible.
+        for node in self._nodes():
+            node["serial-number"] = "FOC0000A001"
+        ctx, result = self._collect(inventory=self.inventory)
+        self.assertIn("show inventory", ctx.commands)
+        for key, expected in _stack_members().items():
+            self.assertEqual(result["normalized"][key], expected, key)
+        self.assertEqual(
+            result["context"]["serial_source"],
+            dict.fromkeys(("1", "2", "3", "4"), "show inventory"),
+        )
+        self.assertEqual(
+            result["raw"]["note"],
+            "stack-oper repeats serial-number FOC0000A001 on chassis-number 1, 2, 3, 4: used "
+            "for none of them",
+        )
+        # Without show inventory, nothing is guessed.
+        _ctx, result = self._collect(inventory="% Invalid input detected at '^' marker.")
+        for key in _stack_members():
+            self.assertNotIn("serial", result["normalized"][key])
+        self.assertIn(
+            "switch 1, 2, 3, 4: no serial or model (its stack-oper serial-number repeats on "
+            "another stack-node; show inventory rejected; not a lone member beside a lone "
+            "chassis entry)",
+            result["raw"]["note"],
+        )
+
+    def test_one_serial_on_two_members_is_withdrawn_from_both(self):
+        # stack-oper lacks member 4, and show inventory's 'Switch 4' carries
+        # member 1's serial: the sources contradict each other, so neither
+        # member keeps that serial (nor a model from it); the note says why.
+        del self._nodes()[3]
+        inventory = self.inventory.replace("SN: FOC0000A004", "SN: FOC0000A001")
+        self.assertNotEqual(inventory, self.inventory)
+        _ctx, result = self._collect(inventory=inventory)
+        normalized = result["normalized"]
+        for number in ("1", "4"):
+            self.assertNotIn("serial", normalized["switch|%s" % (number,)])
+            self.assertNotIn("model", normalized["switch|%s" % (number,)])
+        self.assertEqual(normalized["switch|2"], _stack_members()["switch|2"])
+        self.assertEqual(
+            result["context"]["serial_source"],
+            {"1": None, "2": "stack-oper", "3": "stack-oper", "4": None},
+        )
+        self.assertEqual(
+            result["raw"]["note"],
+            "switch 1, 4: no serial or model (one serial for more than one member: "
+            "FOC0000A001); device-inventory chassis serials on no member: FOC0000A001 "
+            "(hw-dev-index 1), FOC0000A004 (hw-dev-index 20)",
+        )
+
+    def test_serial_join_ignores_case(self):
+        # A lower-case stack-oper serial still finds its chassis entry, and
+        # reads upper-cased: a change of source never flips the spelling.
+        self._nodes()[2]["serial-number"] = "foc0000a003"
+        ctx, result = self._collect()
+        self.assertNotIn("show inventory", ctx.commands)
+        self.assertEqual(result["normalized"]["switch|3"], _stack_members()["switch|3"])
+
+    def test_stack_oper_without_stack_nodes_falls_back_to_show_inventory(self):
+        # stack-oper answers without a stack-node list: no serials or reload
+        # reasons from it, show inventory serves the serials, and context
+        # says the read came back empty.
+        empty = {"Cisco-IOS-XE-stack-oper:stack-oper-data": {"stack-info": {"size": 4}}}
+        ctx, result = self._collect(stack_oper=empty, inventory=self.inventory)
+        self.assertIn("show inventory", ctx.commands)
+        for key, expected in _stack_members().items():
+            del expected["reload_reason"]
+            self.assertEqual(result["normalized"][key], expected, key)
+        self.assertEqual(result["context"]["stack_oper"], "served without stack-node entries")
+        self.assertEqual(result["raw"]["note"], "stack-oper answered without stack-node entries")
+
+    def test_show_inventory_failure_keeps_the_roster_and_ring(self):
+        # stack-oper unserved and show inventory failing outright (a read
+        # timeout): the members go without serial and model this capture, the
+        # roster and ring survive, and the note says why.
+        ctx, result = self._collect(
+            stack_oper=None, raise_for={"show inventory": TimeoutError("Pattern not detected")}
+        )
+        self.assertEqual(ctx.commands[-1], "show inventory")
+        normalized = result["normalized"]
+        self.assertEqual(len(normalized), 13)
+        self.assertEqual(normalized["stack-port|2/1"]["link_ok_changes"], 1)
+        for key, expected in _stack_members().items():
+            for field in ("serial", "model", "reload_reason"):
+                del expected[field]
+            self.assertEqual(normalized[key], expected, key)
+        self.assertNotIn("show inventory", result["raw"])
+        self.assertEqual(result["context"]["serial_source"], dict.fromkeys(("1", "2", "3", "4")))
+        note = result["raw"]["note"]
+        self.assertIn("show inventory failed (Pattern not detected)", note)
+        self.assertIn(
+            "switch 1, 2, 3, 4: no serial or model (no stack-oper serial-number; show inventory "
+            "failed; not a lone member beside a lone chassis entry)",
+            note,
+        )
+
+    def test_show_inventory_never_swallows_the_celery_abort_signal(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        with self.assertRaises(SoftTimeLimitExceeded):
+            self._collect(stack_oper=None, raise_for={"show inventory": SoftTimeLimitExceeded()})
 
     def test_collector_skips_when_platform_does_not_stack(self):
         ctx = _StackCtx({"show switch detail": "% Invalid input detected at '^' marker."})
@@ -1148,60 +1872,40 @@ class TestSwitchStack(unittest.TestCase):
             checks._collect_switch_stack(ctx)
 
     def test_summary_rejected_keeps_detail_ports_and_notes_it(self):
-        ctx = _StackCtx(
-            {
-                "show switch detail": self.detail,
-                "show switch stack-ports summary": "% Invalid input detected at '^' marker.",
-            },
-            payloads={checks._HW_PATH: _STACK_HARDWARE},
+        _ctx, result = self._collect(
+            stack_oper=None,
+            inventory=self.inventory,
+            summary="% Invalid input detected at '^' marker.",
         )
-        result = checks._collect_switch_stack(ctx)
         self.assertEqual(result["normalized"]["stack-port|2/1"], {"status": "OK", "neighbor": 3})
         self.assertIn("stack-ports summary rejected", result["raw"]["note"])
         # No stack-oper payload (404) is a note, never a failure.
-        self.assertIn("stack-oper data not served", result["raw"]["note"])
+        self.assertIn("stack-oper not served", result["raw"]["note"])
         self.assertIsNone(result["raw"]["stack-oper"])
 
-    def test_inventory_without_matching_member_is_noted_not_applied(self):
-        hardware = {
-            "device-hardware-data": {
-                "device-hardware": {
-                    "device-inventory": [
-                        {"hw-type": "hw-type-chassis", "hw-dev-index": 9, "serial-number": "X"}
-                    ]
-                }
-            }
-        }
-        ctx = _StackCtx(
-            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
-            payloads={checks._HW_PATH: hardware},
-        )
-        result = checks._collect_switch_stack(ctx)
-        self.assertNotIn("serial", result["normalized"]["switch|1"])
-        self.assertIn("no member row: 9", result["raw"]["note"])
-
     def test_stack_oper_transport_failure_is_a_note(self):
-        ctx = _StackCtx(
-            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
-            payloads={checks._HW_PATH: _STACK_HARDWARE},
+        _ctx, result = self._collect(
+            inventory=self.inventory,
             raise_for={checks._STACK_OPER_PATH: RuntimeError("HTTP 500")},
         )
-        result = checks._collect_switch_stack(ctx)
-        # 'stack' + 4 'switch|' + 8 'stack-port|' keys: the full view survives.
+        # 'stack' + 4 'switch|' + 8 'stack-port|' keys: the full view survives,
+        # member serials from show inventory.
         self.assertEqual(len(result["normalized"]), 13)
-        self.assertIn("stack-oper supplement failed: HTTP 500", result["raw"]["note"])
+        self.assertEqual(result["normalized"]["switch|3"]["serial"], "FOC0000A003")
+        self.assertEqual(
+            result["raw"]["note"],
+            "stack-oper read failed (HTTP 500): no reload reasons, member serials from the "
+            "fallbacks",
+        )
+        # Context tells this apart from a release that lacks the model.
+        self.assertEqual(result["context"]["stack_oper"], "read failed")
 
     def test_stack_oper_never_swallows_the_celery_abort_signal(self):
         class SoftTimeLimitExceeded(Exception):
             pass
 
-        ctx = _StackCtx(
-            {"show switch detail": self.detail, "show switch stack-ports summary": self.summary},
-            payloads={checks._HW_PATH: _STACK_HARDWARE},
-            raise_for={checks._STACK_OPER_PATH: SoftTimeLimitExceeded()},
-        )
         with self.assertRaises(SoftTimeLimitExceeded):
-            checks._collect_switch_stack(ctx)
+            self._collect(raise_for={checks._STACK_OPER_PATH: SoftTimeLimitExceeded()})
 
 
 if __name__ == "__main__":

@@ -77,8 +77,10 @@ IOSXE_KEY_MODELS = (
     "Cisco-IOS-XE-environment-oper",
     "Cisco-IOS-XE-matm-oper",
     "Cisco-IOS-XE-switch-cp-svl-oper",
-    # Read raw-only by iosxe_switch_stack; its presence here tells a 9300
-    # shakedown whether a structured stack view is available to refine into.
+    # iosxe_switch_stack's per-member serial source, plus the reload-reason
+    # each stack-node carries (per member or stack-wide: still unverified);
+    # leaf spellings field-verified on a 4-member 9300. Where it is absent,
+    # the check falls back to `show inventory` for member serials.
     "Cisco-IOS-XE-stack-oper",
 )
 

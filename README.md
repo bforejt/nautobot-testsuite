@@ -161,7 +161,7 @@ the humans reading the report.
 | `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window, on every stack member's filesystem |
 | `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason |
 | `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
-| `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, model, serial) and stack-port ring health (not-present when the platform does not stack) |
+| `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, serial, model matched by serial, reload reason) and stack-port ring health (not-present when the platform does not stack) |
 | `panos_jobs` | panos | 1 | Unfinished commit/config jobs (history counts in context) |
 | `panos_chassis_ready` | panos | 1 | Dataplane readiness (show chassis-ready) |
 | `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
