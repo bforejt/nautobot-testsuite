@@ -1,5 +1,6 @@
 """CollectorContext transport trace/caching and the shakedown advisory helper."""
 
+import logging
 import unittest
 
 if __package__:
@@ -309,6 +310,146 @@ class TestShakedownAdvice(unittest.TestCase):
         self.assertIn("payload shape", after)
         nothing = registry.shakedown_advice("failed", "404", 0, False)
         self.assertIn("transport/path problem", nothing)
+
+
+class _RecordingSsh:
+    """An SSH-slot client that answers one canned text and records each call's kwargs."""
+
+    def __init__(self, output="enable secret 9 CANARYE1", error=None):
+        self.output = output
+        self.error = error
+        self.calls = []
+
+    def run(self, command, **kwargs):
+        self.calls.append((command, kwargs))
+        if self.error is not None:
+            raise self.error
+        return self.output
+
+    def close(self):
+        pass
+
+
+def _mask(text):
+    return text.replace("CANARYE1", "***")
+
+
+class TestRunSshRedaction(unittest.TestCase):
+    """The redact hook: config reads keep only a redacted copy in the debug trace."""
+
+    def _ctx(self, ssh, debug=True):
+        return context.CollectorContext("dev1", "iosxe", ssh=ssh, debug=debug)
+
+    def test_trace_keeps_only_the_redacted_copy(self):
+        ssh = _RecordingSsh()
+        ctx = self._ctx(ssh)
+        output = ctx.run_ssh("show running-config", redact=_mask, timeout=300)
+        # The caller still receives the verbatim text: it redacts what it stores.
+        self.assertEqual(output, "enable secret 9 CANARYE1")
+        self.assertEqual(ctx.trace[0]["output"], "enable secret 9 ***")
+        self.assertEqual(ctx.trace[0]["chars"], len(output))
+        # The hook never reaches the transport; every other kwarg does.
+        self.assertEqual(ssh.calls, [("show running-config", {"timeout": 300})])
+
+    def test_without_debug_nothing_is_kept_or_redacted(self):
+        seen = []
+
+        def redact(text):
+            seen.append(text)
+            return text
+
+        ctx = self._ctx(_RecordingSsh(), debug=False)
+        ctx.run_ssh("show running-config", redact=redact)
+        self.assertNotIn("output", ctx.trace[0])
+        self.assertEqual(seen, [])
+
+    def test_a_traced_error_is_redacted(self):
+        ssh = _RecordingSsh(error=RuntimeError("died after: enable secret 9 CANARYE1"))
+        ctx = self._ctx(ssh, debug=False)
+        with self.assertRaises(RuntimeError):
+            ctx.run_ssh("show running-config", redact=_mask)
+        self.assertEqual(ctx.trace[0]["outcome"], "error")
+        self.assertEqual(ctx.trace[0]["error"], "RuntimeError: died after: enable secret 9 ***")
+
+    def test_a_failing_redactor_withholds_instead_of_leaking(self):
+        def broken(text):
+            raise ValueError("bad pattern")
+
+        ctx = self._ctx(_RecordingSsh())
+        output = ctx.run_ssh("show running-config", redact=broken)
+        self.assertEqual(output, "enable secret 9 CANARYE1")
+        self.assertNotIn("CANARYE1", ctx.trace[0]["output"])
+        self.assertIn("withheld", ctx.trace[0]["output"])
+
+    def test_the_abort_signal_escapes_the_redactor(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        def aborting(text):
+            raise SoftTimeLimitExceeded()
+
+        ctx = self._ctx(_RecordingSsh())
+        with self.assertRaises(SoftTimeLimitExceeded):
+            ctx.run_ssh("show running-config", redact=aborting)
+
+    def test_without_a_redactor_the_trace_is_verbatim(self):
+        ctx = self._ctx(_RecordingSsh(output="Cisco IOS XE Software"))
+        ctx.run_ssh("show version")
+        self.assertEqual(ctx.trace[0]["output"], "Cisco IOS XE Software")
+
+
+class _EchoingSsh(_RecordingSsh):
+    """Logs each read the way netmiko does: DEBUG records carrying the channel data."""
+
+    def run(self, command, **kwargs):
+        logging.getLogger("netmiko").debug("read_channel: enable secret 9 CANARYE1")
+        logging.getLogger("netmiko.base_connection").debug("Pattern found: # CANARYE1")
+        logging.getLogger("netmiko").info("%s sent", command)
+        return super().run(command, **kwargs)
+
+
+class _Collected(logging.Handler):
+    def __init__(self):
+        super().__init__(logging.DEBUG)
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+
+class TestRunSshWithholdsTheChannelEcho(unittest.TestCase):
+    """A worker at DEBUG never logs a redacted read's text through the SSH library."""
+
+    def setUp(self):
+        self.netmiko = logging.getLogger("netmiko")
+        self.level = self.netmiko.level
+        self.netmiko.setLevel(logging.DEBUG)
+        self.collected = _Collected()
+        self.netmiko.addHandler(self.collected)
+
+    def tearDown(self):
+        self.netmiko.removeHandler(self.collected)
+        self.netmiko.setLevel(self.level)
+
+    def test_a_redacted_read_holds_the_debug_echo_back(self):
+        ctx = context.CollectorContext("dev1", "iosxe", ssh=_EchoingSsh())
+        ctx.run_ssh("show running-config", redact=_mask)
+        self.assertNotIn("CANARYE1", " ".join(self.collected.messages))
+        self.assertIn("show running-config sent", self.collected.messages)  # INFO still flows
+        self.assertEqual(self.netmiko.level, logging.DEBUG)  # restored afterwards
+
+    def test_restored_when_the_read_fails(self):
+        ssh = _EchoingSsh(error=RuntimeError("stream died"))
+        ctx = context.CollectorContext("dev1", "iosxe", ssh=ssh)
+        with self.assertRaises(RuntimeError):
+            ctx.run_ssh("show running-config", redact=_mask)
+        self.assertNotIn("CANARYE1", " ".join(self.collected.messages))
+        self.assertEqual(self.netmiko.level, logging.DEBUG)
+
+    def test_an_ordinary_read_is_left_alone(self):
+        ctx = context.CollectorContext("dev1", "iosxe", ssh=_EchoingSsh())
+        ctx.run_ssh("show version")
+        self.assertIn("read_channel: enable secret 9 CANARYE1", self.collected.messages)
 
 
 if __name__ == "__main__":

@@ -498,6 +498,7 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_svl_health",
         "iosxe_ntp",
         "iosxe_routing_config",
+        "iosxe_config",
         "iosxe_optics",
         "iosxe_crash_files",
         "iosxe_errdisable",

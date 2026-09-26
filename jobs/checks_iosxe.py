@@ -13,6 +13,7 @@ iosxe_route_rollups call ``ctx.get`` with the identical path and kwargs, so
 the per-run cache issues one GET for both checks.
 """
 
+import difflib
 import re
 from datetime import datetime, timezone
 
@@ -1012,6 +1013,761 @@ register(
         ),
         collector=_collect_routing_config,
         tags=("routing", "config"),
+    )
+)
+
+
+# --- iosxe_config (the whole running-config + startup-config, redacted) -------
+# The configuration as the operator reads it: `show running-config` and
+# `show startup-config` over SSH. The CLI text is the ground truth — the
+# native RESTCONF model is a translation of the running config, and the saved
+# startup-config is not reachable through RESTCONF at all — and it covers
+# everything the per-feature config checks slice out. Each text is ONE
+# normalized object, {"lines": [...]}, so the pretty-printed snapshot stays
+# readable in an editor and the text_diff compare mode reports a change as
+# line-level hunks rather than one enormous changed value.
+#
+# Secrets: these artifacts are downloaded and pasted into LLM conversations,
+# so every line is redacted before it is stored ANYWHERE — normalized,
+# context, raw, error messages, and (through run_ssh's redact hook) the debug
+# trace the Collector Shakedown attaches. The verbatim text never outlives
+# one collection's local variables. Redaction is line by line: explicit
+# rules for the known secret-bearing command shapes keep the keyword and the
+# encryption-type digit (a type-7 password stays visibly type 7) and replace
+# the value with the house marker, and a fail-closed catch-all masks the
+# rest of any line holding a secret-looking word no rule explained.
+# Over-redaction is acceptable; a leak is not.
+
+_SECRET_MARK = "***scrubbed***"
+# An IOS encryption-type digit between a secret keyword and its value (0
+# cleartext, 4/5/8/9 hashes, 6 AES, 7 the reversible legacy cipher). Kept only
+# when another token follows it — a lone trailing digit is the secret itself.
+_TYPE_DIGIT = r"(?:\s+[045-9](?=\s+\S))?"
+_TYPE_DIGIT_AT = re.compile(r"\s+[045-9](?=\s+\S)")
+# A variable or option name that says it holds a secret: some '_', '-' or '.'
+# separated part of it ends in one of these (TEAGENT_ACCOUNT_TOKEN,
+# PROXY_PASS, _smtp_pw, _apikey, AUTH_TYPE). Used with IGNORECASE.
+_SECRET_NAME = (
+    r"(?:pass(?:wd|word|phrase)?|pwd|pw|secret|token|key|psk|pin|pmk|auth"
+    r"|cred(?:ential)?s?|bearer|cookie)"
+)
+
+# Whole lines that carry a secret-looking word but, by their grammar, no
+# secret; matched against the full line, so nothing else can ride along.
+_BENIGN_CONFIG_LINES = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\s*(?:no\s+)?password\s+encryption\s+aes\s*",
+        r"\s*security\s+passwords\s+min-length\s+\d+\s*",
+        r"\s*ip\s+ssh\s+server\s+algorithm\s+authentication"
+        r"(?:\s+(?:password|keyboard|publickey))+\s*",
+        r"\s*mka\s+pre-shared-key\s+key-chain\s+\S+(?:\s+fallback\s+key-chain\s+\S+)?\s*",
+        r"\s*ntp\s+trusted-key\s+\d+(?:\s*-\s*\d+)?\s*",  # key NUMBERS
+        # BGP communities are routing attributes, not SNMP community strings.
+        r"\s*ip\s+(?:ext|large-)?community-list\s.*",
+        r"\s*ip\s+bgp-community\s+new-format\s*",
+        r"\s*(?:set|match)\s+(?:ext|large-)?community(?:\s.*)?",
+        r"\s*(?:neighbor\s+\S+\s+)?send-community(?:\s+(?:both|standard|extended|large))*\s*",
+    )
+)
+
+# scheme://user:password@host in archive paths and kron/EEM copy commands:
+# everything between '://' and the LAST '@' of the token goes, so an '@'
+# inside the password cannot split it.
+_URL_USERINFO = re.compile(r"(?P<scheme>\b[A-Za-z][A-Za-z0-9+.-]*://)\S*@")
+# The same credential with no scheme: call-home's `mail-server
+# user:password@host` (the SMTP login; Cisco-IOS-XE-call-home documents that
+# format, either part possibly empty) and EEM `mail server "user:pw@host"`.
+# From the token's start to its LAST '@' goes; a ':' followed by '//' is a
+# URL the rule above has already masked.
+_BARE_USERINFO = re.compile(r"(?<![^\s\"'(=,])[^\s\"'@:/]*:(?!//)\S*@")
+
+# Full-line shapes whose secret is ONE token followed by keywords worth
+# keeping; only that token is replaced. A line that misses its shape falls
+# through to the mask rules below, which mask everything after the keyword.
+_CONFIG_VALUE_RULES = (
+    # ntp authentication-key <id> <algorithm> <value> [<type>] — the type TRAILS.
+    # The algorithm is spelled out: an unknown second token must never be
+    # mistaken for one and kept (the mask rules then take the whole tail).
+    re.compile(
+        r"(?P<keep>\s*ntp\s+(?P<kw>authentication-key)\s+\d+\s+"
+        r"(?:md5|sha1|sha2|cmac-aes-128|hmac-sha1|hmac-sha2-256)\s+)(?P<secret>\S+)"
+        r"(?P<rest>\s+[0-9])?\s*"
+    ),
+    # crypto isakmp key [<type>] <value> address <peer> [<mask>] [no-xauth] | hostname <name>
+    re.compile(
+        r"(?P<keep>\s*crypto\s+isakmp\s+(?P<kw>key)\s+(?:[045-9]\s+)?)(?P<secret>\S+)"
+        r"(?P<rest>\s+(?:address|hostname)\s+\S+(?:\s+\S+)?(?:\s+no-xauth)?)\s*"
+    ),
+    # snmp-server community <string> [view <v>] [RO|RW] [ipv6 <acl>] [<acl>]; a
+    # leading digit is masked WITH the string, never read as a type.
+    re.compile(
+        r"(?P<keep>\s*snmp-server\s+(?P<kw>community)\s+)(?P<secret>(?:[0-9]\s+)?\S+)"
+        r"(?P<rest>(?:\s+view\s+\S+)?(?:\s+(?:RO|RW|ro|rw))?(?:\s+ipv6\s+\S+)?(?:\s+\S+)?)\s*"
+    ),
+)
+
+
+def _benign_key(line, match, parent):
+    """True where the bare word 'key' names or numbers a key instead of introducing one."""
+    after = line[match.end("kw") :]
+    if re.match(r"\s+chain\b", after) or re.fullmatch(r"\s*crypto\s+", line[: match.start("kw")]):
+        return True  # `key chain <name>`, `crypto key pubkey-chain rsa`
+    if re.match(r"\s*ntp\s+(?:server|peer)\b", line) and re.match(r"\s+\d+(?:\s|$)", after):
+        return True  # `ntp server <address> key <key-id>`
+    # ` key <id>` directly under `key chain <name>` numbers the key; its
+    # key-string line carries the secret.
+    return parent.startswith("key chain") and bool(re.fullmatch(r"\s+key\s+[0-9A-Fa-f]+\s*", line))
+
+
+# (pattern, benign-predicate) pairs: after a match the rest of the line is
+# secret. The 'kw' group is the keyword the rule explains (the catch-all does
+# not cut there again); the match ends where masking starts, after any kept
+# encryption-type digit.
+_CONFIG_MASK_RULES = (
+    # snmp-server host <addr> [vrf <v>] [informs|traps] [version 1|2c|3 [auth|noauth|priv]]
+    # <community> ... — the v1/v2c community is positional, so everything past
+    # the recognized keywords goes, notification types included.
+    (
+        re.compile(
+            r"^\s*(?P<kw>snmp-server\s+host)\s+\S+(?:\s+vrf\s+\S+)?(?:\s+(?:informs|traps))?"
+            r"(?:\s+version\s+(?:1|2c|3(?:\s+(?:auth|noauth|priv))?))?"
+        ),
+        None,
+    ),
+    # snmp-server user <u> <g> ... v3 auth <algorithm> <password> [priv <alg> <password>];
+    # whichever of auth/priv comes first starts the mask. The key lengths are
+    # the model's enumerations (sha-2 256|384|512, aes 128|192|256) and are
+    # kept only when a password follows, so an all-digit password is never
+    # mistaken for one.
+    (
+        re.compile(
+            r"^\s*snmp-server\s+user\b.*?(?<![\w-])(?P<kw>auth|priv)(?![\w-])"
+            r"(?:\s+(?:md5|sha-2(?:\s+(?:256|384|512)(?=\s+\S))?|sha|3des|des"
+            r"|aes(?:\s+(?:128|192|256)(?=\s+\S))?))?"
+        ),
+        None,
+    ),
+    # HSRP/VRRP/GLBP plain-text authentication; the md5 forms carry a
+    # key-string (the catch-all's) or a key-chain NAME (no secret).
+    (
+        re.compile(
+            r"^\s*(?:standby|vrrp|glbp)(?:\s+\d+)?\s+(?P<kw>authentication)(?!\s+md5\b)"
+            r"(?:\s+text)?"
+        ),
+        None,
+    ),
+    # OSPF (interface or virtual/sham link) message-digest-key <id> md5 [<type>] <value>
+    (re.compile(r"\b(?P<kw>message-digest-key)(?:\s+\d+\s+md5)?" + _TYPE_DIGIT), None),
+    # OSPFv3 IPsec: ... {authentication|encryption} ipsec spi <n> <algorithms and keys>
+    (re.compile(r"\b(?P<kw>(?:authentication|encryption)\s+ipsec\s+spi\s+\d+)"), None),
+    # Named-mode EIGRP: authentication mode hmac-sha-256 [<type>] <password>
+    (re.compile(r"\b(?P<kw>authentication\s+mode\s+hmac-sha-256)" + _TYPE_DIGIT), None),
+    (re.compile(r"\b(?P<kw>(?:ip|ipv6)\s+nhrp\s+authentication)\b"), None),
+    # 9800 WLAN PSK / MPSK: [psk] set-key {ascii|hex} [<type>] <value>
+    (re.compile(r"(?P<kw>(?:\bpsk\s+)?\bset-key)(?:\s+(?:ascii|hex))?" + _TYPE_DIGIT), None),
+    (re.compile(r"\b(?P<kw>wpa-psk)(?:\s+(?:ascii|hex))?" + _TYPE_DIGIT), None),
+    # IKEv2 keyring pre-shared-key [local|remote] [<type>] <value>; IKEv1
+    # keyring pre-shared-key {address|hostname} <peer> [<mask>] key [<type>] <value>
+    (
+        re.compile(
+            r"\b(?P<kw>pre-shared-key)(?:\s+(?:local|remote))?"
+            r"(?:\s+(?:address|hostname)\s+\S+(?:\s+\S+)?\s+key\b)?" + _TYPE_DIGIT
+        ),
+        None,
+    ),
+    # IKEv2 profile: authentication {local|remote} pre-share key [<type>] <value>
+    (re.compile(r"\b(?P<kw>pre-share\s+key)" + _TYPE_DIGIT), None),
+    # Umbrella/OpenDNS parameter-map device token
+    (re.compile(r"^\s*(?P<kw>token)\b"), None),
+    (re.compile(r"(?<![\w-])(?P<kw>cak)(?![\w-])" + _TYPE_DIGIT), None),
+    # HTTP credentials in a raw request (IP SLA http-raw-request lines).
+    (
+        re.compile(
+            r"(?<![\w-])(?P<kw>(?:proxy-)?authorization|(?:set-)?cookie)\s*:", re.IGNORECASE
+        ),
+        None,
+    ),
+    # A variable named for a secret: EEM `event manager environment _smtp_pw
+    # <value>`, and NAME=VALUE options such as the ThousandEyes agent's
+    # app-hosting `run-opts 1 "-e TEAGENT_ACCOUNT_TOKEN=<token>"`.
+    (
+        re.compile(
+            r"^\s*event\s+manager\s+environment\s+(?P<kw>\S*?" + _SECRET_NAME + r"(?![^_.\s-])\S*)",
+            re.IGNORECASE,
+        ),
+        None,
+    ),
+    (
+        re.compile(
+            r"(?<![^\s\"'(,;:=?&/])(?P<kw>[\w.-]*?" + _SECRET_NAME + r"(?![^_.=-])[\w.-]*)(?==)",
+            re.IGNORECASE,
+        ),
+        None,
+    ),
+    # The bare word 'key' (lowercase, as IOS prints keywords): tacacs/radius
+    # server `key [6|7] <value>`, `pac key`, tacacs-server/radius-server key,
+    # server-private ... key, crypto isakmp client group `key`, key
+    # config-key, tunnel key, LISP map-server and fabric control-plane keys.
+    (re.compile(r"(?<![\w-])(?P<kw>key)(?![\w-])" + _TYPE_DIGIT), _benign_key),
+)
+
+# Fail-closed catch-all: a token holding one of these words (any case) that
+# no rule explained masks the rest of its line — descriptions, banners,
+# remarks, EEM strings and commands no rule knows included. Besides the plain
+# words (token covers auth-token, idtoken, the 9800's `nmsp cloud-services
+# server token` and DNA/WSA tokens): any compound on '-key' or '_key'
+# (server-key, session-key, api-key, authentication-key, _api_key ...) or
+# '-pin'/'_pin' (user-pin), and a bare 'pin' or 'pmk' (TrustSec SAP's
+# Pre-Master Key, the switch-to-switch MACsec keying beside MKA: interface
+# `cts manual` / ` sap pmk <key> [mode-list ...]`, and ` default pmk [0|6]
+# <key>` — Cisco-IOS-XE-cts; the type digit stays). As whole words only,
+# the shorthand free text uses ("pw ...", "pass: ...", "creds: ..."), and a
+# 'Key' that labels a value ("Key: ...", "KEY=...") — never 'Key West'.
+_CATCH_ALL_WORDS = re.compile(
+    r"password|passwd|secret|community|passphrase|psk|pre-share|key-string|token|bearer"
+    r"|keyhash|(?<=[A-Za-z0-9])[-_](?:key|pin)|(?<![A-Za-z0-9-])(?:pin|pmk)(?![A-Za-z])"
+    r"|(?<![\w-])(?:pw|pwd|pass|passcode|creds?)(?![\w-])|(?<![\w-])key(?=[:=])",
+    re.IGNORECASE,
+)
+# What may follow the word inside its token and leave the token an IOS
+# keyword (password-encryption, community-map, psk-sha256, passwords,
+# "Password:") — the cut then falls after the token. Anything else is taken
+# for a value glued onto the word (password=x, password-x, key-string:x) and
+# the cut falls right after the word.
+_KEYWORD_TAIL = re.compile(r"(?:s|-encryption|-recovery|-prompt|-list|-map|-sha\d+)?[\"'():;,.]*")
+_TOKEN = re.compile(r"\S+")
+
+# Grammar-fixed tokens the catch-all must not cut at. On these lines an
+# operator-chosen name — a route-map, prefix-list, ACL, class or policy, VRF,
+# VLAN, user, key chain, server group, or a 9800 WLAN's profile, SSID and
+# policy profile — sits at a fixed place from the start of the line. A
+# secret-looking word inside it (SET-COMMUNITY, CORP-PSK, PL-KEY-SERVERS)
+# would otherwise mask the rest of the line and hide a real change — a
+# permit turned deny, a WLAN moved to another policy profile — from the diff
+# and from in_sync. Anchored at the line start, so a description, remark or
+# EEM string never forms one, and never applied inside a banner's text; the
+# explicit rules above still see every token, and a secret word elsewhere on
+# the line still masks.
+_CONFIG_NAME_POSITIONS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\s*(?:no\s+)?route-map\s+(?P<n1>\S+)",
+        r"\s*(?:ip|ipv6)\s+prefix-list\s+(?P<n1>\S+)",
+        r"\s*(?:ip|ipv6|mac)\s+access-list\s+(?:(?:standard|extended|role-based)\s+)?(?P<n1>\S+)",
+        r"\s*(?:ip|ipv6)\s+(?:access-group|traffic-filter)\s+(?P<n1>\S+)",
+        r"\s*(?:ipv6\s+)?access-class\s+(?P<n1>\S+)",
+        r"\s*class-map\s+(?:type\s+\S+\s+)?(?:match-(?:any|all|none)\s+)?(?P<n1>\S+)",
+        r"\s*policy-map\s+(?:type\s+(?:control\s+subscriber|\S+)\s+)?(?P<n1>\S+)",
+        r"\s*class\s+(?:type\s+\S+\s+)?(?P<n1>\S+)",
+        r"\s*service-policy\s+(?:type\s+(?:control\s+subscriber|\S+)\s+)?"
+        r"(?:(?:input|output)\s+)?(?P<n1>\S+)",
+        r"\s*(?:vrf\s+(?:definition|forwarding|member)|ip\s+vrf(?:\s+forwarding)?)\s+(?P<n1>\S+)",
+        r"\s*address-family\s+\S+(?:\s+(?:unicast|multicast))?\s+vrf\s+(?P<n1>\S+)",
+        r"\s*name\s+(?P<n1>\S+)",
+        r"\s*username\s+(?P<n1>\S+)",
+        r"\s*key\s+chain\s+(?P<n1>\S+)",
+        r"\s*neighbor\s+(?P<n1>\S+)"
+        r"(?:\s+(?:route-map|prefix-list|peer-group|filter-list)\s+(?P<n2>\S+))?",
+        r"\s*match\s+(?:ip|ipv6)\s+address\s+(?:prefix-list\s+)?(?P<n1>\S+)",
+        r"\s*redistribute\s+\S+(?:\s+\S+)*?\s+route-map\s+(?P<n1>\S+)",
+        r"\s*(?:ip\s+policy|default-information\s+originate(?:\s+always)?)\s+route-map"
+        r"\s+(?P<n1>\S+)",
+        r"\s*wlan\s+(?P<n1>\S+)(?:\s+\d+\s+(?P<n2>\S+)|\s+policy\s+(?P<n3>\S+))?",
+        r"\s*(?:wireless\s+(?:tag|profile)\s+\S+|policy-tag|site-tag|rf-tag)\s+(?P<n1>\S+)",
+        r"\s*aaa\s+group\s+server\s+\S+\s+(?P<n1>\S+)",
+        # `crypto pki token <label> ...`: 'token' names a USB token here; its
+        # user-pin still masks.
+        r"\s*crypto\s+pki\s+(?P<n1>token)\s+(?P<n2>\S+)",
+    )
+)
+
+
+# A name is an identifier: anything else in a name position (a glued
+# 'password=x', a quoted string) gets no exemption.
+_CONFIG_NAME = re.compile(r"[\w.-]+")
+
+
+def _name_spans(line):
+    """Spans of the grammar-fixed name tokens on one (non-free-text) line."""
+    spans = []
+    for rule in _CONFIG_NAME_POSITIONS:
+        match = rule.match(line)
+        if match is None:
+            continue
+        for name, value in match.groupdict().items():
+            if value and _CONFIG_NAME.fullmatch(value):
+                spans.append(match.span(name))
+    return spans
+
+
+def _catch_all_cut(line, explained, cut):
+    """Where the first unexplained secret-looking token starts masking, capped at ``cut``."""
+    for token in _TOKEN.finditer(line):
+        if cut is not None and token.start() >= cut:
+            break
+        text = token.group()
+        hit = _CATCH_ALL_WORDS.search(text)
+        if hit is None:
+            continue
+        offset = len(text) if _KEYWORD_TAIL.fullmatch(text[hit.end() :]) else hit.end()
+        if any(start < token.end() and token.start() < end for start, end in explained):
+            continue
+        position = token.start() + offset
+        digit = _TYPE_DIGIT_AT.match(line, position)
+        if digit is not None:
+            position = digit.end()
+        return position if cut is None else min(cut, position)
+    return cut
+
+
+def _redact_config_line(line, parent="", free_text=False):
+    """One configuration line with every secret value replaced by the house marker.
+
+    ``parent`` is the enclosing top-level line (a key chain's key numbers are
+    not secrets); ``free_text`` marks a line of a banner's text, where no
+    token is a grammar-fixed name. A line holding nothing secret-looking
+    comes back unchanged.
+    """
+    if any(rule.fullmatch(line) for rule in _BENIGN_CONFIG_LINES):
+        return line
+    line = _URL_USERINFO.sub(lambda match: match.group("scheme") + _SECRET_MARK + "@", line)
+    line = _BARE_USERINFO.sub(_SECRET_MARK + "@", line)
+    explained = []
+    cut = None
+    for rule in _CONFIG_VALUE_RULES:
+        match = rule.fullmatch(line)
+        if match is not None:
+            explained.append(match.span("kw"))
+            line = match.group("keep") + _SECRET_MARK + (match.group("rest") or "")
+            break
+    else:
+        for rule, benign in _CONFIG_MASK_RULES:
+            for match in rule.finditer(line):
+                explained.append(match.span("kw"))
+                if benign is not None and benign(line, match, parent):
+                    continue
+                if cut is None or match.end() < cut:
+                    cut = match.end()
+                break
+    if not free_text and _CATCH_ALL_WORDS.search(line):
+        explained.extend(_name_spans(line))
+    cut = _catch_all_cut(line, explained, cut)
+    if cut is None or not line[cut:].strip():
+        return line
+    return line[:cut].rstrip() + " " + _SECRET_MARK
+
+
+# EEM applets that answer a CLI prompt: an action that waits for a prompt
+# (`cli command "..." pattern "..."`) is followed by a `cli command` action
+# whose whole argument is the answer — a password as often as an address or
+# a file name (`pattern "word:"`, `pattern ":"`), with no keyword on its own
+# line — so every such answer is masked; an empty "" answer (just Enter)
+# stays.
+_EEM_PROMPT = re.compile(r"\bcli\s+command\b.*\bpattern\b")
+_EEM_CLI_COMMAND = re.compile(r"\bcli\s+command\b")
+_EEM_EMPTY_ANSWER = re.compile(r'\s*""(?:\s|$)')
+# IOS prints a banner's (and a line's vacant/refuse message's) delimiter as
+# ^C: the text between an opening and a closing ^C is free text.
+_TEXT_DELIMITER = "^C"
+
+
+def _redact_config_lines(lines):
+    """Redact configuration lines one by one; the result aligns 1:1 with the input.
+
+    Three facts carry from line to line: the enclosing top-level line, whether
+    the line sits inside a ^C-delimited banner text, and inside an EEM applet
+    a pending prompt, whose answer is the argument of the next `cli command`
+    action.
+    """
+    redacted = []
+    parent = ""
+    answer_pending = False
+    in_text = False
+    for line in lines:
+        free_text = in_text
+        if line.count(_TEXT_DELIMITER) % 2:
+            in_text = not in_text
+        if not free_text and line[:1] not in ("", " ", "\t", "!"):
+            parent = line.strip()
+            answer_pending = False  # a new stanza: no prompt carries over
+        out = _redact_config_line(line, parent, free_text=free_text)
+        if parent.startswith("event manager applet"):
+            command = _EEM_CLI_COMMAND.search(out) if answer_pending else None
+            if command is not None:
+                answer_pending = False
+                answer = out[command.end() :]
+                if answer.strip() and not _EEM_EMPTY_ANSWER.match(answer):
+                    out = out[: command.end()] + " " + _SECRET_MARK
+            if _EEM_PROMPT.search(line):
+                answer_pending = True
+        redacted.append(out)
+    return redacted
+
+
+def _redact_config_text(text):
+    """Whole-output form of _redact_config_lines — also ctx.run_ssh's trace hook."""
+    return "\n".join(_redact_config_lines(str(text).splitlines()))
+
+
+# Framing IOS prints around the configuration, never part of it, and each
+# line changes without a configuration change: the byte counts move with
+# every edit and differ between running and startup by construction, and the
+# comment lines move with every edit, save and reload. They are dropped from
+# the normalized text and their facts lifted into context; the '!'
+# separators around them are text and stay.
+_CONFIG_HEADER = tuple(
+    (re.compile(pattern), constant)
+    for pattern, constant in (
+        (r"Building configuration\.\.\.", {}),
+        (r"Current configuration\s*:\s*(?P<bytes>\d+)\s+bytes", {}),
+        (
+            r"Using\s+(?P<bytes>\d+)\s+out\s+of\s+(?P<nvram_bytes_total>\d+)\s+bytes"
+            r"(?:,\s*uncompressed\s+size\s*=\s*(?P<uncompressed_bytes>\d+)\s+bytes)?",
+            {},
+        ),
+        (
+            r"Uncompressed configuration from\s+\d+\s+bytes\s+to\s+"
+            r"(?P<uncompressed_bytes>\d+)\s+bytes",
+            {},
+        ),
+        (
+            r"! Last configuration change at (?P<last_change_at>.+?)"
+            r"(?: by (?P<last_change_by>.+?))?",
+            {},
+        ),
+        (
+            r"! NVRAM config last updated at (?P<nvram_updated_at>.+?)"
+            r"(?: by (?P<nvram_updated_by>.+?))?",
+            {},
+        ),
+        (r"! No configuration change since last restart", {"no_change_since_restart": True}),
+        # `exec prompt timestamp` on the vty lines prefixes every show output
+        # with the CPU load and the clock — different on every capture.
+        (r"Load for five secs:.*", {}),
+        (r"(?:Time source is |No time source, ).*", {}),
+        # netmiko's echo of the command, should one ever survive strip_command
+        (r"(?:[\w.:/()-]+[#>])?\s*show\s+(?:running|startup)-config", {}),
+    )
+)
+# The one body line known to change with no configuration change: IOS
+# rewrites `ntp clock-period` as NTP disciplines the clock (and saves the
+# value of the moment with every `write memory`), so it would diff between
+# two healthy captures.
+_CONFIG_VOLATILE_BODY = re.compile(r"ntp\s+clock-period\s+\d+")
+# A trailing CLI prompt netmiko failed to strip ("switch#").
+_PROMPT_LINE = re.compile(r"[\w.:/()-]+[#>]")
+# Never saved ("startup-config is not present"), or no NVRAM file to read.
+_STARTUP_ABSENT = re.compile(r"\bnot present\b|no such file or directory", re.IGNORECASE)
+# How IOS refuses a command (a privilege or command-authorization boundary),
+# as opposed to answering it.
+_CLI_REFUSAL = re.compile(
+    r"invalid input|incomplete command|ambiguous command|authorization failed"
+    r"|not authorized|permission denied|access denied",
+    re.IGNORECASE,
+)
+_PRIVILEGE_LINE = re.compile(r"Current privilege level is (\d+)")
+# Lines of the startup-vs-running unified diff kept in raw (redacted text).
+_CONFIG_DIFF_RAW_LINES = 2000
+_CONFIGS = (("running-config", "show running-config"), ("startup-config", "show startup-config"))
+
+
+def _config_end(lines):
+    """Index of the configuration's final 'end' line; None when the text stops short.
+
+    Only blank lines, or one CLI prompt netmiko left behind, may follow it.
+    """
+    texts = [index for index, line in enumerate(lines) if line.strip()]
+    if texts and lines[texts[-1]].strip() == "end":
+        return texts[-1]
+    if (
+        len(texts) >= 2
+        and _PROMPT_LINE.fullmatch(lines[texts[-1]].strip())
+        and lines[texts[-2]].strip() == "end"
+    ):
+        return texts[-2]
+    return None
+
+
+def _classify_config_output(lines, startup):
+    """What one config command answered: (kind, detail).
+
+    'config' (detail: index of the final 'end'), 'absent' (startup only, never
+    saved), 'rejected' (the refusal line), 'error' (startup only: the device's
+    %-message), 'truncated' (the first line) or 'empty'. A refusal or an
+    error is a short answer, judged without the framing a show prints around
+    any answer (exec prompt timestamp lines, a leftover command echo or
+    prompt); anything else without its final 'end' is a read cut short, and
+    on the running side a device error too — never a configuration.
+    """
+    texts = [line.strip() for line in lines if line.strip()]
+    if not texts:
+        return "empty", None
+    end = _config_end(lines)
+    if end is not None:
+        return "config", end
+    answer = [
+        text
+        for text in texts
+        if _config_header_facts(text) is None and not _PROMPT_LINE.fullmatch(text)
+    ]
+    if not answer:
+        return "empty", None
+    if len(answer) <= 5:
+        for text in answer:
+            if startup and _STARTUP_ABSENT.search(text):
+                return "absent", text
+        for text in answer:
+            if _CLI_REFUSAL.search(text):
+                return "rejected", text
+        # NVRAM busy (a save or archive in progress) or unreadable (bad
+        # checksum): the saved side is unknown, the running text still good.
+        if startup and answer[0].startswith("%"):
+            return "error", answer[0]
+    return "truncated", texts[0]
+
+
+def _config_header_facts(text):
+    """The facts one header line states, or None when the line is configuration."""
+    for pattern, constant in _CONFIG_HEADER:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        facts = dict(constant)
+        for name, value in match.groupdict().items():
+            if value is not None:
+                facts[name] = int(value) if name.endswith(("bytes", "bytes_total")) else value
+        return facts
+    return None
+
+
+def _config_body(lines, end):
+    """(indexes of the normalized text, lifted header facts, volatile lines dropped).
+
+    The header region is the leading run of blank, '!' and header lines —
+    blank and header lines are dropped there, '!' lines kept. The body runs
+    from the first other line through the final 'end'.
+    """
+    keep = []
+    facts = {}
+    index = 0
+    while index < end:
+        text = lines[index].strip()
+        if text == "!":
+            keep.append(index)
+        elif text:
+            header = _config_header_facts(text)
+            if header is None:
+                break
+            facts.update(header)
+        index += 1
+    volatile = 0
+    for position in range(index, end + 1):
+        if _CONFIG_VOLATILE_BODY.fullmatch(lines[position].strip()):
+            volatile += 1
+        else:
+            keep.append(position)
+    return keep, facts, volatile
+
+
+def _ssh_failure(command, exc):
+    """A redacted one-line account of a failed SSH read (the error text may echo output)."""
+    return "'%s' failed: %s" % (command, _redact_config_text("%s: %s" % (type(exc).__name__, exc)))
+
+
+def _config_read(ctx, command, **kwargs):
+    """One SSH read traced through the redact hook; a failure fails the check, redacted."""
+    try:
+        output = ctx.run_ssh(command, redact=_redact_config_text, **kwargs)
+    except Exception as exc:
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never wrapped
+        raise CollectError(_ssh_failure(command, exc)) from None
+    return output if isinstance(output, str) else ""
+
+
+def _session_privilege(ctx, raw, notes):
+    """This session's privilege level from `show privilege` (best-effort; None when unread)."""
+    command = "show privilege"
+    try:
+        output = _config_read(ctx, command)
+    except CollectError as exc:
+        notes.append(str(exc))
+        return None
+    raw[command] = _redact_config_lines(output.splitlines())
+    match = _PRIVILEGE_LINE.search(output)
+    if match is None:
+        first = next((line.strip() for line in output.splitlines() if line.strip()), "")
+        notes.append(
+            "'%s' reported no privilege level: %s" % (command, _redact_config_line(first)[:120])
+        )
+        return None
+    return int(match.group(1))
+
+
+def _unsaved_config_leaf(ctx):
+    """(value, note) of device-system-data's unsaved-config leaf; (None, None) when not served.
+
+    Read from the hardware GET platform-health and the stack check make —
+    identical path and kwargs, so the per-run cache answers it without a
+    request of its own. Defined in the 17.9.1 and 17.12.1 models; the
+    committed 17.12.04 capture does not carry it.
+    """
+    try:
+        payload = ctx.get(_HW_PATH)
+    except Exception as exc:
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise
+        return None, "device-hardware read for the unsaved-config leaf failed: %s" % (exc,)
+    container = _container(payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data")
+    hardware = container.get("device-hardware") if isinstance(container, dict) else None
+    system = hardware.get("device-system-data") if isinstance(hardware, dict) else None
+    value = system.get("unsaved-config") if isinstance(system, dict) else None
+    if isinstance(value, bool):
+        return value, None
+    if str(value).lower() in ("true", "false"):
+        return str(value).lower() == "true", None
+    return None, None
+
+
+def _config_delta(startup, running):
+    """(lines only in running, lines only in startup, capped unified diff) of two bodies."""
+    only_running = only_startup = 0
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, startup, running).get_opcodes():
+        if tag != "equal":
+            only_startup += i2 - i1
+            only_running += j2 - j1
+    diff = list(
+        difflib.unified_diff(startup, running, "startup-config", "running-config", lineterm="")
+    )
+    if len(diff) > _CONFIG_DIFF_RAW_LINES:
+        dropped = len(diff) - _CONFIG_DIFF_RAW_LINES
+        diff = diff[:_CONFIG_DIFF_RAW_LINES] + ["... [%d more diff lines truncated]" % (dropped,)]
+    return only_running, only_startup, diff
+
+
+def _collect_config(ctx):
+    if not ctx.has_ssh:
+        raise SkipCheck("no SSH transport")
+    raw = {}
+    context = {}
+    notes = []
+    texts = {}  # label -> (redacted body, verbatim body); verbatim never leaves here
+    unread = {}  # label -> why the device gave no text: its refusal or error (redacted)
+    for label, command in _CONFIGS:
+        lines = _config_read(ctx, command, timeout=C.SSH_CONFIG_READ_TIMEOUT).splitlines()
+        kind, detail = _classify_config_output(lines, startup=label == "startup-config")
+        if kind == "empty":
+            raise CollectError("'%s' returned no output" % (command,))
+        if kind == "truncated":
+            raise CollectError(
+                "'%s' output has no final 'end' (%d lines received, starting %r) — a read "
+                "cut short or a device error; nothing stored"
+                % (command, len(lines), _redact_config_line(detail)[:120])
+            )
+        redacted = _redact_config_lines(lines)
+        raw[command] = redacted
+        if kind == "absent":
+            context[label] = {"present": False, "device_says": _redact_config_line(detail)[:200]}
+            continue
+        if kind in ("rejected", "error"):
+            unread[label] = "'%s' %s: %s" % (
+                command,
+                "rejected" if kind == "rejected" else "answered with a device error",
+                _redact_config_line(detail)[:200],
+            )
+            context[label] = {"error": unread[label]}
+            continue
+        keep, facts, volatile = _config_body(lines, detail)
+        body = [redacted[index] for index in keep]
+        texts[label] = (body, [lines[index] for index in keep])
+        facts["line_count"] = len(body)
+        if volatile:
+            facts["volatile_lines_stripped"] = volatile
+        context[label] = facts
+    if not texts:
+        # Every IOS-XE device has a running-config, so reading none is a failed
+        # read (registry doctrine), never an absence — typically an account
+        # below privilege 15 or refused by command authorization.
+        reasons = [unread[label] for label, _command in _CONFIGS if label in unread]
+        if "startup-config" not in unread:
+            reasons.append("startup-config is not present")
+        raise CollectError(
+            "no configuration text readable (check the account's privilege and command "
+            "authorization): %s" % ("; ".join(reasons),)
+        )
+
+    privilege = _session_privilege(ctx, raw, notes)
+    running = texts.get("running-config")
+    startup = texts.get("startup-config")
+    if privilege is not None:
+        context["session_privilege"] = privilege
+        if privilege < 15 and running is not None:
+            notes.append(
+                "session privilege %d is below 15: IOS shows a lower-privileged session only "
+                "the configuration it may itself use, so running-config may be partial"
+                % (privilege,)
+            )
+    if running is not None:
+        if "bytes" not in context["running-config"]:
+            notes.append(
+                "running-config printed no 'Current configuration' header — the text may be "
+                "partial (a privilege-limited view)"
+            )
+        if not any(line.startswith("version ") for line in running[0]):
+            notes.append("running-config has no 'version' line — the text may be partial")
+
+    sync = {}
+    if running is not None and startup is not None:
+        in_sync = running[0] == startup[0]
+        # The same comparison before redaction, as one bit: false while
+        # in_sync is true means only a masked value differs — a rotated TACACS
+        # key or SNMP community that was never saved, which the redacted texts
+        # (and so the hunks) cannot show, and which a reload would undo.
+        verbatim_in_sync = running[1] == startup[1]
+        only_running, only_startup, diff = _config_delta(startup[0], running[0])
+        sync["only_in_running"] = only_running
+        sync["only_in_startup"] = only_startup
+        if diff:
+            raw["startup-vs-running diff"] = diff
+    elif running is not None and "startup-config" not in unread:
+        # never saved: nothing on NVRAM matches the running text
+        in_sync = verbatim_in_sync = False
+    else:
+        in_sync = verbatim_in_sync = None  # one side unread: unknown, never a guess
+    leaf, leaf_note = _unsaved_config_leaf(ctx)
+    if leaf is not None:
+        sync["unsaved_config_leaf"] = leaf
+    if leaf_note:
+        notes.append(leaf_note)
+    context["running-vs-startup"] = sync
+    if notes:
+        context["notes"] = notes
+
+    normalized = {
+        label: {"lines": texts[label][0]} for label, _command in _CONFIGS if label in texts
+    }
+    normalized["running-vs-startup"] = {"in_sync": in_sync, "verbatim_in_sync": verbatim_in_sync}
+    return {"raw": raw, "normalized": normalized, "context": context}
+
+
+register(
+    CheckDef(
+        id="iosxe_config",
+        platform="iosxe",
+        description=(
+            "Full running-config and startup-config text (secrets redacted) and whether they match"
+        ),
+        tier=2,
+        compare={"mode": "text_diff"},
+        miss_meaning=(
+            "The configuration TEXT changed — each contiguous run of changed lines is its own "
+            "hunk: the planned edit (verify it matches the change plan exactly) or an edit "
+            "nobody declared. A running-config change without the same startup-config change "
+            "was not saved and does not survive a reload."
+        ),
+        collector=_collect_config,
+        tags=("config",),
     )
 )
 

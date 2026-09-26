@@ -17,13 +17,29 @@ A *compare config* declares how a check's normalized views are compared::
      "fields": {"installed_prefixes": {"tolerance": {"abs": 3}}}}
 
 Modes: equality_set, equality_scalar, tolerance, presence_only, capability,
-info_only. ("activity" — counters that must advance across two post samples —
+info_only, text_diff. ("activity" — counters that must advance across two post samples —
 is reserved and not yet wired.)
 
 The diff output shape is the report shape: added / removed / changed buckets
 with old→new values, or per-field/per-key evaluations for the numeric modes.
+
+text_diff is for views holding whole texts as line lists ({"lines": [...]},
+a device configuration): each contiguous run of changed lines — one hunk of
+a zero-context unified diff between the two line lists — is its own
+'changed' entry: field is the hunk's '@@ -a,b +c,d @@' header, old/new the
+removed/added lines, and section the indentation parents of its first line
+when that line is indented. Runs are matched line by line even where a line
+repeats all over the text, and a stanza added or removed whole is lined up
+to start at its own first line (see _text_opcodes), so an edit comes back as
+a few entries an expectation can match, never one enormous changed value
+(to_contains reads the added lines; a hunk that only removes lines is
+matched by key and op). A text key added or removed whole carries
+{"line_count": N} rather than the text (the snapshot files already hold it,
+and a diff index that repeats whole configurations buries the finding);
+every other value compares exactly as in equality_set.
 """
 
+import difflib
 from fnmatch import fnmatchcase
 
 MODES = (
@@ -33,6 +49,7 @@ MODES = (
     "presence_only",
     "capability",
     "info_only",
+    "text_diff",
 )
 
 
@@ -85,6 +102,8 @@ def diff_check(pre, post, compare):
         return _diff_capability(pre, post, compare)
     if mode == "info_only":
         return {"result": "info"}
+    if mode == "text_diff":
+        return _diff_text(pre, post, compare)
     raise ValueError("unknown compare mode: %r" % (mode,))
 
 
@@ -253,6 +272,200 @@ def _diff_capability(pre, post, compare):
             misses += 1
         evaluations.append(entry)
     return {"result": "diffs" if misses else "pass", "evaluations": evaluations}
+
+
+def _text_lines(value):
+    """The line list of a text value ({"lines": [...]}) as strings; None for any other value."""
+    if isinstance(value, dict) and isinstance(value.get("lines"), list):
+        return [line if isinstance(line, str) else str(line) for line in value["lines"]]
+    return None
+
+
+def _text_summary(value):
+    """A text value with its line list replaced by the count; any other value unchanged."""
+    lines = _text_lines(value)
+    if lines is None:
+        return value
+    summary = {field: item for field, item in value.items() if field != "lines"}
+    summary["line_count"] = len(lines)
+    return summary
+
+
+def _unified_range(start, stop):
+    """One side of a hunk header exactly as difflib.unified_diff prints it.
+
+    1-based start and ',length' — the length is omitted when it is 1, and an
+    empty range names the line just before it.
+    """
+    length = stop - start
+    if length == 1:
+        return "%d" % (start + 1,)
+    return "%d,%d" % (start + 1 if length else start, length)
+
+
+def _enclosing_lines(lines, wanted):
+    """{index: [enclosing lines, outermost first]} for the wanted indexes, in one pass.
+
+    A line's parents are the nearest preceding lines of smaller indentation
+    (IOS-style hierarchical text); blank and '!' comment lines are never
+    parents. A line at column 0 has none.
+    """
+    found = {}
+    stack = []  # (indent, stripped line) of the stanzas currently open
+    for index, line in enumerate(lines):
+        text = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if index in wanted:
+            found[index] = [opener for level, opener in stack if level < indent]
+            if len(found) == len(wanted):
+                break
+        if not text or text.startswith("!"):
+            continue
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        stack.append((indent, text))
+    return found
+
+
+# difflib's autojunk heuristic (texts of 200+ lines) never anchors a match on
+# a line repeating in more than 1% of the text — in a configuration '!',
+# ' switchport mode access', ' spanning-tree portfast' — so two edits either
+# side of such a line come back as ONE replace run that lists the untouched
+# line as removed and re-added. Each replace run is re-matched without the
+# heuristic; that match is quadratic, so a run is refined only up to this
+# many line pairs, and one diff only up to the budget.
+_TEXT_REFINE_CELLS = 250000
+_TEXT_REFINE_BUDGET = 2000000
+
+
+def _stanza_start_rank(line):
+    """How badly a hunk starting on this line reads: a '!'/blank start worst, then deeper indent."""
+    text = line.strip()
+    return (not text or text.startswith("!"), len(line) - len(line.lstrip()))
+
+
+def _slide_block(lines, start, stop, low, high):
+    """Where a pure insert/delete block lines[start:stop] reads as whole stanzas: its new start.
+
+    A block of added (or removed) lines can shift while it stays the same
+    text: down while its first line equals the line after it, up while its
+    last line equals the line before it, within the unchanged run [low, high)
+    around it. difflib takes whichever alignment it met first, so a stanza
+    added after a sibling that ends with the same lines comes back starting
+    inside the sibling (its trailing lines, '!', then the new stanza's head).
+    Of the equivalent positions, the block whose first line opens a stanza —
+    least indented, not a '!' separator — wins; ties keep the topmost.
+    """
+    while start > low and lines[start - 1] == lines[stop - 1]:
+        start, stop = start - 1, stop - 1
+    best, best_rank = start, _stanza_start_rank(lines[start])
+    while stop < high and lines[start] == lines[stop]:
+        start, stop = start + 1, stop + 1
+        rank = _stanza_start_rank(lines[start])
+        if rank < best_rank:
+            best, best_rank = start, rank
+    return best
+
+
+def _text_opcodes(old_lines, new_lines):
+    """The non-equal (tag, i1, i2, j1, j2) runs of a line diff, one per hunk.
+
+    difflib's line match, with each replace run re-matched without autojunk
+    and each pure insert/delete block slid to stanza boundaries (both above).
+    Neither changes what the hunks add up to: applying them to the old lines
+    still gives the new ones.
+    """
+    budget = _TEXT_REFINE_BUDGET
+    opcodes = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old_lines, new_lines).get_opcodes():
+        cells = (i2 - i1) * (j2 - j1)
+        if tag == "replace" and 1 < cells <= min(budget, _TEXT_REFINE_CELLS):
+            budget -= cells
+            finer = difflib.SequenceMatcher(
+                None, old_lines[i1:i2], new_lines[j1:j2], autojunk=False
+            ).get_opcodes()
+            opcodes.extend((t, i1 + a1, i1 + a2, j1 + b1, j1 + b2) for t, a1, a2, b1, b2 in finer)
+        else:
+            opcodes.append((tag, i1, i2, j1, j2))
+    runs = [list(opcode) for opcode in opcodes if opcode[0] != "equal"]
+    for index, run in enumerate(runs):
+        tag, i1, i2, j1, j2 = run
+        if tag not in ("insert", "delete"):
+            continue
+        # The unchanged runs either side bound the slide (the previous run
+        # has already settled where it ends).
+        before = runs[index - 1] if index else None
+        after = runs[index + 1] if index + 1 < len(runs) else None
+        if tag == "insert":
+            low = before[4] if before else 0
+            high = after[3] if after else len(new_lines)
+            shift = _slide_block(new_lines, j1, j2, low, high) - j1
+        else:
+            low = before[2] if before else 0
+            high = after[1] if after else len(old_lines)
+            shift = _slide_block(old_lines, i1, i2, low, high) - i1
+        # Both sides move together: the unchanged runs around the block keep
+        # equal lengths on either side.
+        run[1:] = [i1 + shift, i2 + shift, j1 + shift, j2 + shift]
+    return [tuple(run) for run in runs]
+
+
+def _text_hunks(key, old_lines, new_lines):
+    """One 'changed' entry per hunk of a zero-context line diff of two line lists.
+
+    Zero context makes every hunk exactly one contiguous replace/insert/delete
+    run (see _text_opcodes), so old/new are precisely the removed/added lines.
+    'section' carries the hunk's enclosing stanza lines (post side when it
+    added lines, pre side for a pure deletion) — the answer to "which
+    interface was that?".
+    """
+    opcodes = _text_opcodes(old_lines, new_lines)
+    new_anchors = {j1 for _tag, _i1, _i2, j1, j2 in opcodes if j2 > j1}
+    old_anchors = {i1 for _tag, i1, _i2, j1, j2 in opcodes if j2 == j1}
+    new_parents = _enclosing_lines(new_lines, new_anchors) if new_anchors else {}
+    old_parents = _enclosing_lines(old_lines, old_anchors) if old_anchors else {}
+    entries = []
+    for _tag, i1, i2, j1, j2 in opcodes:
+        entry = {
+            "key": key,
+            "field": "@@ -%s +%s @@" % (_unified_range(i1, i2), _unified_range(j1, j2)),
+            "old": old_lines[i1:i2],
+            "new": new_lines[j1:j2],
+        }
+        section = new_parents.get(j1) if j2 > j1 else old_parents.get(i1)
+        if section:
+            entry["section"] = section
+        entries.append(entry)
+    return entries
+
+
+def _diff_text(pre, post, compare):
+    """text_diff: line-level hunks for text values, equality_set for everything else.
+
+    A key holding {"lines": [...]} on both sides yields one 'changed' entry per
+    hunk (see _text_hunks); its other fields, if any, compare field by field.
+    Every remaining key goes through equality_set with text values reduced to
+    their line count, so added/removed/changed entries stay bounded however
+    large the texts are.
+    """
+    text_keys = {
+        key
+        for key in set(pre) & set(post)
+        if _text_lines(pre[key]) is not None and _text_lines(post[key]) is not None
+    }
+    rest_pre, rest_post = {}, {}
+    for side, rest in ((pre, rest_pre), (post, rest_post)):
+        for key, value in side.items():
+            if key in text_keys:
+                rest[key] = {field: item for field, item in value.items() if field != "lines"}
+            else:
+                rest[key] = _text_summary(value)
+    diff = _diff_equality_set(rest_pre, rest_post, compare)
+    for key in sorted(text_keys):
+        diff["changed"].extend(_text_hunks(key, _text_lines(pre[key]), _text_lines(post[key])))
+    diff["changed"].sort(key=lambda entry: str(entry.get("key")))
+    diff["result"] = "diffs" if (diff["added"] or diff["removed"] or diff["changed"]) else "pass"
+    return diff
 
 
 # --- expectations ------------------------------------------------------------

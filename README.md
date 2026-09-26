@@ -11,8 +11,8 @@ Two jobs, both under the **Test Suite** grouping:
   to the JobResult: `snapshot_<device>_<change_id>.json` / `raw_<device>_<change_id>.json`.
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
   full transport trace (every RESTCONF/Redfish path, SSH command and SOAP
-  operation with timing, outcome, and payload), so even a FAILED check keeps
-  its evidence.
+  operation with timing, outcome, and payload — configuration text only in
+  its redacted form), so even a FAILED check keeps its evidence.
 - *(analysis happens outside Nautobot: download the snapshot files and feed
   them, with your test-plan prompt, to the LLM your organization approves —
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
@@ -145,6 +145,7 @@ the humans reading the report.
 | `panos_dhcp` | panos | 3 | DHCP server lease overview (not-present when DHCP is unused) |
 | `iosxe_dhcp` | iosxe | 3 | DHCP server/relay configuration (not-present when unused) |
 | `iosxe_routing_config` | iosxe | 2 | Static-route and router-stanza configuration (secrets scrubbed) |
+| `iosxe_config` | iosxe | 2 | Full running-config and startup-config text as line lists (secrets redacted, changes diff as line-level hunks) and whether the two match |
 | `iosxe_syslog_errors` | iosxe | 3 | Error-and-worse syslog event counts from the logging buffer |
 | `iosxe_svl_health` | iosxe | 3 | StackWise Virtual link membership and bundled state |
 | `iosxe_ntp` | iosxe | 3 | NTP synchronization state |

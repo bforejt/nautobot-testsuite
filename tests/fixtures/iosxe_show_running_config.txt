@@ -1,0 +1,454 @@
+Building configuration...
+
+Current configuration : 19873 bytes
+!
+! Last configuration change at 14:02:11 EDT Thu Sep 24 2026 by netops
+! NVRAM config last updated at 09:13:02 EDT Tue Sep 22 2026 by netops
+!
+version 17.12
+service timestamps debug datetime msec localtime show-timezone
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+service call-home
+no service password-recovery
+platform punt-keepalive disable-kernel-core
+!
+hostname lab-9300-stk1
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+ !
+ address-family ipv6
+ exit-address-family
+!
+logging buffered 64000 informational
+no logging console
+enable secret 9 $9$CANARY01xQ2v7c3hF8Tq$w9cD4n0pZkR5sLm1YbE6aUuJfGhV3tXo2iWqN7rKe8
+!
+aaa new-model
+!
+!
+aaa group server tacacs+ TACACS-GRP
+ server name TAC1
+ server name TAC2
+ ip vrf forwarding Mgmt-vrf
+ ip tacacs source-interface GigabitEthernet0/0
+!
+aaa group server radius ISE-GRP
+ server name ISE1
+ server-private 192.0.2.62 auth-port 1812 acct-port 1813 key 7 CANARY04
+ ip radius source-interface Vlan100
+!
+aaa authentication login default group TACACS-GRP local
+aaa authentication enable default group TACACS-GRP enable
+aaa authentication dot1x default group ISE-GRP
+aaa authorization console
+aaa authorization exec default group TACACS-GRP local
+aaa authorization network default group ISE-GRP
+aaa accounting dot1x default start-stop group ISE-GRP
+aaa accounting exec default start-stop group TACACS-GRP
+aaa accounting commands 15 default start-stop group TACACS-GRP
+!
+aaa server radius dynamic-author
+ client 192.0.2.61 server-key 7 CANARY05
+!
+aaa session-id common
+clock timezone EST -5 0
+clock summer-time EDT recurring
+switch 1 provision c9300-48uxm
+switch 2 provision c9300-48uxm
+switch 3 provision c9300-48uxm
+switch 4 provision c9300-48uxm
+!
+!
+!
+ip routing
+!
+ip name-server vrf Mgmt-vrf 192.0.2.53
+ip domain name example.net
+!
+!
+!
+login on-success log
+ipv6 unicast-routing
+vtp domain LAB
+vtp mode transparent
+vtp version 1
+!
+!
+!
+!
+!
+device-tracking policy IPDT_POLICY
+ tracking enable
+!
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha256
+!
+crypto pki trustpoint TP-self-signed-2840110734
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-2840110734
+ revocation-check none
+ rsakeypair TP-self-signed-2840110734
+ hash sha256
+!
+!
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01
+  30820321 30820209 A0030201 02020101 300D0609 2A864886 F70D0101 0B050030
+  32310E30 0C060355 040A1305 43697363 6F312030 1E060355 04031317 43697363
+  6F204C69 63656E73 696E6720 526F6F74 20434130 1E170D31 33303533 30313934
+  3834375A 170D3338 30353330 31393438 34375A30 32310E30 0C060355 040A1305
+  	quit
+crypto pki certificate chain TP-self-signed-2840110734
+ certificate self-signed 01
+  3082032E 30820216 A0030201 02020101 300D0609 2A864886 F70D0101 05050030
+  30312E30 2C060355 04031325 494F532D 53656C66 2D536967 6E65642D 43657274
+  69666963 6174652D 32383430 31313037 3334301E 170D3236 30393130 31353530
+  	quit
+!
+license boot level network-advantage addon dna-advantage
+license smart transport smart
+license smart url default
+!
+!
+diagnostic bootup level minimal
+!
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+memory free low-watermark processor 134344
+dot1x system-auth-control
+dot1x credentials SUPPLICANT-PROFILE
+ username sup-user
+ password 7 CANARY06
+!
+username netops privilege 15 secret 9 $9$CANARY02nV4q8Lk2$Xr7bT3mWc9pQ1sZ6yH0eJ5uA8dF2gK4vN7iO3lR6tE
+username breakglass privilege 15 password 7 CANARY03
+!
+redundancy
+ mode sso
+crypto engine compliance shield disable
+!
+key chain OSPF-KC
+ key 1
+  key-string 7 CANARY07
+  cryptographic-algorithm hmac-sha-256
+key chain MKA-KC macsec
+ key 01
+  cryptographic-algorithm aes-256-cmac
+  key-string 7 CANARY08
+  lifetime local 00:00:00 Jan 1 2026 infinite
+!
+!
+transceiver type all
+ monitoring
+!
+vlan 10
+ name USERS
+!
+vlan 20
+ name VOICE
+!
+vlan 30
+ name PRINTERS
+!
+vlan 100
+ name MGMT
+!
+vlan 925
+ name TRANSIT
+!
+vlan 926
+ name TRANSIT-B
+!
+class-map match-any system-cpp-police-ewlc-control
+  description EWLC Control
+class-map match-any system-cpp-police-topology-control
+  description Topology control
+!
+policy-map system-cpp-policy
+!
+policy-map type control subscriber DOT1X-MAB-POLICY
+ event session-started match-all
+  10 class always do-until-failure
+   10 authenticate using dot1x priority 10
+ event authentication-failure match-first
+  10 class always do-until-failure
+   10 authenticate using mab priority 20
+!
+!
+!
+!
+interface Port-channel1
+ description Uplink to core pair
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,100,925,926
+!
+interface GigabitEthernet0/0
+ vrf forwarding Mgmt-vrf
+ ip address 192.0.2.10 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet1/0/1
+ description user access
+ switchport access vlan 10
+ switchport mode access
+ switchport voice vlan 20
+ access-session port-control auto
+ mab
+ dot1x pae authenticator
+ spanning-tree portfast
+ service-policy type control subscriber DOT1X-MAB-POLICY
+!
+interface GigabitEthernet1/0/2
+ description printer 3rd floor
+ switchport access vlan 30
+ switchport mode access
+ spanning-tree portfast
+!
+interface TenGigabitEthernet1/1/1
+ description Uplink core-a Te1/0/48
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,100,925,926
+ channel-group 1 mode active
+ mka pre-shared-key key-chain MKA-KC
+ macsec network-link
+!
+interface GigabitEthernet2/0/1
+ description user access
+ switchport access vlan 10
+ switchport mode access
+ switchport voice vlan 20
+ access-session port-control auto
+ mab
+ dot1x pae authenticator
+ spanning-tree portfast
+ service-policy type control subscriber DOT1X-MAB-POLICY
+!
+interface TenGigabitEthernet2/1/1
+ description Uplink core-b Te1/0/48
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,100,925,926
+ channel-group 1 mode active
+ mka pre-shared-key key-chain MKA-KC
+ macsec network-link
+!
+interface TenGigabitEthernet3/1/1
+ description Uplink IDF-2 Te1/1/1 (TrustSec SAP)
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,100
+ cts manual
+  policy static sgt 2 trusted
+  sap pmk 3DA9C1E0CANARY36 mode-list gcm-encrypt null
+!
+interface GigabitEthernet3/0/1
+ description user access
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet4/0/1
+ description AP uplink
+ switchport access vlan 100
+ switchport mode access
+ spanning-tree portfast
+!
+interface Vlan1
+ no ip address
+ shutdown
+!
+interface Vlan10
+ description USERS gateway
+ ip address 10.10.0.2 255.255.255.0
+ ip helper-address 192.0.2.67
+ standby version 2
+ standby 10 ip 10.10.0.1
+ standby 10 priority 110
+ standby 10 preempt
+ standby 10 authentication md5 key-string 7 CANARY09
+!
+interface Vlan20
+ description VOICE gateway
+ ip address 10.20.0.2 255.255.255.0
+ vrrp 20 ip 10.20.0.1
+ vrrp 20 authentication text CANARY10
+!
+interface Vlan30
+ description PRINTERS gateway
+ ip address 10.30.0.2 255.255.255.0
+ standby 30 ip 10.30.0.1
+ standby 30 authentication CANARY11
+!
+interface Vlan100
+ description MGMT
+ ip address 10.100.0.2 255.255.255.0
+!
+interface Vlan925
+ description Transit to firewall
+ ip address 192.0.2.130 255.255.255.248
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 7 CANARY12
+ ip ospf network point-to-point
+!
+interface Vlan926
+ description Transit B
+ ip address 192.0.2.138 255.255.255.248
+ ip ospf authentication-key 7 CANARY13
+!
+router ospf 1
+ router-id 10.255.255.1
+ area 0 authentication message-digest
+ area 1 virtual-link 10.255.255.9 message-digest-key 2 md5 7 CANARY14
+ passive-interface default
+ no passive-interface Vlan925
+ no passive-interface Vlan926
+ network 10.10.0.0 0.0.255.255 area 0
+ network 192.0.2.128 0.0.0.15 area 0
+!
+router bgp 65010
+ bgp router-id 10.255.255.1
+ bgp log-neighbor-changes
+ neighbor 192.0.2.1 remote-as 65000
+ neighbor 192.0.2.1 password 7 CANARY15
+ !
+ address-family ipv4
+  network 10.10.0.0 mask 255.255.0.0
+  neighbor 192.0.2.1 activate
+  neighbor 192.0.2.1 send-community both
+  neighbor 192.0.2.1 route-map RM-OUT out
+ exit-address-family
+!
+ip forward-protocol nd
+no ip http server
+ip http authentication local
+ip http secure-server
+ip http client username cfgpull
+ip http client password 7 CANARY31
+ip ssh bulk-mode 131072
+ip ssh version 2
+ip tacacs source-interface Vlan100
+ip route 0.0.0.0 0.0.0.0 192.0.2.129
+ip route 10.9.0.0 255.255.0.0 192.0.2.137
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 192.0.2.254
+!
+ip access-list standard SNMP-RO
+ 10 permit 192.0.2.0 0.0.0.255
+ip access-list standard SNMP-RW
+ 10 permit 192.0.2.50
+ip access-list extended ACL-VTY
+ 10 remark management stations only
+ 20 permit tcp 192.0.2.0 0.0.0.255 any eq 22
+ 30 deny   ip any any log
+!
+ip community-list standard CL-CORE permit 65000:100
+logging host 192.0.2.50 vrf Mgmt-vrf
+!
+route-map RM-OUT permit 10
+ match community CL-CORE
+ set community 65000:200 additive
+!
+snmp-server community CANARY16 RO SNMP-RO
+snmp-server community CANARY17 RW SNMP-RW
+snmp-server location Lab rack 4
+snmp-server contact noc@example.net
+snmp-server group V3GROUP v3 priv read V3VIEW
+snmp-server view V3VIEW iso included
+snmp-server user SNMPV3USER V3GROUP v3 auth sha CANARY20 priv aes 128 CANARY21
+snmp-server enable traps snmp authentication linkdown linkup coldstart warmstart
+snmp-server host 192.0.2.50 vrf Mgmt-vrf version 2c CANARY18
+snmp-server host 192.0.2.51 informs version 2c CANARY19 udp-port 1162 config
+!
+tacacs server TAC1
+ address ipv4 192.0.2.49
+ key 7 CANARY22
+ timeout 5
+tacacs server TAC2
+ address ipv4 192.0.2.48
+ key 6 CANARY23
+!
+radius server ISE1
+ address ipv4 192.0.2.61 auth-port 1812 acct-port 1813
+ key 7 CANARY24
+ pac key 7 CANARY25
+ automate-tester username probe-user probe-on
+!
+radius-server dead-criteria time 10 tries 3
+radius-server deadtime 15
+!
+!
+control-plane
+ service-policy input system-cpp-policy
+!
+banner login ^C
+Authorized access only. Password sharing is prohibited.
+^C
+banner motd ^C
+lab-9300-stk1 - property of Example Corp
+^C
+!
+line con 0
+ exec-timeout 15 0
+ password 7 CANARY27
+ login authentication default
+ stopbits 1
+line vty 0 4
+ access-class ACL-VTY in vrf-also
+ exec-timeout 15 0
+ password 7 CANARY28
+ transport input ssh
+line vty 5 15
+ access-class ACL-VTY in vrf-also
+ password 7 CANARY30
+ transport input ssh
+!
+ntp authentication-key 1 md5 CANARY26 7
+ntp authenticate
+ntp trusted-key 1
+ntp source Vlan100
+ntp server 192.0.2.123 key 1 prefer
+ntp clock-period 17179938
+!
+!
+!
+archive
+ path scp://cfgbackup:CANARY29@192.0.2.40/configs/$h
+ write-memory
+!
+event manager applet CFG-BACKUP
+ event timer cron cron-entry "0 2 * * *"
+ action 1.0 cli command "enable"
+ action 2.0 cli command "copy running-config scp://cfgbackup@192.0.2.40/nightly.cfg" pattern "Address|Destination|Password"
+ action 3.0 cli command "" pattern "Destination"
+ action 4.0 cli command "" pattern "Password"
+ action 5.0 cli command "CANARY33"
+!
+call-home
+ ! If contact email address in call-home is configured as sch-smart-licensing@cisco.com
+ ! the email address configured in Cisco Smart License Portal will be used as contact email address to send SCH notifications.
+ contact-email-addr sch-smart-licensing@cisco.com
+ mail-server smtprelay:CANARY32@192.0.2.26 priority 1 secure tls
+ profile "CiscoTAC-1"
+  active
+  destination transport-method http
+!
+iox
+app-hosting appid te-agent
+ app-vnic AppGigabitEthernet trunk
+  vlan 100 guest-interface 0
+   guest-ipaddress 10.100.0.50 netmask 255.255.255.0
+ app-default-gateway 10.100.0.1 guest-interface 0
+ app-resource docker
+  prepend-pkg-opts
+  run-opts 1 "-e TEAGENT_ACCOUNT_TOKEN=CANARY34"
+  run-opts 2 "--hostname lab-9300-stk1-te -e TEAGENT_PROXY_PASS=CANARY35"
+ name-server0 192.0.2.53
+ start
+!
+mac address-table notification change
+end
