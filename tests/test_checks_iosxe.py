@@ -302,12 +302,40 @@ class TestInterfacesNormalizer(unittest.TestCase):
         )
 
 
+def _hardware_with(leaves):
+    """The committed 9500 fixture with device-system-data leaves added or replaced.
+
+    The fixture holds neither reboot leaf, although the model defines both.
+    It was hand-built (it carries values outside the model), so that absence
+    is no field evidence; the added values are YANG-shaped, not field-captured.
+    """
+    payload = _loader.fixture_json("iosxe_device_hardware.json")
+    container = payload["Cisco-IOS-XE-device-hardware-oper:device-hardware-data"]
+    container["device-hardware"]["device-system-data"].update(leaves)
+    return payload
+
+
+class _HealthCtx:
+    """Fake CollectorContext: RESTCONF payload per path, every GET recorded with its kwargs."""
+
+    def __init__(self, payloads):
+        self.payloads = payloads
+        self.gets = []
+
+    def get(self, path, **kwargs):
+        self.gets.append((path, kwargs))
+        return self.payloads.get(path)
+
+
 class TestPlatformHealthNormalizer(unittest.TestCase):
+    NEITHER_SERVED = {"reboot_leaves_not_served": ["last-reboot-reason", "reason-severity"]}
+
     def test_hardware_plus_environment(self):
         hardware = _loader.fixture_json("iosxe_device_hardware.json")
         env = _loader.fixture_json("iosxe_environment_sensors.json")
+        normalized, _context = checks._normalize_platform_health(hardware, env)
         self.assertEqual(
-            checks._normalize_platform_health(hardware, env),
+            normalized,
             {
                 "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
@@ -319,13 +347,186 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
 
     def test_environment_payload_absent(self):
         hardware = _loader.fixture_json("iosxe_device_hardware.json")
+        normalized, _context = checks._normalize_platform_health(hardware, None)
         self.assertEqual(
-            checks._normalize_platform_health(hardware, None),
+            normalized,
             {
                 "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
             },
         )
+
+    def test_last_reboot_both_leaves_served(self):
+        # RESTCONF may pad strings; the served values are stripped, never reworded.
+        hardware = _hardware_with(
+            {"last-reboot-reason": " Reload Command ", "reason-severity": "normal"}
+        )
+        normalized, context = checks._normalize_platform_health(hardware, None)
+        self.assertEqual(
+            normalized,
+            {
+                "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
+                "last-reboot": {"reason": "Reload Command", "severity": "normal"},
+                "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
+            },
+        )
+        self.assertEqual(context, {"reboot_leaves_not_served": []})
+
+    def test_last_reboot_one_leaf_served(self):
+        # Only what the device served: no placeholder for the missing field.
+        cases = (
+            (
+                {"last-reboot-reason": "Reload Command"},
+                {"reason": "Reload Command"},
+                "reason-severity",
+            ),
+            ({"reason-severity": "abnormal"}, {"severity": "abnormal"}, "last-reboot-reason"),
+        )
+        for leaves, expected, not_served in cases:
+            with self.subTest(leaves=leaves):
+                normalized, context = checks._normalize_platform_health(
+                    _hardware_with(leaves), None
+                )
+                self.assertEqual(normalized["last-reboot"], expected)
+                self.assertEqual(context, {"reboot_leaves_not_served": [not_served]})
+
+    def test_last_reboot_neither_leaf_served(self):
+        # The committed fixture as-is: no key, nothing fabricated, both leaves
+        # named in context (boot-time was served, so it is not).
+        hardware = _loader.fixture_json("iosxe_device_hardware.json")
+        normalized, context = checks._normalize_platform_health(hardware, None)
+        self.assertNotIn("last-reboot", normalized)
+        self.assertEqual(context, self.NEITHER_SERVED)
+
+    def test_device_system_data_absent_names_every_reload_leaf(self):
+        hardware = {"Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {}}
+        for payload in (hardware, None):
+            normalized, context = checks._normalize_platform_health(payload, None)
+            self.assertEqual(normalized, {})
+            self.assertEqual(
+                context,
+                {
+                    "reboot_leaves_not_served": [
+                        "boot-time",
+                        "last-reboot-reason",
+                        "reason-severity",
+                    ]
+                },
+            )
+
+    def test_last_reboot_values_keep_one_type(self):
+        # A normalized value never changes type between captures: a
+        # non-conforming encoder sending the enum's integer still yields text,
+        # and 0 (normal's enum value) is a served leaf, not an absent one.
+        for value, text in ((0, "0"), (1, "1")):
+            with self.subTest(value=value):
+                normalized, context = checks._normalize_platform_health(
+                    _hardware_with({"reason-severity": value}), None
+                )
+                self.assertEqual(normalized["last-reboot"], {"severity": text})
+                self.assertEqual(context, {"reboot_leaves_not_served": ["last-reboot-reason"]})
+
+    def test_blank_reason_is_served_not_absent(self):
+        # A served-but-blank leaf is what the device said: kept as '', and
+        # context never claims the device omitted it, empty or padded.
+        for blank in ("", "  "):
+            with self.subTest(reason=blank):
+                normalized, context = checks._normalize_platform_health(
+                    _hardware_with({"last-reboot-reason": blank, "reason-severity": "normal"}),
+                    None,
+                )
+                self.assertEqual(normalized["last-reboot"], {"reason": "", "severity": "normal"})
+                self.assertEqual(context, {"reboot_leaves_not_served": []})
+
+    def test_healthy_captures_normalize_identically(self):
+        # Two healthy captures of an unchanged device: identical payloads, and
+        # payloads apart only in volatile leaves (the device clock beside the
+        # reboot leaves, every sensor reading), give one normalized view, one
+        # context, and a diffcore 'pass' under the check's own compare.
+        leaves = {"last-reboot-reason": "Reload Command", "reason-severity": "normal"}
+        env_fixture = "iosxe_environment_sensors.json"
+        pre, pre_context = checks._normalize_platform_health(
+            _hardware_with(leaves), _loader.fixture_json(env_fixture)
+        )
+        drifted_env = _loader.fixture_json(env_fixture)
+        sensors = drifted_env["Cisco-IOS-XE-environment-oper:environment-sensors"]
+        for sensor in sensors["environment-sensor"]:
+            sensor["current-reading"] += 1
+        drifted = _hardware_with({**leaves, "current-time": "2026-08-24T02:47:31+00:00"})
+        compare = registry.CHECKS["iosxe_platform_health"].compare
+        for name, hardware, env_payload in (
+            ("identical", _hardware_with(leaves), _loader.fixture_json(env_fixture)),
+            ("volatile drift", drifted, drifted_env),
+        ):
+            with self.subTest(name):
+                post, post_context = checks._normalize_platform_health(hardware, env_payload)
+                self.assertEqual(post, pre)
+                self.assertEqual(post_context, pre_context)
+                self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+
+    def test_changed_reason_diffs_under_the_checks_own_compare(self):
+        # A reload between captures: boot-time moves, and last-reboot says why
+        # field by field. The reason strings are synthetic, shaped like the
+        # free text the model defines.
+        compare = registry.CHECKS["iosxe_platform_health"].compare
+        pre, _ = checks._normalize_platform_health(
+            _hardware_with({"last-reboot-reason": "Reload Command", "reason-severity": "normal"}),
+            None,
+        )
+        post, _ = checks._normalize_platform_health(
+            _hardware_with(
+                {
+                    "boot-time": "2026-08-23T20:41:07+00:00",
+                    "last-reboot-reason": "Critical software exception",
+                    "reason-severity": "abnormal",
+                }
+            ),
+            None,
+        )
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual((diff["added"], diff["removed"]), ([], []))
+        self.assertEqual(
+            diff["changed"],
+            [
+                {
+                    "key": "boot-time",
+                    "field": "value",
+                    "old": "2026-07-11T03:12:44+00:00",
+                    "new": "2026-08-23T20:41:07+00:00",
+                },
+                {
+                    "key": "last-reboot",
+                    "field": "reason",
+                    "old": "Reload Command",
+                    "new": "Critical software exception",
+                },
+                {"key": "last-reboot", "field": "severity", "old": "normal", "new": "abnormal"},
+            ],
+        )
+
+    def test_collector_reads_the_reboot_leaves_from_the_existing_get(self):
+        hardware = _hardware_with(
+            {"last-reboot-reason": "Reload Command", "reason-severity": "normal"}
+        )
+        env = _loader.fixture_json("iosxe_environment_sensors.json")
+        ctx = _HealthCtx({checks._HW_PATH: hardware, checks._ENV_PATH: env})
+        result = checks._collect_platform_health(ctx)
+        self.assertEqual(
+            result["normalized"]["last-reboot"], {"reason": "Reload Command", "severity": "normal"}
+        )
+        self.assertEqual(result["context"], {"reboot_leaves_not_served": []})
+        self.assertEqual(result["raw"], {"device-hardware": hardware, "environment-sensors": env})
+        # No request of its own: the same two GETs as before the reboot leaves.
+        self.assertEqual(ctx.gets, [(checks._HW_PATH, {}), (checks._ENV_PATH, {"ok_404": True})])
+
+    def test_collector_records_unserved_leaves_without_failing(self):
+        hardware = _loader.fixture_json("iosxe_device_hardware.json")
+        ctx = _HealthCtx({checks._HW_PATH: hardware})  # environment-sensors 404s
+        result = checks._collect_platform_health(ctx)
+        self.assertNotIn("last-reboot", result["normalized"])
+        self.assertEqual(result["context"], self.NEITHER_SERVED)
+        self.assertIn("environment-sensors path absent", result["raw"]["note"])
 
 
 class TestSyslogErrorParser(unittest.TestCase):
