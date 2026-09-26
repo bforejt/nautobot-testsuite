@@ -128,7 +128,7 @@ the humans reading the report.
 | `iosxe_arp` | iosxe | 2 | ARP tables, all VRFs: resolved MAC and interface per address |
 | `iosxe_neighbors` | iosxe | 2 | CDP and LLDP neighbor tables combined: who is on which local port |
 | `iosxe_interfaces` | iosxe | 2 | All interfaces: admin/oper status and IPv4 address |
-| `iosxe_platform_health` | iosxe | 3 | Boot time, active hardware alarms, environment sensor states |
+| `iosxe_platform_health` | iosxe | 3 | Boot time, last reboot reason and severity (context names any reload leaf the device did not serve), active hardware alarms, environment sensor states |
 | `panos_system_info` | panos | 3 | Software/content versions, model, serial, and hostname |
 | `panos_ha` | panos | 1 | HA enablement, local/peer state, and running-config sync |
 | `panos_session_info` | panos | 1 | Global session counts within tolerance of the baseline |

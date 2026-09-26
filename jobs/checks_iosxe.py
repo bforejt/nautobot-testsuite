@@ -462,10 +462,32 @@ def _collect_interfaces(ctx):
 
 # --- platform health ---------------------------------------------------------
 
+# The last reload as device-system-data records it, in YANG order: boot-time
+# says when, last-reboot-reason (free text) says why, and reason-severity
+# (reboot-reason-type, revision 2020-07-01) says whether the device judged it
+# "normal and intentional" (normal) or "abnormal or unintentional" (abnormal).
+# The container is singular: one record per device, never one per stack
+# member. 17.9.1 and 17.12.1 define all three with no 9300/9500 deviation;
+# 17.12.1 (revision 2023-03-01) adds reload-history beside them (up to 10
+# reloads, each with its own severity), which rides in raw only. The committed
+# iosxe_device_hardware.json holds only boot-time of the three, but it was
+# hand-built at scaffold time (its combined-power-capacity leaf and
+# 'alarm-minor' category are in neither model), so it says nothing about what
+# a device serves; whether a 9300/9500 fills the other two awaits a shakedown.
+# An absent leaf is recorded in context, never an error and never a
+# fabricated value.
+_REBOOT_LEAVES = ("boot-time", "last-reboot-reason", "reason-severity")
+
+# The 'last-reboot' field each leaf feeds (boot-time keeps its own key).
+_LAST_REBOOT_FIELDS = (("last-reboot-reason", "reason"), ("reason-severity", "severity"))
+
 
 def _normalize_platform_health(hardware_payload, env_payload):
-    """boot-time, active alarms, and env sensor states; env_payload may be None.
+    """(normalized, context): boot-time, last reboot, active alarms, env sensor states.
 
+    env_payload may be None. 'last-reboot' carries only the reason/severity
+    leaves the device served, as stripped strings, and is absent when it
+    served neither; context names every reload leaf it did not serve.
     Volatile current-reading values are never emitted — only each sensor's
     state word.
     """
@@ -480,6 +502,13 @@ def _normalize_platform_health(hardware_payload, env_payload):
     boot_time = system.get("boot-time")
     if boot_time is not None:
         normalized["boot-time"] = {"value": str(boot_time)}
+    last_reboot = {}
+    for leaf, field in _LAST_REBOOT_FIELDS:
+        if system.get(leaf) is not None:
+            # str(): the value keeps one type across captures whatever the encoder sent.
+            last_reboot[field] = str(system[leaf]).strip()
+    if last_reboot:
+        normalized["last-reboot"] = last_reboot
     for alarm in _aslist(hardware.get("device-alarm")):
         if not isinstance(alarm, dict):
             continue
@@ -493,7 +522,10 @@ def _normalize_platform_health(hardware_payload, env_payload):
             continue
         key = "env|%s/%s" % (sensor.get("location"), sensor.get("name"))
         normalized[key] = {"state": sensor.get("state")}
-    return normalized
+    context = {
+        "reboot_leaves_not_served": [leaf for leaf in _REBOOT_LEAVES if system.get(leaf) is None]
+    }
+    return normalized, context
 
 
 def _collect_platform_health(ctx):
@@ -504,7 +536,8 @@ def _collect_platform_health(ctx):
     raw = {"device-hardware": hardware, "environment-sensors": env}
     if env is None:
         raw["note"] = "environment-sensors path absent on this release/SKU; env portion skipped"
-    return {"raw": raw, "normalized": _normalize_platform_health(hardware, env)}
+    normalized, context = _normalize_platform_health(hardware, env)
+    return {"raw": raw, "normalized": normalized, "context": context}
 
 
 # --- registrations -----------------------------------------------------------
@@ -642,12 +675,16 @@ register(
     CheckDef(
         id="iosxe_platform_health",
         platform="iosxe",
-        description="Boot time, active hardware alarms, environment sensor states.",
+        description=(
+            "Boot time, last reboot reason and severity, active hardware alarms, environment "
+            "sensor states."
+        ),
         tier=3,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "The core itself changed — a reload (boot-time), a new alarm, or a degraded "
-            "sensor during the window."
+            "The core itself changed — a reload (boot-time moved; last-reboot gives the "
+            "latest reload's reason, and severity 'abnormal' means the device did not "
+            "intend it), a new alarm, or a degraded sensor during the window."
         ),
         collector=_collect_platform_health,
         tags=("platform",),
