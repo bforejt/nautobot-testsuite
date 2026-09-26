@@ -194,7 +194,7 @@ class CaptureSnapshot(Job):
         description=(
             "Attach a `debug_*.json` transport trace per device: every RESTCONF/"
             "Redfish path, SSH command and SOAP operation with timing, outcome, and "
-            "the FULL payload — "
+            "the FULL payload (configuration text redacted) — "
             "so a failed check keeps its evidence. Payload-heavy; use on one or "
             "two devices at a time, not a fleet."
         ),

@@ -115,6 +115,11 @@ WLC_CLIENT_RAW_MAX = 10000
 SSH_CONNECT_TIMEOUT = 15
 SSH_READ_TIMEOUT = 90  # several PAN-OS shows run long
 SSH_BIG_READ_TIMEOUT = 300  # session-matrix sweeps, route dumps
+# `show running-config` / `show startup-config` (iosxe_config): a 4-member
+# Catalyst 9300 stack's configuration runs to hundreds of KB, and IOS prints
+# "Building configuration..." and renders the whole text before the first
+# line arrives — the same class of read as the big dumps above.
+SSH_CONFIG_READ_TIMEOUT = 300
 
 # --- comparison defaults (overridable per check / per run) ------------------
 SESSION_TOLERANCE_PCT = 30  # active session count post vs pre

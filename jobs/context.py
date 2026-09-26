@@ -21,10 +21,16 @@ transport trace: one entry per GET / SSH command / API call with timing and
 outcome. With ``debug=True`` each entry additionally carries the full payload
 or output — the raw material for the Collector Shakedown job and for
 harvesting test fixtures — at the cost of memory proportional to everything
-fetched, so debug runs belong on one device at a time.
+fetched, so debug runs belong on one device at a time. An SSH read whose
+output holds secrets (the configuration text) passes ``run_ssh`` a
+``redact`` callable: the trace keeps only the redacted copy, the callable
+never reaches the transport, and the SSH library's own DEBUG echo of the
+channel is held back while the read runs.
 """
 
 import contextlib
+import logging
+import threading
 import time
 
 
@@ -48,6 +54,63 @@ def _canonical(value):
     if isinstance(value, (set, frozenset)):
         return tuple(sorted(_canonical(item) for item in value))
     return value
+
+
+def _traced(redact, text):
+    """The copy of ``text`` the trace may keep: ``redact(text)`` when a redactor is given.
+
+    Fail-closed: a redactor that raises withholds the text instead of letting
+    the verbatim copy through (the Celery soft-time-limit signal still
+    propagates).
+    """
+    if redact is None or text is None:
+        return text
+    try:
+        return redact(text)
+    except Exception as exc:
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise
+        return "[withheld: redaction failed with %s]" % (type(exc).__name__,)
+
+
+class _ChannelEchoGuard:
+    """Holds the SSH library's loggers at INFO while any redacted read is in flight.
+
+    netmiko writes every channel read into its DEBUG log ("read_channel:
+    <data>", "Pattern found: ... <output>" — netmiko 4.7.0, all on its package
+    logger), so a worker started at DEBUG would copy a redacted read's
+    verbatim text into the worker log. Child loggers inherit the level; the
+    first read in saves the levels, the last one out restores them.
+    """
+
+    def __init__(self, names):
+        self.names = names
+        self.lock = threading.Lock()
+        self.depth = 0
+        self.saved = {}
+
+    @contextlib.contextmanager
+    def held(self):
+        with self.lock:
+            if self.depth == 0:
+                for name in self.names:
+                    logger = logging.getLogger(name)
+                    self.saved[name] = logger.level
+                    if logger.getEffectiveLevel() < logging.INFO:
+                        logger.setLevel(logging.INFO)
+            self.depth += 1
+        try:
+            yield
+        finally:
+            with self.lock:
+                self.depth -= 1
+                if self.depth == 0:
+                    for name, level in self.saved.items():
+                        logging.getLogger(name).setLevel(level)
+                    self.saved.clear()
+
+
+_CHANNEL_ECHO = _ChannelEchoGuard(("netmiko",))
 
 
 class CollectorContext:
@@ -138,25 +201,35 @@ class CollectorContext:
         self._cache[key] = payload
         return payload
 
-    def run_ssh(self, command, **kwargs):
-        """Run one allowlisted operational command over SSH (opens lazily)."""
+    def run_ssh(self, command, *, redact=None, **kwargs):
+        """Run one allowlisted operational command over SSH (opens lazily).
+
+        ``redact`` (text -> text) is for a command whose output holds secrets:
+        it is applied to the copy the debug trace keeps and to a traced error
+        message, it holds the SSH library's DEBUG channel echo back for the
+        duration of the read, and it is never passed to the transport. The
+        caller still receives the verbatim output and owns redacting whatever
+        it stores.
+        """
         if self.ssh is None:
             raise RuntimeError("no SSH transport for %s" % (self.device_name,))
         entry = {"transport": "ssh", "target": command}
         started = time.monotonic()
+        withheld = _CHANNEL_ECHO.held() if redact is not None else contextlib.nullcontext()
         try:
-            output = self.ssh.run(command, **kwargs)
+            with withheld:
+                output = self.ssh.run(command, **kwargs)
         except Exception as exc:
             entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
             entry["outcome"] = "error"
-            entry["error"] = "%s: %s" % (type(exc).__name__, exc)
+            entry["error"] = _traced(redact, "%s: %s" % (type(exc).__name__, exc))
             self.trace.append(entry)
             raise
         entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
         entry["outcome"] = "ok"
         entry["chars"] = len(output or "")
         if self.debug:
-            entry["output"] = output
+            entry["output"] = _traced(redact, output)
         self.trace.append(entry)
         return output
 
