@@ -1,0 +1,136 @@
+{
+  "Cisco-IOS-XE-platform-software-oper:q-filesystem": [
+    {
+      "fru": "fru-rp",
+      "slot": 0,
+      "bay": 0,
+      "chassis": 1,
+      "partitions": [
+        {
+          "name": "bootflash:",
+          "total-size": "11087104",
+          "used-size": "2330624",
+          "used-percent": 21,
+          "disk-status": "healthy",
+          "thresholds": {
+            "warning-threshold-percent": 80,
+            "critical-threshold-percent": 90
+          },
+          "is-primary": true,
+          "is-writable": true,
+          "partition-content": [
+            {
+              "full-path": "/bootflash/packages.conf",
+              "size": "8411",
+              "type": "file",
+              "modified-time": "2026-07-11T03:02:10+00:00"
+            },
+            {
+              "full-path": "/bootflash/.pnp-ztp-lock",
+              "size": "0",
+              "type": "other",
+              "modified-time": "2025-10-16T02:01:16+00:00"
+            },
+            {
+              "full-path": "/bootflash/core",
+              "size": "4096",
+              "type": "directory",
+              "modified-time": "2025-01-02T03:00:00+00:00"
+            },
+            {
+              "full-path": "/bootflash/core/fed_1_RP_0_31337_20250102-030000-UTC.core.gz",
+              "size": "52428800",
+              "type": "file",
+              "modified-time": "2025-01-02T03:00:00+00:00"
+            },
+            {
+              "full-path": "/bootflash/tracelogs",
+              "size": "16384",
+              "type": "directory",
+              "modified-time": "2026-08-23T21:04:12+00:00"
+            },
+            {
+              "full-path": "/bootflash/.installer",
+              "size": "4096",
+              "type": "directory",
+              "modified-time": "2026-07-11T03:02:10+00:00"
+            }
+          ]
+        },
+        {
+          "name": "crashinfo:",
+          "total-size": "1612608",
+          "used-size": "130944",
+          "used-percent": 8,
+          "disk-status": "healthy",
+          "thresholds": {
+            "warning-threshold-percent": 80,
+            "critical-threshold-percent": 90
+          },
+          "is-primary": false,
+          "is-writable": true,
+          "partition-content": [
+            {
+              "full-path": "/crashinfo/tracelogs",
+              "size": "16384",
+              "type": "directory",
+              "modified-time": "2026-08-23T21:04:12+00:00"
+            },
+            {
+              "full-path": "/crashinfo/tracelogs/fed_pmanTTY_R0-0.1234_0.20260823021503.bin.gz",
+              "size": "20480",
+              "type": "file",
+              "modified-time": "2026-08-23T02:15:03+00:00"
+            },
+            {
+              "full-path": "/crashinfo/license_evlog",
+              "size": "4096",
+              "type": "directory",
+              "modified-time": "2025-10-16T02:01:40+00:00"
+            },
+            {
+              "full-path": "/crashinfo/koops.dat",
+              "size": "0",
+              "type": "file",
+              "modified-time": "2019-07-31T04:59:17+00:00"
+            },
+            {
+              "full-path": "/crashinfo/system-report_1_20260823-021503-UTC.tar.gz",
+              "size": "1234567",
+              "type": "file",
+              "modified-time": "2026-08-23T02:15:03+00:00"
+            }
+          ]
+        }
+      ],
+      "core-files": [
+        {
+          "filename": "/bootflash/core/fed_1_RP_0_31337_20250102-030000-UTC.core.gz",
+          "time": "2025-01-02T03:00:00+00:00"
+        }
+      ],
+      "image-files": [
+        {
+          "full-path": "/bootflash/cat9k_iosxe.17.09.01.SPA.bin",
+          "file-size": "1234567890",
+          "sha1sum": "c3ludGhldGljLXNoYTEtdmFsdWU="
+        }
+      ]
+    },
+    {
+      "fru": "fru-rp",
+      "slot": 0,
+      "bay": 0,
+      "chassis": 2,
+      "partitions": {
+        "name": "crashinfo:",
+        "total-size": "1612608",
+        "used-size": "65472",
+        "used-percent": 4,
+        "disk-status": "healthy",
+        "is-primary": false,
+        "is-writable": true
+      }
+    }
+  ]
+}

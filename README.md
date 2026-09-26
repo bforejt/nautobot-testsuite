@@ -20,8 +20,9 @@ Two jobs, both under the **Test Suite** grouping:
 - **Test Suite Shakedown (dev)** — hidden development job: runs *every* registered
   check for one device's platform in debug mode and attaches per-check verdicts
   with advisories ("parsed but empty — leaf names likely differ on this
-  version"), a per-platform `discovery` block (yang-library module inventory
-  and RIB/FIB naming on IOS-XE; Redfish version, `$expand` support, OEM links
+  version"), a per-platform `discovery` block (yang-library module inventory,
+  RIB/FIB naming and where crash files live in the q-filesystem model on
+  IOS-XE; Redfish version, `$expand` support, OEM links
   and collection counts on an XCC; hostd build, lockdown mode, CDP hearing
   and health-runtime population on ESXi), and the full payload trace. This is
   how collectors get validated
@@ -158,7 +159,7 @@ the humans reading the report.
 | `panos_ospf_neighbors` | panos | 1 | OSPF adjacencies, engine-aware (the firewall's view of the core) |
 | `panos_crash_files` | panos | 1 | Core/crash files within the recency window |
 | `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
-| `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window, on every stack member's filesystem |
+| `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window on every stack member's filesystem (`dir`, field-verified), plus the q-filesystem model's core-file list (a YANG best guess pending a shakedown) |
 | `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason |
 | `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
 | `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, model, serial) and stack-port ring health (not-present when the platform does not stack) |
@@ -275,9 +276,10 @@ fence guard` CI step pins that wiring (the fence call and the single
 `session.get` site in `_send`). The SSH runner (`jobs/transport_ssh.py`)
 refuses any command that does not match a per-platform read-only allowlist
 (the `show ` prefix; the display-only `request license info` on PAN-OS; and on
-IOS-XE the crashinfo `dir` listings — `dir crashinfo:` and
-`dir stby-crashinfo:` as exact commands, `dir crashinfo-<N>:` per stack member
-as an anchored, numeric-only shape, the bare `dir` verb still banned —
+IOS-XE the crashinfo `dir` listings — `dir crashinfo-<N>:` per stack member
+as an anchored, numeric-only shape, and `dir crashinfo:` / `dir stby-crashinfo:`
+as exact commands (the fallback, and the only form on a device with no stack
+roster), the bare `dir` verb still banned —
 deliberately not `test`/`ping`, since e.g. PAN-OS `test vpn ike-sa` *initiates*
 SA negotiation; future probe commands get individually vetted entries, and
 `tests/test_transport_allowlist.py` locks the allowlist in CI) and never enters
@@ -336,6 +338,24 @@ the read-only grep guard and the SOAP operation guard.
    payload holds the real leaf/element names — adjust the normalizer to match;
    "nothing fetched" is a path/transport problem (check the module inventory in
    `discovery`).
+   - On an **IOS-XE switch** `discovery.q_filesystem` reads the full
+     platform-software `q-filesystem` list, `partition-content` included (every
+     file on every partition — unbounded, so only the shakedown reads it), and
+     reports per location (`<fru>/<slot>/<bay>/<chassis>`) each partition's
+     entry counts by type, the entries whose own name looks crash-related
+     (`crash`, `core`, `system-report`, `koops`; the first 20 plus a total) and
+     the `core-files` count with its first entries. Read beside the per-member
+     `dir crashinfo-<N>:` listings in the same trace (a `koops.dat` with the
+     same timestamp on both sides pins a location to a member), it settles
+     what `iosxe_crash_files` still guesses about its YANG source: whether
+     `chassis` is the stack member number, what `core-files` lists and whether
+     its `filename` is a name or a path, and which partitions carry crashinfo.
+     Until then the check's `dir` listings stay the field-verified source.
+     `payload_chars` sizes the full read; past 1,000,000 characters the trace
+     keeps a marker in its place (`trace_payload_trimmed`), so one unbounded
+     list never pushes the trace past the 10 MB artifact limit, and the
+     summary plus the check's own narrowed read (also in the trace) still
+     answer all three questions.
    - On an **XCC** the `discovery` block answers the questions the Redfish
      collectors were written around: `RedfishVersion`, whether the root
      advertises `$expand` (`ProtocolFeaturesSupported` — this decides the

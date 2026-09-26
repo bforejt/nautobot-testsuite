@@ -1,0 +1,77 @@
+{
+  "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+    "q-filesystem": [
+      {
+        "fru": "fru-rp",
+        "slot": 0,
+        "bay": 0,
+        "chassis": 1,
+        "partitions": [
+          {
+            "name": "bootflash:"
+          },
+          {
+            "name": "crashinfo:"
+          }
+        ],
+        "core-files": [
+          {
+            "filename": "system-report_1_20260823-021503-UTC.tar.gz",
+            "time": "2026-08-23T02:15:03+00:00"
+          },
+          {
+            "filename": "/crashinfo/core/fed_1_RP_0_31337_20250102-030000-UTC.core.gz",
+            "time": "2025-01-02T03:00:00+00:00"
+          }
+        ]
+      },
+      {
+        "fru": "fru-rp",
+        "slot": 0,
+        "bay": 0,
+        "chassis": 2,
+        "partitions": [
+          {
+            "name": "bootflash:"
+          },
+          {
+            "name": "crashinfo:"
+          }
+        ]
+      },
+      {
+        "fru": "fru-rp",
+        "slot": 0,
+        "bay": 0,
+        "chassis": 3,
+        "partitions": [
+          {
+            "name": "bootflash:"
+          },
+          {
+            "name": "crashinfo:"
+          }
+        ],
+        "core-files": [
+          {
+            "filename": "/crashinfo/core/linux_iosd-imag_3_RP_0_4242_20260823-101010-UTC.core.gz",
+            "time": "2026-08-23T10:10:10.123456789+00:00"
+          }
+        ]
+      },
+      {
+        "fru": "fru-rp",
+        "slot": 0,
+        "bay": 0,
+        "chassis": 4,
+        "partitions": {
+          "name": "crashinfo:"
+        },
+        "core-files": {
+          "filename": "crashinfo:core/fed_4_RP_0_777_20260101-000000-UTC.core.gz",
+          "time": "2026-01-01T00:00:00+00:00"
+        }
+      }
+    ]
+  }
+}

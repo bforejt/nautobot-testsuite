@@ -21,6 +21,7 @@ from nautobot.extras.models import SecretsGroup
 
 from . import checks_iosxe_wireless, creds, envelope, registry
 from . import constants as C
+from .checks_iosxe import _Q_FS_LIST_PATH, _summarize_q_filesystem
 from .checks_vmware import (
     _HARDWARE_PATHS,
     _HEALTH_PATHS,
@@ -75,6 +76,7 @@ IOSXE_KEY_MODELS = (
     "Cisco-IOS-XE-interfaces-oper",
     "Cisco-IOS-XE-device-hardware-oper",
     "Cisco-IOS-XE-environment-oper",
+    "Cisco-IOS-XE-platform-software-oper",
     "Cisco-IOS-XE-matm-oper",
     "Cisco-IOS-XE-switch-cp-svl-oper",
     # Read raw-only by iosxe_switch_stack; its presence here tells a 9300
@@ -129,6 +131,46 @@ def _fib_instances(ctx):
         for entry in _aslist(container.get("fib-ni-entry"))
         if isinstance(entry, dict)
     ]
+
+
+# The full q-filesystem read, in characters of JSON, past which its trace
+# entry keeps a marker instead of the payload. The debug trace holds every
+# payload, and one unbounded list (thousands of tracelog files per member,
+# unverified) must never push the trace past the 10 MB artifact limit, where
+# it is dropped whole — every check's payload and the dir listings with it.
+Q_FILESYSTEM_TRACE_MAX_CHARS = 1000000
+
+
+def _q_filesystem(ctx):
+    """The FULL q-filesystem, partition-content included, summarized per location.
+
+    iosxe_crash_files reads this model narrowed (location keys, core files,
+    partition names) because partition-content lists every file on every
+    partition — unbounded, so it is read here only, on one device at a time.
+    Beside the member `dir crashinfo-<N>:` listings in the same trace, the
+    summary settles the check's best guess: whether chassis is the stack
+    member number, what core-files holds, and which partitions list crashinfo.
+    payload_chars sizes the read; past Q_FILESYSTEM_TRACE_MAX_CHARS the trace
+    keeps a marker in its place (trace_payload_trimmed), and the summary plus
+    the check's own narrowed read, also in the trace, still answer all three.
+    """
+    start = len(ctx.trace)
+    payload = ctx.get(_Q_FS_LIST_PATH, ok_404=True, timeout=C.BIG_GET_TIMEOUT)
+    summary = _summarize_q_filesystem(payload)
+    if payload is not None:
+        chars = len(json.dumps(payload, default=str))
+        summary["payload_chars"] = chars
+        if chars > Q_FILESYSTEM_TRACE_MAX_CHARS:
+            marker = (
+                "trimmed: %d characters of JSON over the %d cap; its summary is "
+                "discovery.q_filesystem in the shakedown report"
+                % (chars, Q_FILESYSTEM_TRACE_MAX_CHARS)
+            )
+            for entry in ctx.trace[start:]:
+                if "payload" in entry:
+                    entry["payload"] = marker
+            summary["trace_payload_trimmed"] = True
+    return summary
 
 
 # --- xcc discovery -----------------------------------------------------------
@@ -331,6 +373,7 @@ DISCOVERY_PROBES = {
         ("modules", _module_inventory),
         ("rib_names", _rib_names),
         ("fib_instances", _fib_instances),
+        ("q_filesystem", _q_filesystem),
     ),
     "panos": (),
     "xcc": (
