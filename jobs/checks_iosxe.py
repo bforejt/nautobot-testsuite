@@ -36,11 +36,32 @@ _OSPF_PATH = (
     "ospfv2-neighbor(nbr-id;address;state))))"
 )
 _ARP_PATH = "/data/Cisco-IOS-XE-arp-oper:arp-data"
-_IFACE_PATH = (
-    "/data/Cisco-IOS-XE-interfaces-oper:interfaces"
-    "?fields=interface(name;description;admin-status;oper-status;vrf;ipv4)"
+_IFACE_BASE_PATH = "/data/Cisco-IOS-XE-interfaces-oper:interfaces"
+# One GET serves iosxe_interfaces and iosxe_errdisable (identical path and
+# kwargs, so the per-run cache issues it once). Every leaf is defined by the
+# interface-state grouping of Cisco-IOS-XE-interfaces-oper (17.12.1): the
+# effective config (vrf, mask, ipv6-addrs, mtu, the security ACLs, the
+# diffserv policy names), the negotiated Ethernet state (ether-state is the
+# interface-class-ethernet case; the model's own `speed` leaf is a bandwidth
+# estimate and is not requested), the extended state (valid only beside the
+# intf-ext-state-support presence leaf: err-disable type and reason, mGig
+# downshift), the storm-control filter states and the statistics counters.
+# diffserv-info is cut to its keys: its classifier statistics are volatile
+# and large. Unfiltered on HTTP 400 (see _fetch_interfaces).
+_IFACE_FIELDS = (
+    "interface(name;description;admin-status;oper-status;vrf;ipv4;ipv4-subnet-mask;"
+    "ipv6-addrs;mtu;input-security-acl;output-security-acl;"
+    "diffserv-info(direction;policy-name);storm-control;"
+    "intf-ext-state-support;intf-ext-state;statistics;"
+    "ether-state(negotiated-port-speed;negotiated-duplex-mode;auto-negotiate))"
 )
+_IFACE_PATH = "%s?fields=%s" % (_IFACE_BASE_PATH, _IFACE_FIELDS)
 _CDP_PATH = "/data/Cisco-IOS-XE-cdp-oper:cdp-neighbor-details"
+# The VLAN database (Cisco-IOS-XE-vlan-oper vlans/vlan[id], its `ports` list
+# is "Assigned ports"): iosxe_interfaces reads it, ok_404, to tell access
+# ports from trunks and routed ports. Identical path and kwargs to the GET
+# iosxe_vlans makes, so the per-run cache issues it once.
+_VLAN_PATH = "/data/Cisco-IOS-XE-vlan-oper:vlans"
 _LLDP_PATH = "/data/Cisco-IOS-XE-lldp-oper:lldp-entries"
 _HW_PATH = "/data/Cisco-IOS-XE-device-hardware-oper:device-hardware-data"
 _ENV_PATH = "/data/Cisco-IOS-XE-environment-oper:environment-sensors"
@@ -222,6 +243,8 @@ def _collect_route_rollups(ctx):
             else:
                 raw["note"] = "no OSPF type-split lines found in route summary output"
         except Exception as exc:  # transport failure modes vary by SSH stack
+            if type(exc).__name__ == "SoftTimeLimitExceeded":
+                raise  # the Celery abort signal is never a note
             raw["note"] = "ssh 'show ip route summary' failed: %s" % (exc,)
     else:
         raw["note"] = "no SSH transport; OSPF type splits unavailable"
@@ -395,8 +418,25 @@ def _normalize_cdp(payload):
             "port": entry.get("port-id"),
             # 17.12 emits "capability"; tolerate the plural seen on other trains
             "caps": entry.get("capability", entry.get("capabilities")),
+            # The neighbor's native VLAN and appliance (voice) VLAN as it
+            # advertises them; the model defines 0 as "not received", so 0
+            # and an absent leaf both read None. duplex is the cdp-duplex
+            # enum verbatim (cdp-full-duplex, cdp-half-duplex-mismatch, ...).
+            "native_vlan": _vlan_or_none(entry.get("native-vlan")),
+            "duplex": _strip_module(entry.get("duplex")),
+            "voice_vlan": _vlan_or_none(entry.get("vvid")),
+            # The model's platform-name ("cisco C9300-48P", "Cisco IP Phone
+            # 8845"): a stable identity string on the same GET; the bare
+            # spelling is tolerated the way the capability leaf's plural is.
+            "platform": _text_or_none(entry.get("platform-name", entry.get("platform"))),
         }
     return normalized
+
+
+def _vlan_or_none(value):
+    """A CDP VLAN id as int; None when absent, non-numeric or 0 (the model's 'not received')."""
+    number = _to_int(value)
+    return number if number else None
 
 
 def _normalize_lldp(payload):
@@ -431,34 +471,336 @@ def _collect_neighbors(ctx):
 
 # --- interfaces --------------------------------------------------------------
 
+_IFACE_UP = "if-oper-state-ready"
 
-def _normalize_interfaces(payload):
-    """interface name -> admin/oper status and IPv4 address (None when unset).
+# The statistics leaves raw keeps per interface (intf-statistics grouping),
+# in model order: the byte/packet totals, the error and discard counters, the
+# CRC and flap counters and the rate estimates. The counters are read as
+# deltas by the analyst; nothing here is ever normalized.
+_IFACE_STATS_LEAVES = (
+    "discontinuity-time",
+    "in-octets",
+    "in-unicast-pkts",
+    "in-broadcast-pkts",
+    "in-multicast-pkts",
+    "in-discards",
+    "in-errors",
+    "in-unknown-protos",
+    "out-octets",
+    "out-unicast-pkts",
+    "out-broadcast-pkts",
+    "out-multicast-pkts",
+    "out-discards",
+    "out-errors",
+    "rx-pps",
+    "rx-kbps",
+    "tx-pps",
+    "tx-kbps",
+    "num-flaps",
+    "in-crc-errors",
+    "in-discards-64",
+    "in-errors-64",
+    "in-unknown-protos-64",
+    "out-octets-64",
+)
+# The per-port counters context surfaces when nonzero, (leaf, context field).
+_IFACE_CONTEXT_COUNTERS = (
+    ("in-crc-errors", "crc"),
+    ("in-errors", "in_errors"),
+    ("num-flaps", "flaps"),
+)
+# The storm-control traffic-type containers of the interface-sc-state grouping.
+_STORM_TYPES = ("broadcast", "multicast", "unicast", "unknown-unicast")
+# The widened containers whose presence on at least one interface context
+# reports, so a capture says which the release populated.
+_IFACE_WIDENED = (
+    "ether-state",
+    "intf-ext-state",
+    "storm-control",
+    "diffserv-info",
+    "statistics",
+    "ipv6-addrs",
+)
+# Raw keeps curated statistics for at most this many interfaces.
+_IFACE_STATS_RAW_MAX = 1024
 
-    Description is deliberately raw-only: cosmetic edits must not fail a
-    change window.
-    """
+
+def _interface_entries(payload):
+    """The interface list entries of an interfaces-oper payload (dicts only)."""
     container = _container(payload, "Cisco-IOS-XE-interfaces-oper:interfaces") or {}
-    normalized = {}
-    for entry in _aslist(container.get("interface")):
-        if not isinstance(entry, dict):
+    return [entry for entry in _aslist(container.get("interface")) if isinstance(entry, dict)]
+
+
+def _text_or_none(value):
+    """A string leaf stripped; None when absent or blank."""
+    text = "" if value is None else str(value).strip()
+    return text or None
+
+
+def _vrf_or_none(value):
+    """The vrf leaf; None for the global table, which the model spells 'Global' and a
+    device may leave blank."""
+    text = _text_or_none(value)
+    if text is None or text.lower() == "global":
+        return None
+    return text
+
+
+def _qos_policies(entry):
+    """(inbound, outbound) diffserv policy names, each the sorted names joined by ','
+    or None; the list key is (direction, policy-name)."""
+    names = {"qos-inbound": [], "qos-outbound": []}
+    for info in _aslist(entry.get("diffserv-info")):
+        if not isinstance(info, dict):
             continue
+        direction = _strip_module(info.get("direction"))
+        name = _text_or_none(info.get("policy-name"))
+        if direction in names and name is not None:
+            names[direction].append(name)
+    return tuple(",".join(sorted(set(names[d]))) or None for d in ("qos-inbound", "qos-outbound"))
+
+
+def _storm_blocking(entry):
+    """Sorted traffic types whose storm-control filter-state is 'blocking'."""
+    storm = entry.get("storm-control")
+    storm = storm if isinstance(storm, dict) else {}
+    blocking = []
+    for traffic in _STORM_TYPES:
+        state = storm.get(traffic)
+        state = state if isinstance(state, dict) else {}
+        if _strip_module(state.get("filter-state")) == "blocking":
+            blocking.append(traffic)
+    return blocking
+
+
+def _ext_state(entry):
+    """The intf-ext-state container, {} when absent; the model marks it valid only
+    beside the intf-ext-state-support presence leaf, but a device that serves the
+    container without the flag is read rather than ignored."""
+    ext = entry.get("intf-ext-state")
+    return ext if isinstance(ext, dict) else {}
+
+
+def _access_ports(vlan_payload):
+    """The interfaces named in any VLAN's assigned-`ports` list of a vlan-oper
+    payload, or None when the model was not served (404) so every port keeps
+    its negotiated link state."""
+    if vlan_payload is None:
+        return None
+    container = _container(vlan_payload, "Cisco-IOS-XE-vlan-oper:vlans") or {}
+    names = set()
+    for vlan in _aslist(container.get("vlan") if isinstance(container, dict) else None):
+        if not isinstance(vlan, dict):
+            continue
+        for member in _aslist(vlan.get("ports")):
+            if isinstance(member, dict) and member.get("interface"):
+                names.add(str(member["interface"]))
+    return names
+
+
+def _link_state(entry):
+    """(speed, duplex, mgig_downshift, autoneg) of one interface entry.
+
+    speed and duplex are the ether-state negotiated values, only while oper is
+    up (a down port negotiated nothing); mgig_downshift is the intf-ext-state
+    flag; autoneg is the auto-negotiate leaf, a config fact read whatever the
+    oper state (the model defines the negotiated leaves only when it is true).
+    """
+    oper = entry.get("oper-status")
+    ether = entry.get("ether-state")
+    ether = ether if isinstance(ether, dict) else {}
+    negotiated = ether if oper == _IFACE_UP else {}
+    downshift = _ext_state(entry).get("mgig-downshift-enabled")
+    autoneg = ether.get("auto-negotiate")
+    if isinstance(autoneg, str):
+        autoneg = {"true": True, "false": False}.get(autoneg.strip().lower())
+    return (
+        _strip_module(negotiated.get("negotiated-port-speed")),
+        _strip_module(negotiated.get("negotiated-duplex-mode")),
+        downshift if isinstance(downshift, bool) else None,
+        autoneg if isinstance(autoneg, bool) else None,
+    )
+
+
+def _normalize_interfaces(payload, access_ports=None):
+    """interface name -> stable state and effective config (None when unset).
+
+    State: admin/oper status; speed and duplex (ether-state negotiated values,
+    only while oper is up — a down port negotiated nothing); mgig_downshift;
+    autoneg (the auto-negotiate leaf: a hard-set port reads False with None
+    speed/duplex); storm (traffic types storm-control is blocking). Effective
+    config: ipv4, mask, vrf, ipv6 (sorted), mtu, acl_in/acl_out,
+    qos_in/qos_out. Description is deliberately raw-only: cosmetic edits must
+    not fail a change window. The err-disable leaves of intf-ext-state are
+    iosxe_errdisable's, so one event is reported once; counters are context
+    and raw, never here.
+
+    access_ports: the interfaces the VLAN database lists as assigned ports.
+    Their negotiated speed, duplex and mgig_downshift follow the endpoint's
+    power state (a docked laptop that sleeps drops its link rate with the
+    port still up), so for them the three read None here and the values ride
+    in context (_interfaces_context's access_link). None (the model was not
+    served) keeps every port's values here.
+    """
+    normalized = {}
+    access = access_ports or set()
+    for entry in _interface_entries(payload):
         name = entry.get("name")
         if name is None:
             continue
+        oper = entry.get("oper-status")
+        speed, duplex, downshift, autoneg = _link_state(entry)
+        if name in access:
+            speed = duplex = downshift = None
+        qos_in, qos_out = _qos_policies(entry)
         normalized[name] = {
             "admin": entry.get("admin-status"),
-            "oper": entry.get("oper-status"),
+            "oper": oper,
             "ipv4": entry.get("ipv4"),
+            "mask": entry.get("ipv4-subnet-mask"),
+            "vrf": _vrf_or_none(entry.get("vrf")),
+            "ipv6": sorted(str(addr).lower() for addr in _aslist(entry.get("ipv6-addrs"))),
+            "mtu": _to_int(entry.get("mtu")),
+            "acl_in": _text_or_none(entry.get("input-security-acl")),
+            "acl_out": _text_or_none(entry.get("output-security-acl")),
+            "qos_in": qos_in,
+            "qos_out": qos_out,
+            "speed": speed,
+            "duplex": duplex,
+            "mgig_downshift": downshift,
+            "autoneg": autoneg,
+            "storm": _storm_blocking(entry),
         }
     return normalized
 
 
-def _collect_interfaces(ctx):
-    payload = ctx.get(_IFACE_PATH)
+def _interfaces_context(payload, access_ports=None):
+    """Counters and coverage facts: nonzero CRC / in-error / flap counters per port
+    (read as deltas), port totals, which widened containers the device served,
+    and the link scope: link_scope 'trunks_and_routed' when the VLAN database
+    named the access ports (their negotiated speed, duplex and mgig_downshift
+    then ride here under access_link, never in normalized), 'all' when it was
+    not served and every port's values stay normalized."""
+    entries = _interface_entries(payload)
+    counters = {}
+    access_link = {}
+    access = access_ports or set()
+    seen = {leaf: False for leaf in _IFACE_WIDENED}
+    for entry in entries:
+        for leaf in _IFACE_WIDENED:
+            if entry.get(leaf) not in (None, [], {}):
+                seen[leaf] = True
+        if entry.get("name") in access:
+            speed, duplex, downshift, _autoneg = _link_state(entry)
+            access_link[entry["name"]] = {
+                "speed": speed,
+                "duplex": duplex,
+                "mgig_downshift": downshift,
+            }
+        stats = entry.get("statistics")
+        stats = stats if isinstance(stats, dict) else {}
+        nonzero = {}
+        for leaf, field in _IFACE_CONTEXT_COUNTERS:
+            value = _to_int(stats.get(leaf))
+            if value:
+                nonzero[field] = value
+        if nonzero and entry.get("name") is not None:
+            counters[entry["name"]] = nonzero
+    return {
+        "ports_total": len(entries),
+        "ports_oper_up": sum(1 for e in entries if e.get("oper-status") == _IFACE_UP),
+        "counters": counters,
+        "leaves_seen": seen,
+        "link_scope": "all" if access_ports is None else "trunks_and_routed",
+        "access_ports_listed": None if access_ports is None else len(access_ports),
+        "access_link": dict(sorted(access_link.items())),
+    }
+
+
+def _interface_statistics(payload):
+    """interface name -> the curated statistics leaves the device served, for raw
+    (capped at _IFACE_STATS_RAW_MAX interfaces, in payload order)."""
+    curated = {}
+    for entry in _interface_entries(payload):
+        stats = entry.get("statistics")
+        name = entry.get("name")
+        if name is None or not isinstance(stats, dict):
+            continue
+        curated[name] = {leaf: stats[leaf] for leaf in _IFACE_STATS_LEAVES if leaf in stats}
+        if len(curated) >= _IFACE_STATS_RAW_MAX:
+            break
+    return curated
+
+
+def _interfaces_without_statistics(payload):
+    """The payload with each interface's statistics container dropped, so raw holds
+    the counters once, curated, beside the rest of the reply."""
+    container = _container(payload, "Cisco-IOS-XE-interfaces-oper:interfaces")
+    if not isinstance(container, dict):
+        return payload
+    stripped = [
+        {k: v for k, v in entry.items() if k != "statistics"} if isinstance(entry, dict) else entry
+        for entry in _aslist(container.get("interface"))
+    ]
+    return {"Cisco-IOS-XE-interfaces-oper:interfaces": {"interface": stripped}}
+
+
+def _fetch_interfaces(ctx):
+    """(payload, notes): the widened interfaces GET, retried once unfiltered on HTTP 400.
+
+    Shared by iosxe_interfaces and iosxe_errdisable; the second caller is a
+    cache hit. CollectError when the reply lacks the interfaces container.
+    """
+    notes = []
+    try:
+        payload = ctx.get(_IFACE_PATH)
+    except Exception as exc:
+        if getattr(exc, "status_code", None) != 400:
+            raise
+        notes.append("interfaces: fields filter rejected (HTTP 400); unfiltered read used")
+        # The unfiltered reply carries every leaf of every interface (the
+        # diffserv classifier statistics included), so it gets the budget every
+        # other unfiltered retry on the platform gets.
+        payload = ctx.get(_IFACE_BASE_PATH, timeout=C.BIG_GET_TIMEOUT)
     if _container(payload, "Cisco-IOS-XE-interfaces-oper:interfaces") is None:
         raise CollectError("interfaces container missing from RESTCONF reply")
-    return {"raw": {"interfaces": payload}, "normalized": _normalize_interfaces(payload)}
+    return payload, notes
+
+
+def _fetch_access_ports(ctx, notes):
+    """The VLAN database's assigned-port names; None when the model is absent
+    (context's link_scope records that) or the read failed (noted). A cache
+    hit beside iosxe_vlans, best-effort — a failed read costs the link scope,
+    never the check."""
+    try:
+        vlan_payload = ctx.get(_VLAN_PATH, ok_404=True)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        notes.append("vlan-oper read failed (%s); link state kept for every port" % (exc,))
+        return None
+    return _access_ports(vlan_payload)
+
+
+def _collect_interfaces(ctx):
+    payload, notes = _fetch_interfaces(ctx)
+    filter_rejected = bool(notes)
+    access_ports = _fetch_access_ports(ctx, notes)
+    raw = {
+        "interfaces": _interfaces_without_statistics(payload),
+        "statistics": _interface_statistics(payload),
+    }
+    context = _interfaces_context(payload, access_ports)
+    context["fields_filter"] = (
+        "rejected (HTTP 400); unfiltered read" if filter_rejected else "accepted"
+    )
+    if notes:
+        raw["note"] = "; ".join(notes)
+    return {
+        "raw": raw,
+        "normalized": _normalize_interfaces(payload, access_ports),
+        "context": context,
+    }
 
 
 # --- platform health ---------------------------------------------------------
@@ -489,8 +831,9 @@ def _normalize_platform_health(hardware_payload, env_payload):
     env_payload may be None. 'last-reboot' carries only the reason/severity
     leaves the device served, as stripped strings, and is absent when it
     served neither; context names every reload leaf it did not serve.
-    Volatile current-reading values are never emitted — only each sensor's
-    state word.
+    Volatile current-reading values are never normalized — only each sensor's
+    state word; context 'readings' keeps each served reading with its units
+    under the same 'env|location/sensor' key, for the reader, never diffed.
     """
     container = (
         _container(hardware_payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") or {}
@@ -518,13 +861,18 @@ def _normalize_platform_health(hardware_payload, env_payload):
     env_container = (
         _container(env_payload, "Cisco-IOS-XE-environment-oper:environment-sensors") or {}
     )
+    readings = {}
     for sensor in _aslist(env_container.get("environment-sensor")):
         if not isinstance(sensor, dict):
             continue
         key = "env|%s/%s" % (sensor.get("location"), sensor.get("name"))
         normalized[key] = {"state": sensor.get("state")}
+        reading = _to_int(sensor.get("current-reading"))
+        if reading is not None:
+            readings[key] = {"reading": reading, "units": _strip_module(sensor.get("sensor-units"))}
     context = {
-        "reboot_leaves_not_served": [leaf for leaf in _REBOOT_LEAVES if system.get(leaf) is None]
+        "reboot_leaves_not_served": [leaf for leaf in _REBOOT_LEAVES if system.get(leaf) is None],
+        "readings": readings,
     }
     return normalized, context
 
@@ -647,12 +995,16 @@ register(
     CheckDef(
         id="iosxe_neighbors",
         platform="iosxe",
-        description="CDP and LLDP neighbor tables combined: who is on which local port.",
+        description=(
+            "CDP and LLDP neighbor tables combined: who is on which local port, with the "
+            "CDP neighbor's native VLAN, duplex and voice VLAN."
+        ),
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A neighbor disappeared or moved — a link was bounced or mis-cabled during the "
-            "physical work."
+            "window — or a CDP neighbor now advertises another native VLAN, duplex or voice "
+            "VLAN across the same link."
         ),
         collector=_collect_neighbors,
         tags=("topology",),
@@ -663,10 +1015,18 @@ register(
     CheckDef(
         id="iosxe_interfaces",
         platform="iosxe",
-        description="All interfaces: admin/oper status and IPv4 address.",
+        description=(
+            "All interfaces: admin/oper status, negotiated speed and duplex, storm-control "
+            "blocking, mGig downshift, and the effective config (IPv4/mask, VRF, IPv6, MTU, "
+            "ACLs, QoS policies); CRC, error and flap counters in context"
+        ),
         tier=2,
         compare={"mode": "equality_set"},
-        miss_meaning=("A port that was up is no longer up (outside the declared firewall ports)."),
+        miss_meaning=(
+            "A port changed state outside the declared expectations — down, renegotiated to "
+            "another speed or duplex, blocking a traffic type, or carrying a different "
+            "address, VRF, MTU, ACL or QoS policy than before."
+        ),
         collector=_collect_interfaces,
         tags=("interfaces",),
     )
@@ -678,7 +1038,7 @@ register(
         platform="iosxe",
         description=(
             "Boot time, last reboot reason and severity, active hardware alarms, environment "
-            "sensor states."
+            "sensor states (readings in context)."
         ),
         tier=3,
         compare={"mode": "equality_set"},
@@ -2394,6 +2754,12 @@ register(
 # --- iosxe_errdisable + iosxe_port_channels (approved TAC-lens additions) -----
 
 _ERRDISABLE_LINE = re.compile(r"^(\S+\d\S*)\s+(?:.*?\s+)?err-?disabled?\s+(\S+)\s*$", re.IGNORECASE)
+_ERRDISABLE_COMMAND = "show interfaces status err-disabled"
+# The port-error-code enum value (Cisco-IOS-XE-ios-common-oper) that marks a
+# port err-disabled; the other value is port-error-none.
+_PORT_ERROR_DISABLE = "port-error-disable"
+# Raw keeps the extended-state rows of at most this many interfaces.
+_ERRDISABLE_RAW_MAX = 1024
 
 
 def _parse_errdisable(cli_output):
@@ -2410,15 +2776,76 @@ def _parse_errdisable(cli_output):
     return normalized
 
 
+def _normalize_errdisable(payload):
+    """(normalized, ext_states) from the interfaces-oper intf-ext-state leaves.
+
+    ext_states: interface name -> {error-type, port-error-reason} for every
+    interface serving an error-type leaf, {} when no interface does (the
+    caller then falls back to the CLI). normalized: the interfaces whose
+    error-type is port-error-disable -> {"reason": <port-err-* enum>}; healthy
+    is EMPTY. Enum values keep the model's spelling (port-err-bpduguard).
+    """
+    normalized = {}
+    ext_states = {}
+    for entry in _interface_entries(payload):
+        name = entry.get("name")
+        ext = _ext_state(entry)
+        if name is None or ext.get("error-type") is None:
+            continue
+        error_type = _strip_module(ext.get("error-type"))
+        reason = _strip_module(ext.get("port-error-reason"))
+        ext_states[name] = {"error-type": error_type, "port-error-reason": reason}
+        if error_type == _PORT_ERROR_DISABLE:
+            normalized[name] = {"reason": reason}
+    return normalized, ext_states
+
+
 def _collect_errdisable(ctx):
+    # Primary source: the intf-ext-state container of the interfaces GET
+    # iosxe_interfaces makes (identical path and kwargs: a cache hit when the
+    # fields filter was accepted; on the HTTP 400 path the rejected filtered
+    # request is re-issued, since a failed GET is never cached, and only the
+    # unfiltered read is the cache hit). The read stays best-effort — a failed
+    # GET costs the model source, never the check — and the CLI form is the
+    # fallback wherever no interface serves the leaves (older releases, or a
+    # fields filter that dropped them). Which source answered rides in context.
+    raw = {}
+    notes = []
+    try:
+        payload, fetch_notes = _fetch_interfaces(ctx)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        notes.append("interfaces-oper read failed (%s); CLI fallback used" % (exc,))
+    else:
+        notes.extend(fetch_notes)
+        normalized, ext_states = _normalize_errdisable(payload)
+        if ext_states:
+            raw["intf-ext-state"] = dict(sorted(ext_states.items())[:_ERRDISABLE_RAW_MAX])
+            if notes:
+                raw["note"] = "; ".join(notes)
+            context = {
+                "source": "intf-ext-state",
+                "ports_with_ext_state": len(ext_states),
+                "ports_errdisabled": len(normalized),
+            }
+            return {"raw": raw, "normalized": normalized, "context": context}
+        notes.append("intf-ext-state served on no interface; CLI fallback used")
     if not ctx.has_ssh:
-        raise SkipCheck("no SSH transport")
-    command = "show interfaces status err-disabled"
-    output = ctx.run_ssh(command)
+        raise SkipCheck("intf-ext-state not served and no SSH transport for the CLI fallback")
+    output = ctx.run_ssh(_ERRDISABLE_COMMAND)
+    raw[_ERRDISABLE_COMMAND] = output
     lowered = (output or "").lower()
     if "invalid input" in lowered or "incomplete command" in lowered:
         raise SkipCheck("err-disabled status form rejected on this platform")
-    return {"raw": {command: output}, "normalized": _parse_errdisable(output)}
+    normalized = _parse_errdisable(output)
+    raw["note"] = "; ".join(notes)
+    context = {
+        "source": _ERRDISABLE_COMMAND,
+        "ports_with_ext_state": 0,
+        "ports_errdisabled": len(normalized),
+    }
+    return {"raw": raw, "normalized": normalized, "context": context}
 
 
 _PO_LINE = re.compile(r"^\d+\s+(Po\d+)\(([\w-]*)\)\s+(\S+)\s*(.*)$")
@@ -2467,13 +2894,16 @@ register(
     CheckDef(
         id="iosxe_errdisable",
         platform="iosxe",
-        description="Ports in err-disabled state with the triggering reason",
+        description=(
+            "Ports in err-disabled state with the triggering reason, from the interfaces "
+            "model's extended state (CLI fallback)"
+        ),
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "A port was knocked into err-disable during the work — it reads as merely "
-            "'down' everywhere else; the reason here says why (security violation, "
-            "link-flap, UDLD...)."
+            "A port was knocked into err-disable during the window — it reads as merely "
+            "'down' everywhere else; the reason here says why (BPDU guard, port security, "
+            "link-flap, UDLD, storm-control, inline power...)."
         ),
         collector=_collect_errdisable,
         tags=("interfaces",),
@@ -2748,6 +3178,42 @@ _INVENTORY_PID_LINE = re.compile(
 _INVENTORY_MEMBER_NAME = re.compile(r"^(?:Switch|Chassis)\s+(\d+)$", re.IGNORECASE)
 
 
+_INVENTORY_DESCR = re.compile(r',\s*DESCR:\s*"([^"]*)"', re.IGNORECASE)
+
+
+def _inventory_items(cli_output):
+    """The NAME/DESCR + PID/VID/SN pairs of ``show inventory`` in print order.
+
+    Each item is {name, descr, pid, vid, sn} with blank fields as ''. A
+    PID line with no NAME line before it is ignored.
+    """
+    items = []
+    name = None
+    descr = ""
+    for line in (cli_output or "").splitlines():
+        stripped = line.strip()
+        name_match = _INVENTORY_NAME_LINE.match(stripped)
+        if name_match:
+            name = name_match.group(1).strip()
+            descr_match = _INVENTORY_DESCR.search(stripped)
+            descr = descr_match.group(1).strip() if descr_match else ""
+            continue
+        pid_match = _INVENTORY_PID_LINE.match(stripped)
+        if pid_match is None or name is None:
+            continue
+        items.append(
+            {
+                "name": name,
+                "descr": descr,
+                "pid": pid_match.group(1),
+                "vid": pid_match.group(2),
+                "sn": pid_match.group(3),
+            }
+        )
+        name = None
+    return items
+
+
 def _parse_show_inventory(cli_output):
     """'<n>' -> {model, serial} from the member chassis entries of ``show inventory``.
 
@@ -2756,25 +3222,15 @@ def _parse_show_inventory(cli_output):
     names no member.
     """
     entries = {}
-    name = None
-    for line in (cli_output or "").splitlines():
-        stripped = line.strip()
-        name_match = _INVENTORY_NAME_LINE.match(stripped)
-        if name_match:
-            name = name_match.group(1).strip()
-            continue
-        pid_match = _INVENTORY_PID_LINE.match(stripped)
-        if pid_match is None or name is None:
-            continue
-        member = _INVENTORY_MEMBER_NAME.match(name)
-        name = None
+    for item in _inventory_items(cli_output):
+        member = _INVENTORY_MEMBER_NAME.match(item["name"])
         if member is None:
             continue
         facts = {}
-        if pid_match.group(1):
-            facts["model"] = pid_match.group(1)
-        if pid_match.group(3):
-            facts["serial"] = pid_match.group(3)
+        if item["pid"]:
+            facts["model"] = item["pid"]
+        if item["sn"]:
+            facts["serial"] = item["sn"]
         number = str(int(member.group(1)))
         entries[number] = facts if entries.get(number, facts) == facts else None
     return entries
@@ -3072,5 +3528,239 @@ register(
         ),
         collector=_collect_switch_stack,
         tags=("platform", "stack"),
+    )
+)
+
+
+# --- iosxe_inventory ---------------------------------------------------------
+# Chassis identity on every IOS-XE form (standalone, StackWise, StackWise
+# Virtual, modular): model, serial, description and hardware version of every
+# chassis, module, power supply, fan and transceiver the device lists.
+# Source: device-inventory of Cisco-IOS-XE-device-hardware-oper on the GET
+# platform-health and the stack check already make (a cache hit). Its list
+# key is (hw-type hw-dev-index), and hw-dev-index is the item's physical
+# inventory index (field-verified: 1, 8, 15 and 20 for the chassis of a
+# 4-member 9300 stack), so a normalized row is keyed on the item's dev-name,
+# else its serial, and on the index only when it carries neither — context
+# names those rows. Fallback: `show inventory`, whose NAME plays dev-name.
+# Member roles and the ring live in iosxe_switch_stack; identity lives here.
+
+_INVENTORY_CLASSES = {
+    "hw-type-chassis": "chassis",
+    "hw-type-pim": "module",
+    "hw-type-pem": "psu",
+    "hw-type-fantray": "fan",
+    "hw-type-transceiver": "transceiver",
+}
+# On-board parts (CPU, memory, storage) are not field-replaceable identity:
+# counted in context, never keyed. hw-type-ssd also carries a lifetime
+# percentage, which would drift. Any other hw-type reads as 'other'.
+_INVENTORY_INTERNAL = (
+    "hw-type-cpu",
+    "hw-type-dram",
+    "hw-type-flash",
+    "hw-type-emmc",
+    "hw-type-sdcard",
+    "hw-type-usb",
+    "hw-type-ssd",
+)
+_INVENTORY_LEAVES = (
+    ("part-number", "model"),
+    ("serial-number", "serial"),
+    ("hw-description", "description"),
+    ("version", "version"),
+)
+# Raw keeps at most this many device-inventory entries.
+_INVENTORY_RAW_MAX = 512
+_INVENTORY_COMMAND = "show inventory"
+# `show inventory` names: a transceiver by its port ("Te1/1/1",
+# "TwentyFiveGigE1/0/1"); the stack-level pseudo entry ("c93xx Stack")
+# repeats the active member's PID and SN, so it would move with a
+# switchover and is skipped (context names it).
+_INVENTORY_PORT_NAME = re.compile(r"^[A-Za-z][A-Za-z-]*\d+(?:/\d+)+$")
+_INVENTORY_STACK_NAME = re.compile(r"\bstack$", re.IGNORECASE)
+_INVENTORY_CLASS_WORDS = (("power supply", "psu"), ("fan", "fan"), ("module", "module"))
+
+
+def _inventory_facts(model, serial, description, version):
+    """The four identity fields, each stripped text or None; serial upper-cased so a
+    change of source never flips its spelling."""
+    serial = _text_or_none(serial)
+    return {
+        "model": _text_or_none(model),
+        "serial": serial.upper() if serial else None,
+        "description": _text_or_none(description),
+        "version": _text_or_none(version),
+    }
+
+
+def _inventory_place(normalized, key, facts, serial):
+    """Store facts under key; a second item with the same key is suffixed by its
+    serial (else by its occurrence ordinal, '#2', '#3', ... — never by the
+    hw-dev-index, which may move across a reload) so neither hides the other.
+    Returns the key used."""
+    if key in normalized and normalized[key] != facts:
+        if serial:
+            key = "%s|sn:%s" % (key, serial)
+        else:
+            ordinal = 2
+            while "%s|#%d" % (key, ordinal) in normalized:
+                ordinal += 1
+            key = "%s|#%d" % (key, ordinal)
+    normalized[key] = facts
+    return key
+
+
+def _inventory_entries(hardware_payload):
+    """The device-inventory list entries (dicts only) of a device-hardware-data payload."""
+    container = (
+        _container(hardware_payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") or {}
+    )
+    hardware = container.get("device-hardware")
+    hardware = hardware if isinstance(hardware, dict) else {}
+    return [entry for entry in _aslist(hardware.get("device-inventory")) if isinstance(entry, dict)]
+
+
+def _normalize_inventory(hardware_payload):
+    """(normalized, facts) from device-inventory: '<class>|<dev-name>' (else
+    '<class>|sn:<serial>', else '<class>|pn:<part-number>') -> model, serial,
+    description, version. A row with neither name, serial nor part number has
+    no replaceable identity, and its hw-dev-index may move across a reload, so
+    it is never keyed: facts unidentified counts those per class. facts also
+    carries items_by_class, keyed_by_part_number (the rows keyed on their part
+    number alone) and internal_skipped (on-board parts by hw-type)."""
+    normalized = {}
+    by_class = {}
+    keyed_by_pn = []
+    unidentified = {}
+    internal = {}
+    for entry in _inventory_entries(hardware_payload):
+        hw_type = str(entry.get("hw-type") or "").strip().split(":")[-1].lower()
+        if hw_type in _INVENTORY_INTERNAL:
+            internal[hw_type] = internal.get(hw_type, 0) + 1
+            continue
+        cls = _INVENTORY_CLASSES.get(hw_type, "other")
+        facts = _inventory_facts(
+            entry.get("part-number"),
+            entry.get("serial-number"),
+            entry.get("hw-description"),
+            entry.get("version"),
+        )
+        name = _text_or_none(entry.get("dev-name"))
+        by_class[cls] = by_class.get(cls, 0) + 1
+        if name is not None:
+            key = "%s|%s" % (cls, name)
+        elif facts["serial"] is not None:
+            key = "%s|sn:%s" % (cls, facts["serial"])
+        elif facts["model"] is not None:
+            key = "%s|pn:%s" % (cls, facts["model"])
+        else:
+            unidentified[cls] = unidentified.get(cls, 0) + 1
+            continue
+        key = _inventory_place(normalized, key, facts, facts["serial"])
+        if name is None and facts["serial"] is None and key not in keyed_by_pn:
+            keyed_by_pn.append(key)
+    return normalized, {
+        "items_by_class": by_class,
+        "keyed_by_part_number": keyed_by_pn,
+        "unidentified": unidentified,
+        "internal_skipped": internal,
+    }
+
+
+def _inventory_cli_class(name, descr):
+    """The identity class of a `show inventory` item from its NAME (and DESCR); None
+    for the stack-level pseudo entry."""
+    if _INVENTORY_MEMBER_NAME.match(name):
+        return "chassis"
+    if _INVENTORY_STACK_NAME.search(name):
+        return None
+    if _INVENTORY_PORT_NAME.match(name):
+        return "transceiver"
+    haystack = ("%s %s" % (name, descr)).lower()
+    for word, cls in _INVENTORY_CLASS_WORDS:
+        if word in haystack:
+            return cls
+    return "other"
+
+
+def _normalize_inventory_cli(cli_output):
+    """(normalized, facts) from `show inventory`: '<class>|<NAME>' -> model (PID),
+    serial (SN), description (DESCR), version (VID); the CLI fallback's view,
+    shaped like _normalize_inventory's. facts: items_by_class, skipped (the
+    pseudo entries left out)."""
+    normalized = {}
+    by_class = {}
+    skipped = []
+    for item in _inventory_items(cli_output):
+        cls = _inventory_cli_class(item["name"], item["descr"])
+        if cls is None:
+            skipped.append(item["name"])
+            continue
+        facts = _inventory_facts(item["pid"], item["sn"], item["descr"], item["vid"])
+        _inventory_place(normalized, "%s|%s" % (cls, item["name"]), facts, facts["serial"])
+        by_class[cls] = by_class.get(cls, 0) + 1
+    return normalized, {
+        "items_by_class": by_class,
+        "keyed_by_part_number": [],
+        "unidentified": {},
+        "skipped": skipped,
+    }
+
+
+def _collect_inventory(ctx):
+    hardware = ctx.get(_HW_PATH)
+    if _container(hardware, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") is None:
+        raise CollectError("device-hardware-data container missing from RESTCONF reply")
+    raw = {}
+    notes = []
+    entries = _inventory_entries(hardware)
+    raw["device-inventory"] = entries[:_INVENTORY_RAW_MAX]
+    normalized, facts = _normalize_inventory(hardware)
+    source = "device-inventory"
+    if not normalized:
+        # A device that answered lists its hardware somewhere: the model
+        # served no identity rows, so the CLI is asked. Nothing here is ever
+        # not-present — an empty inventory is a failed read.
+        notes.append(
+            "device-inventory served no entries"
+            if not entries
+            else "device-inventory served no chassis/module/psu/fan/transceiver entries"
+        )
+        if not ctx.has_ssh:
+            raise CollectError("%s and no SSH transport for %s" % (notes[-1], _INVENTORY_COMMAND))
+        output = ctx.run_ssh(_INVENTORY_COMMAND)
+        raw[_INVENTORY_COMMAND] = output
+        if _cli_rejected(output):
+            raise CollectError("%s and '%s' rejected" % (notes[-1], _INVENTORY_COMMAND))
+        normalized, facts = _normalize_inventory_cli(output)
+        source = _INVENTORY_COMMAND
+        if not normalized:
+            raise CollectError("%s and '%s' listed no items" % (notes[-1], _INVENTORY_COMMAND))
+    context = {"source": source}
+    context.update(facts)
+    if notes:
+        raw["note"] = "; ".join(notes)
+    return {"raw": raw, "normalized": normalized, "context": context}
+
+
+register(
+    CheckDef(
+        id="iosxe_inventory",
+        platform="iosxe",
+        description=(
+            "Hardware identity on every platform form: model, serial, description and "
+            "version of each chassis, module, power supply, fan and transceiver"
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A hardware item changed identity, vanished or appeared — a chassis, module, "
+            "power supply, fan or transceiver was replaced, removed or inserted during the "
+            "window (a serial change on an unchanged key is a swap of that part; a removed "
+            "key is a part no longer listed)."
+        ),
+        collector=_collect_inventory,
+        tags=("platform", "inventory"),
     )
 )

@@ -12,15 +12,18 @@ fail the JobResult — finding them is its purpose. It is hidden from the
 default job list (development tooling, not an operator surface).
 """
 
+import importlib
 import json
+import os
+import pkgutil
 import time
 
 from nautobot.apps.jobs import Job, ObjectVar
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
-from . import checks_iosxe_wireless, creds, envelope, registry
 from . import constants as C
+from . import creds, envelope, registry
 from .checks_iosxe import _Q_FS_LIST_PATH, _summarize_q_filesystem
 from .checks_vmware import (
     _HARDWARE_PATHS,
@@ -63,8 +66,10 @@ from .transport_vsphere import probe_hint as vsphere_probe_hint
 # Jobs-UI grouping header (house convention).
 name = C.UI_GROUP
 
-# Models the IOS-XE catalog reads from — presence/revision is reported so a
-# shakedown immediately shows which collectors CAN work on this image.
+# Models the IOS-XE switch catalog (checks_iosxe) reads from — presence/revision
+# is reported so a shakedown immediately shows which collectors CAN work on this
+# image. Every other catalog module contributes its own KEY_MODELS on top
+# (_catalog_key_models), so a merged platform branch never edits this list.
 IOSXE_KEY_MODELS = (
     "ietf-routing",
     "Cisco-IOS-XE-fib-oper",
@@ -85,6 +90,39 @@ IOSXE_KEY_MODELS = (
     # the check falls back to `show inventory` for member serials.
     "Cisco-IOS-XE-stack-oper",
 )
+
+# Per-platform base lists; only IOS-XE has a yang-library to check against today.
+PLATFORM_KEY_MODELS = {"iosxe": IOSXE_KEY_MODELS}
+
+
+def _catalog_modules():
+    """Every ``jobs/checks_*.py`` module, in name order — jobs/__init__.py's loop."""
+    modules = []
+    for entry in sorted(pkgutil.iter_modules([os.path.dirname(__file__)]), key=lambda e: e.name):
+        if entry.name.startswith("checks_"):
+            modules.append(importlib.import_module("." + entry.name, __package__))
+    return modules
+
+
+def _catalog_key_models(platform):
+    """yang-library module names the platform's catalog reads, order-stable, de-duplicated.
+
+    The platform's base list comes first, then the ``KEY_MODELS`` of every
+    catalog module that registers a check for this platform, in module-name
+    order (a module without the attribute contributes nothing; another
+    platform's catalog never leaks in). First occurrence wins, so a model two
+    modules both read is reported once.
+    """
+    owners = {check.collector.__module__ for check in registry.checks_for(platform)}
+    models = list(PLATFORM_KEY_MODELS.get(platform, ()))
+    for module in _catalog_modules():
+        if module.__name__ in owners:
+            models.extend(getattr(module, "KEY_MODELS", ()))
+    ordered = []
+    for model in models:
+        if model not in ordered:
+            ordered.append(model)
+    return tuple(ordered)
 
 
 def _aslist(value):
@@ -524,12 +562,11 @@ class CollectorShakedown(Job):
             if platform == "iosxe":
                 modules = report["discovery"].get("modules")
                 if isinstance(modules, dict) and modules:
-                    # Each catalog module names the models its collectors read;
-                    # the wireless list rides beside the switch list so a 9800
-                    # shakedown shows at once which wireless collectors CAN work.
-                    key_models = IOSXE_KEY_MODELS + checks_iosxe_wireless.KEY_MODELS
+                    # Each catalog module names the models its collectors read
+                    # (KEY_MODELS); merged together, a switch or 9800 shakedown
+                    # shows at once which collectors of every module CAN work.
                     report["discovery"]["key_models"] = {
-                        model: modules.get(model) for model in key_models
+                        model: modules.get(model) for model in _catalog_key_models(platform)
                     }
 
             for index, check in enumerate(checks, 1):

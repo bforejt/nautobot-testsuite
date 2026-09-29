@@ -238,6 +238,20 @@ class TestCapability(unittest.TestCase):
         self.assertIs(entry["ok"], False)
         self.assertIn("not measured post", entry["note"])
 
+    def test_absent_post_can_be_declared_a_zero(self):
+        # A check whose buckets are counted rows declares absent_post "zero":
+        # the verdict is the same miss, the note says what absent means there.
+        compare = {"mode": "capability", "absent_post": "zero"}
+        diff = diffcore.diff_check({"a|b": 5, "c": 2}, {}, compare)
+        self.assertEqual(diff["result"], "diffs")
+        by_key = {entry["key"]: entry for entry in diff["evaluations"]}
+        self.assertIs(by_key["a|b"]["ok"], False)
+        self.assertEqual(by_key["a|b"]["note"], "absent post (counts as zero)")
+        self.assertIsNone(by_key["c"]["ok"])  # below the floor: never gating
+        # Any other value keeps the sweep wording.
+        diff = diffcore.diff_check({"a|b": 5}, {}, {"mode": "capability", "absent_post": "x"})
+        self.assertIn("sweep mismatch", diff["evaluations"][0]["note"])
+
     def test_all_non_gating_passes(self):
         diff = diffcore.diff_check({"a|b": 1}, {"a|b": 0}, {"mode": "capability"})
         self.assertEqual(diff["result"], "pass")

@@ -8,7 +8,89 @@
           "version": "V02",
           "part-number": "C9500-48Y4C",
           "serial-number": "FCW0000A0AA",
-          "hw-description": "Cisco Catalyst 9500 Series Switch"
+          "hw-description": "Cisco Catalyst 9500 Series Switch",
+          "dev-name": "Chassis 1",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-pem",
+          "hw-dev-index": 2,
+          "version": "V01",
+          "part-number": "C9K-PWR-650WAC-R",
+          "serial-number": "art0000a001 ",
+          "hw-description": "Cisco Catalyst 9500 Series 650W AC Power Supply",
+          "dev-name": "Chassis 1 Power Supply Module 0",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-pem",
+          "hw-dev-index": 3,
+          "version": "V01",
+          "part-number": "C9K-PWR-650WAC-R",
+          "serial-number": "ART0000A002",
+          "hw-description": "Cisco Catalyst 9500 Series 650W AC Power Supply",
+          "dev-name": "Chassis 1 Power Supply Module 1",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-fantray",
+          "hw-dev-index": 4,
+          "version": "",
+          "part-number": "C9K-T1-FANTRAY",
+          "serial-number": "",
+          "hw-description": "Cisco Catalyst 9500 Series Fan Tray",
+          "dev-name": "Chassis 1 Fan Tray",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-transceiver",
+          "hw-dev-index": 5,
+          "version": "V03",
+          "part-number": "SFP-10G-SR",
+          "serial-number": "AGD0000C101",
+          "hw-description": "SFP-10GBase-SR",
+          "dev-name": "TwentyFiveGigE1/0/1",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-pim",
+          "hw-dev-index": 6,
+          "version": "V02",
+          "part-number": "C9500-NM-8X",
+          "serial-number": "FOC0000B101",
+          "hw-description": "8x10G Uplink Module",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-unknown",
+          "hw-dev-index": 7,
+          "hw-description": "Unnamed item without a serial",
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-cpu",
+          "hw-dev-index": 8,
+          "hw-description": "Intel Xeon D-1530",
+          "dev-name": "cpu0",
+          "field-replaceable": false,
+          "hw-class": "hw-class-physical"
+        },
+        {
+          "hw-type": "hw-type-ssd",
+          "hw-dev-index": 9,
+          "part-number": "SSD-240G",
+          "serial-number": "SSD0000D001",
+          "hw-description": "Solid state drive",
+          "dev-name": "disk0",
+          "field-replaceable": true,
+          "hw-class": "hw-class-physical",
+          "lifetime": 97
         }
       ],
       "device-system-data": {

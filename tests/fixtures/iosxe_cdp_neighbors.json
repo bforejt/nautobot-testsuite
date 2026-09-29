@@ -6,18 +6,37 @@
         "local-intf-name": "TenGigabitEthernet1/0/48",
         "port-id": "TenGigabitEthernet1/0/48",
         "capability": "Router Switch IGMP",
-        "platform": "cisco C9500-48Y4C",
+        "platform-name": "cisco C9500-48Y4C",
         "ip-address": "10.10.255.2",
-        "up-time": "6 weeks"
+        "up-time": "6 weeks",
+        "duplex": "cdp-full-duplex",
+        "native-vlan": 1,
+        "vvid-tag": 0,
+        "vvid": 0
       },
       {
         "device-id": "ap-lab-01",
         "local-intf-name": "GigabitEthernet1/0/12",
         "port-id": "GigabitEthernet0",
         "capabilities": "Trans-Bridge Source-Route-Bridge IGMP",
-        "platform": "cisco AIR-AP2802I-B-K9",
+        "platform-name": "cisco AIR-AP2802I-B-K9",
         "ip-address": "10.20.30.7",
-        "up-time": "3 days"
+        "up-time": "3 days",
+        "duplex": "cdp-full-duplex",
+        "native-vlan": 0
+      },
+      {
+        "device-id": "SEP00000A000001",
+        "local-intf-name": "GigabitEthernet1/0/7",
+        "port-id": "Port 1",
+        "capability": "Host Phone Two-port Mac Relay",
+        "platform-name": "Cisco IP Phone 8845",
+        "ip-address": "10.20.40.21",
+        "up-time": "2 days",
+        "duplex": "cdp-full-duplex-mismatch",
+        "native-vlan": 10,
+        "vvid-tag": 2,
+        "vvid": 20
       }
     ]
   }

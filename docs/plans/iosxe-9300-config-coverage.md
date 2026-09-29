@@ -1,5 +1,7 @@
 # Plan: Catalyst 9300 running-config coverage and the gaps worth closing
 
+Status tracker: `docs/coverage.md` records which recommendations have landed and ranks the open holes.
+
 Status: **analysis only. Nothing here is implemented.** The question is how
 much of a Catalyst 9300's running-config (and startup-config) the existing
 snapshot structure cannot show, and which of those gaps deserve a check.

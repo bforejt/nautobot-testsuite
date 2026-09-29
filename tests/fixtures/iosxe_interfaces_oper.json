@@ -7,22 +7,178 @@
         "admin-status": "if-state-up",
         "oper-status": "if-oper-state-ready",
         "vrf": "",
-        "ipv4": "10.10.9.1"
+        "ipv4": "10.10.9.1",
+        "ipv4-subnet-mask": "255.255.255.252",
+        "mtu": 1500,
+        "input-security-acl": "ACL-TRANSIT-IN",
+        "output-security-acl": "",
+        "ipv6-addrs": ["fe80::1", "2001:db8:100::1"],
+        "diffserv-info": [
+          {"direction": "qos-outbound", "policy-name": "PM-EGRESS"},
+          {"direction": "qos-inbound", "policy-name": "PM-INGRESS"}
+        ],
+        "statistics": {
+          "discontinuity-time": "2026-07-11T03:12:44+00:00",
+          "in-octets": 918273645,
+          "in-unicast-pkts": 8123456,
+          "in-broadcast-pkts": 1200,
+          "in-multicast-pkts": 34000,
+          "in-discards": 0,
+          "in-errors": 0,
+          "in-unknown-protos": 0,
+          "out-octets": 719283746,
+          "out-unicast-pkts": 7123456,
+          "out-broadcast-pkts": 900,
+          "out-multicast-pkts": 21000,
+          "out-discards": 0,
+          "out-errors": 0,
+          "rx-pps": 120,
+          "rx-kbps": 480,
+          "tx-pps": 95,
+          "tx-kbps": 310,
+          "num-flaps": 0,
+          "in-crc-errors": 0
+        }
       },
       {
         "name": "TenGigabitEthernet1/0/1",
         "description": "core-sw-02 Te1/0/1",
         "admin-status": "if-state-up",
         "oper-status": "if-oper-state-ready",
-        "vrf": "",
-        "ipv4": "10.0.0.1"
+        "vrf": "Global",
+        "ipv4": "10.0.0.1",
+        "ipv4-subnet-mask": "255.255.255.252",
+        "mtu": 9198,
+        "input-security-acl": "",
+        "output-security-acl": "",
+        "intf-ext-state-support": [null],
+        "intf-ext-state": {
+          "error-type": "port-error-none",
+          "port-error-reason": "port-err-none",
+          "auto-mdix-enabled": true,
+          "mdix-oper-status-enabled": true,
+          "fec-enabled": false,
+          "mgig-downshift-enabled": false
+        },
+        "storm-control": {
+          "broadcast": {"filter-state": "inactive"},
+          "multicast": {"filter-state": "inactive"},
+          "unicast": {"filter-state": "inactive"},
+          "unknown-unicast": {"filter-state": "inactive"}
+        },
+        "statistics": {
+          "discontinuity-time": "2026-07-11T03:12:44+00:00",
+          "in-octets": 5192837465,
+          "in-unicast-pkts": 48123456,
+          "in-broadcast-pkts": 3200,
+          "in-multicast-pkts": 94000,
+          "in-discards": 0,
+          "in-errors": 3,
+          "in-unknown-protos": 0,
+          "out-octets": 4192837465,
+          "out-unicast-pkts": 37123456,
+          "out-broadcast-pkts": 2900,
+          "out-multicast-pkts": 81000,
+          "out-discards": 0,
+          "out-errors": 0,
+          "rx-pps": 1200,
+          "rx-kbps": 9800,
+          "tx-pps": 950,
+          "tx-kbps": 7100,
+          "num-flaps": 2,
+          "in-crc-errors": 3
+        },
+        "ether-state": {
+          "negotiated-duplex-mode": "full-duplex",
+          "negotiated-port-speed": "speed-10gb",
+          "auto-negotiate": true
+        }
       },
       {
         "name": "TenGigabitEthernet1/0/5",
         "description": "",
         "admin-status": "if-state-down",
         "oper-status": "if-oper-state-no-pass",
-        "vrf": ""
+        "vrf": "",
+        "mtu": 1500,
+        "input-security-acl": "",
+        "output-security-acl": "",
+        "intf-ext-state-support": [null],
+        "intf-ext-state": {
+          "error-type": "port-error-disable",
+          "port-error-reason": "port-err-bpduguard",
+          "auto-mdix-enabled": true,
+          "mdix-oper-status-enabled": false,
+          "fec-enabled": false,
+          "mgig-downshift-enabled": false
+        },
+        "storm-control": {
+          "broadcast": {"filter-state": "link-down"},
+          "multicast": {"filter-state": "inactive"},
+          "unicast": {"filter-state": "inactive"},
+          "unknown-unicast": {"filter-state": "inactive"}
+        },
+        "statistics": {
+          "discontinuity-time": "2026-07-11T03:12:44+00:00",
+          "in-octets": 0,
+          "in-unicast-pkts": 0,
+          "in-discards": 0,
+          "in-errors": 0,
+          "out-octets": 0,
+          "out-unicast-pkts": 0,
+          "out-discards": 0,
+          "out-errors": 0,
+          "num-flaps": 0,
+          "in-crc-errors": 0
+        },
+        "ether-state": {
+          "negotiated-duplex-mode": "full-duplex",
+          "negotiated-port-speed": "speed-1gb",
+          "auto-negotiate": true
+        }
+      },
+      {
+        "name": "TwoGigabitEthernet1/0/12",
+        "description": "ap-lab-01",
+        "admin-status": "if-state-up",
+        "oper-status": "if-oper-state-ready",
+        "vrf": "",
+        "mtu": 1500,
+        "input-security-acl": "",
+        "output-security-acl": "",
+        "intf-ext-state-support": [null],
+        "intf-ext-state": {
+          "error-type": "port-error-none",
+          "port-error-reason": "port-err-none",
+          "auto-mdix-enabled": true,
+          "mdix-oper-status-enabled": true,
+          "fec-enabled": false,
+          "mgig-downshift-enabled": true
+        },
+        "storm-control": {
+          "broadcast": {"filter-state": "blocking", "current-rate": {"pps": 12000}},
+          "multicast": {"filter-state": "forwarding", "current-rate": {"pps": 40}},
+          "unicast": {"filter-state": "inactive"},
+          "unknown-unicast": {"filter-state": "blocking", "current-rate": {"pps": 9000}}
+        },
+        "statistics": {
+          "discontinuity-time": "2026-07-11T03:12:44+00:00",
+          "in-octets": 192837465,
+          "in-unicast-pkts": 1823456,
+          "in-discards": 12,
+          "in-errors": 0,
+          "out-octets": 292837465,
+          "out-unicast-pkts": 2723456,
+          "out-discards": 0,
+          "out-errors": 0,
+          "num-flaps": 7,
+          "in-crc-errors": 0
+        },
+        "ether-state": {
+          "negotiated-duplex-mode": "full-duplex",
+          "negotiated-port-speed": "speed-1gb",
+          "auto-negotiate": true
+        }
       },
       {
         "name": "GigabitEthernet0/0",
@@ -30,7 +186,14 @@
         "admin-status": "if-state-up",
         "oper-status": "if-oper-state-ready",
         "vrf": "mgmt",
-        "ipv4": "10.255.0.5"
+        "ipv4": "10.255.0.5",
+        "ipv4-subnet-mask": "255.255.255.0",
+        "mtu": 1500,
+        "ether-state": {
+          "negotiated-duplex-mode": "full-duplex",
+          "negotiated-port-speed": "speed-1gb",
+          "auto-negotiate": true
+        }
       }
     ]
   }

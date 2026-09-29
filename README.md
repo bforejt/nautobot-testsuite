@@ -127,9 +127,9 @@ the humans reading the report.
 | `iosxe_bgp_peers` | iosxe | 1 | BGP sessions per AFI/VRF/peer: state, remote AS, installed prefixes |
 | `iosxe_ospf_neighbors` | iosxe | 1 | OSPFv2 adjacencies per instance/area/interface: neighbor state, address |
 | `iosxe_arp` | iosxe | 2 | ARP tables, all VRFs: resolved MAC and interface per address |
-| `iosxe_neighbors` | iosxe | 2 | CDP and LLDP neighbor tables combined: who is on which local port |
-| `iosxe_interfaces` | iosxe | 2 | All interfaces: admin/oper status and IPv4 address |
-| `iosxe_platform_health` | iosxe | 3 | Boot time, last reboot reason and severity (context names any reload leaf the device did not serve), active hardware alarms, environment sensor states |
+| `iosxe_neighbors` | iosxe | 2 | CDP and LLDP neighbor tables combined: who is on which local port, with the CDP neighbor's platform string, native VLAN, duplex and voice VLAN |
+| `iosxe_interfaces` | iosxe | 2 | All interfaces: admin/oper status, auto-negotiation flag, negotiated speed and duplex (while up; on access ports named by the VLAN database they move to context, `link_scope` says which), storm-control blocking, mGig downshift, and the effective config (IPv4/mask, VRF, IPv6, MTU, ACLs, QoS policies); CRC, error and flap counters in context |
+| `iosxe_platform_health` | iosxe | 3 | Boot time, last reboot reason and severity (context names any reload leaf the device did not serve), active hardware alarms, environment sensor states (readings in context; PSU input presence visible as the P0/P1 sensor states) |
 | `panos_system_info` | panos | 3 | Software/content versions, model, serial, and hostname |
 | `panos_ha` | panos | 1 | HA enablement, local/peer state, and running-config sync |
 | `panos_session_info` | panos | 1 | Global session counts within tolerance of the baseline |
@@ -161,9 +161,15 @@ the humans reading the report.
 | `panos_crash_files` | panos | 1 | Core/crash files within the recency window |
 | `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
 | `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window on every stack member's filesystem (`dir`, field-verified), plus the q-filesystem model's core-file list (a YANG best guess pending a shakedown) |
-| `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason |
+| `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason, from the interfaces model's intf-ext-state (`show interfaces status err-disabled` fallback) |
 | `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
 | `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, serial, model matched by serial, reload reason) and stack-port ring health (not-present when the platform does not stack) |
+| `iosxe_inventory` | iosxe | 1 | Hardware identity on every platform form: model, serial, description and version of each chassis, module, power supply, fan and transceiver, keyed by name, else serial, else part number (an item with none of the three is counted, never keyed; device-inventory, `show inventory` fallback; an empty inventory is a failed read, never not-present) |
+| `iosxe_vlans` | iosxe | 1 | Operational VLAN database (name, status) plus VTP mode/domain/revision (`show vtp status`, its MD5 digest redacted); per-port VLAN maps in context |
+| `iosxe_trunks` | iosxe | 1 | Trunk ports: mode, encapsulation, native VLAN and the allowed/active/forwarding VLAN sets; where VTP pruning is on the forwarding set moves to context (`vtp_pruning` says which) (not-present when no port trunks) |
+| `iosxe_stp` | iosxe | 1 | Spanning tree: mode and global guards, per-instance root facts, and every port that is neither designated-forwarding nor disabled (link down) |
+| `iosxe_mac_table` | iosxe | 2 | Dynamically learned MAC counts per VLAN, stack member and port, evaluated as capability (an absent bucket post counts as zero; rows in raw, capped) |
+| `iosxe_poe` | iosxe | 1 | PoE port admin/oper/class in one vocabulary whichever port list the release fills, plus StackPower mode, topology (ring/star/standalone), supply count, installed watts and each member's two cable ports; budgets and wattages in context (not-present on a non-PoE SKU or when the model is absent) |
 | `panos_jobs` | panos | 1 | Unfinished commit/config jobs (history counts in context) |
 | `panos_chassis_ready` | panos | 1 | Dataplane readiness (show chassis-ready) |
 | `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
@@ -205,6 +211,12 @@ the humans reading the report.
 | `xcc_storage` | xcc | 1 | Storage controllers, physical drives (health, SED status) and RAID volumes (not-present when none enumerate) |
 | `xcc_manager_network` | xcc | 2 | XCC network services: NTP, DNS, enabled protocols/ports, addressing origin |
 | `xcc_chassis_location` | xcc | 3 | Operator-maintained chassis Location record and the intrusion sensor state |
+
+What this catalog captures per network layer, and the holes still open ranked
+by general value, is tracked in `docs/coverage.md` (the living coverage map);
+the IOS-XE layer-2 and PoE checks live in `jobs/checks_iosxe_layer2.py` and
+`jobs/checks_iosxe_poe.py`, the rest of the switch catalog in
+`jobs/checks_iosxe.py`.
 
 ## Always-everything capture
 
@@ -261,7 +273,10 @@ that replaces the synthetic `tests/fixtures/wlc_*` captures.
 Catalog modules are discovered by file name (`jobs/checks_*.py`) by both
 `jobs/__init__.py` and the test loader, so a new platform is one new module
 and no shared file edit — several platform branches merge without touching
-the same line.
+the same line. The shakedown's `key_models` block is assembled the same way:
+every discovered module's `KEY_MODELS` tuple is merged (de-duplicated, in
+module-name order) onto the platform's base list, so a new module's models
+show as served or absent without an edit to the shakedown.
 
 ## Read-only guarantee
 

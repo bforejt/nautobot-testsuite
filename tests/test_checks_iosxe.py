@@ -123,6 +123,30 @@ class TestRouteRollups(unittest.TestCase):
             {"total": 7, "static": 2, "ospfv2": 3, "direct": 2},
         )
 
+    def test_ssh_trouble_is_a_note_but_the_celery_abort_is_raised(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        payload = _loader.fixture_json("iosxe_rib_routing_state.json")
+
+        class _Ctx:
+            has_ssh = True
+
+            def __init__(self, failure):
+                self.failure = failure
+
+            def get(self, path, **kwargs):
+                return payload
+
+            def run_ssh(self, command, **kwargs):
+                raise self.failure
+
+        result = checks._collect_route_rollups(_Ctx(RuntimeError("timed out")))
+        self.assertIn("timed out", result["raw"]["note"])
+        self.assertEqual(result["normalized"]["total"], 7)
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_route_rollups(_Ctx(SoftTimeLimitExceeded()))
+
 
 class TestRouteSummaryParser(unittest.TestCase):
     def test_ospf_type_splits_summed_across_processes(self):
@@ -236,16 +260,69 @@ class TestNeighborNormalizers(unittest.TestCase):
         self.assertEqual(
             checks._normalize_cdp(payload),
             {
+                # native-vlan 1 advertised, vvid 0: the model's "not received".
                 "cdp|core-sw-02.example.net|TenGigabitEthernet1/0/48": {
                     "port": "TenGigabitEthernet1/0/48",
                     "caps": "Router Switch IGMP",
+                    "native_vlan": 1,
+                    "duplex": "cdp-full-duplex",
+                    "voice_vlan": None,
+                    "platform": "cisco C9500-48Y4C",
                 },
-                # Second entry uses the plural "capabilities" leaf.
+                # Second entry uses the plural "capabilities" leaf; native-vlan
+                # 0 and no vvid leaf both read None.
                 "cdp|ap-lab-01|GigabitEthernet1/0/12": {
                     "port": "GigabitEthernet0",
                     "caps": "Trans-Bridge Source-Route-Bridge IGMP",
+                    "native_vlan": None,
+                    "duplex": "cdp-full-duplex",
+                    "voice_vlan": None,
+                    "platform": "cisco AIR-AP2802I-B-K9",
+                },
+                # A phone: voice VLAN advertised, duplex mismatch reported verbatim.
+                "cdp|SEP00000A000001|GigabitEthernet1/0/7": {
+                    "port": "Port 1",
+                    "caps": "Host Phone Two-port Mac Relay",
+                    "native_vlan": 10,
+                    "duplex": "cdp-full-duplex-mismatch",
+                    "voice_vlan": 20,
+                    "platform": "Cisco IP Phone 8845",
                 },
             },
+        )
+
+    def test_cdp_platform_tolerates_the_bare_spelling_and_blank(self):
+        # The model's leaf is platform-name; a bare 'platform' is read too, and
+        # blank / absent both read None.
+        def view(extra):
+            payload = {
+                "Cisco-IOS-XE-cdp-oper:cdp-neighbor-details": {
+                    "cdp-neighbor-detail": {"device-id": "n", "local-intf-name": "Gi1/0/1", **extra}
+                }
+            }
+            return checks._normalize_cdp(payload)["cdp|n|Gi1/0/1"]["platform"]
+
+        self.assertEqual(view({"platform-name": " cisco WS-C2960X "}), "cisco WS-C2960X")
+        self.assertEqual(view({"platform": "cisco C9200L"}), "cisco C9200L")
+        self.assertIsNone(view({"platform-name": ""}))
+        self.assertIsNone(view({}))
+
+    def test_cdp_vlan_leaves_keep_one_type(self):
+        # RESTCONF may string-ify numbers; junk never becomes a value.
+        payload = {
+            "Cisco-IOS-XE-cdp-oper:cdp-neighbor-details": {
+                "cdp-neighbor-detail": {
+                    "device-id": "sw",
+                    "local-intf-name": "Gi1/0/1",
+                    "native-vlan": "30",
+                    "vvid": "n/a",
+                    "duplex": "Cisco-IOS-XE-cdp-oper:cdp-half-duplex",
+                }
+            }
+        }
+        view = checks._normalize_cdp(payload)["cdp|sw|Gi1/0/1"]
+        self.assertEqual(
+            (view["native_vlan"], view["voice_vlan"], view["duplex"]), (30, None, "cdp-half-duplex")
         )
 
     def test_lldp(self):
@@ -271,35 +348,550 @@ class TestNeighborNormalizers(unittest.TestCase):
         self.assertIn("lldp|core-sw-02.example.net|TenGigabitEthernet1/0/48", combined)
 
 
+class _IfaceCtx:
+    """Fake CollectorContext for the interfaces GET: payload per path, an exception
+    per path on cue, every GET recorded; SSH output per command when given."""
+
+    def __init__(self, payloads, raise_for=None, outputs=None):
+        self.payloads = payloads
+        self.raise_for = raise_for or {}
+        self.outputs = outputs
+        self.gets = []
+        self.commands = []
+
+    @property
+    def has_ssh(self):
+        return self.outputs is not None
+
+    def get(self, path, **kwargs):
+        self.gets.append((path, dict(kwargs)))
+        if path in self.raise_for:
+            raise self.raise_for[path]
+        return self.payloads.get(path)
+
+    def run_ssh(self, command, **kwargs):
+        self.commands.append(command)
+        return self.outputs[command]
+
+
+class _RestconfError(Exception):
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _iface_payload(*entries):
+    return {"Cisco-IOS-XE-interfaces-oper:interfaces": {"interface": list(entries)}}
+
+
+_UP = {"admin-status": "if-state-up", "oper-status": "if-oper-state-ready"}
+_ETHER_1G = {"negotiated-duplex-mode": "full-duplex", "negotiated-port-speed": "speed-1gb"}
+_UNSET = {
+    "ipv4": None,
+    "mask": None,
+    "vrf": None,
+    "ipv6": [],
+    "mtu": None,
+    "acl_in": None,
+    "acl_out": None,
+    "qos_in": None,
+    "qos_out": None,
+    "speed": None,
+    "duplex": None,
+    "mgig_downshift": None,
+    "autoneg": None,
+    "storm": [],
+}
+_ACCESS_CTX_KWARGS = {"ok_404": True}
+
+
+def _vlan_payload(*port_names):
+    """A vlan-oper payload whose VLAN 10 lists the given interfaces as assigned ports."""
+    return {
+        "Cisco-IOS-XE-vlan-oper:vlans": {
+            "vlan": [
+                {
+                    "id": 10,
+                    "name": "USERS",
+                    "status": "active",
+                    "ports": [{"interface": name, "subinterface": 0} for name in port_names],
+                }
+            ]
+        }
+    }
+
+
 class TestInterfacesNormalizer(unittest.TestCase):
+    def setUp(self):
+        self.payload = _loader.fixture_json("iosxe_interfaces_oper.json")
+
     def test_full_normalized_view(self):
-        payload = _loader.fixture_json("iosxe_interfaces_oper.json")
         self.assertEqual(
-            checks._normalize_interfaces(payload),
+            checks._normalize_interfaces(self.payload),
             {
+                # SVI: effective config only; no ether-state, so no speed/duplex.
+                # ipv6-addrs arrive link-local first and are sorted; "" vrf is global.
                 "Vlan925": {
                     "admin": "if-state-up",
                     "oper": "if-oper-state-ready",
                     "ipv4": "10.10.9.1",
+                    "mask": "255.255.255.252",
+                    "vrf": None,
+                    "ipv6": ["2001:db8:100::1", "fe80::1"],
+                    "mtu": 1500,
+                    "acl_in": "ACL-TRANSIT-IN",
+                    "acl_out": None,
+                    "qos_in": "PM-INGRESS",
+                    "qos_out": "PM-EGRESS",
+                    "speed": None,
+                    "duplex": None,
+                    "mgig_downshift": None,
+                    "autoneg": None,
+                    "storm": [],
                 },
+                # Uplink, up: negotiated values emitted; the model's 'Global' vrf is None.
                 "TenGigabitEthernet1/0/1": {
                     "admin": "if-state-up",
                     "oper": "if-oper-state-ready",
                     "ipv4": "10.0.0.1",
+                    "mask": "255.255.255.252",
+                    "vrf": None,
+                    "ipv6": [],
+                    "mtu": 9198,
+                    "acl_in": None,
+                    "acl_out": None,
+                    "qos_in": None,
+                    "qos_out": None,
+                    "speed": "speed-10gb",
+                    "duplex": "full-duplex",
+                    "mgig_downshift": False,
+                    "autoneg": True,
+                    "storm": [],
                 },
-                # No ipv4 leaf at all -> explicit None, not absence.
+                # Down and err-disabled: ether-state served but the negotiated
+                # values not emitted (autoneg, a config fact, is); the err-disable
+                # leaves are iosxe_errdisable's, so nothing of them here.
                 "TenGigabitEthernet1/0/5": {
                     "admin": "if-state-down",
                     "oper": "if-oper-state-no-pass",
                     "ipv4": None,
+                    "mask": None,
+                    "vrf": None,
+                    "ipv6": [],
+                    "mtu": 1500,
+                    "acl_in": None,
+                    "acl_out": None,
+                    "qos_in": None,
+                    "qos_out": None,
+                    "speed": None,
+                    "duplex": None,
+                    "mgig_downshift": False,
+                    "autoneg": True,
+                    "storm": [],
                 },
+                # Access port: two traffic types blocking (sorted, rates ignored),
+                # mGig downshifted. No VLAN database given: link scope 'all', so
+                # its negotiated values are here.
+                "TwoGigabitEthernet1/0/12": {
+                    "admin": "if-state-up",
+                    "oper": "if-oper-state-ready",
+                    "ipv4": None,
+                    "mask": None,
+                    "vrf": None,
+                    "ipv6": [],
+                    "mtu": 1500,
+                    "acl_in": None,
+                    "acl_out": None,
+                    "qos_in": None,
+                    "qos_out": None,
+                    "speed": "speed-1gb",
+                    "duplex": "full-duplex",
+                    "mgig_downshift": True,
+                    "autoneg": True,
+                    "storm": ["broadcast", "unknown-unicast"],
+                },
+                # Management port: no extended state at all -> None, not absence.
                 "GigabitEthernet0/0": {
                     "admin": "if-state-up",
                     "oper": "if-oper-state-ready",
                     "ipv4": "10.255.0.5",
+                    "mask": "255.255.255.0",
+                    "vrf": "mgmt",
+                    "ipv6": [],
+                    "mtu": 1500,
+                    "acl_in": None,
+                    "acl_out": None,
+                    "qos_in": None,
+                    "qos_out": None,
+                    "speed": "speed-1gb",
+                    "duplex": "full-duplex",
+                    "mgig_downshift": None,
+                    "autoneg": True,
+                    "storm": [],
                 },
             },
         )
+
+    def test_autoneg_is_a_config_fact_read_whatever_the_oper_state(self):
+        # A hard-set port: autoneg False, negotiated values None (the model
+        # defines them only under auto-negotiation) — not a fault. The leaf is
+        # read down as well as up, and a string-ified boolean is tolerated;
+        # junk is None.
+        for oper, leaf, expected in (
+            ("if-oper-state-ready", False, False),
+            ("if-oper-state-no-pass", False, False),
+            ("if-oper-state-ready", "false", False),
+            ("if-oper-state-ready", "TRUE", True),
+            ("if-oper-state-ready", "maybe", None),
+        ):
+            with self.subTest(oper=oper, leaf=leaf):
+                entry = {
+                    "name": "Te1/1/1",
+                    "oper-status": oper,
+                    "ether-state": {
+                        "auto-negotiate": leaf,
+                        "negotiated-port-speed": "speed-unknown",
+                    },
+                }
+                view = checks._normalize_interfaces(_iface_payload(entry))["Te1/1/1"]
+                self.assertIs(view["autoneg"], expected)
+        entry = {"name": "Te1/1/1", "oper-status": "if-oper-state-ready", "ether-state": {}}
+        self.assertIsNone(checks._normalize_interfaces(_iface_payload(entry))["Te1/1/1"]["autoneg"])
+
+    def test_access_ports_keep_link_state_in_context_not_normalized(self):
+        # The VLAN database names TwoGigabitEthernet1/0/12 as an assigned port:
+        # its negotiated values move to context access_link and read None in
+        # normalized; the uplink (absent from every ports list) keeps its own.
+        access = checks._access_ports(_vlan_payload("TwoGigabitEthernet1/0/12"))
+        self.assertEqual(access, {"TwoGigabitEthernet1/0/12"})
+        normalized = checks._normalize_interfaces(self.payload, access)
+        host = normalized["TwoGigabitEthernet1/0/12"]
+        self.assertEqual(
+            (host["speed"], host["duplex"], host["mgig_downshift"]), (None, None, None)
+        )
+        self.assertIs(host["autoneg"], True)  # a config fact stays keyed
+        self.assertEqual(host["storm"], ["broadcast", "unknown-unicast"])
+        uplink = normalized["TenGigabitEthernet1/0/1"]
+        self.assertEqual((uplink["speed"], uplink["duplex"]), ("speed-10gb", "full-duplex"))
+        context = checks._interfaces_context(self.payload, access)
+        self.assertEqual(context["link_scope"], "trunks_and_routed")
+        self.assertEqual(context["access_ports_listed"], 1)
+        self.assertEqual(
+            context["access_link"],
+            {
+                "TwoGigabitEthernet1/0/12": {
+                    "speed": "speed-1gb",
+                    "duplex": "full-duplex",
+                    "mgig_downshift": True,
+                }
+            },
+        )
+        # No VLAN database (404): scope 'all', every value normalized, no access_link.
+        self.assertIsNone(checks._access_ports(None))
+        context = checks._interfaces_context(self.payload, None)
+        self.assertEqual(context["link_scope"], "all")
+        self.assertIsNone(context["access_ports_listed"])
+        self.assertEqual(context["access_link"], {})
+        self.assertEqual(
+            checks._normalize_interfaces(self.payload, None)["TwoGigabitEthernet1/0/12"]["speed"],
+            "speed-1gb",
+        )
+        # An empty VLAN database is served-but-lists-nothing: scope stays
+        # trunks_and_routed with zero access ports.
+        empty = checks._access_ports({"Cisco-IOS-XE-vlan-oper:vlans": {}})
+        self.assertEqual(empty, set())
+        self.assertEqual(checks._interfaces_context(self.payload, empty)["access_ports_listed"], 0)
+
+    def test_sleeping_host_flip_lands_in_context_not_normalized(self):
+        # An access port whose endpoint went to standby: link still up, the
+        # negotiated rate fell to 10 Mb/s half duplex and the mGig downshift
+        # cleared. Under the trunks_and_routed scope the check's own compare
+        # passes and only context moved.
+        asleep = _loader.fixture_json("iosxe_interfaces_oper.json")
+        for entry in asleep["Cisco-IOS-XE-interfaces-oper:interfaces"]["interface"]:
+            if entry["name"] == "TwoGigabitEthernet1/0/12":
+                entry["ether-state"].update(
+                    {"negotiated-port-speed": "speed-10mb", "negotiated-duplex-mode": "half-duplex"}
+                )
+                entry["intf-ext-state"]["mgig-downshift-enabled"] = False
+        access = checks._access_ports(_vlan_payload("TwoGigabitEthernet1/0/12"))
+        pre = checks._normalize_interfaces(self.payload, access)
+        post = checks._normalize_interfaces(asleep, access)
+        self.assertEqual(pre, post)
+        compare = registry.CHECKS["iosxe_interfaces"].compare
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        before = checks._interfaces_context(self.payload, access)["access_link"]
+        after = checks._interfaces_context(asleep, access)["access_link"]
+        self.assertEqual(
+            after["TwoGigabitEthernet1/0/12"],
+            {"speed": "speed-10mb", "duplex": "half-duplex", "mgig_downshift": False},
+        )
+        self.assertNotEqual(before, after)
+        # The same flip under scope 'all' (no VLAN database) is three changed fields.
+        diff = _loader.diffcore.diff_check(
+            checks._normalize_interfaces(self.payload),
+            checks._normalize_interfaces(asleep),
+            compare,
+        )
+        self.assertEqual(diff["result"], "diffs")
+
+    def test_speed_and_duplex_follow_oper_state(self):
+        # The same negotiated leaves: emitted only while oper is ready.
+        for oper, expected in (
+            ("if-oper-state-ready", ("speed-1gb", "full-duplex")),
+            ("if-oper-state-no-pass", (None, None)),
+            ("if-oper-state-lower-layer-down", (None, None)),
+            (None, (None, None)),
+        ):
+            with self.subTest(oper=oper):
+                entry = {"name": "Gi1/0/1", "admin-status": "if-state-up", "ether-state": _ETHER_1G}
+                if oper is not None:
+                    entry["oper-status"] = oper
+                view = checks._normalize_interfaces(_iface_payload(entry))["Gi1/0/1"]
+                self.assertEqual((view["speed"], view["duplex"]), expected)
+
+    def test_single_dict_shape_and_module_prefixes(self):
+        # RESTCONF quirk: bare dicts for one-entry lists, and identityref-style
+        # prefixes on enums; two policies in one direction join sorted.
+        payload = {
+            "Cisco-IOS-XE-interfaces-oper:interfaces": {
+                "interface": {
+                    "name": "Gi1/0/2",
+                    "oper-status": "if-oper-state-ready",
+                    "mtu": "1500",
+                    "ipv6-addrs": "FE80::2",
+                    "diffserv-info": [
+                        {"direction": "qos-inbound", "policy-name": "B"},
+                        {"direction": "qos-inbound", "policy-name": "A"},
+                    ],
+                    "storm-control": {"unicast": {"filter-state": "x:blocking"}},
+                    "ether-state": {
+                        "negotiated-port-speed": "Cisco-IOS-XE-interfaces-oper:speed-100mb",
+                        "negotiated-duplex-mode": "half-duplex",
+                    },
+                    "intf-ext-state": {"mgig-downshift-enabled": "true"},
+                }
+            }
+        }
+        view = checks._normalize_interfaces(payload)["Gi1/0/2"]
+        self.assertEqual(view["mtu"], 1500)
+        self.assertEqual(view["ipv6"], ["fe80::2"])
+        self.assertEqual(view["qos_in"], "A,B")
+        self.assertEqual(view["storm"], ["unicast"])
+        self.assertEqual((view["speed"], view["duplex"]), ("speed-100mb", "half-duplex"))
+        # A non-boolean downshift leaf is not a value.
+        self.assertIsNone(view["mgig_downshift"])
+        self.assertEqual(view["admin"], None)
+
+    def test_err_disable_leaves_never_normalized_here(self):
+        # One event reported once: the err-disabled port carries no reason field.
+        view = checks._normalize_interfaces(self.payload)["TenGigabitEthernet1/0/5"]
+        self.assertFalse(set(view) & {"reason", "error_type", "error-type", "port-error-reason"})
+
+    def test_context_counters_and_leaves_seen(self):
+        self.assertEqual(
+            checks._interfaces_context(self.payload),
+            {
+                "ports_total": 5,
+                "ports_oper_up": 4,
+                # Nonzero only, and only the three: discards and rates stay in raw.
+                "counters": {
+                    "TenGigabitEthernet1/0/1": {"crc": 3, "in_errors": 3, "flaps": 2},
+                    "TwoGigabitEthernet1/0/12": {"flaps": 7},
+                },
+                "leaves_seen": {
+                    "ether-state": True,
+                    "intf-ext-state": True,
+                    "storm-control": True,
+                    "diffserv-info": True,
+                    "statistics": True,
+                    "ipv6-addrs": True,
+                },
+                "link_scope": "all",
+                "access_ports_listed": None,
+                "access_link": {},
+            },
+        )
+
+    def test_context_on_a_six_leaf_reply(self):
+        # A release that answers the old six-leaf shape: every widened
+        # container reads unseen, no counters, and the normalized fields are
+        # None / [] rather than absent.
+        payload = _iface_payload(
+            {"name": "Gi1/0/1", "description": "x", "vrf": "", "ipv4": "10.0.0.1", **_UP}
+        )
+        context = checks._interfaces_context(payload)
+        self.assertEqual(context["counters"], {})
+        self.assertEqual(set(context["leaves_seen"].values()), {False})
+        self.assertEqual(
+            checks._normalize_interfaces(payload)["Gi1/0/1"],
+            {**_UNSET, "admin": "if-state-up", "oper": "if-oper-state-ready", "ipv4": "10.0.0.1"},
+        )
+
+    def test_raw_statistics_tuple_names_only_model_leaves(self):
+        # Grouping intf-statistics (17.12.1) defines these 64-bit counters and
+        # no in-octets-64 (in-octets is already uint64).
+        self.assertNotIn("in-octets-64", checks._IFACE_STATS_LEAVES)
+        for leaf in ("in-discards-64", "in-errors-64", "in-unknown-protos-64", "out-octets-64"):
+            self.assertIn(leaf, checks._IFACE_STATS_LEAVES)
+        self.assertEqual(len(checks._IFACE_STATS_LEAVES), len(set(checks._IFACE_STATS_LEAVES)))
+
+    def test_raw_statistics_curated_and_capped(self):
+        curated = checks._interface_statistics(self.payload)
+        # GigabitEthernet0/0 serves no statistics: no row, not an empty one.
+        self.assertEqual(
+            sorted(curated),
+            [
+                "TenGigabitEthernet1/0/1",
+                "TenGigabitEthernet1/0/5",
+                "TwoGigabitEthernet1/0/12",
+                "Vlan925",
+            ],
+        )
+        self.assertEqual(curated["TenGigabitEthernet1/0/1"]["in-crc-errors"], 3)
+        self.assertEqual(curated["TenGigabitEthernet1/0/1"]["num-flaps"], 2)
+        self.assertEqual(curated["Vlan925"]["discontinuity-time"], "2026-07-11T03:12:44+00:00")
+        # Unknown leaves are not copied.
+        big = _iface_payload(
+            *[
+                {"name": "Gi1/0/%d" % (i,), "statistics": {"in-octets": i, "junk": 1}}
+                for i in range(3)
+            ]
+        )
+        self.assertNotIn("junk", checks._interface_statistics(big)["Gi1/0/1"])
+        original = checks._IFACE_STATS_RAW_MAX
+        checks._IFACE_STATS_RAW_MAX = 2
+        try:
+            self.assertEqual(len(checks._interface_statistics(big)), 2)
+        finally:
+            checks._IFACE_STATS_RAW_MAX = original
+        stripped = checks._interfaces_without_statistics(self.payload)
+        entries = stripped["Cisco-IOS-XE-interfaces-oper:interfaces"]["interface"]
+        self.assertFalse(any("statistics" in e for e in entries))
+        self.assertEqual(len(entries), 5)
+        # The source payload is untouched.
+        self.assertIn(
+            "statistics", self.payload["Cisco-IOS-XE-interfaces-oper:interfaces"]["interface"][0]
+        )
+
+    def test_healthy_captures_normalize_identically(self):
+        # Counters and storm rates drift between healthy captures; the
+        # normalized view does not, and the check's own compare passes.
+        drifted = _loader.fixture_json("iosxe_interfaces_oper.json")
+        for entry in drifted["Cisco-IOS-XE-interfaces-oper:interfaces"]["interface"]:
+            for leaf in entry.get("statistics", {}):
+                if leaf != "discontinuity-time":
+                    entry["statistics"][leaf] += 5
+            for state in entry.get("storm-control", {}).values():
+                if "current-rate" in state:
+                    state["current-rate"]["pps"] += 100
+        pre = checks._normalize_interfaces(self.payload)
+        post = checks._normalize_interfaces(drifted)
+        self.assertEqual(pre, post)
+        compare = registry.CHECKS["iosxe_interfaces"].compare
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        self.assertNotEqual(
+            checks._interfaces_context(self.payload), checks._interfaces_context(drifted)
+        )
+
+    def test_collector_widened_get_is_the_shared_path(self):
+        ctx = _IfaceCtx({checks._IFACE_PATH: self.payload})
+        result = checks._collect_interfaces(ctx)
+        # The VLAN database rides beside it, ok_404 and with the kwargs
+        # iosxe_vlans uses, so the per-run cache serves both checks once.
+        self.assertEqual(
+            ctx.gets, [(checks._IFACE_PATH, {}), (checks._VLAN_PATH, _ACCESS_CTX_KWARGS)]
+        )
+        self.assertEqual(checks._VLAN_PATH, "/data/Cisco-IOS-XE-vlan-oper:vlans")
+        self.assertEqual(result["context"]["fields_filter"], "accepted")
+        self.assertEqual(result["context"]["link_scope"], "all")  # 404 here
+        self.assertNotIn("note", result["raw"])
+        self.assertEqual(sorted(result["raw"]), ["interfaces", "statistics"])
+        self.assertEqual(result["normalized"]["Vlan925"]["qos_out"], "PM-EGRESS")
+        # The filter names every widened leaf of the interface-state grouping.
+        for leaf in (
+            "ipv4-subnet-mask",
+            "ipv6-addrs",
+            "mtu",
+            "input-security-acl",
+            "output-security-acl",
+            "diffserv-info(direction;policy-name)",
+            "storm-control",
+            "intf-ext-state-support",
+            "intf-ext-state",
+            "statistics",
+            "negotiated-port-speed",
+            "negotiated-duplex-mode",
+        ):
+            self.assertIn(leaf, checks._IFACE_PATH)
+        self.assertNotIn(";speed;", checks._IFACE_PATH)
+        self.assertIn("auto-negotiate", checks._IFACE_PATH)
+
+    def test_collector_link_scope_follows_the_vlan_database(self):
+        # Served: the listed access port's link state is context, the scope says so.
+        ctx = _IfaceCtx(
+            {
+                checks._IFACE_PATH: self.payload,
+                checks._VLAN_PATH: _vlan_payload("TwoGigabitEthernet1/0/12"),
+            }
+        )
+        result = checks._collect_interfaces(ctx)
+        self.assertEqual(result["context"]["link_scope"], "trunks_and_routed")
+        self.assertIsNone(result["normalized"]["TwoGigabitEthernet1/0/12"]["speed"])
+        self.assertEqual(
+            result["context"]["access_link"]["TwoGigabitEthernet1/0/12"]["speed"], "speed-1gb"
+        )
+        self.assertNotIn("note", result["raw"])
+        # A failed VLAN read is a note and scope 'all', never a failed check.
+        ctx = _IfaceCtx(
+            {checks._IFACE_PATH: self.payload},
+            raise_for={checks._VLAN_PATH: _RestconfError("GET: HTTP 500", 500)},
+        )
+        result = checks._collect_interfaces(ctx)
+        self.assertEqual(result["context"]["link_scope"], "all")
+        self.assertEqual(result["context"]["fields_filter"], "accepted")
+        self.assertIn("vlan-oper read failed", result["raw"]["note"])
+        self.assertEqual(result["normalized"]["TwoGigabitEthernet1/0/12"]["speed"], "speed-1gb")
+
+    def test_collector_celery_abort_on_the_vlan_read_is_never_a_note(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        ctx = _IfaceCtx(
+            {checks._IFACE_PATH: self.payload},
+            raise_for={checks._VLAN_PATH: SoftTimeLimitExceeded()},
+        )
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_interfaces(ctx)
+
+    def test_collector_retries_unfiltered_once_on_http_400(self):
+        rejection = _RestconfError("GET %s: HTTP 400" % (checks._IFACE_PATH,), status_code=400)
+        ctx = _IfaceCtx(
+            {checks._IFACE_BASE_PATH: self.payload}, raise_for={checks._IFACE_PATH: rejection}
+        )
+        result = checks._collect_interfaces(ctx)
+        # The unfiltered reply is the whole model: it gets the big-GET budget.
+        self.assertEqual(
+            ctx.gets,
+            [
+                (checks._IFACE_PATH, {}),
+                (checks._IFACE_BASE_PATH, {"timeout": _loader.constants.BIG_GET_TIMEOUT}),
+                (checks._VLAN_PATH, _ACCESS_CTX_KWARGS),
+            ],
+        )
+        self.assertIn("HTTP 400", result["raw"]["note"])
+        self.assertEqual(result["context"]["fields_filter"], "rejected (HTTP 400); unfiltered read")
+        self.assertEqual(result["normalized"], checks._normalize_interfaces(self.payload))
+
+    def test_collector_other_errors_and_missing_container_fail(self):
+        for status in (401, 500, None):
+            with self.subTest(status=status):
+                ctx = _IfaceCtx({}, raise_for={checks._IFACE_PATH: _RestconfError("x", status)})
+                with self.assertRaises(_RestconfError):
+                    checks._collect_interfaces(ctx)
+                self.assertEqual(len(ctx.gets), 1)  # no retry
+        with self.assertRaises(registry.CollectError):
+            checks._collect_interfaces(_IfaceCtx({checks._IFACE_PATH: {"other": {}}}))
 
 
 def _hardware_with(leaves):
@@ -328,7 +920,18 @@ class _HealthCtx:
 
 
 class TestPlatformHealthNormalizer(unittest.TestCase):
-    NEITHER_SERVED = {"reboot_leaves_not_served": ["last-reboot-reason", "reason-severity"]}
+    NEITHER_SERVED = {
+        "reboot_leaves_not_served": ["last-reboot-reason", "reason-severity"],
+        "readings": {},
+    }
+    # Every served current-reading with its units, keyed like normalized; the
+    # 'Not Present' supply slot serves no reading and so has no entry.
+    READINGS = {
+        "env|Switch 1 R0/Temp: Coretemp": {"reading": 43, "units": "celsius"},
+        "env|Switch 1 R0/Temp: OutletTemp": {"reading": 51, "units": "celsius"},
+        "env|Switch 1 P0/P0 Vout": {"reading": 12000, "units": "millivolts"},
+        "env|Switch 1 P0/P0 Iin": {"reading": 1, "units": "amperes"},
+    }
 
     def test_hardware_plus_environment(self):
         hardware = _loader.fixture_json("iosxe_device_hardware.json")
@@ -342,8 +945,27 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                 "env|Switch 1 R0/Temp: Coretemp": {"state": "Normal"},
                 "env|Switch 1 R0/Temp: OutletTemp": {"state": "Normal"},
                 "env|Switch 1 P0/P0 Vout": {"state": "Normal"},
+                "env|Switch 1 P0/P0 Iin": {"state": "Normal"},
+                # A supply slot without input is a sensor state, visible here.
+                "env|Switch 1 P1/P1 Vout": {"state": "Not Present"},
             },
         )
+        self.assertEqual(_context["readings"], self.READINGS)
+
+    def test_readings_are_context_never_normalized(self):
+        hardware = _loader.fixture_json("iosxe_device_hardware.json")
+        env = _loader.fixture_json("iosxe_environment_sensors.json")
+        normalized, context = checks._normalize_platform_health(hardware, env)
+        for facts in normalized.values():
+            self.assertNotIn("reading", facts)
+        self.assertEqual(set(context["readings"]) - set(normalized), set())
+        # A string-ified reading is still a number; junk is no reading.
+        sensors = env["Cisco-IOS-XE-environment-oper:environment-sensors"]["environment-sensor"]
+        sensors[0]["current-reading"] = "44"
+        sensors[1]["current-reading"] = "n/a"
+        _normalized, context = checks._normalize_platform_health(hardware, env)
+        self.assertEqual(context["readings"]["env|Switch 1 R0/Temp: Coretemp"]["reading"], 44)
+        self.assertNotIn("env|Switch 1 R0/Temp: OutletTemp", context["readings"])
 
     def test_environment_payload_absent(self):
         hardware = _loader.fixture_json("iosxe_device_hardware.json")
@@ -370,7 +992,7 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
             },
         )
-        self.assertEqual(context, {"reboot_leaves_not_served": []})
+        self.assertEqual(context, {"reboot_leaves_not_served": [], "readings": {}})
 
     def test_last_reboot_one_leaf_served(self):
         # Only what the device served: no placeholder for the missing field.
@@ -388,7 +1010,9 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                     _hardware_with(leaves), None
                 )
                 self.assertEqual(normalized["last-reboot"], expected)
-                self.assertEqual(context, {"reboot_leaves_not_served": [not_served]})
+                self.assertEqual(
+                    context, {"reboot_leaves_not_served": [not_served], "readings": {}}
+                )
 
     def test_last_reboot_neither_leaf_served(self):
         # The committed fixture as-is: no key, nothing fabricated, both leaves
@@ -410,7 +1034,8 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                         "boot-time",
                         "last-reboot-reason",
                         "reason-severity",
-                    ]
+                    ],
+                    "readings": {},
                 },
             )
 
@@ -424,7 +1049,9 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                     _hardware_with({"reason-severity": value}), None
                 )
                 self.assertEqual(normalized["last-reboot"], {"severity": text})
-                self.assertEqual(context, {"reboot_leaves_not_served": ["last-reboot-reason"]})
+                self.assertEqual(
+                    context, {"reboot_leaves_not_served": ["last-reboot-reason"], "readings": {}}
+                )
 
     def test_blank_reason_is_served_not_absent(self):
         # A served-but-blank leaf is what the device said: kept as '', and
@@ -436,13 +1063,14 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                     None,
                 )
                 self.assertEqual(normalized["last-reboot"], {"reason": "", "severity": "normal"})
-                self.assertEqual(context, {"reboot_leaves_not_served": []})
+                self.assertEqual(context, {"reboot_leaves_not_served": [], "readings": {}})
 
     def test_healthy_captures_normalize_identically(self):
         # Two healthy captures of an unchanged device: identical payloads, and
         # payloads apart only in volatile leaves (the device clock beside the
         # reboot leaves, every sensor reading), give one normalized view, one
-        # context, and a diffcore 'pass' under the check's own compare.
+        # context apart from the readings it keeps for the reader, and a
+        # diffcore 'pass' under the check's own compare.
         leaves = {"last-reboot-reason": "Reload Command", "reason-severity": "normal"}
         env_fixture = "iosxe_environment_sensors.json"
         pre, pre_context = checks._normalize_platform_health(
@@ -451,17 +1079,22 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         drifted_env = _loader.fixture_json(env_fixture)
         sensors = drifted_env["Cisco-IOS-XE-environment-oper:environment-sensors"]
         for sensor in sensors["environment-sensor"]:
-            sensor["current-reading"] += 1
+            if "current-reading" in sensor:
+                sensor["current-reading"] += 1
         drifted = _hardware_with({**leaves, "current-time": "2026-08-24T02:47:31+00:00"})
         compare = registry.CHECKS["iosxe_platform_health"].compare
-        for name, hardware, env_payload in (
-            ("identical", _hardware_with(leaves), _loader.fixture_json(env_fixture)),
-            ("volatile drift", drifted, drifted_env),
+        for name, hardware, env_payload, same_readings in (
+            ("identical", _hardware_with(leaves), _loader.fixture_json(env_fixture), True),
+            ("volatile drift", drifted, drifted_env, False),
         ):
             with self.subTest(name):
                 post, post_context = checks._normalize_platform_health(hardware, env_payload)
                 self.assertEqual(post, pre)
-                self.assertEqual(post_context, pre_context)
+                self.assertEqual(
+                    post_context["reboot_leaves_not_served"],
+                    pre_context["reboot_leaves_not_served"],
+                )
+                self.assertEqual(post_context["readings"] == pre_context["readings"], same_readings)
                 self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
 
     def test_changed_reason_diffs_under_the_checks_own_compare(self):
@@ -515,7 +1148,9 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         self.assertEqual(
             result["normalized"]["last-reboot"], {"reason": "Reload Command", "severity": "normal"}
         )
-        self.assertEqual(result["context"], {"reboot_leaves_not_served": []})
+        self.assertEqual(
+            result["context"], {"reboot_leaves_not_served": [], "readings": self.READINGS}
+        )
         self.assertEqual(result["raw"], {"device-hardware": hardware, "environment-sensors": env})
         # No request of its own: the same two GETs as before the reboot leaves.
         self.assertEqual(ctx.gets, [(checks._HW_PATH, {}), (checks._ENV_PATH, {"ok_404": True})])
@@ -705,6 +1340,7 @@ class TestRegistrations(unittest.TestCase):
         "iosxe_errdisable",
         "iosxe_port_channels",
         "iosxe_switch_stack",
+        "iosxe_inventory",
     }
 
     # Other catalog modules (checks_iosxe_wireless) register under platform
@@ -1757,6 +2393,145 @@ class TestErrdisableAndPortChannels(unittest.TestCase):
         )
         self.assertEqual(checks._parse_errdisable("Port  Name  Status  Reason\n"), {})
 
+    ERRDISABLED_CLI = (
+        "Port      Name               Status       Reason\n"
+        "Te1/0/5   server-cab-3       err-disabled bpduguard\n"
+    )
+    HEALTHY_CLI = "Port      Name               Status       Reason\n"
+
+    def test_errdisable_normalized_from_ext_state(self):
+        payload = _loader.fixture_json("iosxe_interfaces_oper.json")
+        normalized, ext_states = checks._normalize_errdisable(payload)
+        self.assertEqual(normalized, {"TenGigabitEthernet1/0/5": {"reason": "port-err-bpduguard"}})
+        # Every interface serving the leaves, whether or not disabled; none for
+        # the interfaces without the container.
+        self.assertEqual(
+            sorted(ext_states),
+            ["TenGigabitEthernet1/0/1", "TenGigabitEthernet1/0/5", "TwoGigabitEthernet1/0/12"],
+        )
+        self.assertEqual(
+            ext_states["TenGigabitEthernet1/0/1"],
+            {"error-type": "port-error-none", "port-error-reason": "port-err-none"},
+        )
+        # Prefixed enums and a missing reason: the type decides, the reason may be None.
+        payload = _iface_payload(
+            {"name": "Gi1/0/9", "intf-ext-state": {"error-type": "x:port-error-disable"}}
+        )
+        self.assertEqual(checks._normalize_errdisable(payload)[0], {"Gi1/0/9": {"reason": None}})
+
+    def test_errdisable_collector_primary_is_the_interfaces_get(self):
+        payload = _loader.fixture_json("iosxe_interfaces_oper.json")
+        ctx = _IfaceCtx({checks._IFACE_PATH: payload}, outputs={})
+        result = checks._collect_errdisable(ctx)
+        # Same path and kwargs as iosxe_interfaces: one GET for both; no SSH.
+        self.assertEqual(ctx.gets, [(checks._IFACE_PATH, {})])
+        self.assertEqual(ctx.commands, [])
+        self.assertEqual(
+            result["normalized"], {"TenGigabitEthernet1/0/5": {"reason": "port-err-bpduguard"}}
+        )
+        self.assertEqual(
+            result["context"],
+            {"source": "intf-ext-state", "ports_with_ext_state": 3, "ports_errdisabled": 1},
+        )
+        self.assertEqual(sorted(result["raw"]), ["intf-ext-state"])
+        self.assertIn("TenGigabitEthernet1/0/1", result["raw"]["intf-ext-state"])
+        # iosxe_interfaces on the same ctx reports the port as down, without the reason.
+        iface = checks._collect_interfaces(ctx)["normalized"]["TenGigabitEthernet1/0/5"]
+        self.assertEqual(iface["oper"], "if-oper-state-no-pass")
+        self.assertNotIn("reason", iface)
+
+    def test_errdisable_healthy_model_source_is_empty(self):
+        payload = _iface_payload(
+            {
+                "name": "Gi1/0/1",
+                "intf-ext-state": {
+                    "error-type": "port-error-none",
+                    "port-error-reason": "port-err-none",
+                },
+            }
+        )
+        result = checks._collect_errdisable(_IfaceCtx({checks._IFACE_PATH: payload}))
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["context"]["source"], "intf-ext-state")
+
+    def test_errdisable_falls_back_to_cli_without_ext_state(self):
+        # No interface serves intf-ext-state (an older release, or the leaves
+        # unfilled): the CLI is the source, and raw's note says so.
+        payload = _iface_payload({"name": "Gi1/0/1", **_UP})
+        ctx = _IfaceCtx(
+            {checks._IFACE_PATH: payload},
+            outputs={"show interfaces status err-disabled": self.ERRDISABLED_CLI},
+        )
+        result = checks._collect_errdisable(ctx)
+        self.assertEqual(ctx.commands, ["show interfaces status err-disabled"])
+        self.assertEqual(result["normalized"], {"Te1/0/5": {"reason": "bpduguard"}})
+        self.assertEqual(
+            result["context"],
+            {
+                "source": "show interfaces status err-disabled",
+                "ports_with_ext_state": 0,
+                "ports_errdisabled": 1,
+            },
+        )
+        self.assertIn("intf-ext-state served on no interface", result["raw"]["note"])
+        self.assertIn("show interfaces status err-disabled", result["raw"])
+        # Healthy CLI output: empty, still recorded.
+        ctx.outputs["show interfaces status err-disabled"] = self.HEALTHY_CLI
+        self.assertEqual(checks._collect_errdisable(ctx)["normalized"], {})
+
+    def test_errdisable_falls_back_to_cli_when_the_get_fails(self):
+        for failure in (
+            _RestconfError("GET: HTTP 500", 500),
+            RuntimeError("no HTTP GET transport"),
+        ):
+            with self.subTest(failure=type(failure).__name__):
+                ctx = _IfaceCtx(
+                    {},
+                    raise_for={checks._IFACE_PATH: failure},
+                    outputs={"show interfaces status err-disabled": self.HEALTHY_CLI},
+                )
+                result = checks._collect_errdisable(ctx)
+                self.assertEqual(result["normalized"], {})
+                self.assertIn("interfaces-oper read failed", result["raw"]["note"])
+                self.assertEqual(result["context"]["source"], "show interfaces status err-disabled")
+        # The 400 retry also serves this check; the unfiltered reply is used.
+        payload = _loader.fixture_json("iosxe_interfaces_oper.json")
+        ctx = _IfaceCtx(
+            {checks._IFACE_BASE_PATH: payload},
+            raise_for={checks._IFACE_PATH: _RestconfError("GET: HTTP 400", 400)},
+        )
+        result = checks._collect_errdisable(ctx)
+        # The same kwargs iosxe_interfaces uses on this path, so the unfiltered
+        # read is the cache hit (the rejected filtered GET is never cached).
+        self.assertEqual(
+            ctx.gets,
+            [
+                (checks._IFACE_PATH, {}),
+                (checks._IFACE_BASE_PATH, {"timeout": _loader.constants.BIG_GET_TIMEOUT}),
+            ],
+        )
+        self.assertEqual(result["context"]["source"], "intf-ext-state")
+        self.assertIn("HTTP 400", result["raw"]["note"])
+
+    def test_errdisable_celery_abort_is_never_a_note(self):
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        ctx = _IfaceCtx({}, raise_for={checks._IFACE_PATH: SoftTimeLimitExceeded()}, outputs={})
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_errdisable(ctx)
+
+    def test_errdisable_not_present_only_without_any_source(self):
+        payload = _iface_payload({"name": "Gi1/0/1", **_UP})
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_errdisable(_IfaceCtx({checks._IFACE_PATH: payload}))
+        ctx = _IfaceCtx(
+            {checks._IFACE_PATH: payload},
+            outputs={"show interfaces status err-disabled": "% Invalid input detected"},
+        )
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_errdisable(ctx)
+
     def test_etherchannel_parse_with_wrapped_members(self):
         output = (
             "Group  Port-channel  Protocol    Ports\n"
@@ -2807,6 +3582,355 @@ class TestSwitchStack(unittest.TestCase):
 
         with self.assertRaises(SoftTimeLimitExceeded):
             self._collect(raise_for={checks._STACK_OPER_PATH: SoftTimeLimitExceeded()})
+
+
+class _InventoryCtx(_IfaceCtx):
+    """_IfaceCtx whose SSH commands can be rejected on cue."""
+
+    def run_ssh(self, command, **kwargs):
+        self.commands.append(command)
+        if command in self.raise_for:
+            raise self.raise_for[command]
+        return self.outputs[command]
+
+
+class TestInventory(unittest.TestCase):
+    CHASSIS = {
+        "model": "C9500-48Y4C",
+        "serial": "FCW0000A0AA",
+        "description": "Cisco Catalyst 9500 Series Switch",
+        "version": "V02",
+    }
+
+    def setUp(self):
+        self.hardware = _loader.fixture_json("iosxe_device_hardware.json")
+
+    def test_model_view_keys_and_classes(self):
+        normalized, facts = checks._normalize_inventory(self.hardware)
+        self.assertEqual(
+            sorted(normalized),
+            [
+                "chassis|Chassis 1",
+                "fan|Chassis 1 Fan Tray",
+                # No dev-name: keyed by serial.
+                "module|sn:FOC0000B101",
+                # The hw-type-unknown row has neither name, serial nor part
+                # number: counted in context unidentified, never keyed.
+                "psu|Chassis 1 Power Supply Module 0",
+                "psu|Chassis 1 Power Supply Module 1",
+                "transceiver|TwentyFiveGigE1/0/1",
+            ],
+        )
+        self.assertEqual(normalized["chassis|Chassis 1"], self.CHASSIS)
+        # Serial padded and lower-cased by the encoder: stripped and upper-cased.
+        self.assertEqual(normalized["psu|Chassis 1 Power Supply Module 0"]["serial"], "ART0000A001")
+        # Blank leaves are None, not '' — a fan tray with no serial.
+        self.assertEqual(
+            normalized["fan|Chassis 1 Fan Tray"],
+            {
+                "model": "C9K-T1-FANTRAY",
+                "serial": None,
+                "description": "Cisco Catalyst 9500 Series Fan Tray",
+                "version": None,
+            },
+        )
+        self.assertEqual(
+            facts,
+            {
+                "items_by_class": {
+                    "chassis": 1,
+                    "psu": 2,
+                    "fan": 1,
+                    "transceiver": 1,
+                    "module": 1,
+                    "other": 1,
+                },
+                "keyed_by_part_number": [],
+                "unidentified": {"other": 1},
+                # On-board parts are counted, never keyed: no cpu0 / disk0 rows.
+                "internal_skipped": {"hw-type-cpu": 1, "hw-type-ssd": 1},
+            },
+        )
+        for facts_ in normalized.values():
+            self.assertEqual(sorted(facts_), ["description", "model", "serial", "version"])
+
+    def test_model_view_never_keys_an_index(self):
+        # Every key starts with its class and none carries the hw-dev-index:
+        # renumbering the nameless, serial-less row (a reload re-walks the
+        # inventory) diffs to nothing.
+        normalized, _facts = checks._normalize_inventory(self.hardware)
+        for key in normalized:
+            self.assertRegex(key, r"^(chassis|module|psu|fan|transceiver|other)\|")
+            self.assertNotIn("idx:", key)
+        renumbered = _loader.fixture_json("iosxe_device_hardware.json")
+        for entry in checks._inventory_entries(renumbered):
+            if entry.get("hw-type") == "hw-type-unknown":
+                entry["hw-dev-index"] = 11
+        self.assertEqual(checks._normalize_inventory(renumbered)[0], normalized)
+
+    def test_model_view_part_number_keys_and_ordinal_collisions(self):
+        # No name, no serial, a part number: keyed on it and named in context.
+        # Two such identical parts (fan trays) are told apart by an ordinal,
+        # never by the index; a serial, when one of them has it, wins.
+        entries = [
+            {"hw-type": "hw-type-fantray", "hw-dev-index": 30, "part-number": "C9K-T1-FANTRAY"},
+            {"hw-type": "hw-type-fantray", "hw-dev-index": 31, "part-number": "C9K-T1-FANTRAY"},
+            {
+                "hw-type": "hw-type-fantray",
+                "hw-dev-index": 32,
+                "part-number": "C9K-T1-FANTRAY",
+                "hw-description": "spare",
+            },
+            {"hw-type": "hw-type-unknown", "hw-dev-index": 33},
+            {"hw-type": "hw-type-pem", "hw-dev-index": 34, "hw-description": "blank slot"},
+        ]
+        normalized, facts = checks._normalize_inventory(_hardware(entries))
+        # The second identical tray carries the same facts, so it folds into the
+        # first key; the third differs (description) and gets the ordinal.
+        self.assertEqual(sorted(normalized), ["fan|pn:C9K-T1-FANTRAY", "fan|pn:C9K-T1-FANTRAY|#2"])
+        self.assertEqual(normalized["fan|pn:C9K-T1-FANTRAY|#2"]["description"], "spare")
+        self.assertEqual(
+            facts["keyed_by_part_number"], ["fan|pn:C9K-T1-FANTRAY", "fan|pn:C9K-T1-FANTRAY|#2"]
+        )
+        self.assertEqual(facts["unidentified"], {"other": 1, "psu": 1})
+        self.assertEqual(facts["items_by_class"], {"fan": 3, "other": 1, "psu": 1})
+
+    def test_model_view_stack_shape_and_collisions(self):
+        # A 4-member stack whose chassis carry the physical indexes 1, 8, 15
+        # and 20, dev-named 'Switch <n>'; a PEM sharing index 1 with a chassis;
+        # two items with one dev-name are told apart by serial.
+        entries = [
+            {
+                "hw-type": "hw-type-chassis",
+                "hw-dev-index": idx,
+                "part-number": "C9300-48UXM",
+                "serial-number": "FOC0000A00%d" % (n,),
+                "dev-name": "Switch %d" % (n,),
+            }
+            for n, idx in ((1, 1), (2, 8), (3, 15), (4, 20))
+        ]
+        entries.append(
+            {
+                "hw-type": "hw-type-pem",
+                "hw-dev-index": 1,
+                "part-number": "PWR-C1-1100WAC-P",
+                "serial-number": "DTN0000A001",
+                "dev-name": "Switch 1 - Power Supply A",
+            }
+        )
+        entries.append(
+            {
+                "hw-type": "hw-type-pem",
+                "hw-dev-index": 2,
+                "part-number": "PWR-C1-1100WAC-P",
+                "serial-number": "DTN0000A002",
+                "dev-name": "Switch 1 - Power Supply A",
+            }
+        )
+        normalized, facts = checks._normalize_inventory(_hardware(entries))
+        self.assertEqual(
+            sorted(normalized),
+            [
+                "chassis|Switch 1",
+                "chassis|Switch 2",
+                "chassis|Switch 3",
+                "chassis|Switch 4",
+                "psu|Switch 1 - Power Supply A",
+                "psu|Switch 1 - Power Supply A|sn:DTN0000A002",
+            ],
+        )
+        self.assertEqual(normalized["chassis|Switch 3"]["serial"], "FOC0000A003")
+        self.assertEqual(facts["keyed_by_part_number"], [])
+        self.assertEqual(facts["unidentified"], {})
+        # Single-dict list, prefixed enum, unknown future hw-type -> other.
+        payload = _hardware([{"hw-type": "m:hw-type-newthing", "hw-dev-index": 3, "dev-name": "x"}])
+        payload_c = payload["Cisco-IOS-XE-device-hardware-oper:device-hardware-data"]
+        payload_c["device-hardware"]["device-inventory"] = payload_c["device-hardware"][
+            "device-inventory"
+        ][0]
+        self.assertEqual(list(checks._normalize_inventory(payload)[0]), ["other|x"])
+
+    def test_cli_view_9300_stack(self):
+        normalized, facts = checks._normalize_inventory_cli(
+            _loader.fixture_text("iosxe_show_inventory_9300_stack.txt")
+        )
+        self.assertEqual(
+            sorted(normalized),
+            [
+                "chassis|Switch 1",
+                "chassis|Switch 2",
+                "chassis|Switch 3",
+                "chassis|Switch 4",
+                "module|Switch 1 FRU Uplink Module 1",
+                "module|Switch 2 FRU Uplink Module 1",
+                "psu|Switch 1 - Power Supply A",
+                "psu|Switch 1 - Power Supply B",
+                "psu|Switch 2 - Power Supply A",
+                "psu|Switch 3 - Power Supply A",
+                "psu|Switch 4 - Power Supply A",
+                "transceiver|Te1/1/1",
+                "transceiver|Te2/1/1",
+            ],
+        )
+        self.assertEqual(
+            normalized["chassis|Switch 2"],
+            {
+                "model": "C9300-48UXM",
+                "serial": "FOC0000A002",
+                "description": "C9300-48UXM",
+                "version": "V02",
+            },
+        )
+        self.assertEqual(
+            normalized["transceiver|Te1/1/1"],
+            {
+                "model": "SFP-10G-SR",
+                "serial": "AGD0000C001",
+                "description": "SFP-10GBase-SR",
+                "version": "V03",
+            },
+        )
+        # The stack-level pseudo entry (the active's PID and SN again) is skipped, by name.
+        self.assertEqual(
+            facts,
+            {
+                "items_by_class": {"chassis": 4, "psu": 5, "module": 2, "transceiver": 2},
+                "keyed_by_part_number": [],
+                "unidentified": {},
+                "skipped": ["c93xx Stack"],
+            },
+        )
+
+    def test_cli_view_9500_svl_pair(self):
+        normalized, facts = checks._normalize_inventory_cli(
+            _loader.fixture_text("iosxe_show_inventory_9500_svl.txt")
+        )
+        self.assertEqual(
+            facts["items_by_class"], {"chassis": 2, "psu": 3, "fan": 2, "transceiver": 2}
+        )
+        self.assertEqual(facts["skipped"], [])
+        # 'Power Supply Module' is a psu, not a module; a blank VID/SN is None.
+        self.assertIn("psu|Chassis 2 Power Supply Module 0", normalized)
+        self.assertEqual(
+            normalized["fan|Chassis 2 Fan Tray"],
+            {
+                "model": "C9K-T1-FANTRAY",
+                "serial": None,
+                "description": "Cisco Catalyst 9500 Series Fan Tray",
+                "version": None,
+            },
+        )
+        self.assertEqual(normalized["chassis|Chassis 2"]["serial"], "FCW0000A0BB")
+        # The two views name the same chassis serials the stack check joins on.
+        cli_serials = {v["serial"] for k, v in normalized.items() if k.startswith("chassis|")}
+        self.assertEqual(cli_serials, {"FCW0000A0AA", "FCW0000A0BB"})
+
+    def test_cli_items_parser_and_member_parser_agree(self):
+        output = _loader.fixture_text("iosxe_show_inventory_9300_stack.txt")
+        items = checks._inventory_items(output)
+        self.assertEqual(len(items), 14)  # the stack entry, 4 chassis, 5 PSUs, 2 modules, 2 optics
+        self.assertEqual(
+            items[1],
+            {
+                "name": "Switch 1",
+                "descr": "C9300-48UXM",
+                "pid": "C9300-48UXM",
+                "vid": "V02",
+                "sn": "FOC0000A001",
+            },
+        )
+        # A PID line with no NAME before it is ignored; a NAME without DESCR parses.
+        self.assertEqual(checks._inventory_items("PID: X , VID: , SN: 1\n"), [])
+        self.assertEqual(
+            checks._inventory_items('NAME: "Fan 1"\nPID: F , VID: , SN:\n'),
+            [{"name": "Fan 1", "descr": "", "pid": "F", "vid": "", "sn": ""}],
+        )
+        # The stack check's member parser still reads the same output.
+        members = checks._parse_show_inventory(output)
+        self.assertEqual(members["2"], {"model": "C9300-48UXM", "serial": "FOC0000A002"})
+
+    def test_collector_model_source(self):
+        ctx = _InventoryCtx({checks._HW_PATH: self.hardware}, outputs={})
+        result = checks._collect_inventory(ctx)
+        # The platform-health GET, cached: same path, same kwargs; no SSH.
+        self.assertEqual(ctx.gets, [(checks._HW_PATH, {})])
+        self.assertEqual(ctx.commands, [])
+        self.assertEqual(result["normalized"]["chassis|Chassis 1"], self.CHASSIS)
+        self.assertEqual(result["context"]["source"], "device-inventory")
+        self.assertEqual(result["context"]["unidentified"], {"other": 1})
+        self.assertNotIn("keyed_by_index", result["context"])
+        self.assertEqual(len(result["raw"]["device-inventory"]), 9)
+        self.assertNotIn("note", result["raw"])
+        self.assertEqual(
+            _loader.diffcore.diff_check(
+                result["normalized"],
+                checks._collect_inventory(ctx)["normalized"],
+                registry.CHECKS["iosxe_inventory"].compare,
+            )["result"],
+            "pass",
+        )
+
+    def test_collector_raw_cap(self):
+        entries = [
+            {"hw-type": "hw-type-transceiver", "hw-dev-index": i, "dev-name": "Te1/1/%d" % (i,)}
+            for i in range(5)
+        ]
+        original = checks._INVENTORY_RAW_MAX
+        checks._INVENTORY_RAW_MAX = 3
+        try:
+            result = checks._collect_inventory(_InventoryCtx({checks._HW_PATH: _hardware(entries)}))
+        finally:
+            checks._INVENTORY_RAW_MAX = original
+        self.assertEqual(len(result["raw"]["device-inventory"]), 3)
+        self.assertEqual(len(result["normalized"]), 5)
+
+    def test_collector_empty_model_inventory_falls_back_to_cli(self):
+        output = _loader.fixture_text("iosxe_show_inventory_9300_stack.txt")
+        for name, entries in (
+            ("no entries", []),
+            ("internal only", [{"hw-type": "hw-type-cpu", "hw-dev-index": 1}]),
+        ):
+            with self.subTest(name):
+                ctx = _InventoryCtx(
+                    {checks._HW_PATH: _hardware(entries)}, outputs={"show inventory": output}
+                )
+                result = checks._collect_inventory(ctx)
+                self.assertEqual(ctx.commands, ["show inventory"])
+                self.assertEqual(result["context"]["source"], "show inventory")
+                self.assertEqual(result["context"]["skipped"], ["c93xx Stack"])
+                self.assertEqual(result["normalized"]["chassis|Switch 4"]["serial"], "FOC0000A004")
+                self.assertIn("device-inventory served no", result["raw"]["note"])
+                self.assertEqual(result["raw"]["show inventory"], output)
+
+    def test_collector_empty_inventory_is_a_failed_read_never_not_present(self):
+        empty = _hardware([])
+        cases = (
+            ("no SSH", _InventoryCtx({checks._HW_PATH: empty})),
+            (
+                "CLI rejected",
+                _InventoryCtx(
+                    {checks._HW_PATH: empty}, outputs={"show inventory": "% Invalid input"}
+                ),
+            ),
+            ("CLI empty", _InventoryCtx({checks._HW_PATH: empty}, outputs={"show inventory": ""})),
+            ("container missing", _InventoryCtx({checks._HW_PATH: {"other": {}}}, outputs={})),
+            ("no reply", _InventoryCtx({}, outputs={})),
+        )
+        for name, ctx in cases:
+            with self.subTest(name):
+                with self.assertRaises(registry.CollectError):
+                    checks._collect_inventory(ctx)
+        # Transport failures propagate as they are: never a skip.
+        ctx = _InventoryCtx({}, raise_for={checks._HW_PATH: RuntimeError("boom")}, outputs={})
+        with self.assertRaises(RuntimeError):
+            checks._collect_inventory(ctx)
+
+    def test_registration(self):
+        check = registry.CHECKS["iosxe_inventory"]
+        self.assertEqual((check.tier, check.compare), (1, {"mode": "equality_set"}))
+        self.assertIn("iosxe_switch_stack", registry.SEMANTICS["iosxe_inventory"])
+        self.assertIn("iosxe_inventory", registry.SEMANTICS["iosxe_switch_stack"])
+        self.assertIn("iosxe_inventory", registry.SEMANTICS["iosxe_platform_health"])
 
 
 if __name__ == "__main__":
