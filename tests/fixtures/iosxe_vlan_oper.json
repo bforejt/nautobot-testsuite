@@ -1,0 +1,77 @@
+{
+  "Cisco-IOS-XE-vlan-oper:vlans": {
+    "vlan": [
+      {
+        "id": 1,
+        "name": "default",
+        "status": "active",
+        "ports": [
+          {"interface": "GigabitEthernet1/0/5", "subinterface": 0},
+          {"interface": "GigabitEthernet1/0/6", "subinterface": 0},
+          {"interface": "GigabitEthernet2/0/5", "subinterface": 0}
+        ],
+        "vlan-interfaces": [
+          {"interface": "GigabitEthernet1/0/5", "subinterface": 0},
+          {"interface": "GigabitEthernet1/0/6", "subinterface": 0},
+          {"interface": "GigabitEthernet2/0/5", "subinterface": 0}
+        ]
+      },
+      {
+        "id": 10,
+        "name": "USERS",
+        "status": "active",
+        "ports": [
+          {"interface": "GigabitEthernet1/0/1", "subinterface": 0},
+          {"interface": "GigabitEthernet1/0/2", "subinterface": 0},
+          {"interface": "GigabitEthernet2/0/1", "subinterface": 0}
+        ],
+        "vlan-interfaces": [
+          {"interface": "GigabitEthernet1/0/1", "subinterface": 0},
+          {"interface": "GigabitEthernet1/0/2", "subinterface": 0},
+          {"interface": "GigabitEthernet2/0/1", "subinterface": 0},
+          {"interface": "GigabitEthernet1/1/1", "subinterface": 0}
+        ]
+      },
+      {
+        "id": 20,
+        "name": "VOICE",
+        "status": "active",
+        "ports": [
+          {"interface": "GigabitEthernet1/0/1", "subinterface": 0},
+          {"interface": "GigabitEthernet1/0/2", "subinterface": 0}
+        ]
+      },
+      {
+        "id": 30,
+        "name": "QUARANTINE",
+        "status": "active",
+        "ports": {"interface": "GigabitEthernet1/0/3", "subinterface": 0}
+      },
+      {
+        "id": 99,
+        "name": "OLD-MGMT",
+        "status": "suspend"
+      },
+      {
+        "id": 1002,
+        "name": "fddi-default",
+        "status": "active"
+      },
+      {
+        "id": 1003,
+        "name": "token-ring-default",
+        "status": "active"
+      },
+      {
+        "id": 1004,
+        "name": "fddinet-default",
+        "status": "active"
+      },
+      {
+        "id": 1005,
+        "name": "trnet-default",
+        "status": "active"
+      }
+    ]
+  }
+}

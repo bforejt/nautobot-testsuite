@@ -1,0 +1,154 @@
+{
+  "Cisco-IOS-XE-spanning-tree-oper:stp-details": {
+    "stp-detail": [
+      {
+        "instance": "VLAN0001",
+        "hello-time": 2,
+        "max-age": 20,
+        "forwarding-delay": 15,
+        "hold-count": 6,
+        "bridge-priority": 32769,
+        "bridge-address": "00:00:5e:00:53:a1",
+        "designated-root-priority": 24577,
+        "designated-root-address": "00:00:5e:00:53:01",
+        "root-port": 49,
+        "root-cost": 4,
+        "hold-time": 1,
+        "topology-changes": 7,
+        "time-of-last-topology-change": "2026-09-20T10:11:12.000+00:00",
+        "interfaces": {
+          "interface": [
+            {
+              "name": "GigabitEthernet1/0/1",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 1,
+              "role": "stp-designated",
+              "state": "stp-forwarding",
+              "forward-transitions": 1,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-default",
+              "bpdu-guard": "stp-port-bpduguard-enable",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 120345,
+              "bpdu-received": 0
+            },
+            {
+              "name": "GigabitEthernet1/0/2",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 2,
+              "role": "stp-designated",
+              "state": "stp-forwarding",
+              "forward-transitions": 3,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-default",
+              "bpdu-guard": "stp-port-bpduguard-enable",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 120340,
+              "bpdu-received": 0
+            },
+            {
+              "name": "GigabitEthernet1/0/3",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 3,
+              "role": "stp-designated",
+              "state": "stp-listening",
+              "forward-transitions": 0,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-default",
+              "bpdu-guard": "stp-port-bpduguard-enable",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 3,
+              "bpdu-received": 0
+            },
+            {
+              "name": "GigabitEthernet1/1/1",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 49,
+              "role": "stp-root",
+              "state": "stp-forwarding",
+              "forward-transitions": 1,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-default",
+              "bpdu-guard": "stp-port-bpduguard-default",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 2,
+              "bpdu-received": 120400
+            },
+            {
+              "name": "GigabitEthernet2/1/1",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 105,
+              "role": "stp-alternate",
+              "state": "stp-blocking",
+              "forward-transitions": 0,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-loop",
+              "bpdu-guard": "stp-port-bpduguard-default",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 2,
+              "bpdu-received": 120398
+            },
+            {
+              "name": "GigabitEthernet1/0/7",
+              "cost": 4,
+              "port-priority": 128,
+              "port-num": 7,
+              "role": "stp-designated",
+              "state": "stp-disabled",
+              "forward-transitions": 0,
+              "link-type": "stp-point-to-point",
+              "guard": "stp-port-guard-default",
+              "bpdu-guard": "stp-port-bpduguard-enable",
+              "bpdu-filter": "stp-port-bpdufilter-default",
+              "bpdu-sent": 0,
+              "bpdu-received": 0
+            }
+          ]
+        }
+      },
+      {
+        "instance": "VLAN0010",
+        "hello-time": 2,
+        "max-age": 20,
+        "forwarding-delay": 15,
+        "hold-count": 6,
+        "bridge-priority": 24586,
+        "bridge-address": "00:00:5e:00:53:a1",
+        "designated-root-priority": 24586,
+        "designated-root-address": "00:00:5e:00:53:a1",
+        "root-port": 0,
+        "root-cost": 0,
+        "hold-time": 1,
+        "topology-changes": 2,
+        "time-of-last-topology-change": "2026-09-01T08:00:00.000+00:00",
+        "interfaces": {
+          "interface": {
+            "name": "GigabitEthernet1/1/1",
+            "cost": 4,
+            "port-priority": 128,
+            "port-num": 49,
+            "role": "stp-designated",
+            "state": "stp-forwarding",
+            "forward-transitions": 1,
+            "link-type": "stp-point-to-point",
+            "guard": "stp-port-guard-default",
+            "bpdu-guard": "stp-port-bpduguard-default",
+            "bpdu-filter": "stp-port-bpdufilter-default",
+            "bpdu-sent": 120400,
+            "bpdu-received": 0
+          }
+        }
+      }
+    ],
+    "stp-global": {
+      "mode": "stp-mode-rapid-pvst",
+      "bpdu-guard": [null],
+      "etherchannel-misconfig-guard": [null]
+    }
+  }
+}

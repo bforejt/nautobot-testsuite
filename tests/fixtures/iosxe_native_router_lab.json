@@ -1,0 +1,80 @@
+{
+ "Cisco-IOS-XE-native:router": {
+  "Cisco-IOS-XE-eigrp:router-eigrp": {
+   "eigrp": {
+    "classic-mode": [
+     {
+      "autonomous-system": 1,
+      "eigrp": {
+       "stub": {
+        "advertise": {
+         "connected": [
+          null
+         ],
+         "summary": [
+          null
+         ]
+        }
+       }
+      },
+      "network": {
+       "address-wildcard": [
+        {
+         "ipv4-address": "203.0.113.0",
+         "wildcard": "0.0.0.255"
+        },
+        {
+         "ipv4-address": "198.18.4.0",
+         "wildcard": "0.0.0.255"
+        }
+       ]
+      },
+      "passive-interface": {
+       "default": true
+      }
+     }
+    ]
+   }
+  },
+  "Cisco-IOS-XE-ospf:router-ospf": {
+   "ospf": {
+    "process-id": [
+     {
+      "id": 1,
+      "network": [
+       {
+        "ip": "203.0.113.0",
+        "wildcard": "0.0.0.255",
+        "area": 0
+       },
+       {
+        "ip": "198.18.4.0",
+        "wildcard": "0.0.0.255",
+        "area": 0
+       }
+      ],
+      "passive-interface-config": {
+       "default": [
+        null
+       ],
+       "disable-interface": {
+        "Vlan": [
+         {
+          "name": 3
+         },
+         {
+          "name": 4
+         }
+        ]
+       }
+      },
+      "passive-interface": {
+       "default": true
+      },
+      "router-id": "203.0.113.2"
+     }
+    ]
+   }
+  }
+ }
+}

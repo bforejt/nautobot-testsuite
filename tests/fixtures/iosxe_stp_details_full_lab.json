@@ -1,0 +1,396 @@
+{
+ "Cisco-IOS-XE-spanning-tree-oper:stp-details": {
+  "stp-detail": [
+   {
+    "instance": "VLAN0001",
+    "hello-time": 2,
+    "max-age": 20,
+    "forwarding-delay": 15,
+    "hold-count": 6,
+    "bridge-priority": 61441,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61441,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "hold-time": "1",
+    "topology-changes": "5",
+    "time-of-last-topology-change": "1970-01-01T00:23:59+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "AppGigabitEthernet1/0/1",
+       "cost": "20000",
+       "port-priority": 128,
+       "port-num": 65,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61441,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61441,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 65,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1757",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61441,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61441,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 48,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1754",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      },
+      {
+       "name": "TwoGigabitEthernet1/0/14",
+       "cost": "20000",
+       "port-priority": 128,
+       "port-num": 14,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61441,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61441,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 14,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1763",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0002",
+    "hello-time": 2,
+    "max-age": 20,
+    "forwarding-delay": 15,
+    "hold-count": 6,
+    "bridge-priority": 61442,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61442,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "hold-time": "1",
+    "topology-changes": "1",
+    "time-of-last-topology-change": "1970-01-01T00:23:59+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TwoGigabitEthernet1/0/1",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 1,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61442,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61442,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 1,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1231",
+       "bpdu-received": "535",
+       "oper-p2p": [
+        null
+       ],
+       "oper-portfast-edge": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      },
+      {
+       "name": "TwoGigabitEthernet1/0/11",
+       "cost": "200000",
+       "port-priority": 128,
+       "port-num": 11,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61442,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61442,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 11,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1760",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "oper-portfast-edge": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0003",
+    "hello-time": 2,
+    "max-age": 20,
+    "forwarding-delay": 15,
+    "hold-count": 6,
+    "bridge-priority": 61443,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61443,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "hold-time": "1",
+    "topology-changes": "2",
+    "time-of-last-topology-change": "1970-01-01T00:03:11+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61443,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61443,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 47,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "112",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61443,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61443,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 48,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1751",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0004",
+    "hello-time": 2,
+    "max-age": 20,
+    "forwarding-delay": 15,
+    "hold-count": 6,
+    "bridge-priority": 61444,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61444,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "hold-time": "1",
+    "topology-changes": "2",
+    "time-of-last-topology-change": "1970-01-01T00:03:11+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61444,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61444,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 47,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "112",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 61444,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 61444,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 48,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "1751",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0999",
+    "hello-time": 2,
+    "max-age": 20,
+    "forwarding-delay": 15,
+    "hold-count": 6,
+    "bridge-priority": 33767,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 33767,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "hold-time": "1",
+    "topology-changes": "1",
+    "time-of-last-topology-change": "1970-01-01T00:03:11+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "cost": "8000",
+       "port-priority": 128,
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "designated-root-priority": 33767,
+       "designated-root-address": "44:01:e4:b4:5b:26",
+       "designated-cost": 0,
+       "designated-bridge-priority": 33767,
+       "designated-bridge-address": "44:01:e4:b4:5b:26",
+       "designated-port-priority": 128,
+       "designated-port-num": 47,
+       "forward-transitions": "1",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default",
+       "bpdu-filter": "stp-port-bpdufilter-default",
+       "bpdu-sent": "113",
+       "bpdu-received": "0",
+       "oper-p2p": [
+        null
+       ],
+       "guard-status": "stp-ps-inconst-none",
+       "agg-port-id": 0
+      }
+     ]
+    }
+   }
+  ],
+  "stp-global": {
+   "mode": "stp-mode-rapid-pvst",
+   "bridge-assurance": [
+    null
+   ],
+   "etherchannel-misconfig-guard": [
+    null
+   ],
+   "mst-only": {
+    "mst-config-revision": 0,
+    "mst-config-name": "",
+    "max-hops": 20
+   }
+  }
+ }
+}

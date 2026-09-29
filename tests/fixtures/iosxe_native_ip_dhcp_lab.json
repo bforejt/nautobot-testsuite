@@ -1,0 +1,28 @@
+{
+ "Cisco-IOS-XE-native:dhcp": {
+  "Cisco-IOS-XE-dhcp:excluded-address": {
+   "low-high-address-list": [
+    {
+     "low-address": "203.0.113.1",
+     "high-address": "203.0.113.10"
+    }
+   ]
+  },
+  "Cisco-IOS-XE-dhcp:pool": [
+   {
+    "id": "lab-vlan3",
+    "default-router": {
+     "default-router-list": [
+      "203.0.113.1"
+     ]
+    },
+    "network": {
+     "primary-network": {
+      "number": "203.0.113.0",
+      "mask": "255.255.255.0"
+     }
+    }
+   }
+  ]
+ }
+}

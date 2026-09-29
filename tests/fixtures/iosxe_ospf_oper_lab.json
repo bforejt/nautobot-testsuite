@@ -1,0 +1,26 @@
+{
+ "Cisco-IOS-XE-ospf-oper:ospf-oper-data": {
+  "ospfv2-instance": [
+   {
+    "instance-id": 1,
+    "vrf-name": "",
+    "router-id": 3405803778,
+    "ospfv2-area": [
+     {
+      "area-id": 0,
+      "ospfv2-interface": [
+       {
+        "name": "Vlan4",
+        "state": "ospfv2-interface-state-dr"
+       },
+       {
+        "name": "Vlan3",
+        "state": "ospfv2-interface-state-dr"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

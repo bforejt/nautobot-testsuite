@@ -6,21 +6,34 @@
         "location": "Switch 1 R0",
         "state": "Normal",
         "current-reading": 43,
-        "sensor-units": "Celsius"
+        "sensor-units": "celsius"
       },
       {
         "name": "Temp: OutletTemp",
         "location": "Switch 1 R0",
         "state": "Normal",
         "current-reading": 51,
-        "sensor-units": "Celsius"
+        "sensor-units": "celsius"
       },
       {
         "name": "P0 Vout",
         "location": "Switch 1 P0",
         "state": "Normal",
         "current-reading": 12000,
-        "sensor-units": "mV"
+        "sensor-units": "millivolts"
+      },
+      {
+        "name": "P0 Iin",
+        "location": "Switch 1 P0",
+        "state": "Normal",
+        "current-reading": 1,
+        "sensor-units": "amperes"
+      },
+      {
+        "name": "P1 Vout",
+        "location": "Switch 1 P1",
+        "state": "Not Present",
+        "sensor-units": "millivolts"
       }
     ]
   }

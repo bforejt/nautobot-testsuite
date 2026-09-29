@@ -726,9 +726,7 @@ class TestHeaderStripping(unittest.TestCase):
             {
                 "bytes": 19873,
                 "last_change_at": "14:02:11 EDT Thu Sep 24 2026",
-                "last_change_by": "netops",
                 "nvram_updated_at": "09:13:02 EDT Tue Sep 22 2026",
-                "nvram_updated_by": "netops",
                 "line_count": len(self.running),
                 "volatile_lines_stripped": 1,
             },

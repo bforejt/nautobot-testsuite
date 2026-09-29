@@ -1,0 +1,51 @@
+{
+ "Cisco-IOS-XE-hsrp-oper:hsrp-oper-data": {
+  "hsrp-group-info": [
+   {
+    "group-id": 10,
+    "if-name": "Vlan10",
+    "priority": 110,
+    "preempt": true,
+    "state": "hsrp-state-active",
+    "active-ip": "198.18.10.2",
+    "standby-ip": "198.18.10.3",
+    "virtual-ip": "198.18.10.1"
+   },
+   {
+    "group-id": 11,
+    "if-name": "Vlan11",
+    "priority": 90,
+    "preempt": false,
+    "state": "hsrp-state-standby",
+    "active-ip": "198.18.11.3",
+    "standby-ip": "198.18.11.2",
+    "virtual-ip": "198.18.11.1"
+   },
+   {
+    "group-id": 12,
+    "if-name": "Vlan12",
+    "priority": "100",
+    "preempt": "true",
+    "state": "hsrp-state-active",
+    "active-ip": "198.18.12.2",
+    "standby-ip": "0.0.0.0",
+    "virtual-ip": "198.18.12.1"
+   }
+  ],
+  "hsrp-neighbor": {
+   "if-name": "Vlan10",
+   "neighbor": [
+    {
+     "address": "198.18.10.3",
+     "active-list": [],
+     "standby-list": [
+      10
+     ],
+     "passive": false,
+     "passive-timer-remaining": 0,
+     "bfd-enabled": false
+    }
+   ]
+  }
+ }
+}

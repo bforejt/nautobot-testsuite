@@ -1,0 +1,153 @@
+{
+  "Cisco-IOS-XE-identity-oper:session-context-data": [
+    {
+      "mac": "00:00:5e:00:53:01",
+      "intf-name": "TwoGigabitEthernet1/0/1",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:02",
+      "intf-name": "TwoGigabitEthernet1/0/2",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:03",
+      "intf-name": "TwoGigabitEthernet1/0/3",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:04",
+      "intf-name": "TwoGigabitEthernet1/0/4",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:05",
+      "intf-name": "TwoGigabitEthernet1/0/5",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:06",
+      "intf-name": "TwoGigabitEthernet1/0/6",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:07",
+      "intf-name": "TwoGigabitEthernet1/0/7",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 30,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:08",
+      "intf-name": "TwoGigabitEthernet1/0/7",
+      "method-id": "mab-id",
+      "domain": "voice",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 20,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:09",
+      "intf-name": "TwoGigabitEthernet1/0/9",
+      "method-id": "dot1x-auth-id",
+      "domain": "data",
+      "state": "running",
+      "authorized": false,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:0a",
+      "intf-name": "TwoGigabitEthernet2/0/1",
+      "method-id": "mab-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:0b",
+      "intf-name": "TwoGigabitEthernet2/0/2",
+      "method-id": "mab-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:0c",
+      "intf-name": "TwoGigabitEthernet2/0/3",
+      "method-id": "mab-id",
+      "domain": "data",
+      "state": "authc-failed",
+      "authorized": false,
+      "vlan-id": 999,
+      "policy-name": "PMAP-DOT1X-MAB"
+    },
+    {
+      "mac": "00:00:5e:00:53:0d",
+      "intf-name": "TwoGigabitEthernet2/0/4",
+      "method-id": "web-auth-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 40,
+      "policy-name": "PMAP-WEBAUTH"
+    },
+    {
+      "mac": "00:00:5e:00:53:0e",
+      "intf-name": "TwoGigabitEthernet2/0/5",
+      "method-id": "dot1x-auth-id",
+      "domain": "domain-unknown",
+      "state": "authz-failed",
+      "authorized": false,
+      "vlan-id": 10
+    },
+    {
+      "mac": "00:00:5e:00:53:0f",
+      "intf-name": "Port-channel1",
+      "method-id": "static-method-id",
+      "domain": "data",
+      "state": "authz-success",
+      "authorized": true,
+      "vlan-id": 10,
+      "policy-name": "PMAP-STATIC"
+    }
+  ]
+}

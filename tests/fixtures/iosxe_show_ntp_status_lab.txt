@@ -1,0 +1,8 @@
+Clock is synchronized, stratum 2, reference is 198.18.89.0   
+nominal freq is 250.0000 Hz, actual freq is 249.9986 Hz, precision is 2**10
+ntp uptime is 355100 (1/100 of seconds), resolution is 4016
+reference time is EE668313.0B851ED8 (18:33:55.045 UTC Tue Sep 29 2026)
+clock offset is 7.9169 msec, root delay is 23.00 msec
+root dispersion is 14.74 msec, peer dispersion is 3.03 msec
+loopfilter state is 'CTRL' (Normal Controlled Loop), drift is 0.000005304 s/s
+system poll interval is 128, last update was 22 sec ago.

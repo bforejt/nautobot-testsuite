@@ -1,0 +1,44 @@
+{
+  "Cisco-IOS-XE-matm-oper:matm-table": [
+    {
+      "table-type": "mat-vlan",
+      "vlan-id-number": 1,
+      "aging-time": 300,
+      "matm-mac-entry": [
+        {"table-type": "mat-vlan", "vlan-id-number": 1, "mac": "00:00:5e:00:53:01", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 1, "mac": "00:00:5e:00:53:02", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 1, "mac": "00:00:5e:00:53:a1", "mat-addr-type": "static", "port": "Vlan1"}
+      ]
+    },
+    {
+      "table-type": "mat-vlan",
+      "vlan-id-number": 10,
+      "aging-time": 300,
+      "matm-mac-entry": [
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:11", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:12", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:13", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:14", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/1/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:15", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/0/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:16", "mat-addr-type": "dynamic", "port": "GigabitEthernet2/0/1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:17", "mat-addr-type": "dynamic", "port": "Port-channel1"},
+        {"table-type": "mat-vlan", "vlan-id-number": 10, "mac": "00:00:5e:00:53:a1", "mat-addr-type": "static", "port": "Vlan10"}
+      ]
+    },
+    {
+      "table-type": "mat-vlan",
+      "vlan-id-number": 20,
+      "aging-time": 300,
+      "matm-mac-entry": {"table-type": "mat-vlan", "vlan-id-number": 20, "mac": "00:00:5e:00:53:21", "mat-addr-type": "dynamic", "port": "GigabitEthernet1/0/1"}
+    },
+    {
+      "table-type": "mat-vlan-independent",
+      "vlan-id-number": 1,
+      "aging-time": 0,
+      "matm-mac-entry": [
+        {"table-type": "mat-vlan-independent", "vlan-id-number": 1, "mac": "01:00:0c:cc:cc:cc", "mat-addr-type": "static", "port": "CPU", "vlan-all": [null]},
+        {"table-type": "mat-vlan-independent", "vlan-id-number": 1, "mac": "01:80:c2:00:00:00", "mat-addr-type": "static", "port": "CPU", "vlan-all": [null]}
+      ]
+    }
+  ]
+}

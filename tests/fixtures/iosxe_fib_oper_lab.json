@@ -1,0 +1,193 @@
+{
+ "Cisco-IOS-XE-fib-oper:fib-oper-data": {
+  "fib-ni-entry": [
+   {
+    "instance-name": "IPv4:Default",
+    "af": "fib-addr-fam-ipv4",
+    "num-pfx": 25,
+    "fib-entries": [
+     {
+      "ip-addr": "0.0.0.0/0",
+      "fib-nexthop-entries": [
+       {
+        "nh-addr": "192.0.2.1/32",
+        "ifname": "Vlan2"
+       }
+      ]
+     },
+     {
+      "ip-addr": "0.0.0.0/8"
+     },
+     {
+      "ip-addr": "0.0.0.0/32"
+     },
+     {
+      "ip-addr": "203.0.113.0/24"
+     },
+     {
+      "ip-addr": "203.0.113.0/32"
+     },
+     {
+      "ip-addr": "203.0.113.2/32"
+     },
+     {
+      "ip-addr": "203.0.113.255/32"
+     },
+     {
+      "ip-addr": "198.18.4.0/24"
+     },
+     {
+      "ip-addr": "198.18.4.0/32"
+     },
+     {
+      "ip-addr": "198.18.4.1/32"
+     },
+     {
+      "ip-addr": "198.18.4.2/32"
+     },
+     {
+      "ip-addr": "198.18.4.255/32"
+     },
+     {
+      "ip-addr": "192.0.2.0/23"
+     },
+     {
+      "ip-addr": "192.0.2.0/32"
+     },
+     {
+      "ip-addr": "192.0.2.1/32",
+      "fib-nexthop-entries": [
+       {
+        "nh-addr": "192.0.2.1/32",
+        "ifname": "Vlan2"
+       }
+      ]
+     },
+     {
+      "ip-addr": "198.18.212.5/32",
+      "fib-nexthop-entries": [
+       {
+        "nh-addr": "198.18.212.5/32",
+        "ifname": "Vlan2"
+       }
+      ]
+     },
+     {
+      "ip-addr": "192.0.2.49/32",
+      "fib-nexthop-entries": [
+       {
+        "nh-addr": "192.0.2.49/32",
+        "ifname": "Vlan2"
+       }
+      ]
+     },
+     {
+      "ip-addr": "192.0.2.148/32"
+     },
+     {
+      "ip-addr": "198.18.212.210/32",
+      "fib-nexthop-entries": [
+       {
+        "nh-addr": "198.18.212.210/32",
+        "ifname": "Vlan2"
+       }
+      ]
+     },
+     {
+      "ip-addr": "198.51.100.255/32"
+     },
+     {
+      "ip-addr": "127.0.0.0/8"
+     },
+     {
+      "ip-addr": "224.0.0.0/4"
+     },
+     {
+      "ip-addr": "224.0.0.0/24"
+     },
+     {
+      "ip-addr": "240.0.0.0/4"
+     },
+     {
+      "ip-addr": "255.255.255.255/32"
+     }
+    ]
+   },
+   {
+    "instance-name": "IPv4:Mgmt-vrf",
+    "af": "fib-addr-fam-ipv4",
+    "num-pfx": 8,
+    "fib-entries": [
+     {
+      "ip-addr": "0.0.0.0/0"
+     },
+     {
+      "ip-addr": "0.0.0.0/8"
+     },
+     {
+      "ip-addr": "0.0.0.0/32"
+     },
+     {
+      "ip-addr": "127.0.0.0/8"
+     },
+     {
+      "ip-addr": "224.0.0.0/4"
+     },
+     {
+      "ip-addr": "224.0.0.0/24"
+     },
+     {
+      "ip-addr": "240.0.0.0/4"
+     },
+     {
+      "ip-addr": "255.255.255.255/32"
+     }
+    ]
+   },
+   {
+    "instance-name": "IPv6:Default",
+    "af": "fib-addr-fam-ipv6",
+    "num-pfx": 5,
+    "fib-entries": [
+     {
+      "ip-addr": "::/0"
+     },
+     {
+      "ip-addr": "::/127"
+     },
+     {
+      "ip-addr": "fe80::/10"
+     },
+     {
+      "ip-addr": "ff00::/8"
+     },
+     {
+      "ip-addr": "ff02::/16"
+     }
+    ]
+   },
+   {
+    "instance-name": "IPv6:Mgmt-vrf",
+    "af": "fib-addr-fam-ipv6",
+    "num-pfx": 5,
+    "fib-entries": [
+     {
+      "ip-addr": "::/0"
+     },
+     {
+      "ip-addr": "::/127"
+     },
+     {
+      "ip-addr": "fe80::/10"
+     },
+     {
+      "ip-addr": "ff00::/8"
+     },
+     {
+      "ip-addr": "ff02::/16"
+     }
+    ]
+   }
+  ]
+ }
+}

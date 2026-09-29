@@ -1,0 +1,31 @@
+{
+ "Cisco-IOS-XE-isis-oper:isis-oper-data": {
+  "isis-instance": [
+   {
+    "tag": "CORE",
+    "isis-neighbor": [
+     {
+      "system-id": "00:00:00:00:00:12",
+      "level": "isis-level-2",
+      "if-name": "TenGigabitEthernet1/1/1",
+      "ipv4-address": "198.18.1.2",
+      "ipv6-address": "2001:db8:1::2",
+      "state": "isis-adj-up",
+      "holdtime": 27
+     },
+     {
+      "system-id": "00:00:00:00:00:12",
+      "level": "isis-level-1",
+      "if-name": "TenGigabitEthernet1/1/1",
+      "ipv4-address": "198.18.1.2",
+      "state": "isis-adj-init",
+      "holdtime": 9
+     }
+    ]
+   },
+   {
+    "tag": "EDGE"
+   }
+  ]
+ }
+}

@@ -1,0 +1,6 @@
+
+  address         ref clock       st   when   poll reach  delay  offset   disp
+*~198.18.89.0    .GOOG.           1     22    128   377 23.000   7.916  3.032
++~192.0.2.1       198.18.107.113  3    155    256   377  0.906   9.863  2.870
++~198.18.154.28     .NIST.           1     18    128   377 22.998   6.842  5.343
+ * sys.peer, # selected, + candidate, - outlyer, x falseticker, ~ configured

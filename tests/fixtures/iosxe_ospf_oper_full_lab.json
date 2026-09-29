@@ -1,0 +1,197 @@
+{
+ "Cisco-IOS-XE-ospf-oper:ospf-oper-data": {
+  "ospf-state": {
+   "op-mode": "ospf-ships-in-the-night",
+   "ospf-instance": [
+    {
+     "af": "address-family-ipv4",
+     "router-id": 3405803778,
+     "ospf-area": [
+      {
+       "area-id": 0,
+       "ospf-interface": [
+        {
+         "name": "Vlan4",
+         "network-type": "ospf-broadcast",
+         "passive": false,
+         "demand-circuit": false,
+         "multi-area": {
+          "multi-area-id": 0,
+          "cost": 0
+         },
+         "node-flag": false,
+         "fast-reroute": {
+          "candidate-disabled": false,
+          "enabled": false,
+          "remote-lfa-enabled": false
+         },
+         "cost": 1,
+         "hello-interval": 10,
+         "dead-interval": 40,
+         "retransmit-interval": 5,
+         "transmit-delay": 1,
+         "mtu-ignore": false,
+         "lls": false,
+         "prefix-suppression": false,
+         "bfd": false,
+         "ttl-security": {
+          "enabled": false,
+          "hops": 255
+         },
+         "enable": true,
+         "authentication": {
+          "no-auth": 1
+         },
+         "state": "DR",
+         "hello-timer": 5,
+         "wait-timer": 40,
+         "dr": "203.0.113.2",
+         "bdr": "0.0.0.0",
+         "priority": 0
+        },
+        {
+         "name": "Vlan3",
+         "network-type": "ospf-broadcast",
+         "passive": false,
+         "demand-circuit": false,
+         "multi-area": {
+          "multi-area-id": 0,
+          "cost": 0
+         },
+         "node-flag": false,
+         "fast-reroute": {
+          "candidate-disabled": false,
+          "enabled": false,
+          "remote-lfa-enabled": false
+         },
+         "cost": 1,
+         "hello-interval": 10,
+         "dead-interval": 40,
+         "retransmit-interval": 5,
+         "transmit-delay": 1,
+         "mtu-ignore": false,
+         "lls": false,
+         "prefix-suppression": false,
+         "bfd": false,
+         "ttl-security": {
+          "enabled": false,
+          "hops": 255
+         },
+         "enable": true,
+         "authentication": {
+          "no-auth": 1
+         },
+         "state": "DR",
+         "hello-timer": 9,
+         "wait-timer": 40,
+         "dr": "203.0.113.2",
+         "bdr": "0.0.0.0",
+         "priority": 0
+        }
+       ]
+      }
+     ],
+     "process-id": 1
+    }
+   ]
+  },
+  "ospfv2-instance": [
+   {
+    "instance-id": 1,
+    "vrf-name": "",
+    "router-id": 3405803778,
+    "ospfv2-area": [
+     {
+      "area-id": 0,
+      "ospfv2-lsdb-area": [
+       {
+        "lsa-type": 1,
+        "lsa-id": 167968770,
+        "advertising-router": 167968770,
+        "lsa-age": 1535,
+        "lsa-options": "",
+        "lsa-seq-number": 2147483652,
+        "lsa-checksum": 43578,
+        "lsa-length": 48,
+        "ospfv2-router-lsa-links": [
+         {
+          "link-type": 3,
+          "link-id": 168034304,
+          "link-data": 4294967040
+         },
+         {
+          "link-type": 3,
+          "link-id": 167968768,
+          "link-data": 4294967040
+         }
+        ],
+        "router-lsa": {
+         "router-lsa-bits": "",
+         "router-lsa-number-links": 2
+        }
+       }
+      ],
+      "ospfv2-interface": [
+       {
+        "name": "Vlan4",
+        "network-type": "ospf-broadcast",
+        "enable": true,
+        "passive": false,
+        "demand-circuit": false,
+        "mtu-ignore": false,
+        "prefix-suppresion": false,
+        "cost": 1,
+        "hello-interval": 10,
+        "dead-interval": 40,
+        "retransmit-interval": 5,
+        "transmit-delay": 1,
+        "hello-timer": 5495,
+        "wait-timer": 40000,
+        "dr": 167968770,
+        "bdr": 0,
+        "dr-ip": "198.18.4.2",
+        "bdr-ip": "0.0.0.0",
+        "state": "ospfv2-interface-state-dr",
+        "ttl-security-val": {
+         "enable": false,
+         "hops": 255
+        },
+        "auth-val": {
+         "no-auth": 1
+        }
+       },
+       {
+        "name": "Vlan3",
+        "network-type": "ospf-broadcast",
+        "enable": true,
+        "passive": false,
+        "demand-circuit": false,
+        "mtu-ignore": false,
+        "prefix-suppresion": false,
+        "cost": 1,
+        "hello-interval": 10,
+        "dead-interval": 40,
+        "retransmit-interval": 5,
+        "transmit-delay": 1,
+        "hello-timer": 9110,
+        "wait-timer": 40000,
+        "dr": 167968770,
+        "bdr": 0,
+        "dr-ip": "203.0.113.2",
+        "bdr-ip": "0.0.0.0",
+        "state": "ospfv2-interface-state-dr",
+        "ttl-security-val": {
+         "enable": false,
+         "hops": 255
+        },
+        "auth-val": {
+         "no-auth": 1
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

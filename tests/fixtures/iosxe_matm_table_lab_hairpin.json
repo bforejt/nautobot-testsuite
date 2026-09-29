@@ -1,0 +1,724 @@
+{
+ "Cisco-IOS-XE-matm-oper:matm-table": [
+  {
+   "table-type": "mat-vlan",
+   "vlan-id-number": 1,
+   "aging-time": 300,
+   "matm-mac-entry": [
+    {
+     "mac": "2c:6c:b0:b0:b5:a8",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "bc:58:8e:b3:a5:b8",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f8:63:cb:39:d8:a6",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "44:68:9a:92:9e:0f",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "74:f8:08:3d:c5:00",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/14"
+    },
+    {
+     "mac": "c4:2e:c0:b9:a6:3b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "70:35:39:cb:ab:39",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "bc:18:c3:3f:97:12",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "96:e3:46:f4:c6:13",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "c0:92:2a:31:35:08",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "48:90:a3:c8:23:05",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "30:45:f6:c9:04:c4",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "c8:2f:5d:e3:6b:57",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "24:d5:1b:40:b1:fc",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f8:48:57:46:65:3b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "a4:13:b3:83:53:45",
+     "mat-addr-type": "static",
+     "port": "Vlan1"
+    },
+    {
+     "mac": "d8:f6:09:28:09:1e",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "3c:a7:86:e4:20:b4",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "28:82:6f:01:c5:48",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "80:8f:07:63:ff:14",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "34:ef:ba:bc:98:f2",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "28:6e:8f:70:a7:0b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f0:41:aa:67:cc:41",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "5c:26:4f:ac:69:83",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "88:77:34:7a:15:cf",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "60:94:68:74:1c:b8",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "00:62:d0:e8:cb:3c",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "28:bb:98:8d:1c:8e",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "c6:a4:bc:13:c2:75",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "30:17:3a:98:46:9b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "4c:16:16:0c:c3:79",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "ec:c8:4a:fb:2b:fe",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "84:bc:5b:69:fd:60",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "68:0e:ee:b3:bc:d8",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "34:48:86:a1:7a:a0",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "48:65:69:01:ba:33",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "00:11:c8:b9:94:2b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "84:1c:a2:9b:6d:3b",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "80:0a:2d:87:76:5f",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "60:3d:3b:30:7b:a0",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "a8:18:c7:d6:47:3e",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "d0:7a:65:e7:de:eb",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "30:61:7d:45:cd:a2",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "c4:e5:ba:b6:02:78",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f4:b1:17:86:ce:bf",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "10:55:a0:e5:19:6a",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "0c:a4:c7:9c:66:5e",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "d0:4d:50:93:11:2c",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "e0:2a:9d:84:aa:3d",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "e0:51:76:68:ef:7a",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f4:5b:82:ff:76:59",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "64:33:7d:6f:f2:99",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "f4:3a:86:fd:49:bd",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "a4:56:38:97:ba:f7",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "d4:b0:df:e0:2b:4a",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    },
+    {
+     "mac": "94:8e:99:77:3b:2d",
+     "mat-addr-type": "dynamic",
+     "port": "TenGigabitEthernet1/0/47"
+    }
+   ]
+  },
+  {
+   "table-type": "mat-vlan",
+   "vlan-id-number": 2,
+   "aging-time": 300,
+   "matm-mac-entry": [
+    {
+     "mac": "2c:6c:b0:b0:b5:a8",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "bc:58:8e:b3:a5:b8",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "f8:63:cb:39:d8:a6",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "44:68:9a:92:9e:0f",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "74:f8:08:3d:c5:00",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "c4:2e:c0:b9:a6:3b",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "70:35:39:cb:ab:39",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "bc:18:c3:3f:97:12",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "96:e3:46:f4:c6:13",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "c0:92:2a:31:35:08",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "48:90:a3:c8:23:05",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "30:45:f6:c9:04:c4",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "c8:2f:5d:e3:6b:57",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "24:d5:1b:40:b1:fc",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "dc:02:4f:e1:c3:3a",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "28:0a:50:ee:62:c3",
+     "mat-addr-type": "static",
+     "port": "Vlan2"
+    },
+    {
+     "mac": "d8:f6:09:28:09:1e",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "3c:a7:86:e4:20:b4",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "28:82:6f:01:c5:48",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "80:8f:07:63:ff:14",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "34:ef:ba:bc:98:f2",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "28:6e:8f:70:a7:0b",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "f0:41:aa:67:cc:41",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "5c:26:4f:ac:69:83",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "88:77:34:7a:15:cf",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "60:94:68:74:1c:b8",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "00:62:d0:e8:cb:3c",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "28:bb:98:8d:1c:8e",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "c6:a4:bc:13:c2:75",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "30:17:3a:98:46:9b",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "4c:16:16:0c:c3:79",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "ec:c8:4a:fb:2b:fe",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "84:bc:5b:69:fd:60",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "68:0e:ee:b3:bc:d8",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "34:48:86:a1:7a:a0",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "48:65:69:01:ba:33",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "00:11:c8:b9:94:2b",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "84:1c:a2:9b:6d:3b",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "80:0a:2d:87:76:5f",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "60:3d:3b:30:7b:a0",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "a8:18:c7:d6:47:3e",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "d0:7a:65:e7:de:eb",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "30:61:7d:45:cd:a2",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "c4:e5:ba:b6:02:78",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "f4:b1:17:86:ce:bf",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "10:55:a0:e5:19:6a",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "0c:a4:c7:9c:66:5e",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "d0:4d:50:93:11:2c",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "e0:2a:9d:84:aa:3d",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "e0:51:76:68:ef:7a",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "f4:5b:82:ff:76:59",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "64:33:7d:6f:f2:99",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "f4:3a:86:fd:49:bd",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "a4:56:38:97:ba:f7",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "d4:b0:df:e0:2b:4a",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    },
+    {
+     "mac": "94:8e:99:77:3b:2d",
+     "mat-addr-type": "dynamic",
+     "port": "TwoGigabitEthernet1/0/1"
+    }
+   ]
+  },
+  {
+   "table-type": "mat-vlan",
+   "vlan-id-number": 3,
+   "aging-time": 300,
+   "matm-mac-entry": [
+    {
+     "mac": "64:0e:50:0c:17:72",
+     "mat-addr-type": "static",
+     "port": "TwoGigabitEthernet1/0/21"
+    },
+    {
+     "mac": "ac:16:f4:e6:59:50",
+     "mat-addr-type": "static",
+     "port": "Vlan3"
+    }
+   ]
+  },
+  {
+   "table-type": "mat-vlan",
+   "vlan-id-number": 4,
+   "aging-time": 300,
+   "matm-mac-entry": [
+    {
+     "mac": "00:00:5e:00:01:04",
+     "mat-addr-type": "static",
+     "port": "Vlan4"
+    },
+    {
+     "mac": "b8:46:6c:ca:0c:d0",
+     "mat-addr-type": "static",
+     "port": "Vlan4"
+    }
+   ]
+  },
+  {
+   "table-type": "mat-vlan-independent",
+   "vlan-id-number": 1,
+   "aging-time": 0,
+   "matm-mac-entry": [
+    {
+     "mac": "01:00:0c:cc:cc:cc",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:00:0c:cc:cc:cd",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:00",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:01",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:02",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:03",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:04",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:05",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:06",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:07",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:08",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:09",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0a",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0b",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0c",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0d",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0e",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:0f",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:10",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "01:80:c2:00:00:21",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    },
+    {
+     "mac": "ff:ff:ff:ff:ff:ff",
+     "mat-addr-type": "static",
+     "port": "CPU"
+    }
+   ]
+  }
+ ]
+}

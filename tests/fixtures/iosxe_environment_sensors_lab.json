@@ -1,0 +1,102 @@
+{
+ "Cisco-IOS-XE-environment-oper:environment-sensors": {
+  "environment-sensor": [
+   {
+    "name": "Inlet Temp Sensor",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 28,
+    "sensor-units": "celsius",
+    "low-critical-threshold": -10,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 46,
+    "high-critical-threshold": 56,
+    "sensor-name": "temperature"
+   },
+   {
+    "name": "Outlet Temp Sensor",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 42,
+    "sensor-units": "celsius",
+    "low-critical-threshold": -10,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 105,
+    "high-critical-threshold": 125,
+    "sensor-name": "temperature"
+   },
+   {
+    "name": "HotSpot Temp Sensor",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 66,
+    "sensor-units": "celsius",
+    "low-critical-threshold": -10,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 105,
+    "high-critical-threshold": 125,
+    "sensor-name": "temperature"
+   },
+   {
+    "name": "FAN - T1 1",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 0,
+    "sensor-units": "revolutions-per-minute",
+    "low-critical-threshold": 0,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 0,
+    "high-critical-threshold": 0,
+    "sensor-name": "fan"
+   },
+   {
+    "name": "FAN - T1 2",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 0,
+    "sensor-units": "revolutions-per-minute",
+    "low-critical-threshold": 0,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 0,
+    "high-critical-threshold": 0,
+    "sensor-name": "fan"
+   },
+   {
+    "name": "FAN - T1 3",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 0,
+    "sensor-units": "revolutions-per-minute",
+    "low-critical-threshold": 0,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 0,
+    "high-critical-threshold": 0,
+    "sensor-name": "fan"
+   },
+   {
+    "name": "Power Supply A",
+    "location": "Switch 1",
+    "state": "Norm",
+    "current-reading": 0,
+    "sensor-units": "watts",
+    "low-critical-threshold": 0,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 0,
+    "high-critical-threshold": 0,
+    "sensor-name": "power"
+   },
+   {
+    "name": "Power Supply B",
+    "location": "Switch 1",
+    "state": "Shut",
+    "current-reading": 0,
+    "sensor-units": "watts",
+    "low-critical-threshold": 0,
+    "low-normal-threshold": 0,
+    "high-normal-threshold": 0,
+    "high-critical-threshold": 0,
+    "sensor-name": "power"
+   }
+  ]
+ }
+}

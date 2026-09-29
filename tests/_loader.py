@@ -15,6 +15,7 @@ seeing duplicate registrations across the battery.
 """
 
 import importlib
+import ipaddress
 import json
 import pathlib
 import sys
@@ -43,6 +44,36 @@ def fixture_text(name):
     """Raw text fixture from tests/fixtures/."""
     with open(FIXTURES / name, encoding="utf-8") as handle:
         return handle.read()
+
+
+# The only IPv4 ranges a committed fixture may carry: the sanitizer's targets
+# (RFC 5737 documentation nets, RFC 2544 benchmark space) plus what it leaves
+# untouched because it identifies nobody (masks and wildcards in 0/8 and
+# 255/8, loopback, multicast, reserved). Shape rules, so the guard never has
+# to name a real address to catch one.
+LAB_ADDRESS_RANGES = tuple(
+    ipaddress.ip_network(net)
+    for net in (
+        "192.0.2.0/24",
+        "198.51.100.0/24",
+        "203.0.113.0/24",
+        "198.18.0.0/15",
+        "0.0.0.0/8",
+        "127.0.0.0/8",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "255.0.0.0/8",
+    )
+)
+
+
+def allowed_lab_address(text):
+    """True when a dotted quad is a mask (255.x / 0.x) or sits in an allowed range."""
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return any(address in net for net in LAB_ADDRESS_RANGES)
 
 
 constants = load("constants")

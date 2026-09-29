@@ -1,0 +1,169 @@
+{
+ "Cisco-IOS-XE-interfaces-oper:interface": [
+  {
+   "name": "TwoGigabitEthernet1/0/14",
+   "interface-type": "iana-iftype-ethernet-csmacd",
+   "admin-status": "if-state-up",
+   "oper-status": "if-oper-state-ready",
+   "last-change": "2026-09-29T17:35:35.078+00:00",
+   "if-index": 22,
+   "phys-address": "58:c3:30:fa:ab:80",
+   "speed": "1000000000",
+   "statistics": {
+    "discontinuity-time": "2026-09-29T17:33:06.415+00:00",
+    "in-octets": "565092",
+    "in-unicast-pkts": "2367",
+    "in-broadcast-pkts": "1367",
+    "in-multicast-pkts": "552",
+    "in-discards": 0,
+    "in-errors": 0,
+    "in-unknown-protos": 0,
+    "out-octets": 1738955,
+    "out-unicast-pkts": "8314",
+    "out-broadcast-pkts": "813",
+    "out-multicast-pkts": "6461",
+    "out-discards": "0",
+    "out-errors": "0",
+    "rx-pps": "0",
+    "rx-kbps": "0",
+    "tx-pps": "0",
+    "tx-kbps": "0",
+    "num-flaps": "0",
+    "in-crc-errors": "0",
+    "in-discards-64": "0",
+    "in-errors-64": "0",
+    "in-unknown-protos-64": "0",
+    "out-octets-64": "1738955"
+   },
+   "vrf": "",
+   "ipv4": "0.0.0.0",
+   "ipv4-subnet-mask": "0.0.0.0",
+   "description": "",
+   "mtu": 1500,
+   "input-security-acl": "",
+   "output-security-acl": "",
+   "v4-protocol-stats": {
+    "in-pkts": "0",
+    "in-octets": "0",
+    "in-error-pkts": "0",
+    "in-forwarded-pkts": "0",
+    "in-forwarded-octets": "0",
+    "in-discarded-pkts": "0",
+    "out-pkts": "0",
+    "out-octets": "0",
+    "out-error-pkts": "0",
+    "out-forwarded-pkts": "0",
+    "out-forwarded-octets": "0",
+    "out-discarded-pkts": "0"
+   },
+   "v6-protocol-stats": {
+    "in-pkts": "0",
+    "in-octets": "0",
+    "in-error-pkts": "0",
+    "in-forwarded-pkts": "0",
+    "in-forwarded-octets": "0",
+    "in-discarded-pkts": "0",
+    "out-pkts": "0",
+    "out-octets": "0",
+    "out-error-pkts": "0",
+    "out-forwarded-pkts": "0",
+    "out-forwarded-octets": "0",
+    "out-discarded-pkts": "0"
+   },
+   "bia-address": "58:c3:30:fa:ab:80",
+   "ipv4-tcp-adjust-mss": 0,
+   "ipv6-tcp-adjust-mss": 0,
+   "intf-ext-state-support": [
+    null
+   ],
+   "intf-ext-state": {
+    "error-type": "port-error-none",
+    "port-error-reason": "port-err-none",
+    "auto-mdix-enabled": true,
+    "mdix-oper-status-enabled": true,
+    "fec-enabled": false,
+    "mgig-downshift-enabled": false
+   },
+   "storm-control": {
+    "broadcast": {
+     "filter-state": "inactive"
+    },
+    "multicast": {
+     "filter-state": "inactive"
+    },
+    "unicast": {
+     "filter-state": "inactive"
+    },
+    "unknown-unicast": {
+     "filter-state": "inactive"
+    }
+   },
+   "auto-upstream-bandwidth": "0",
+   "auto-downstream-bandwidth": "0",
+   "eee-capable": [
+    null
+   ],
+   "eee-status": {
+    "eff-eth": "eee-status-disabled",
+    "rx-lpi-status": "lpi-status-none",
+    "tx-lpi-status": "lpi-status-none",
+    "wake-error-count": 0
+   },
+   "eee-caps": {
+    "local-enabled": false,
+    "local-speed": "unknown",
+    "remote-enabled": false,
+    "remote-speed": "unknown"
+   },
+   "ether-state": {
+    "negotiated-duplex-mode": "full-duplex",
+    "negotiated-port-speed": "speed-1gb",
+    "auto-negotiate": false,
+    "enable-flow-control": false,
+    "media-type": "ether-media-type-rj45"
+   },
+   "ether-stats": {
+    "in-mac-control-frames": "0",
+    "in-mac-pause-frames": "0",
+    "in-oversize-frames": "0",
+    "in-jabber-frames": "0",
+    "in-fragment-frames": "0",
+    "in-8021q-frames": "0",
+    "out-mac-control-frames": "0",
+    "out-mac-pause-frames": "0",
+    "out-8021q-frames": "0",
+    "dot3-counters-supported": [
+     null
+    ],
+    "dot3-counters": {
+     "dot3-stats-version": "dot3-version-2",
+     "dot3-error-counters-v2": {
+      "dot3-alignment-errors": "0",
+      "dot3-fcs-errors": "0",
+      "dot3-single-collision-frames": "0",
+      "dot3-multiple-collision-frames": "0",
+      "dot3-sqe-test-errors": "0",
+      "dot3-deferred-transmissions": "0",
+      "dot3-late-collisions": "0",
+      "dot3-excessive-collisions": "0",
+      "dot3-internal-mac-transmit-errors": "0",
+      "dot3-carrier-sense-errors": "0",
+      "dot3-frame-too-longs": "0",
+      "dot3-internal-mac-receive-errors": "0",
+      "dot3-symbol-errors": "0",
+      "dot3-duplex-status": "3",
+      "dot3-hc-alignment-errors": "0",
+      "dot3-hc-inpause-frames": "0",
+      "dot3-hc-outpause-frames": "0",
+      "dot3-hc-fcs-errors": "0",
+      "dot3-hc-frame-too-longs": "0",
+      "dot3-hc-internal-mac-transmit-errors": "0",
+      "dot3-hc-internal-mac-receive-errors": "0",
+      "dot3-hc-symbol-errors": "0"
+     }
+    },
+    "in-undersize-frames": "0"
+   }
+  }
+ ]
+}

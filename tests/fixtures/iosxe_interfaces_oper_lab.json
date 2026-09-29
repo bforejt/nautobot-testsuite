@@ -1,0 +1,4838 @@
+{
+ "Cisco-IOS-XE-interfaces-oper:interfaces": {
+  "interface": [
+   {
+    "name": "AppGigabitEthernet1/0/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.689+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 1793012,
+     "out-unicast-pkts": "8864",
+     "out-broadcast-pkts": "1515",
+     "out-multicast-pkts": "6820",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "1",
+     "tx-kbps": "1",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "1793012"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-1gb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "FortyGigabitEthernet1/1/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.688+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "FortyGigabitEthernet1/1/2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.688+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "GigabitEthernet0/0",
+    "admin-status": "if-state-down",
+    "oper-status": "if-oper-state-no-pass",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.688+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 1192,
+     "out-unicast-pkts": "12",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "1192"
+    },
+    "vrf": "Mgmt-vrf",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-1gb",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "GigabitEthernet1/1/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "GigabitEthernet1/1/2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "GigabitEthernet1/1/3",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "GigabitEthernet1/1/4",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "Port-channel1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab LACP bundle (no partner)",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/37",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.687+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/38",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/39",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/40",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/41",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/42",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/43",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.686+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/44",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/45",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/46",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/47",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "1529543",
+     "in-unicast-pkts": "6008",
+     "in-broadcast-pkts": "5319",
+     "in-multicast-pkts": "4503",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 438797,
+     "out-unicast-pkts": "2501",
+     "out-broadcast-pkts": "323",
+     "out-multicast-pkts": "1522",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "4",
+     "tx-kbps": "2",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "438797"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab: trunk to sw-lab-2 MGI8 (tagged 3,4; native 999)",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-2500mb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/0/48",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 2638643,
+     "out-unicast-pkts": "20138",
+     "out-broadcast-pkts": "1521",
+     "out-multicast-pkts": "18089",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "4",
+     "tx-kbps": "2",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "2638643"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab downstream switch",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "forwarding",
+      "current-rate": {
+       "bandwidth": "0.0"
+      }
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-2500mb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.685+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/3",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/4",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/5",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/6",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/7",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.684+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TenGigabitEthernet1/1/8",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwentyFiveGigE1/1/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": true,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwentyFiveGigE1/1/2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-not-present",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": true,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "5591318",
+     "in-unicast-pkts": "31460",
+     "in-broadcast-pkts": "17612",
+     "in-multicast-pkts": "14646",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 8339147,
+     "out-unicast-pkts": "21472",
+     "out-broadcast-pkts": "6",
+     "out-multicast-pkts": "1419",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "5",
+     "rx-kbps": "11",
+     "tx-pps": "0",
+     "tx-kbps": "24",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "35",
+     "out-octets-64": "8339147"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-2500mb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/10",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/11",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.683+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 4459010,
+     "out-unicast-pkts": "19109",
+     "out-broadcast-pkts": "2969",
+     "out-multicast-pkts": "15775",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "4",
+     "tx-kbps": "6",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "4459010"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-100mb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/12",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/13",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/14",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "564607",
+     "in-unicast-pkts": "2364",
+     "in-broadcast-pkts": "1366",
+     "in-multicast-pkts": "551",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 1738443,
+     "out-unicast-pkts": "8306",
+     "out-broadcast-pkts": "813",
+     "out-multicast-pkts": "6454",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "1",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "1738443"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "full-duplex",
+     "negotiated-port-speed": "speed-1gb",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/15",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/16",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/17",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.682+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/18",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/19",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/20",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "diffserv-info": [
+     {
+      "direction": "qos-inbound",
+      "policy-name": "LAB-MARK"
+     }
+    ],
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab access port with port-security",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/21",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab access port with a static MAC",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/22",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.681+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab LACP member",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/23",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "lab LACP member",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/24",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/25",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/26",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/27",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/28",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.68+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/29",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/3",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/30",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/31",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/32",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/33",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.679+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/34",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/35",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/36",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/4",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/5",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/6",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.678+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/7",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/8",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "TwoGigabitEthernet1/0/9",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-lower-layer-down",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "0",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": true,
+     "mdix-oper-status-enabled": true,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "auto-duplex",
+     "negotiated-port-speed": "speed-auto",
+     "auto-negotiate": true
+    }
+   },
+   {
+    "name": "Vlan1",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "55856",
+     "in-unicast-pkts": "334",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "0.0.0.0",
+    "ipv4-subnet-mask": "0.0.0.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "Vlan2",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "1459240",
+     "in-unicast-pkts": "14866",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 8143020,
+     "out-unicast-pkts": "19688",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "23",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "8143020"
+    },
+    "vrf": "",
+    "ipv4": "192.0.2.148",
+    "ipv4-subnet-mask": "255.255.254.0",
+    "description": "",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "Vlan3",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.677+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "203.0.113.2",
+    "ipv4-subnet-mask": "255.255.255.0",
+    "description": "lab HSRP gateway",
+    "mtu": 1500,
+    "input-security-acl": "LAB-V3-IN",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": false
+    }
+   },
+   {
+    "name": "Vlan4",
+    "admin-status": "if-state-up",
+    "oper-status": "if-oper-state-ready",
+    "statistics": {
+     "discontinuity-time": "2026-09-29T17:33:06.676+00:00",
+     "in-octets": "0",
+     "in-unicast-pkts": "0",
+     "in-broadcast-pkts": "0",
+     "in-multicast-pkts": "0",
+     "in-discards": 0,
+     "in-errors": 0,
+     "in-unknown-protos": 0,
+     "out-octets": 0,
+     "out-unicast-pkts": "0",
+     "out-broadcast-pkts": "0",
+     "out-multicast-pkts": "0",
+     "out-discards": "0",
+     "out-errors": "0",
+     "rx-pps": "0",
+     "rx-kbps": "0",
+     "tx-pps": "0",
+     "tx-kbps": "0",
+     "num-flaps": "<hex:20>",
+     "in-crc-errors": "0",
+     "in-discards-64": "0",
+     "in-errors-64": "0",
+     "in-unknown-protos-64": "0",
+     "out-octets-64": "0"
+    },
+    "vrf": "",
+    "ipv4": "198.18.4.2",
+    "ipv4-subnet-mask": "255.255.255.0",
+    "description": "lab VRRPv3 gateway",
+    "mtu": 1500,
+    "input-security-acl": "",
+    "output-security-acl": "",
+    "intf-ext-state-support": [
+     null
+    ],
+    "intf-ext-state": {
+     "error-type": "port-error-none",
+     "port-error-reason": "port-err-none",
+     "auto-mdix-enabled": false,
+     "mdix-oper-status-enabled": false,
+     "fec-enabled": false,
+     "mgig-downshift-enabled": false
+    },
+    "storm-control": {
+     "broadcast": {
+      "filter-state": "inactive"
+     },
+     "multicast": {
+      "filter-state": "inactive"
+     },
+     "unicast": {
+      "filter-state": "inactive"
+     },
+     "unknown-unicast": {
+      "filter-state": "inactive"
+     }
+    },
+    "ether-state": {
+     "negotiated-duplex-mode": "unknown-duplex",
+     "negotiated-port-speed": "speed-unknown",
+     "auto-negotiate": false
+    }
+   }
+  ]
+ }
+}

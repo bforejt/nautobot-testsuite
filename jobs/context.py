@@ -22,10 +22,14 @@ outcome. With ``debug=True`` each entry additionally carries the full payload
 or output — the raw material for the Collector Shakedown job and for
 harvesting test fixtures — at the cost of memory proportional to everything
 fetched, so debug runs belong on one device at a time. An SSH read whose
-output holds secrets (the configuration text) passes ``run_ssh`` a
-``redact`` callable: the trace keeps only the redacted copy, the callable
-never reaches the transport, and the SSH library's own DEBUG echo of the
-channel is held back while the read runs.
+output holds secrets or usernames (the configuration text, the logging
+buffer) passes ``run_ssh`` a ``redact`` callable: it is applied to the output
+BEFORE the copy the debug trace keeps and before the output is returned, the
+callable never reaches the transport, and the SSH library's own DEBUG echo of
+the channel is held back while the read runs. A caller that needs the
+verbatim text for a comparison it never stores (the config check's
+verbatim_in_sync) passes ``return_verbatim=True`` and owns redacting whatever
+it stores; the trace is redacted either way.
 """
 
 import contextlib
@@ -56,21 +60,28 @@ def _canonical(value):
     return value
 
 
-def _traced(redact, text):
-    """The copy of ``text`` the trace may keep: ``redact(text)`` when a redactor is given.
+def _redacted(redact, text):
+    """(``redact(text)`` when a redactor is given, else ``text``; the failure name or None).
 
-    Fail-closed: a redactor that raises withholds the text instead of letting
-    the verbatim copy through (the Celery soft-time-limit signal still
+    Fail-closed: a redactor that raises withholds the text — the first value
+    is then a marker naming the exception type, never the verbatim copy — and
+    the second value says so (the Celery soft-time-limit signal still
     propagates).
     """
     if redact is None or text is None:
-        return text
+        return text, None
     try:
-        return redact(text)
+        return redact(text), None
     except Exception as exc:
         if type(exc).__name__ == "SoftTimeLimitExceeded":
             raise
-        return "[withheld: redaction failed with %s]" % (type(exc).__name__,)
+        name = type(exc).__name__
+        return "[withheld: redaction failed with %s]" % (name,), name
+
+
+def _traced(redact, text):
+    """The copy of ``text`` the trace may keep (see ``_redacted``)."""
+    return _redacted(redact, text)[0]
 
 
 class _ChannelEchoGuard:
@@ -201,15 +212,23 @@ class CollectorContext:
         self._cache[key] = payload
         return payload
 
-    def run_ssh(self, command, *, redact=None, **kwargs):
+    def run_ssh(self, command, *, redact=None, return_verbatim=False, **kwargs):
         """Run one allowlisted operational command over SSH (opens lazily).
 
-        ``redact`` (text -> text) is for a command whose output holds secrets:
-        it is applied to the copy the debug trace keeps and to a traced error
-        message, it holds the SSH library's DEBUG channel echo back for the
-        duration of the read, and it is never passed to the transport. The
-        caller still receives the verbatim output and owns redacting whatever
-        it stores.
+        ``redact`` (text -> text) is for a command whose output holds secrets
+        or usernames: it is applied to the output before the copy the debug
+        trace keeps, to a traced error message, and to the output returned to
+        the caller, so nothing the collector stores can carry what the
+        redactor strips. It holds the SSH library's DEBUG channel echo back
+        for the duration of the read and is never passed to the transport.
+        Fail-closed: a redactor that raises withholds the trace copy and, as
+        the caller would otherwise receive the verbatim text, the read fails
+        with a RuntimeError naming the exception type (never the text).
+
+        ``return_verbatim=True`` hands the caller the verbatim output instead
+        (the trace copy is still redacted, and a failing redactor still only
+        withholds it): for a collector that compares verbatim texts it never
+        stores and redacts everything it does store itself.
         """
         if self.ssh is None:
             raise RuntimeError("no SSH transport for %s" % (self.device_name,))
@@ -228,10 +247,17 @@ class CollectorContext:
         entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
         entry["outcome"] = "ok"
         entry["chars"] = len(output or "")
+        redacted, failure = _redacted(redact, output)
         if self.debug:
-            entry["output"] = _traced(redact, output)
+            entry["output"] = redacted
         self.trace.append(entry)
-        return output
+        if redact is None or return_verbatim:
+            return output
+        if failure is not None:
+            raise RuntimeError(
+                "'%s': output withheld, its redactor failed with %s" % (command, failure)
+            )
+        return redacted
 
     def budget(self, label, max_fetches):
         """Per-check fetch budget, when a transport offers one; a no-op otherwise.

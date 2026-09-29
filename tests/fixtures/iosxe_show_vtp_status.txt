@@ -1,0 +1,17 @@
+VTP Version capable             : 1 to 3
+VTP version running             : 2
+VTP Domain Name                 : CAMPUS
+VTP Pruning Mode                : Disabled
+VTP Traps Generation            : Disabled
+Device ID                       : 0000.5e00.53a1
+Configuration last modified by 192.0.2.10 at 3-1-93 00:01:22
+Local updater ID is 192.0.2.10 on interface Vl1 (lowest numbered VLAN interface found)
+
+Feature VLAN:
+--------------
+VTP Operating Mode                : Server
+Maximum VLANs supported locally   : 1005
+Number of existing VLANs          : 9
+Configuration Revision            : 42
+MD5 digest                        : 0x8A 0x1F 0x77 0x2C 0x41 0x0B 0x9E 0x53 
+                                    0x11 0xD4 0x6E 0x2A 0x90 0xF3 0x5C 0x07 

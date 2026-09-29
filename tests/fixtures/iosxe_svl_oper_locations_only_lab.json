@@ -1,0 +1,13 @@
+{
+ "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data": {
+  "location": [
+   {
+    "fru": "fru-fp",
+    "slot": 0,
+    "bay": 0,
+    "chassis": 1,
+    "node": 0
+   }
+  ]
+ }
+}

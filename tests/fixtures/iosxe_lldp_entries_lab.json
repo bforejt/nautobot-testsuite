@@ -1,0 +1,562 @@
+{
+ "Cisco-IOS-XE-lldp-oper:lldp-entries": {
+  "lldp-entry": [
+   {
+    "device-id": "c092.2a31.3508",
+    "local-interface": "Tw1/0/1",
+    "connecting-interface": "MGI10",
+    "ttl": 120,
+    "port-vlan-id": 1,
+    "mau-type": 0,
+    "local-efp-id": 0
+   },
+   {
+    "device-id": "c092.2a31.3508",
+    "local-interface": "Te1/0/47",
+    "connecting-interface": "MGI8",
+    "ttl": 120,
+    "port-vlan-id": 999,
+    "mau-type": 0,
+    "local-efp-id": 0
+   },
+   {
+    "device-id": "ap-lab-1.lab.example",
+    "local-interface": "Tw1/0/14",
+    "connecting-interface": "Gi0",
+    "ttl": 120,
+    "capabilities": {
+     "bridge": [
+      null
+     ]
+    },
+    "port-vlan-id": 0,
+    "mau-type": 30,
+    "auto-neg": {
+     "enabled": [
+      null
+     ],
+     "supported": [
+      null
+     ]
+    },
+    "local-efp-id": 0
+   }
+  ],
+  "lldp-state-details": {
+   "enabled": true,
+   "hello-timer": "30",
+   "system-name": "sw-lab-1",
+   "system-desc": "Cisco IOS Software [IOSXE], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.15.6, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2026 by Cisco Systems, Inc.\nCompiled Wed 22-Jul-26 02:58 by mcpre",
+   "chassis-id": "4401.e4b4.5b26",
+   "chassis-id-type": "chassis-mac",
+   "frame-in": "283",
+   "frame-out": "641",
+   "frame-error-in": "0",
+   "frame-discard": "1",
+   "tlv-discard": "0",
+   "tlv-unknown": "0",
+   "entries-aged-out": "0",
+   "mem-failures": "0",
+   "encap-failures": "0",
+   "inqueue-overflow": "0",
+   "table-overflow": "0"
+  },
+  "lldp-intf-details": [
+   {
+    "if-name": "GigabitEthernet0/0",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/1",
+    "isenabled": true,
+    "lldp-neighbor-details": [
+     {
+      "identifier": "c092.2a31.3508MGI10",
+      "chassis-id": "c092.2a31.3508",
+      "chassis-id-type": "chassis-mac",
+      "port-id": "MGI10",
+      "port-id-type": "port-local",
+      "port-desc": "",
+      "system-name": "",
+      "system-desc": "",
+      "time-remaining": 93,
+      "age": 0,
+      "time-since-last-update": 0,
+      "mgmt-addrs": [
+       {
+        "mgmt-addr": "Not Advertised",
+        "mgmt-addr-type": "mgmt-not-advertised"
+       }
+      ],
+      "media-caps": "unknown",
+      "ttl": 120,
+      "peer-src-mac": "c0:92:2a:31:35:08",
+      "local-efp-id": 0
+     }
+    ],
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/2",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/3",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/4",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/5",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/6",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/7",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/8",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/9",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/10",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/11",
+    "isenabled": true,
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/12",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/13",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/14",
+    "isenabled": true,
+    "lldp-neighbor-details": [
+     {
+      "identifier": "9c0d.b5d9.f2d1Gi0",
+      "chassis-id": "9c0d.b5d9.f2d1",
+      "chassis-id-type": "chassis-mac",
+      "port-id": "Gi0",
+      "port-id-type": "port-ifname",
+      "port-desc": "GigabitEthernet0",
+      "system-name": "ap-lab-1.lab.example.net",
+      "system-desc": "Cisco IOS Software, C3700 Software (AP3G2-K9W8-M), Version 15.3(3)JK8b, RELEASE SOFTWARE (fc1)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2022 by Cisco Systems, Inc.\nCompiled Sun 11-Dec-22 08:07 by mcpre",
+      "time-remaining": 93,
+      "age": 0,
+      "time-since-last-update": 0,
+      "mgmt-addrs": [
+       {
+        "mgmt-addr": "Not Advertised",
+        "mgmt-addr-type": "mgmt-not-advertised"
+       }
+      ],
+      "system-capabilities": {
+       "bridge": [
+        null
+       ]
+      },
+      "enabled-capabilities": {
+       "bridge": [
+        null
+       ]
+      },
+      "media-caps": "10baset",
+      "ttl": 120,
+      "peer-src-mac": "74:f8:08:3d:c5:00",
+      "local-efp-id": 0,
+      "adv-media-cap": [
+       "1000baset-fd",
+       "1000base-t-hd",
+       "100basetx-fd",
+       "100basetx",
+       "10baset-fd",
+       "10baset"
+      ]
+     }
+    ],
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/15",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/16",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/17",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/18",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/19",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/20",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/21",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/22",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/23",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/24",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/25",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/26",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/27",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/28",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/29",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/30",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/31",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/32",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/33",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/34",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/35",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwoGigabitEthernet1/0/36",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/37",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/38",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/39",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/40",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/41",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/42",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/43",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/44",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/45",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/46",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/47",
+    "isenabled": true,
+    "lldp-neighbor-details": [
+     {
+      "identifier": "c092.2a31.3508MGI8",
+      "chassis-id": "c092.2a31.3508",
+      "chassis-id-type": "chassis-mac",
+      "port-id": "MGI8",
+      "port-id-type": "port-local",
+      "port-desc": "",
+      "system-name": "",
+      "system-desc": "",
+      "time-remaining": 118,
+      "age": 0,
+      "time-since-last-update": 0,
+      "mgmt-addrs": [
+       {
+        "mgmt-addr": "Not Advertised",
+        "mgmt-addr-type": "mgmt-not-advertised"
+       }
+      ],
+      "media-caps": "unknown",
+      "ttl": 120,
+      "peer-src-mac": "c0:92:2a:31:35:08",
+      "local-efp-id": 0
+     }
+    ],
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/0/48",
+    "isenabled": true,
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "GigabitEthernet1/1/1",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "GigabitEthernet1/1/2",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "GigabitEthernet1/1/3",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "GigabitEthernet1/1/4",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/1",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/2",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/3",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/4",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/5",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/6",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/7",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TenGigabitEthernet1/1/8",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "FortyGigabitEthernet1/1/1",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "FortyGigabitEthernet1/1/2",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwentyFiveGigE1/1/1",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "TwentyFiveGigE1/1/2",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   },
+   {
+    "if-name": "AppGigabitEthernet1/0/1",
+    "isenabled": true,
+    "tx": "idle",
+    "rx": "wait-for-frame"
+   },
+   {
+    "if-name": "Bluetooth0/4",
+    "isenabled": true,
+    "tx": "rx-init",
+    "rx": "wait-port-oper"
+   }
+  ]
+ }
+}

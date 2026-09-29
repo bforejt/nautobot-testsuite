@@ -1,0 +1,326 @@
+{
+ "Cisco-IOS-XE-tcam-oper:tcam-details": {
+  "tcam-detail": [
+   {
+    "asic-no": 0,
+    "name": "PBR ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "QOS ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 5120,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Group LE",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Macsec SPD",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Netflow ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Client Table",
+    "hash-entries-max": 4096,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "L2 Multicast",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "L3 Multicast",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Security ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 5120,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Control Plane",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Flow SPAN ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "IP Route Table",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 4096,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "CTS Cell Matrix",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Lisp Inst Mapping",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 2048,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Mac Address Table",
+    "hash-entries-max": 32768,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 18,
+    "tcam-entries-used": 18
+   },
+   {
+    "asic-no": 0,
+    "name": "Tunnel Termination",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 0,
+    "name": "Security Association",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "PBR ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "QOS ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 5120,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Group LE",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Macsec SPD",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Netflow ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Client Table",
+    "hash-entries-max": 4096,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "L2 Multicast",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "L3 Multicast",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Security ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 5120,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Control Plane",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Flow SPAN ACL",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "IP Route Table",
+    "hash-entries-max": 24576,
+    "tcam-entries-max": 4096,
+    "hash-entries-used": 1,
+    "tcam-entries-used": 1
+   },
+   {
+    "asic-no": 1,
+    "name": "CTS Cell Matrix",
+    "hash-entries-max": 8192,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Lisp Inst Mapping",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 2048,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Mac Address Table",
+    "hash-entries-max": 32768,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 18,
+    "tcam-entries-used": 18
+   },
+   {
+    "asic-no": 1,
+    "name": "Tunnel Termination",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 512,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 1,
+    "name": "Security Association",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 2,
+    "name": "Group LE",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 2,
+    "name": "Client Table",
+    "hash-entries-max": 4096,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 2,
+    "name": "IP Route Table",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 4096,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 3,
+    "name": "Group LE",
+    "hash-entries-max": 0,
+    "tcam-entries-max": 1024,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 3,
+    "name": "Client Table",
+    "hash-entries-max": 4096,
+    "tcam-entries-max": 256,
+    "hash-entries-used": 0,
+    "tcam-entries-used": 0
+   },
+   {
+    "asic-no": 3,
+    "name": "IP Route Table",
+    "hash-entries-max": 24576,
+    "tcam-entries-max": 4096,
+    "hash-entries-used": 1,
+    "tcam-entries-used": 1
+   }
+  ]
+ }
+}

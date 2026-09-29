@@ -1,0 +1,160 @@
+Sep 29 17:39:30.836: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:39:37.825: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 17:44:38.262: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:44:37.958: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:44:38.463: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 17:44:38 UTC Tue Sep 29 2026
+Sep 29 17:44:38.463: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:44:48.008: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:44:53.394: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 17:46:43.073: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:46:43.351: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:46:43.553: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 17:46:43 UTC Tue Sep 29 2026
+Sep 29 17:46:43.553: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:46:53.289: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:46:58.508: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 17:50:26.498: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 1) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:50:26.154: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:50:26.700: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 17:50:26 UTC Tue Sep 29 2026
+Sep 29 17:50:26.700: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 1) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:50:36.816: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:50:42.042: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 1) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 17:54:11.967: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:54:11.601: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:54:12.169: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 17:54:12 UTC Tue Sep 29 2026
+Sep 29 17:54:12.169: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:54:22.181: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:54:27.298: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 17:55:42.942: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:55:42.599: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:55:43.145: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 17:55:43 UTC Tue Sep 29 2026
+Sep 29 17:55:43.145: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 17:55:53.365: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 17:55:58.458: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:04:18.796: %SSH-5-SSH2_SESSION: SSH2 Session request from 198.18.212.210 (tty = 0) using crypto cipher 'chacha20-poly1305@openssh.com', hmac 'hmac-sha2-256-etm@openssh.com' Succeeded
+Sep 29 18:04:21.021: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 198.18.212.210] [localport: 22] at 18:04:21 UTC Tue Sep 29 2026
+Sep 29 18:04:21.021: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 198.18.212.210 (tty = 0) using crypto cipher 'chacha20-poly1305@openssh.com', hmac 'hmac-sha2-256-etm@openssh.com' Succeeded
+Sep 29 18:06:25.969: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:06:26.328: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 1) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:06:26.529: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:06:26 UTC Tue Sep 29 2026
+Sep 29 18:06:26.529: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 1) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:06:30.679: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 1) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:10:08.333: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:09.331: %LINEPROTO-5-UPDOWN: Line protocol on Interface TenGigabitEthernet1/0/47, changed state to up
+Sep 29 18:10:09.332: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:10.333: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:11.332: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:12.333: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:13.333: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:14.334: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:15.333: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:16.334: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:10:49.169: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:11:08.683: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:11:46.104: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:12:06.106: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:12:39.998: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:13:01.555: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:13:31.046: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:14:00.921: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:14:26.562: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:14:27.901: %SSH-5-SSH2_CLOSE: SSH2 Session from 198.18.212.210 (tty = 0) for user 'netops' using crypto cipher 'chacha20-poly1305@openssh.com', hmac 'hmac-sha2-256-etm@openssh.com' closed
+Sep 29 18:14:45.551: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:14:45.752: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:14:45 UTC Tue Sep 29 2026
+Sep 29 18:14:45.752: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:14:50.083: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:14:57.806: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:15:22.459: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:15:47.229: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:16:12.012: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:16:40.927: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:16:41.128: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:16:41 UTC Tue Sep 29 2026
+Sep 29 18:16:41.128: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:16:46.099: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:16:46.295: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user 'netops' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:17:00.966: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:17:45.263: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:17:51.541: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:18:34.786: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:18:41.174: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:19:30.443: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:19:34.758: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:20:25.880: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:20:29.377: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:21:17.443: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:21:17.972: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:21:30.681: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:21:30.340: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:21:30.882: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:21:30 UTC Tue Sep 29 2026
+Sep 29 18:21:30.883: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:21:40.723: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:21:51.074: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:22:12.735: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:22:13.907: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:22:15.007: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:22:37.722: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:22:37.368: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:22:37.923: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:22:37 UTC Tue Sep 29 2026
+Sep 29 18:22:37.923: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:22:48.112: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:22:53.254: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:23:02.540: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:23:12.726: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:23:53.466: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:24:10.186: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:24:23.706: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:24:23.355: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:24:23.908: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:24:23 UTC Tue Sep 29 2026
+Sep 29 18:24:23.908: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:24:33.944: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:24:40.288: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:24:49.154: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:25:06.186: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:25:38.693: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:25:44.321: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:25:44.068: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:25:44.523: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:25:44 UTC Tue Sep 29 2026
+Sep 29 18:25:44.523: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:25:54.411: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:26:01.104: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:26:01.712: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:26:32.096: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:26:54.626: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:27:30.341: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TenGigabitEthernet1/0/47 (1), with sw-lab-1 TwoGigabitEthernet1/0/1 (2).
+Sep 29 18:27:47.156: %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on TwoGigabitEthernet1/0/1 (2), with sw-lab-1 TenGigabitEthernet1/0/47 (1).
+Sep 29 18:29:11.455: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:29:11.782: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:29:11.984: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:29:11 UTC Tue Sep 29 2026
+Sep 29 18:29:11.984: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:29:21.548: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:29:27.429: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:30:22.243: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:30:22.445: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:30:22 UTC Tue Sep 29 2026
+Sep 29 18:30:22.445: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:30:24.166: %SYS-5-CONFIG_I: Configured from console by netops on vty0 (192.0.2.49)
+Sep 29 18:30:24.711: %ARCHIVE_DIFF-5-ROLLBK_CNFMD_CHG_BACKUP: Backing up current running config to flash:lab-archive-Sep-29-18-30-24.223-0
+Sep 29 18:30:24.711: %ARCHIVE_DIFF-5-ROLLBK_CNFMD_CHG_START_ABSTIMER: User: netops(Priv: 15, View: 0): Scheduled to rollback to config flash:lab-archive-Sep-29-18-30-24.223-0 in 5 minutes
+Sep 29 18:30:25.057: %SYS-5-CONFIG_I: Configured from console by netops on vty0 (192.0.2.49)
+Sep 29 18:30:24.985: %DMI-5-SYNC_NEEDED: Switch 1 R0/0: dmiauthd: Configuration change requiring running configuration sync detected - 'switchport trunk allowed vlan 3,4,999'. The running configuration will be synchronized  to the NETCONF running data store.
+Sep 29 18:30:25.411: %DMI-5-SYNC_START: Switch 1 R0/0: dmiauthd: Synchronization of the running configuration to the NETCONF running data store has started.
+Sep 29 18:30:25.686: %DMI-5-SYNC_COMPLETE: Switch 1 R0/0: dmiauthd: The running configuration has been synchronized to the NETCONF running data store.
+Sep 29 18:30:26.011: %LINEPROTO-5-UPDOWN: Line protocol on Interface TenGigabitEthernet1/0/47, changed state to down
+Sep 29 18:30:29.013: %LINEPROTO-5-UPDOWN: Line protocol on Interface TenGigabitEthernet1/0/47, changed state to up
+Sep 29 18:30:36.623: %ARCHIVE_DIFF-5-ROLLBK_CNFMD_CHG_CONFIRM: User: netops: Confirm the configuration change
+Sep 29 18:30:37.684: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:30:57.924: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:30:57.545: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:30:58.126: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:30:58 UTC Tue Sep 29 2026
+Sep 29 18:30:58.126: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:31:07.934: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:31:13.870: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:31:40.525: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:31:40.727: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:31:40 UTC Tue Sep 29 2026
+Sep 29 18:31:40.727: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:31:40.267: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:31:44.390: %SSH-5-SSH2_CLOSE: SSH2 Session from 192.0.2.49 (tty = 0) for user '' using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' closed
+Sep 29 18:33:49.695: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:33:50.028: %SSH-5-SSH2_SESSION: SSH2 Session request from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:33:50.231: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: netops] [Source: 192.0.2.49] [localport: 22] at 18:33:50 UTC Tue Sep 29 2026
+Sep 29 18:33:50.231: %SSH-5-SSH2_USERAUTH: User 'netops' authentication for SSH2 Session from 192.0.2.49 (tty = 0) using crypto cipher 'aes128-ctr', hmac 'hmac-sha2-256' Succeeded
+Sep 29 18:33:59.903: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15
+Sep 29 18:34:10.149: %DMI-5-AUTH_PASSED: Switch 1 R0/0: dmiauthd: User 'netops' authenticated successfully from 192.0.2.49:0  for rest over http. External groups: PRIV15

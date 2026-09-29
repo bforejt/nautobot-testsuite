@@ -248,9 +248,20 @@ def _diff_capability(pre, post, compare):
     on that side". Neither may masquerade as a measured zero: an unreadable
     pre leaves gating unknown (visible, never silently non-gating), and a
     gating bucket that is unreadable or unmeasured post fails closed.
+
+    ``absent_post`` names what an absent post key means for this check: the
+    default is a sweep that did not measure the bucket; ``"zero"`` says the
+    buckets are derived from counted rows, so an absent bucket is a count of
+    zero (nothing was learned or seen there). The verdict is the same — a
+    miss — only the note an analyst reads differs.
     """
     floor = (compare or {}).get("floor_pre", 5)
     min_post = (compare or {}).get("min_post", 1)
+    absent_note = (
+        "absent post (counts as zero)"
+        if (compare or {}).get("absent_post") == "zero"
+        else "not measured post (sweep mismatch)"
+    )
     evaluations = []
     misses = 0
     for key in sorted(set(pre) | set(post)):
@@ -271,7 +282,7 @@ def _diff_capability(pre, post, compare):
                 entry["ok"] = None
             elif key not in post:
                 entry["ok"] = False
-                entry["note"] = "not measured post (sweep mismatch)"
+                entry["note"] = absent_note
             elif new is None:
                 entry["ok"] = False
                 entry["note"] = "post count unreadable"

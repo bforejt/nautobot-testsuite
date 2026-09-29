@@ -1,0 +1,153 @@
+{
+ "Cisco-IOS-XE-cdp-oper:cdp-neighbor-details": {
+  "cdp-neighbor-detail": [
+   {
+    "device-id": 2041,
+    "device-name": "ap-lab-1",
+    "local-intf-name": "TwoGigabitEthernet1/0/14",
+    "port-id": "GigabitEthernet0",
+    "capability": "Trans-Bridge Source-Route-Bridge IGMP ",
+    "platform-name": "cisco AIR-CAP3702I-B-K9",
+    "version": "Cisco IOS Software, C3700 Software (AP3G2-K9W8-M), Version 15.3(3)JK8b, RELEASE SOFTWARE (fc1)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2022 by Cisco Systems, Inc.\nCompiled Sun 11-Dec-22 08:07 by mcpre",
+    "duplex": "cdp-full-duplex",
+    "adv-version": "cdp-advertised-v2",
+    "hello-message": {
+     "oui": "",
+     "protocol-id": "",
+     "payload-value": "",
+     "payload-len": 0
+    },
+    "vty-mgmt-domain": "",
+    "native-vlan": 0,
+    "vvid-tag": 0,
+    "vvid": 0,
+    "power": 16800,
+    "power-request": {
+     "power-request-id": 18691,
+     "power-man-id": 2,
+     "power-request-level": "16800 15400 13000 0 0"
+    },
+    "power-available": {
+     "power-request-id": 0,
+     "power-man-id": 0,
+     "power-available": 0,
+     "power-man-level": 0
+    },
+    "unidirectional-mode": "cdp-uni-mode-off",
+    "spare-pair": {
+     "spare-pair-poe": "cdp-no",
+     "spare-pair-detection-required": "cdp-no",
+     "spare-pair-pd-config": "cdp-disable",
+     "spare-pair-pse-operational": "cdp-no"
+    },
+    "mgmt-address": "198.18.119.160",
+    "ipv6-address": "fe80::76f8:8ff:fe3d:c500",
+    "clns-address": "",
+    "decnet-addr": "",
+    "novell-addr": "",
+    "second-port-status": "",
+    "table-id": 0,
+    "neighbor-identifier": "",
+    "neighbor-port-mac": "74:f8:08:3d:c5:00"
+   },
+   {
+    "device-id": 4082,
+    "device-name": "sw-lab-1",
+    "local-intf-name": "TwoGigabitEthernet1/0/1",
+    "port-id": "TenGigabitEthernet1/0/47",
+    "capability": "Router Switch IGMP ",
+    "platform-name": "cisco C9300-48UXM",
+    "version": "Cisco IOS Software [IOSXE], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.15.6, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2026 by Cisco Systems, Inc.\nCompiled Wed 22-Jul-26 02:58 by mcpre",
+    "duplex": "cdp-full-duplex",
+    "adv-version": "cdp-advertised-v2",
+    "hello-message": {
+     "oui": "",
+     "protocol-id": "",
+     "payload-value": "",
+     "payload-len": 0
+    },
+    "vty-mgmt-domain": "",
+    "native-vlan": 1,
+    "vvid-tag": 0,
+    "vvid": 0,
+    "power": 0,
+    "power-request": {
+     "power-request-id": 0,
+     "power-man-id": 0,
+     "power-request-level": "0 0 0 0 0"
+    },
+    "power-available": {
+     "power-request-id": 0,
+     "power-man-id": 0,
+     "power-available": 0,
+     "power-man-level": 0
+    },
+    "unidirectional-mode": "cdp-uni-mode-off",
+    "spare-pair": {
+     "spare-pair-poe": "cdp-no",
+     "spare-pair-detection-required": "cdp-no",
+     "spare-pair-pd-config": "cdp-disable",
+     "spare-pair-pse-operational": "cdp-no"
+    },
+    "mgmt-address": "192.0.2.148",
+    "ip-address": "192.0.2.148",
+    "clns-address": "",
+    "decnet-addr": "",
+    "novell-addr": "",
+    "second-port-status": "",
+    "table-id": 0,
+    "neighbor-identifier": "PID:C9300-48UXM,VID:A0,SN:FOC8704M57A",
+    "neighbor-port-mac": "dc:02:4f:e1:c3:3a"
+   },
+   {
+    "device-id": 6124,
+    "device-name": "sw-lab-1",
+    "local-intf-name": "TenGigabitEthernet1/0/47",
+    "port-id": "TwoGigabitEthernet1/0/1",
+    "capability": "Router Switch IGMP ",
+    "platform-name": "cisco C9300-48UXM",
+    "version": "Cisco IOS Software [IOSXE], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.15.6, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2026 by Cisco Systems, Inc.\nCompiled Wed 22-Jul-26 02:58 by mcpre",
+    "duplex": "cdp-full-duplex",
+    "adv-version": "cdp-advertised-v2",
+    "hello-message": {
+     "oui": "",
+     "protocol-id": "",
+     "payload-value": "",
+     "payload-len": 0
+    },
+    "vty-mgmt-domain": "",
+    "native-vlan": 2,
+    "vvid-tag": 0,
+    "vvid": 0,
+    "power": 0,
+    "power-request": {
+     "power-request-id": 0,
+     "power-man-id": 0,
+     "power-request-level": "0 0 0 0 0"
+    },
+    "power-available": {
+     "power-request-id": 0,
+     "power-man-id": 0,
+     "power-available": 0,
+     "power-man-level": 0
+    },
+    "unidirectional-mode": "cdp-uni-mode-off",
+    "spare-pair": {
+     "spare-pair-poe": "cdp-no",
+     "spare-pair-detection-required": "cdp-no",
+     "spare-pair-pd-config": "cdp-disable",
+     "spare-pair-pse-operational": "cdp-no"
+    },
+    "mgmt-address": "192.0.2.148",
+    "ip-address": "192.0.2.148",
+    "clns-address": "",
+    "decnet-addr": "",
+    "novell-addr": "",
+    "second-port-status": "",
+    "table-id": 0,
+    "neighbor-identifier": "PID:C9300-48UXM,VID:A0,SN:FOC8704M57A",
+    "neighbor-port-mac": "f8:48:57:46:65:3b"
+   }
+  ]
+ }
+}

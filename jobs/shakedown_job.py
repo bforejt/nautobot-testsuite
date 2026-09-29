@@ -19,7 +19,7 @@ from nautobot.apps.jobs import Job, ObjectVar
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
-from . import checks_iosxe_wireless, creds, envelope, registry
+from . import catalog, creds, envelope, registry
 from . import constants as C
 from .checks_iosxe import _Q_FS_LIST_PATH, _summarize_q_filesystem
 from .checks_vmware import (
@@ -63,28 +63,12 @@ from .transport_vsphere import probe_hint as vsphere_probe_hint
 # Jobs-UI grouping header (house convention).
 name = C.UI_GROUP
 
-# Models the IOS-XE catalog reads from — presence/revision is reported so a
-# shakedown immediately shows which collectors CAN work on this image.
-IOSXE_KEY_MODELS = (
-    "ietf-routing",
-    "Cisco-IOS-XE-fib-oper",
-    "Cisco-IOS-XE-bgp-oper",
-    "Cisco-IOS-XE-ospf-oper",
-    "Cisco-IOS-XE-arp-oper",
-    "Cisco-IOS-XE-cdp-oper",
-    "Cisco-IOS-XE-lldp-oper",
-    "Cisco-IOS-XE-interfaces-oper",
-    "Cisco-IOS-XE-device-hardware-oper",
-    "Cisco-IOS-XE-environment-oper",
-    "Cisco-IOS-XE-platform-software-oper",
-    "Cisco-IOS-XE-matm-oper",
-    "Cisco-IOS-XE-switch-cp-svl-oper",
-    # iosxe_switch_stack's per-member serial source, plus the reload-reason
-    # each stack-node carries (per member or stack-wide: still unverified);
-    # leaf spellings field-verified on a 4-member 9300. Where it is absent,
-    # the check falls back to `show inventory` for member serials.
-    "Cisco-IOS-XE-stack-oper",
-)
+# The IOS-XE base model list and the catalog walk live in jobs/catalog.py (pure,
+# so CI tests them); the historical names are kept here for callers.
+IOSXE_KEY_MODELS = catalog.IOSXE_KEY_MODELS
+PLATFORM_KEY_MODELS = catalog.PLATFORM_KEY_MODELS
+_catalog_modules = catalog.catalog_modules
+_catalog_key_models = catalog.catalog_key_models
 
 
 def _aslist(value):
@@ -524,12 +508,11 @@ class CollectorShakedown(Job):
             if platform == "iosxe":
                 modules = report["discovery"].get("modules")
                 if isinstance(modules, dict) and modules:
-                    # Each catalog module names the models its collectors read;
-                    # the wireless list rides beside the switch list so a 9800
-                    # shakedown shows at once which wireless collectors CAN work.
-                    key_models = IOSXE_KEY_MODELS + checks_iosxe_wireless.KEY_MODELS
+                    # Each catalog module names the models its collectors read
+                    # (KEY_MODELS); merged together, a switch or 9800 shakedown
+                    # shows at once which collectors of every module CAN work.
                     report["discovery"]["key_models"] = {
-                        model: modules.get(model) for model in key_models
+                        model: modules.get(model) for model in _catalog_key_models(platform)
                     }
 
             for index, check in enumerate(checks, 1):

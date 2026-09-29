@@ -1,0 +1,23 @@
+-------------------------
+Device ID: ap-lab-1
+Entry address(es): 
+  IPv6 address: FE80::76F8:8FF:FE3D:C500  (link-local)
+Platform: cisco AIR-CAP3702I-B-K9,  Capabilities: Trans-Bridge Source-Route-Bridge IGMP 
+Interface: TwoGigabitEthernet1/0/14,  Port ID (outgoing port): GigabitEthernet0
+Holdtime : 140 sec
+
+Version :
+Cisco IOS Software, C3700 Software (AP3G2-K9W8-M), Version 15.3(3)JK8b, RELEASE SOFTWARE (fc1)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2022 by Cisco Systems, Inc.
+Compiled Sun 11-Dec-22 08:07 by mcpre
+
+advertisement version: 2
+Peer Source MAC: 74f8.083d.c500
+Duplex: full
+Power drawn: 16.800 Watts
+Power request id: 18691, Power management id: 2
+Power request levels are:16800 15400 13000 0 0 
+
+
+Total cdp entries displayed : 1

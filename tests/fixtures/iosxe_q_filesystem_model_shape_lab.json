@@ -1,0 +1,38 @@
+{
+ "Cisco-IOS-XE-platform-software-oper:cisco-platform-software": {
+  "q-filesystem": [
+   {
+    "fru": "fru-rp",
+    "slot": 0,
+    "bay": 0,
+    "chassis": -1,
+    "partitions": [
+     {
+      "name": "webui:"
+     },
+     {
+      "name": "ucode0:"
+     },
+     {
+      "name": "obfl10:"
+     },
+     {
+      "name": "lic1:"
+     },
+     {
+      "name": "lic0:"
+     },
+     {
+      "name": "flash:"
+     },
+     {
+      "name": "drec0:"
+     },
+     {
+      "name": "crashinfo:"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "Cisco-IOS-XE-install-oper:install-location-information": [
+  {
+   "fru": "fru-rp",
+   "slot": 0,
+   "bay": 0,
+   "chassis": 1,
+   "install-version-info": [
+    {
+     "version": "17.15.06.0.770",
+     "is-default": false,
+     "current": "install-version-state-provisioned-committed",
+     "commit-type": "install-commit-user"
+    },
+    {
+     "version": "17.12.04.0.5766",
+     "is-default": false,
+     "current": "install-version-state-present",
+     "commit-type": "install-commit-pend"
+    }
+   ],
+   "oper-state": {
+    "auto-abort-timer": {
+     "state": "install-timer-state-inactive"
+    },
+    "boot-mode": "install-boot-mode-install"
+   }
+  }
+ ]
+}

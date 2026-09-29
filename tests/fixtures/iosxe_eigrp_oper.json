@@ -1,0 +1,135 @@
+{
+ "Cisco-IOS-XE-eigrp-oper:eigrp-oper-data": {
+  "eigrp-instance": [
+   {
+    "afi": "eigrp-af-ipv4",
+    "vrf-name": "",
+    "as-num": 1,
+    "router-id": 3221226132,
+    "name": "",
+    "eigrp-interface": [
+     {
+      "name": "Vlan3",
+      "hello-interval": 5,
+      "hold-timer": 15,
+      "auth-val": {
+       "auth-mode": "eigrp-auth-hmac-sha-256",
+       "auth-key": {
+        "key-chain": "",
+        "sha256-password": "fixture-only-secret"
+       }
+      },
+      "eigrp-nbr": {
+       "afi": "eigrp-af-ipv4",
+       "nbr-address": "203.0.113.1",
+       "nbr-sw-ver": {
+        "os-majorver": 17,
+        "os-minorver": 15,
+        "tlv-majorrev": 3,
+        "tlv-minorrev": 0
+       },
+       "nbr-stubinfo": {
+        "stubbed": [
+         null
+        ],
+        "allow-connected": [
+         null
+        ],
+        "allow-summary": [
+         null
+        ]
+       },
+       "retransmit-count": 3,
+       "retry-count": 0,
+       "last-seq-number": 41,
+       "srtt": 12,
+       "rto": 100
+      }
+     },
+     {
+      "name": "Vlan4",
+      "hello-interval": 5,
+      "hold-timer": 15,
+      "auth-val": {
+       "auth-mode": "eigrp-auth-none",
+       "auth-key": {
+        "key-chain": "",
+        "sha256-password": ""
+       }
+      },
+      "passive": [
+       null
+      ]
+     }
+    ],
+    "eigrp-topo": [
+     {
+      "topo-id": 0,
+      "eigrp-network": [
+       {
+        "afi": "eigrp-af-ipv4",
+        "ip-prefix": "198.18.4.0/24",
+        "rd-metric": "2816",
+        "rd-vecmetric": {
+         "bandwidth": "1000000",
+         "delay": "10000000",
+         "tag": 0,
+         "routerid": 3221226132,
+         "mtu": 1500,
+         "hopcount": 0,
+         "reliability": 255,
+         "load": 1
+        },
+        "fd-metric": "2816",
+        "successor-count": 1,
+        "eigrp-route": [
+         {
+          "afi": "eigrp-af-ipv4",
+          "infosource": "0.0.0.0",
+          "nexthop": "0.0.0.0",
+          "originating-interface": "Vlan4",
+          "metric": "2816",
+          "vecmetric": {
+           "bandwidth": "1000000",
+           "delay": "10000000",
+           "tag": 0,
+           "routerid": 3221226132,
+           "mtu": 1500,
+           "hopcount": 0,
+           "reliability": 255,
+           "load": 1
+          },
+          "succ-metric": "0",
+          "succ-vecmetric": {
+           "bandwidth": "0",
+           "delay": "0",
+           "tag": 0,
+           "routerid": 0,
+           "mtu": 0,
+           "hopcount": 0,
+           "reliability": 0,
+           "load": 0
+          },
+          "origin": "eigrp-origin-connected",
+          "omp-tag": 0,
+          "in-rib": [
+           null
+          ],
+          "ext-data": {
+           "routerid": 0,
+           "asystem": 0,
+           "tag": 0,
+           "ext-metric": 0,
+           "protocol": 0,
+           "flag": 0
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}
