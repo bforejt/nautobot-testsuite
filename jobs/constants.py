@@ -23,7 +23,6 @@ FRAMEWORK_NAME = "nautobot-testsuite"
 # change_id and device are sanitized (alnum, dash, underscore, dot) before use.
 SNAPSHOT_FILENAME = "snapshot_{device}_{change_id}.json"
 RAW_FILENAME = "raw_{device}_{change_id}.json"
-REPORT_FILENAME = "report_{device}.json"
 DEBUG_FILENAME = "debug_{device}_{change_id}.json"
 SHAKEDOWN_FILENAME = "shakedown_{device}.json"
 SHAKEDOWN_TRACE_FILENAME = "shakedown-trace_{device}.json"

@@ -103,7 +103,7 @@ def _diff_pair(pre_env, post_env):
         if describe and body.get("result") in ("diffs", "failed"):
             body["describe"] = describe
         report["checks"][check_id] = body
-    envelope.summarize_report(report, [], set())
+    envelope.summarize_report(report)
     return report
 
 

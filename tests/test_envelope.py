@@ -170,7 +170,7 @@ class TestReport(unittest.TestCase):
         self.assertEqual(report["pre"]["framework_version"], C.JOB_VERSION)
         self.assertEqual(report["post"]["captured_at"], post["captured_at"])
         self.assertEqual(report["checks"], {})
-        self.assertEqual(report["expectations"], {"matched": [], "unmatched": []})
+        self.assertNotIn("expectations", report)
 
     def test_summarize_report_totals(self):
         pre, post = self._pre_post()
@@ -179,12 +179,9 @@ class TestReport(unittest.TestCase):
             "clean": {"result": "pass", "added": [], "removed": [], "changed": []},
             "set_diffs": {
                 "result": "diffs",
-                "added": [{"key": "k1", "classification": "expected"}],
+                "added": [{"key": "k1"}],
                 "removed": [],
-                "changed": [
-                    {"key": "k2", "classification": "unexpected"},
-                    {"key": "k3"},  # no classification at all counts unexpected
-                ],
+                "changed": [{"key": "k2"}, {"key": "k3"}],
             },
             "numeric": {
                 "result": "diffs",
@@ -199,12 +196,7 @@ class TestReport(unittest.TestCase):
             "context": {"result": "info"},
             "absent": {"result": "skipped"},
         }
-        expectations = [
-            {"id": "e-hit", "note": "planned add"},
-            {"id": "e-miss", "note": "route we expected to vanish"},
-        ]
-        matched = {"e-hit"}
-        result = envelope.summarize_report(report, expectations, matched)
+        result = envelope.summarize_report(report)
         self.assertIs(result, report)
         self.assertEqual(
             report["summary"],
@@ -215,15 +207,7 @@ class TestReport(unittest.TestCase):
                 "checks_failed": 1,
                 "checks_skipped": 2,  # skipped + info
                 "diffs_total": 5,  # 3 bucket entries + 2 failed evaluations
-                "expected": 1,
-                "unexpected": 4,
-                "expectations_unmatched": 1,
             },
-        )
-        self.assertEqual(report["expectations"]["matched"], ["e-hit"])
-        self.assertEqual(
-            report["expectations"]["unmatched"],
-            [{"id": "e-miss", "note": "route we expected to vanish", "status": "not_observed"}],
         )
 
 

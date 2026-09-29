@@ -37,16 +37,14 @@ removed/added lines, and section the indentation parents of its first line
 when that line is indented. Runs are matched line by line even where a line
 repeats all over the text, and a stanza added or removed whole is lined up
 to start at its own first line (see _text_opcodes), so an edit comes back as
-a few entries an expectation can match, never one enormous changed value
-(to_contains reads the added lines; a hunk that only removes lines is
-matched by key and op). A text key added or removed whole carries
+a few entries a reader can point at, never one enormous changed value. A
+text key added or removed whole carries
 {"line_count": N} rather than the text (the snapshot files already hold it,
 and a diff index that repeats whole configurations buries the finding);
 every other value compares exactly as in equality_set.
 """
 
 import difflib
-from fnmatch import fnmatchcase
 
 MODES = (
     "equality_set",
@@ -486,123 +484,3 @@ def _diff_text(pre, post, compare):
     diff["changed"].sort(key=lambda entry: str(entry.get("key")))
     diff["result"] = "diffs" if (diff["added"] or diff["removed"] or diff["changed"]) else "pass"
     return diff
-
-
-# --- expectations ------------------------------------------------------------
-
-
-_SELECTOR_KEYS = ("check", "key", "op", "field", "to", "to_contains", "device")
-
-
-def normalize_expectations(raw):
-    """Validate a user-supplied expectations list; assign ids where missing.
-
-    Returns (expectations, problems). Each expectation is a dict with keys:
-    check (optional exact check id), key (glob, default "*"), op in
-    {added, removed, changed, any}, optional device (glob on the device name),
-    field / to / to_contains / note.
-
-    An entry with no selector key at all (only id/note, or empty) is rejected:
-    defaulting it would silently create a match-everything wildcard that
-    blesses every diff on every device. A deliberate wildcard must say
-    {"key": "*"} explicitly.
-    """
-    expectations, problems = [], []
-    if raw is None:
-        return expectations, problems
-    if not isinstance(raw, list):
-        return [], ["expectations must be a JSON list of objects"]
-    for idx, exp in enumerate(raw):
-        if not isinstance(exp, dict):
-            problems.append("expectation #%d is not an object" % (idx + 1,))
-            continue
-        if not any(key in exp for key in _SELECTOR_KEYS):
-            problems.append(
-                "expectation #%d has no selector keys; add check/key/op/field "
-                '(use {"key": "*"} for a deliberate wildcard)' % (idx + 1,)
-            )
-            continue
-        exp = dict(exp)
-        exp.setdefault("id", "exp-%d" % (idx + 1,))
-        exp.setdefault("key", "*")
-        op = exp.setdefault("op", "any")
-        if op not in ("added", "removed", "changed", "any"):
-            problems.append("expectation %s: unknown op %r" % (exp["id"], op))
-            continue
-        expectations.append(exp)
-    return expectations, problems
-
-
-def expectations_for_device(expectations, device_names):
-    """Expectations whose optional ``device`` glob matches any of the names.
-
-    Expectations without a device selector apply everywhere. Used by the
-    compare job so an expectation scoped to one device is never reported as
-    "not observed" on its neighbors.
-    """
-    out = []
-    for exp in expectations:
-        pattern = str(exp.get("device", "*"))
-        if any(fnmatchcase(str(name), pattern) for name in device_names if name):
-            out.append(exp)
-    return out
-
-
-def _expectation_matches(exp, check_id, op, entry):
-    if exp.get("check") not in (None, check_id):
-        return False
-    if exp.get("op", "any") not in ("any", op):
-        return False
-    if not fnmatchcase(str(entry.get("key", "")), str(exp.get("key", "*"))):
-        return False
-    if exp.get("field") is not None and entry.get("field") != exp.get("field"):
-        return False
-    if op == "changed":
-        if "to" in exp and entry.get("new") != exp["to"]:
-            return False
-        if "to_contains" in exp and str(exp["to_contains"]) not in str(entry.get("new")):
-            return False
-    return True
-
-
-def classify_diff(check_id, diff, expectations, matched_ids):
-    """Annotate a diff's entries expected/unexpected in place.
-
-    Walks the added/removed/changed buckets AND the numeric-mode misses in
-    ``evaluations`` (a tolerance/capability miss is matched as a "changed"
-    entry — it carries old/new — keyed by its bucket key or field name), so a
-    planned numeric change can be declared expected like any other diff.
-
-    ``matched_ids`` is a set accumulated across checks so the report can list
-    expectations that matched nothing ("expected but not observed").
-    Returns (expected_count, unexpected_count).
-    """
-    expected = unexpected = 0
-    for bucket, op in (("added", "added"), ("removed", "removed"), ("changed", "changed")):
-        for entry in diff.get(bucket) or []:
-            if _classify_entry(check_id, op, entry, entry, expectations, matched_ids):
-                expected += 1
-            else:
-                unexpected += 1
-    for entry in diff.get("evaluations") or []:
-        if entry.get("within") is False or entry.get("ok") is False:
-            match_view = dict(entry)
-            if match_view.get("key") is None:
-                match_view["key"] = match_view.get("field")
-            if _classify_entry(check_id, "changed", match_view, entry, expectations, matched_ids):
-                expected += 1
-            else:
-                unexpected += 1
-    return expected, unexpected
-
-
-def _classify_entry(check_id, op, match_view, entry, expectations, matched_ids):
-    """Match one entry against the expectations; annotate it; True when expected."""
-    for exp in expectations:
-        if _expectation_matches(exp, check_id, op, match_view):
-            entry["classification"] = "expected"
-            entry["expectation_id"] = exp["id"]
-            matched_ids.add(exp["id"])
-            return True
-    entry["classification"] = "unexpected"
-    return False

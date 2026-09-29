@@ -1121,8 +1121,8 @@ def _normalize_event_log(entries, log_service=None):
     """(normalized, context) over the whole Entries collection.
 
     Keys 'sel|<CommonEventID>|<Id>' for Severity Warning/Critical only — the
-    event code sits in the key so an expectation glob can bless a declared
-    addition. Every other entry is counted per CommonEventID in context.
+    event code sits in the key so additions can be grouped by event class.
+    Every other entry is counted per CommonEventID in context.
     Ids are the monotonic EventSequenceNumber. Whether the log was cleared
     is a cross-capture fact (a post newest_id below the pre newest_id) that
     one capture cannot know, so context carries the facts the comparison

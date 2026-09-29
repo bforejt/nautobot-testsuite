@@ -102,7 +102,7 @@ management plane, and both are selected for a capture:
   `snapshot_<device>-xcc_<change_id>.json`.
 - A `bmc_of` Relationship links the pair. `vmnicN` Interfaces with Cables to
   the switch ports document the planned uplink map — the collectors never read
-  the ORM, so this is for the analyst and the expectations, not for capture.
+  the ORM, so this is for the analyst, not for capture.
 - The VM-Series (or any other VNF with its own platform) stays its own Device:
   a `virtualization.VirtualMachine` row with a `vm_uuid` custom field is
   documentation only.

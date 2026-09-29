@@ -1121,34 +1121,6 @@ class TestTextDiffMode(unittest.TestCase):
             [{"key": "cfg", "field": None, "old": {"line_count": 11}, "new": "unreadable"}],
         )
 
-    def test_expectations_match_hunks_and_the_report_counts_them(self):
-        exps, problems = diffcore.normalize_expectations(
-            [
-                {
-                    "id": "e-desc",
-                    "check": "iosxe_config",
-                    "key": "running-config",
-                    "op": "changed",
-                    "to_contains": "floor 3",
-                }
-            ]
-        )
-        self.assertEqual(problems, [])
-        diff = self._diff(
-            {"running-config": {"lines": self.PRE}}, {"running-config": {"lines": self.POST}}
-        )
-        matched = set()
-        counts = diffcore.classify_diff("iosxe_config", diff, exps, matched)
-        self.assertEqual(counts, (1, 2))
-        self.assertEqual(matched, {"e-desc"})
-        self.assertEqual(diff["changed"][0]["classification"], "expected")
-        report = {"checks": {"iosxe_config": diff}, "expectations": {}}
-        envelope.summarize_report(report, exps, matched)
-        self.assertEqual(report["summary"]["diffs_total"], 3)
-        self.assertEqual(report["summary"]["expected"], 1)
-        self.assertEqual(report["summary"]["unexpected"], 2)
-        self.assertEqual(report["summary"]["checks_with_diffs"], 1)
-
     def test_collected_views_diff_as_hunks(self):
         pre, _ctx = _collect(outputs=_outputs(running=_as_running(STARTUP)))
         post, _ctx = _collect()
