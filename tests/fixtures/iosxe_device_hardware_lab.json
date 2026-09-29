@@ -1,0 +1,241 @@
+{
+ "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+  "entity-information": [
+   {
+    "fru": "device-hardware-fru-rp",
+    "slotnum": 0,
+    "baynum": 0,
+    "chassisnum": 1,
+    "physical-index": 1000,
+    "status": "module-status-online",
+    "description": "C9300-48UXM",
+    "status-last-change": "2026-09-29T17:33:06+00:00",
+    "high-availability-state": "ha-role-active",
+    "chassis-state": "ha-role-active",
+    "rommon-entry": [
+     {
+      "var-name": "BSI",
+      "var-value": "0"
+     },
+     {
+      "var-name": "BAUD",
+      "var-value": "9600"
+     },
+     {
+      "var-name": "BOOT",
+      "var-value": "flash:packages.conf;"
+     },
+     {
+      "var-name": "BOARDID",
+      "var-value": "24665"
+     },
+     {
+      "var-name": "DC_COPY",
+      "var-value": "yes"
+     },
+     {
+      "var-name": "MAC_ADDR",
+      "var-value": "44:01:E4:B4:5B:26"
+     },
+     {
+      "var-name": "TEMPLATE",
+      "var-value": "access"
+     },
+     {
+      "var-name": "MODEL_NUM",
+      "var-value": "C9300-48UXM"
+     },
+     {
+      "var-name": "RANDOM_NUM",
+      "var-value": "1521132585"
+     },
+     {
+      "var-name": "VERSION_ID",
+      "var-value": "V02"
+     },
+     {
+      "var-name": "MANUAL_BOOT",
+      "var-value": "no"
+     },
+     {
+      "var-name": "USB_DISABLE",
+      "var-value": "0"
+     },
+     {
+      "var-name": "RET_2_RCALTS",
+      "var-value": "1790702749"
+     },
+     {
+      "var-name": "ReloadReason",
+      "var-value": "Image Install RET_2_RCALTS=1420073078,Image Install Abort RET_2_RCALTS=1420080310"
+     },
+     {
+      "var-name": "IMAGE_UPGRADE",
+      "var-value": "no"
+     },
+     {
+      "var-name": "SWITCH_NUMBER",
+      "var-value": "1"
+     },
+     {
+      "var-name": "SWITCH_PRIORITY",
+      "var-value": "15"
+     },
+     {
+      "var-name": "SYSTEM_SERIAL_NUM",
+      "var-value": "FOC8704M57A"
+     },
+     {
+      "var-name": "LICENSE_BOOT_LEVEL",
+      "var-value": "network-essentials+dna-essentials,all:ngwc;"
+     },
+     {
+      "var-name": "MODEL_REVISION_NUM",
+      "var-value": "A0"
+     },
+     {
+      "var-name": "ABNORMAL_RESET_COUNT",
+      "var-value": "0"
+     },
+     {
+      "var-name": "MCP_STARTUP_TRACEFLAGS",
+      "var-value": "00000000:00000000"
+     },
+     {
+      "var-name": "MOTHERBOARD_SERIAL_NUM",
+      "var-value": "FOC91710ZLR"
+     },
+     {
+      "var-name": "MOTHERBOARD_ASSEMBLY_NUM",
+      "var-value": "73-18277-04"
+     },
+     {
+      "var-name": "MOTHERBOARD_REVISION_NUM",
+      "var-value": "A0"
+     },
+     {
+      "var-name": "CONSOLE_MIRRORING_DISABLE",
+      "var-value": "0"
+     },
+     {
+      "var-name": "AUTO_SWITCH_CONSOLE_DISABLE",
+      "var-value": "0"
+     }
+    ],
+    "cr-info": {
+     "cr": "",
+     "cr-next": "",
+     "cr-hex": "",
+     "cr-next-hex": ""
+    }
+   }
+  ],
+  "device-hardware": {
+   "device-inventory": [
+    {
+     "hw-type": "hw-type-emmc",
+     "hw-dev-index": 0,
+     "version": "V02",
+     "part-number": "C9300-48UXM",
+     "serial-number": "FOC8704M57A",
+     "hw-description": "c93xx Stack",
+     "dev-name": "c93xx Stack",
+     "field-replaceable": false,
+     "hw-class": "hw-class-physical"
+    },
+    {
+     "hw-type": "hw-type-chassis",
+     "hw-dev-index": 1,
+     "version": "V02",
+     "part-number": "C9300-48UXM",
+     "serial-number": "FOC8704M57A",
+     "hw-description": "C9300-48UXM",
+     "dev-name": "Switch 1",
+     "field-replaceable": true,
+     "hw-class": "hw-class-physical"
+    },
+    {
+     "hw-type": "hw-type-pem",
+     "hw-dev-index": 2,
+     "version": "V01",
+     "part-number": "PWR-C1-1100WAC-P  ",
+     "serial-number": "DCC0394P6GA",
+     "hw-description": "Switch 1 - Power Supply A",
+     "dev-name": "Switch 1 - Power Supply A",
+     "field-replaceable": true,
+     "hw-class": "hw-class-physical"
+    },
+    {
+     "hw-type": "hw-type-pim",
+     "hw-dev-index": 3,
+     "version": "V01",
+     "part-number": "C3850-NM-4-1G     ",
+     "serial-number": "FOC3364KXJL",
+     "hw-description": "4x1G Uplink Module",
+     "dev-name": "Switch 1 FRU Uplink Module 1",
+     "field-replaceable": true,
+     "hw-class": "hw-class-physical"
+    },
+    {
+     "hw-type": "hw-type-dram",
+     "hw-dev-index": 4,
+     "version": "",
+     "part-number": "",
+     "serial-number": "",
+     "hw-description": "Physical Memory",
+     "dev-name": "Memory",
+     "field-replaceable": false,
+     "hw-class": "hw-class-physical"
+    },
+    {
+     "hw-type": "hw-type-cpu",
+     "hw-dev-index": 5,
+     "version": " 6",
+     "part-number": " GenuineIntel",
+     "serial-number": "",
+     "hw-description": " Intel(R) Xeon(R) CPU D-1526 @ 1.80GHz",
+     "dev-name": "CPU",
+     "field-replaceable": false,
+     "hw-class": "hw-class-physical"
+    }
+   ],
+   "device-system-data": {
+    "current-time": "2026-09-29T18:33:53+00:00",
+    "boot-time": "2026-09-29T17:34:44+00:00",
+    "software-version": "Cisco IOS Software [IOSXE], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.15.6, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2026 by Cisco Systems, Inc.\nCompiled Wed 22-Jul-26 02:58 by mcpre",
+    "rommon-version": "IOS-XE ROMMON",
+    "last-reboot-reason": "Image Install",
+    "reason-severity": "normal",
+    "unsaved-config": false,
+    "reload-history-support": [
+     null
+    ],
+    "reload-history": {
+     "rl-history": [
+      {
+       "reload-category": "rc-img-install",
+       "reload-desc": "Image Install",
+       "reload-time": "2026-09-29T17:34:59+00:00",
+       "reload-severity": "normal",
+       "sw-ver": "17.15.6",
+       "ha-role": "ha-role-active",
+       "crash-data-file": ""
+      },
+      {
+       "reload-category": "rc-other",
+       "reload-desc": "PowerOn",
+       "reload-time": "2015-01-01T00:56:30+00:00",
+       "reload-severity": "abnormal",
+       "sw-ver": "",
+       "ha-role": "ha-role-unknown",
+       "crash-data-file": ""
+      }
+     ],
+     "fru-type": "device-hardware-fru-rp",
+     "fru-id": 0
+    },
+    "mac-address": "44:01:e4:b4:5b:26"
+   }
+  }
+ }
+}

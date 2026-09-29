@@ -1,0 +1,12 @@
+NAME: "c93xx Stack", DESCR: "c93xx Stack"
+PID: C9300-48UXM       , VID: V02  , SN: FOC8704M57A
+
+NAME: "Switch 1", DESCR: "C9300-48UXM"
+PID: C9300-48UXM       , VID: V02  , SN: FOC8704M57A
+
+NAME: "Switch 1 - Power Supply A", DESCR: "Switch 1 - Power Supply A"
+PID: PWR-C1-1100WAC-P  , VID: V01  , SN: DCC0394P6GA
+
+NAME: "Switch 1 FRU Uplink Module 1", DESCR: "4x1G Uplink Module"
+PID: C3850-NM-4-1G     , VID: V01  , SN: FOC3364KXJL
+

@@ -1,0 +1,63 @@
+{
+  "Cisco-IOS-XE-poe-oper:poe-oper-data": {
+    "poe-module": [
+      {
+        "module": 1,
+        "available-power": "525.0",
+        "used-power": "0.0",
+        "remaining-power": "525.0",
+        "chassis-num": 1,
+        "power-pool-idx": 1,
+        "num-ports": 48,
+        "used-ports": 0,
+        "free-ports": 48,
+        "module-type": "module-type-fixed",
+        "if-max-power": "60000.0",
+        "tot-consumed-pwr-valid": [
+          null
+        ],
+        "tot-consumed-pwr": "0.0",
+        "bt-reload-pending": false
+      }
+    ],
+    "poe-stack": [
+      {
+        "power-stack-name": "Powerstack-1",
+        "mode": "stack-mode-sharing",
+        "topolgy": "stack-topo-standalone",
+        "total-power": 1100,
+        "rsvd-power": 0,
+        "alloc-power": 575,
+        "unused-power": 525,
+        "num-sw": 1,
+        "num-ps": 1
+      }
+    ],
+    "poe-switch": [
+      {
+        "switch-num": 1,
+        "power-budget": 1100,
+        "power-allocated": 575,
+        "low-port-priority": 22,
+        "high-port-priority": 13,
+        "switch-priority": 4,
+        "port-one-status": "stack-port-status-not-connected",
+        "port-two-status": "stack-port-status-not-connected",
+        "neighbor-on-port-one": "00:00:00:00:00:00",
+        "neighbor-on-port-two": "00:00:00:00:00:00",
+        "consumed-switch-power": 137,
+        "consumed-high-power": 0,
+        "consumed-low-power": 0,
+        "allocated-high-power": 0,
+        "allocated-low-power": 0,
+        "ps-a": 1100,
+        "ps-b": 0,
+        "available-power": 525,
+        "consumed-system-power": 137,
+        "consumed-poe-power": 0,
+        "power-stack-name": "Powerstack-1",
+        "ps-c": 0
+      }
+    ]
+  }
+}

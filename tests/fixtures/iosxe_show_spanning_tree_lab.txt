@@ -1,0 +1,94 @@
+
+VLAN0001
+  Spanning tree enabled protocol rstp
+  Root ID    Priority    61441
+             Address     4401.e4b4.5b26
+             This bridge is the root
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+
+  Bridge ID  Priority    61441  (priority 61440 sys-id-ext 1)
+             Address     4401.e4b4.5b26
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+             Aging Time  300 sec
+
+Interface           Role Sts Cost      Prio.Nbr Type
+------------------- ---- --- --------- -------- --------------------------------
+Tw1/0/14            Desg FWD 20000     128.14   P2p 
+Te1/0/48            Desg FWD 8000      128.48   P2p 
+Ap1/0/1             Desg FWD 20000     128.65   P2p 
+
+
+
+VLAN0002
+  Spanning tree enabled protocol rstp
+  Root ID    Priority    61442
+             Address     4401.e4b4.5b26
+             This bridge is the root
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+
+  Bridge ID  Priority    61442  (priority 61440 sys-id-ext 2)
+             Address     4401.e4b4.5b26
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+             Aging Time  300 sec
+
+Interface           Role Sts Cost      Prio.Nbr Type
+------------------- ---- --- --------- -------- --------------------------------
+Tw1/0/1             Desg FWD 8000      128.1    P2p Edge 
+Tw1/0/11            Desg FWD 200000    128.11   P2p Edge 
+
+
+
+VLAN0003
+  Spanning tree enabled protocol rstp
+  Root ID    Priority    61443
+             Address     4401.e4b4.5b26
+             This bridge is the root
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+
+  Bridge ID  Priority    61443  (priority 61440 sys-id-ext 3)
+             Address     4401.e4b4.5b26
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+             Aging Time  300 sec
+
+Interface           Role Sts Cost      Prio.Nbr Type
+------------------- ---- --- --------- -------- --------------------------------
+Te1/0/47            Desg FWD 8000      128.47   P2p 
+Te1/0/48            Desg FWD 8000      128.48   P2p 
+
+
+
+VLAN0004
+  Spanning tree enabled protocol rstp
+  Root ID    Priority    61444
+             Address     4401.e4b4.5b26
+             This bridge is the root
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+
+  Bridge ID  Priority    61444  (priority 61440 sys-id-ext 4)
+             Address     4401.e4b4.5b26
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+             Aging Time  300 sec
+
+Interface           Role Sts Cost      Prio.Nbr Type
+------------------- ---- --- --------- -------- --------------------------------
+Te1/0/47            Desg FWD 8000      128.47   P2p 
+Te1/0/48            Desg FWD 8000      128.48   P2p 
+
+
+
+VLAN0999
+  Spanning tree enabled protocol rstp
+  Root ID    Priority    33767
+             Address     4401.e4b4.5b26
+             This bridge is the root
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+
+  Bridge ID  Priority    33767  (priority 32768 sys-id-ext 999)
+             Address     4401.e4b4.5b26
+             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec
+             Aging Time  300 sec
+
+Interface           Role Sts Cost      Prio.Nbr Type
+------------------- ---- --- --------- -------- --------------------------------
+Te1/0/47            Desg FWD 8000      128.47   P2p 
+

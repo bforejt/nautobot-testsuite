@@ -1,0 +1,81 @@
+{
+ "Cisco-IOS-XE-poe-oper:poe-oper-data": {
+  "poe-port-detail": [
+   {
+    "intf-name": "TwoGigabitEthernet1/0/14",
+    "power-used": "16.8",
+    "pd-class": "pd-ieee4",
+    "device-detected": true,
+    "power-admin-max": "60.0",
+    "max-power-drawn": "6.08",
+    "oper-state": "on",
+    "admin-state": "admin-state-auto",
+    "oper-power": "6.02",
+    "oper-police": "oper-police-none",
+    "poe-intf-enabled": true,
+    "module-id": 1,
+    "chassis-num": 1,
+    "pwr-state": "pow-dev-fully-powered"
+   }
+  ],
+  "poe-module": [
+   {
+    "module": 1,
+    "available-power": "525.0",
+    "used-power": "16.8",
+    "remaining-power": "508.2",
+    "chassis-num": 1,
+    "power-pool-idx": 1,
+    "num-ports": 48,
+    "used-ports": 1,
+    "free-ports": 47,
+    "module-type": "module-type-fixed",
+    "if-max-power": "60000.0",
+    "tot-consumed-pwr-valid": [
+     null
+    ],
+    "tot-consumed-pwr": "6.0",
+    "bt-reload-pending": false
+   }
+  ],
+  "poe-stack": [
+   {
+    "power-stack-name": "Powerstack-1",
+    "mode": "stack-mode-sharing",
+    "topolgy": "stack-topo-standalone",
+    "total-power": 1100,
+    "rsvd-power": 0,
+    "alloc-power": 591,
+    "unused-power": 509,
+    "num-sw": 1,
+    "num-ps": 1
+   }
+  ],
+  "poe-switch": [
+   {
+    "switch-num": 1,
+    "power-budget": 1100,
+    "power-allocated": 591,
+    "low-port-priority": 22,
+    "high-port-priority": 13,
+    "switch-priority": 4,
+    "port-one-status": "stack-port-status-not-connected",
+    "port-two-status": "stack-port-status-not-connected",
+    "neighbor-on-port-one": "00:00:00:00:00:00",
+    "neighbor-on-port-two": "00:00:00:00:00:00",
+    "consumed-switch-power": 138,
+    "consumed-high-power": 0,
+    "consumed-low-power": 6,
+    "allocated-high-power": 0,
+    "allocated-low-power": 16,
+    "ps-a": 1100,
+    "ps-b": 0,
+    "available-power": 509,
+    "consumed-system-power": 138,
+    "consumed-poe-power": 6,
+    "power-stack-name": "Powerstack-1",
+    "ps-c": 0
+   }
+  ]
+ }
+}

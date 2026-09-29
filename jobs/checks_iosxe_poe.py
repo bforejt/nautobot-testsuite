@@ -4,30 +4,37 @@ One check, ``iosxe_poe``, read from ``Cisco-IOS-XE-poe-oper`` with a
 ``fields`` filter: per-port inline-power state, and the StackPower ring the
 members share their supplies over. It registers under the ``iosxe`` platform
 like the switch catalog and needs no gate: a device that does not serve the
-model (404), or serves it with no PoE ports and no power stack, records
-not-present.
+model (404), or serves it with no PoE module, no PoE ports and no power
+stack, records not-present.
 
 The model publishes the per-port table twice — ``poe-port-detail`` (the
 richer list, its own enum vocabulary) and ``poe-port`` (the older list,
-``ilpower-*`` enums). Which one a release fills is a *field capture* question,
-so both are requested and both are normalized into ONE vocabulary
-(on/off/faulty/deny/overdrawn/error-disable); context records which list was
-read. Power figures never enter normalized: under StackPower sharing the
-per-switch budget, allocation and availability are drawn from the shared pool
-and move with demand, so they live in context beside the watts each port
-drew.
+``ilpower-*`` enums). What a C9300-48UXM actually fills, settled by the lab
+(plan §9 item 13): ``poe-port-detail`` only, and only for ports that are
+POWERED — the lab harvest with one access point drawing power carried
+exactly that one row, and an earlier probe with nothing powered carried no
+per-port list at all while ``poe-module`` (num-ports 48), ``poe-stack`` and
+``poe-switch`` were served. Both lists are still requested and normalized
+into ONE vocabulary (on/off/faulty/deny/overdrawn/error-disable) so a release
+that fills the other one lands in the same keys; context records which list
+was read and whether the family was absent. Power figures never enter
+normalized: under StackPower sharing the per-switch budget, allocation and
+availability are drawn from the shared pool and move with demand, so they
+live in context beside the watts each port drew.
 
 Merge-friendliness follows checks_iosxe_wireless: SEMANTICS and KEY_MODELS
 live here and are merged/exported at import; jobs/__init__.py and
 tests/_loader.py discover ``checks_*`` modules by name. Every path, leaf and
-enum below was checked against the published 17.12.1
-Cisco-IOS-XE-poe-oper.yang (revision 2023-07-01), including the model's own
-spelling of the topology leaf, ``topolgy``.
+enum below was checked against the 17.15.1 Cisco-IOS-XE-poe-oper.yang on
+disk (the lab advertises revision 2024-07-10), including the model's own
+spelling of the topology leaf,
+``topolgy``. The per-port ``device-name`` leaf (the powered device's model
+string) is deliberately not requested.
 """
 
 from collections import Counter
 
-from . import constants as C
+from . import iosxe_common as common
 from .registry import SEMANTICS as _REGISTRY_SEMANTICS
 from .registry import CheckDef, SkipCheck, register
 
@@ -66,16 +73,13 @@ _RAW_PORT_ROWS_MAX = 600
 _PORT_LISTS = ("poe-port-detail", "poe-port")
 
 
-# --- shared helpers ----------------------------------------------------------
+# --- shared helpers (jobs/iosxe_common; historical names kept for callers) ---
 
-
-def _aslist(node):
-    """RESTCONF quirk: a single list entry may arrive as a bare dict, absent as None."""
-    if node is None:
-        return []
-    if isinstance(node, list):
-        return node
-    return [node]
+_aslist = common.aslist
+_to_int = common.to_int
+_to_float = common.to_float
+_short = common.short
+_compact = common.compact
 
 
 def _poe_container(payload):
@@ -98,38 +102,10 @@ def _rows(container, name):
     return [entry for entry in _aslist(container.get(name)) if isinstance(entry, dict)]
 
 
-def _to_int(value):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _to_float(value):
-    """decimal64 leaves arrive as strings ('13.20'); None and junk stay None."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _short(value, prefix):
-    """Strip a YANG enum prefix ('stack-topo-ring' -> 'ring'); None stays None."""
-    if value is None:
-        return None
-    value = str(value)
-    return value[len(prefix) :] if value.startswith(prefix) else value
-
-
 def _word(value, prefix):
     """_short, with the model's 'not available' enum member read as unmeasured."""
     word = _short(value, prefix)
     return None if word == "null" else word
-
-
-def _compact(facts):
-    """Drop unmeasured (None) facets: absent means the device did not publish it."""
-    return {key: value for key, value in facts.items() if value is not None}
 
 
 # --- enum vocabularies (both port lists -> one set of words) -----------------
@@ -300,9 +276,19 @@ def _poe_context(payload):
     modules = _rows(container, "poe-module")
     stacks = _rows(container, "poe-stack")
     switches = _rows(container, "poe-switch")
+    # poe-module fills num-ports / used-ports / free-ports on the lab release
+    # and not on older ones: the PoE-capable port count is None where the
+    # release does not say, never 0.
+    capacity = [_to_int(entry.get("num-ports")) for entry in modules]
+    capacity = [count for count in capacity if count is not None]
     context = {
         "port_source": source,
+        # The per-port family lists POWERED ports only on the lab releases:
+        # its absence beside a served poe-module is "nothing powered", not
+        # "unserved" (a 404 is not-present).
+        "port_family_served": source is not None,
         "ports_total": len(ports),
+        "poe_ports": sum(capacity) if capacity else None,
         "ports_by_oper": dict(
             sorted(
                 Counter(
@@ -356,6 +342,7 @@ def _poe_context(payload):
                 "consumed_system": _to_int(entry.get("consumed-system-power")),
                 "ps_a": _to_int(entry.get("ps-a")),
                 "ps_b": _to_int(entry.get("ps-b")),
+                "ps_c": _to_int(entry.get("ps-c")),
             }
         )
     return context
@@ -385,28 +372,36 @@ def _capped_raw(payload, notes):
 
 def _collect_poe(ctx):
     notes = []
-    path = _POE_PATH
-    try:
-        payload = ctx.get(path, ok_404=True)
-    except Exception as exc:
-        if getattr(exc, "status_code", None) != 400:
-            raise
-        notes.append("poe-oper-data: fields filter rejected (HTTP 400); unfiltered read used")
-        path = _POE_OPER
-        payload = ctx.get(path, ok_404=True, timeout=C.BIG_GET_TIMEOUT)
+    read = common.get_filtered(
+        ctx, _POE_OPER, _POE_FIELDS, label="poe-oper-data", ok_404=True, notes=notes
+    )
+    path, payload = read.path, read.payload
     if payload is None:
         raise SkipCheck("PoE state not served (poe-oper model absent)")
     container = _poe_container(payload)
     _source, ports = _port_source(container)
+    modules = _rows(container, "poe-module")
     stacks = _rows(container, "poe-stack")
     switches = _rows(container, "poe-switch")
-    if not ports and not stacks and not switches:
+    if not ports and not modules and not stacks and not switches:
         raise SkipCheck(
-            "no PoE ports and no StackPower state reported (non-PoE SKU, or the model is "
-            "served empty)"
+            "no PoE module, no PoE ports and no StackPower state reported (non-PoE SKU, or "
+            "the model is served empty)"
         )
     if not ports:
-        notes.append("no PoE ports reported; StackPower keys only (non-PoE SKU in a power stack)")
+        if modules:
+            # The lab releases list powered ports only (17.15.6 probe: a
+            # 48-port UPOE module served with no per-port list while nothing
+            # drew power). Not a fault, not a non-PoE SKU: no port keys.
+            notes.append(
+                "no per-port PoE rows: the model lists powered ports only and none is "
+                "powered now (PoE module served); StackPower keys only"
+            )
+        else:
+            notes.append(
+                "no PoE ports and no PoE module reported; StackPower keys only (non-PoE SKU "
+                "in a power stack)"
+            )
     normalized = _normalize_ports(ports)
     normalized.update(_normalize_stacks(stacks))
     normalized.update(_normalize_switches(switches))
@@ -421,33 +416,50 @@ def _collect_poe(ctx):
 SEMANTICS = {
     "iosxe_poe": (
         "Inline power and StackPower, from Cisco-IOS-XE-poe-oper. Keys 'port|<interface>' "
-        "cover every PoE-capable port, powered or not: admin (auto/static/off), oper in "
-        "one vocabulary whichever port list the release fills (on is healthy; off is no "
-        "device or a device that went dark; faulty, deny, overdrawn and error-disable are "
-        "faults — deny means the budget could not grant the request), and class: ieee0..ieee8, "
-        "cisco, ieee-unknown-class, mismatch or unknown, the model's own words with their "
-        "list prefix removed; absent only when the model reports the class as not "
-        "available (pd-null / poe-null) — whether an empty port reads absent or unknown is "
-        "release-dependent, so read class beside oper (unknown beside off is an empty "
-        "port, not a device the switch could not classify). A "
-        "port that went on -> off with its class gone is an AP, phone or camera that lost "
-        "power while its link may still read up elsewhere. Keys 'stack|<power-stack>' are "
-        "the power twin of the StackWise ring: the members' supplies pooled over "
+        "-> admin (auto/static/off), oper in one vocabulary whichever port list the "
+        "release fills (on is healthy; off is a device that went dark; faulty, deny, "
+        "overdrawn and error-disable are faults — deny means the budget could not grant "
+        "the request), and class: ieee0..ieee8, cisco, ieee-unknown-class, mismatch or "
+        "unknown, the model's own words with their list prefix removed; absent when the "
+        "model reports the class as not available (pd-null / poe-null). WHICH ports are "
+        "keys is what the device decides, and the 17.15.1 model describes both poe-port "
+        "and poe-port-detail only as 'List of PoE interfaces' (no powered-only "
+        "qualifier). On the lab 9300 (every capture), where context "
+        "port_source reads poe-port-detail and port_family_served is True, the list held "
+        "powered ports only — one row for the one access point drawing power, and no "
+        "per-port list at all while nothing drew power, although poe-module still "
+        "reported its 48 ports. On such a release the key set is the set of powered "
+        "ports: an AP, phone or camera that lost power is a REMOVED key (with its link "
+        "possibly still reading up elsewhere) and a device plugged in is an added one. "
+        "Read class beside oper: unknown beside off is an empty port on a release or SKU "
+        "that lists every PoE-capable port (there a device that lost power is a changed "
+        "oper value, not a removed key), while a port keyed with oper off/faulty/deny "
+        "and a class is a device the switch detected and would not or could not power. "
+        "Context port_source names the list read (None when neither is served), "
+        "port_family_served says whether a per-port list existed at all, ports_total "
+        "counts its rows and poe_ports the module's PoE-capable port count where the "
+        "release fills num-ports (None where it does not) — ports_total equal to "
+        "poe_ports means the release listed every port. Not-present only when the "
+        "model is not served (404) or answers with no module, no ports and no power stack "
+        "(a non-PoE SKU); a PoE switch with nothing powered keeps its stack and switch "
+        "keys with no port keys and a raw note saying so, as does a non-PoE member inside "
+        "a power stack (no poe-module: the note says which). Keys 'stack|<power-stack>' "
+        "are the power twin of the StackWise ring: the members' supplies pooled over "
         "StackPower cables — mode (sharing, redundant, rps, with -strict variants), "
-        "topology (ring is healthy where two or more members are cabled; star or "
-        "standalone is a cable missing or not reseated; none is no StackPower), switches "
-        "and supplies (a supply that failed or was pulled lowers the count) and "
-        "total_watts (the installed supply total, which moves only with supplies). Keys "
-        "'switch|<n>' carry each member's two StackPower cable ports (connected is "
-        "healthy; not-connected or shut breaks the ring to that member). Not-present "
-        "when the model is not served, or when it reports no PoE ports and no power "
-        "stack (a non-PoE SKU); a non-PoE member inside a power stack keeps its stack and "
-        "switch keys with no port keys. Context holds what moves with demand and is "
-        "never compared: the list the port keys came from (port_source), ports by oper "
-        "state, overdrawn-police counts, watts drawn per port set and remaining per "
-        "module, and the per-switch budget, allocation, availability, PSU wattages and "
+        "topology (ring is healthy where two or more members are cabled; star is a cable "
+        "missing or not reseated; standalone is what a single member reports, the lab's "
+        "Powerstack-1; none is no StackPower), switches and supplies (a supply that failed "
+        "or was pulled lowers the count) and total_watts (the installed supply total, "
+        "which moves only with supplies: 1100 for the lab's one PSU). Keys 'switch|<n>' "
+        "carry each member's two StackPower cable ports (connected is healthy; "
+        "not-connected on a standalone member is normal, on a ring member it breaks the "
+        "ring to that member; shut is administrative). Context holds what moves with "
+        "demand and is never compared: ports by oper state, overdrawn-police counts, "
+        "watts drawn per port set and remaining per module, and the per-switch budget, "
+        "allocation, availability, PSU wattages (ps_a/ps_b, ps_c where served) and "
         "consumption, which under StackPower sharing are pool allocations rather than "
-        "fixed hardware figures."
+        "fixed hardware figures (the lab's did not move across three reads with a "
+        "constant load; a device powering up moves them)."
     ),
 }
 _REGISTRY_SEMANTICS.update(SEMANTICS)
@@ -460,8 +472,11 @@ register(
         id="iosxe_poe",
         platform="iosxe",
         description=(
-            "PoE port admin/oper/class and StackPower mode, topology, supplies and cable "
-            "ports (not-present on a non-PoE SKU or when the model is absent)"
+            "PoE port admin/oper/class per listed port (the observed 9300 releases list "
+            "powered ports only, so a device that lost power is a removed key there; "
+            "context port_source, ports_total and poe_ports say what this capture's "
+            "release listed) and StackPower mode, topology, supplies and cable ports "
+            "(not-present on a non-PoE SKU or when the model is absent)"
         ),
         tier=1,
         compare={"mode": "equality_set"},

@@ -1,0 +1,185 @@
+{
+ "Cisco-IOS-XE-spanning-tree-oper:stp-details": {
+  "stp-detail": [
+   {
+    "instance": "VLAN0001",
+    "bridge-priority": 61441,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61441,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "topology-changes": "5",
+    "time-of-last-topology-change": "1970-01-01T00:23:52+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "AppGigabitEthernet1/0/1",
+       "port-num": 65,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      },
+      {
+       "name": "TwoGigabitEthernet1/0/14",
+       "port-num": 14,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0002",
+    "bridge-priority": 61442,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61442,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "topology-changes": "1",
+    "time-of-last-topology-change": "1970-01-01T00:23:52+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TwoGigabitEthernet1/0/1",
+       "port-num": 1,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      },
+      {
+       "name": "TwoGigabitEthernet1/0/11",
+       "port-num": 11,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0003",
+    "bridge-priority": 61443,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61443,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "topology-changes": "2",
+    "time-of-last-topology-change": "1970-01-01T00:03:04+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0004",
+    "bridge-priority": 61444,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 61444,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "topology-changes": "2",
+    "time-of-last-topology-change": "1970-01-01T00:03:04+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      },
+      {
+       "name": "TenGigabitEthernet1/0/48",
+       "port-num": 48,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      }
+     ]
+    }
+   },
+   {
+    "instance": "VLAN0999",
+    "bridge-priority": 33767,
+    "bridge-address": "44:01:e4:b4:5b:26",
+    "designated-root-priority": 33767,
+    "designated-root-address": "44:01:e4:b4:5b:26",
+    "root-port": 0,
+    "root-cost": "0",
+    "topology-changes": "1",
+    "time-of-last-topology-change": "1970-01-01T00:03:04+00:00",
+    "interfaces": {
+     "interface": [
+      {
+       "name": "TenGigabitEthernet1/0/47",
+       "port-num": 47,
+       "role": "stp-designated",
+       "state": "stp-forwarding",
+       "link-type": "stp-auto",
+       "guard": "stp-port-guard-default",
+       "bpdu-guard": "stp-port-bpduguard-default"
+      }
+     ]
+    }
+   }
+  ],
+  "stp-global": {
+   "mode": "stp-mode-rapid-pvst",
+   "bridge-assurance": [
+    null
+   ],
+   "etherchannel-misconfig-guard": [
+    null
+   ],
+   "mst-only": {
+    "mst-config-revision": 0,
+    "mst-config-name": "",
+    "max-hops": 20
+   }
+  }
+ }
+}

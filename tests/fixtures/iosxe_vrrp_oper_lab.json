@@ -1,0 +1,40 @@
+{
+ "Cisco-IOS-XE-vrrp-oper:vrrp-oper-data": {
+  "vrrp-oper-state": [
+   {
+    "if-number": 81,
+    "group-id": 4,
+    "addr-type": "ipv4-address",
+    "version": "vrrp-v3",
+    "virtual-ip": "198.18.4.1",
+    "if-name": "Vlan4",
+    "vrrp-state": "proto-state-master",
+    "virtual-mac": "00:00:5e:00:01:04",
+    "master-ip": "198.18.4.2",
+    "is-owner": false,
+    "priority": 110,
+    "advertisement-timer": 1000,
+    "master-down-timer": 0,
+    "skew-time": 570,
+    "preempt": true,
+    "master-transitions": 1,
+    "new-master-reason": "reason-master-no-response",
+    "last-state-change-time": "2026-09-29T17:36:25.736+00:00",
+    "adv-interval-errors": 0,
+    "ip-ttl-errors": 0,
+    "rcvd-pri-zero-pak": 0,
+    "sent-pri-zero-pak": 0,
+    "rcvd-invalid-type-pak": 0,
+    "addr-list-errors": 0,
+    "pak-len-errors": 0,
+    "discontinuity-time": "2026-09-29T17:36:25.736+00:00",
+    "advertisement-sent": 3840,
+    "advertisement-rcvd": 0,
+    "omp-state": "omp-down",
+    "bfd-enabled": false,
+    "bfd-state": "bfd-none",
+    "state-change-reason": "cr-priority"
+   }
+  ]
+ }
+}

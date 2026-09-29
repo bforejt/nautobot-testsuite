@@ -1,0 +1,39 @@
+{
+ "Cisco-IOS-XE-device-hardware-oper:device-system-data": {
+  "current-time": "2026-09-29T18:34:09+00:00",
+  "boot-time": "2026-09-29T17:34:44+00:00",
+  "software-version": "Cisco IOS Software [IOSXE], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.15.6, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2026 by Cisco Systems, Inc.\nCompiled Wed 22-Jul-26 02:58 by mcpre",
+  "rommon-version": "IOS-XE ROMMON",
+  "last-reboot-reason": "Image Install",
+  "reason-severity": "normal",
+  "unsaved-config": false,
+  "reload-history-support": [
+   null
+  ],
+  "reload-history": {
+   "rl-history": [
+    {
+     "reload-category": "rc-img-install",
+     "reload-desc": "Image Install",
+     "reload-time": "2026-09-29T17:34:59+00:00",
+     "reload-severity": "normal",
+     "sw-ver": "17.15.6",
+     "ha-role": "ha-role-active",
+     "crash-data-file": ""
+    },
+    {
+     "reload-category": "rc-other",
+     "reload-desc": "PowerOn",
+     "reload-time": "2015-01-01T00:56:30+00:00",
+     "reload-severity": "abnormal",
+     "sw-ver": "",
+     "ha-role": "ha-role-unknown",
+     "crash-data-file": ""
+    }
+   ],
+   "fru-type": "device-hardware-fru-rp",
+   "fru-id": 0
+  },
+  "mac-address": "44:01:e4:b4:5b:26"
+ }
+}

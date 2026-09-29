@@ -1,0 +1,90 @@
+{
+ "Cisco-IOS-XE-ntp-oper:ntp-oper-data": {
+  "ntp-status-info": {
+   "refid": {
+    "ip-addr": "198.18.89.0"
+   },
+   "reftime": "2026-09-29T18:33:55.193273+00:00",
+   "sys-poll": 7,
+   "stratum": 2,
+   "root-delay": "23.0",
+   "root-disp": "14.46",
+   "offset": "7.92",
+   "ntp-associations": [
+    {
+     "assoc-id": 50308,
+     "peer-reach": 255,
+     "peer-stratum": 1,
+     "refid": {
+      "ip-addr": "198.18.102.71"
+     },
+     "reftime": "2026-09-29T18:33:55.177884+00:00",
+     "last-poll-time": "3",
+     "poll": 7,
+     "delay": "23.0",
+     "offset": "7.92",
+     "jitter": "3.08",
+     "ntp-address": {
+      "ip-addr": "198.18.89.0",
+      "vrf-name": "default"
+     },
+     "num-events": 1,
+     "last-peer-event": "ntp-peer-event-mobilize",
+     "peer-selection-status": "ntp-peer-sys-peer",
+     "peer-authentication-status": "ntp-auth-none",
+     "serv-type": "ntp-server",
+     "psw-crypto": "crypto-flag-sig"
+    },
+    {
+     "assoc-id": 50309,
+     "peer-reach": 255,
+     "peer-stratum": 3,
+     "refid": {
+      "ip-addr": "198.18.107.113"
+     },
+     "reftime": "2026-09-29T18:29:13.765332+00:00",
+     "last-poll-time": "136",
+     "poll": 8,
+     "delay": "0.91",
+     "offset": "9.86",
+     "jitter": "0.98",
+     "ntp-address": {
+      "ip-addr": "192.0.2.1",
+      "vrf-name": "default"
+     },
+     "num-events": 2,
+     "last-peer-event": "ntp-peer-event-mobilize",
+     "peer-selection-status": "ntp-peer-candidate",
+     "peer-authentication-status": "ntp-auth-none",
+     "serv-type": "ntp-server",
+     "psw-crypto": "crypto-flag-sig"
+    },
+    {
+     "assoc-id": 50310,
+     "peer-reach": 255,
+     "peer-stratum": 1,
+     "refid": {
+      "ip-addr": "198.18.74.84"
+     },
+     "reftime": "2026-09-29T18:33:36+00:00",
+     "last-poll-time": "1",
+     "poll": 7,
+     "delay": "23.0",
+     "offset": "6.84",
+     "jitter": "4.24",
+     "ntp-address": {
+      "ip-addr": "198.18.154.28",
+      "vrf-name": "default"
+     },
+     "num-events": 2,
+     "last-peer-event": "ntp-peer-event-mobilize",
+     "peer-selection-status": "ntp-peer-candidate",
+     "peer-authentication-status": "ntp-auth-none",
+     "serv-type": "ntp-server",
+     "psw-crypto": "crypto-flag-sig"
+    }
+   ],
+   "freq-drift-ppm": "0.0"
+  }
+ }
+}

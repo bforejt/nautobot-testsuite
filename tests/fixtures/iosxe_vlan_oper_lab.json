@@ -1,0 +1,253 @@
+{
+ "Cisco-IOS-XE-vlan-oper:vlans": {
+  "vlan": [
+   {
+    "id": 1,
+    "name": "default",
+    "status": "active",
+    "vlan-interfaces": [
+     {
+      "interface": "AppGigabitEthernet1/0/1",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/37",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/38",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/39",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/40",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/41",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/42",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/43",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/44",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/45",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/46",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/47",
+      "subinterface": 0
+     },
+     {
+      "interface": "TenGigabitEthernet1/0/48",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/13",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/14",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/15",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/16",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/17",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/18",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/19",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/22",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/23",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/24",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/25",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/26",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/27",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/28",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/29",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/30",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/31",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/32",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/33",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/34",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/35",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/36",
+      "subinterface": 0
+     }
+    ]
+   },
+   {
+    "id": 2,
+    "name": "home-lab",
+    "status": "active",
+    "vlan-interfaces": [
+     {
+      "interface": "TwoGigabitEthernet1/0/1",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/2",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/3",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/4",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/5",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/6",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/7",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/8",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/9",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/10",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/11",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/12",
+      "subinterface": 0
+     }
+    ]
+   },
+   {
+    "id": 3,
+    "name": "lab-hsrp",
+    "status": "active",
+    "vlan-interfaces": [
+     {
+      "interface": "TwoGigabitEthernet1/0/20",
+      "subinterface": 0
+     },
+     {
+      "interface": "TwoGigabitEthernet1/0/21",
+      "subinterface": 0
+     }
+    ]
+   },
+   {
+    "id": 4,
+    "name": "lab-vrrp",
+    "status": "active"
+   },
+   {
+    "id": 999,
+    "name": "lab-native",
+    "status": "active"
+   },
+   {
+    "id": 1002,
+    "name": "fddi-default",
+    "status": "suspend"
+   },
+   {
+    "id": 1003,
+    "name": "token-ring-default",
+    "status": "suspend"
+   },
+   {
+    "id": 1004,
+    "name": "fddinet-default",
+    "status": "suspend"
+   },
+   {
+    "id": 1005,
+    "name": "trnet-default",
+    "status": "suspend"
+   }
+  ]
+ }
+}

@@ -1,0 +1,428 @@
+{
+ "Cisco-IOS-XE-crypto-pki-oper:crypto-pki-oper-data": {
+  "crypto-pki-bundle": [
+   {
+    "label": "CISCO_IDEVID_CMCA_SUDI",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": true,
+    "tp-enrolled": true,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-general-purpose",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=C9300-48UXM-4401E4B45B26,serialNumber=PID:C9300-48UXM SN:FOC8704M57A",
+      "issuer-name": "cn=Cisco Manufacturing CA,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2019-01-14T11:01:46+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=Cisco Manufacturing CA,o=Cisco Systems",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2005-06-10T22:16:01+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "CISCO_IDEVID_CMCA2_SUDI",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": true,
+    "tp-enrolled": true,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-general-purpose",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=C9300-48UXM-4401E4B45B26,serialNumber=PID:C9300-48UXM SN:FOC8704M57A",
+      "issuer-name": "cn=Cisco Manufacturing CA SHA2,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2019-01-14T11:16:26+00:00",
+      "validity-end": "2037-11-12T13:00:17+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA2_SUDI"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "02",
+      "subject-name": "cn=Cisco Manufacturing CA SHA2,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA M2,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2012-11-12T13:50:58+00:00",
+      "validity-end": "2037-11-12T13:00:17+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA2_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "CISCO_IDEVID_SUDI",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": true,
+    "tp-enrolled": true,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-general-purpose",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "036A8351",
+      "subject-name": "cn=C9300-48UXM,ou=ACT-2 Lite SUDI,o=Cisco,serialNumber=PID:C9300-48UXM SN:FOC8704M57A",
+      "issuer-name": "cn=ACT2 SUDI CA,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2019-01-14T11:23:50+00:00",
+      "validity-end": "2029-05-14T20:25:41+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_SUDI"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=ACT2 SUDI CA,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2011-06-30T17:56:57+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "Trustpool",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": false,
+    "tp-enrolled": false,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=ACT2 SUDI CA,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2011-06-30T17:56:57+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "02",
+      "subject-name": "cn=Cisco Manufacturing CA SHA2,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA M2,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2012-11-12T13:50:58+00:00",
+      "validity-end": "2037-11-12T13:00:17+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA2_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:20>",
+      "subject-name": "cn=Cisco Manufacturing CA,o=Cisco Systems",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2005-06-10T22:16:01+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:32>",
+      "subject-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2004-05-14T20:17:12+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI0"
+       },
+       {
+        "tp-name": "CISCO_IDEVID_SUDI0"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "01",
+      "subject-name": "cn=Cisco Root CA M2,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA M2,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2012-11-12T13:00:18+00:00",
+      "validity-end": "2037-11-12T13:00:18+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA2_SUDI0"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     },
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "01",
+      "subject-name": "cn=Cisco Licensing Root CA,o=Cisco",
+      "issuer-name": "cn=Cisco Licensing Root CA,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2013-05-30T19:48:47+00:00",
+      "validity-end": "2038-05-30T19:48:47+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "Trustpool"
+       },
+       {
+        "tp-name": "SLA-TrustPoint"
+       }
+      ],
+      "storage": "nvram:CiscoLicensi#1CA.cer"
+     }
+    ]
+   },
+   {
+    "label": "CISCO_IDEVID_CMCA_SUDI0",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": false,
+    "tp-enrolled": false,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:32>",
+      "subject-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2004-05-14T20:17:12+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI0"
+       },
+       {
+        "tp-name": "CISCO_IDEVID_SUDI0"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "CISCO_IDEVID_SUDI0",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": false,
+    "tp-enrolled": false,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "<hex:32>",
+      "subject-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "issuer-name": "cn=Cisco Root CA 2048,o=Cisco Systems",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2004-05-14T20:17:12+00:00",
+      "validity-end": "2029-05-14T20:25:42+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA_SUDI0"
+       },
+       {
+        "tp-name": "CISCO_IDEVID_SUDI0"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "CISCO_IDEVID_CMCA2_SUDI0",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": false,
+    "tp-enrolled": false,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "01",
+      "subject-name": "cn=Cisco Root CA M2,o=Cisco",
+      "issuer-name": "cn=Cisco Root CA M2,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2012-11-12T13:00:18+00:00",
+      "validity-end": "2037-11-12T13:00:18+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "CISCO_IDEVID_CMCA2_SUDI0"
+       },
+       {
+        "tp-name": "Trustpool"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "TP-self-signed-276118150",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": true,
+    "tp-enrolled": true,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-general-purpose",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "01",
+      "subject-name": "cn=IOS-Self-Signed-Certificate-276118150",
+      "issuer-name": "cn=IOS-Self-Signed-Certificate-276118150",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2015-01-01T00:05:39+00:00",
+      "validity-end": "2024-12-31T00:05:39+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "TP-self-signed-276118150"
+       }
+      ],
+      "storage": "nvram:IOS-Self-Sig#5.cer"
+     }
+    ]
+   },
+   {
+    "label": "SLA-TrustPoint",
+    "mode": "crypto-pki-mode-none",
+    "tp-authenticated": true,
+    "tp-keys-generated": false,
+    "tp-enrolled": false,
+    "tp-scep-enrollment-in-progress": false,
+    "key-export": "crypto-pki-key-not-exportable",
+    "cert": [
+     {
+      "cert-avail": "crypto-pki-cert-available",
+      "cert-usage": "crypto-pki-cert-usage-signature",
+      "cert-key-type": "crypto-pki-cert-key-rsa",
+      "serial-number": "01",
+      "subject-name": "cn=Cisco Licensing Root CA,o=Cisco",
+      "issuer-name": "cn=Cisco Licensing Root CA,o=Cisco",
+      "md5-fp": "<hex:32>",
+      "validity-start": "2013-05-30T19:48:47+00:00",
+      "validity-end": "2038-05-30T19:48:47+00:00",
+      "asc-tp": [
+       {
+        "tp-name": "Trustpool"
+       },
+       {
+        "tp-name": "SLA-TrustPoint"
+       }
+      ],
+      "storage": "nvram:CiscoLicensi#1CA.cer"
+     }
+    ]
+   }
+  ]
+ }
+}

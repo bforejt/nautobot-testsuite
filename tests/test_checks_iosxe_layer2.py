@@ -1,11 +1,14 @@
-"""checks_iosxe_layer2: VLANs, trunks, spanning tree and the MAC table.
+"""checks_iosxe_layer2: VLANs, trunks, spanning tree, the MAC table and 802.1X sessions.
 
-Driven with synthetic fixtures shaped after the published 17.12.1 vlan-oper,
-spanning-tree-oper and matm-oper models plus real IOS-XE CLI layouts
-(tests/fixtures/iosxe_vlan_oper.json, iosxe_stp_details.json,
-iosxe_matm_table.json, iosxe_show_interfaces_trunk.txt,
-iosxe_show_vtp_status.txt); MACs and addresses are documentation-range values.
-No Nautobot, no network.
+Driven with synthetic fixtures shaped after the 17.15.1 vlan-oper,
+spanning-tree-oper, matm-oper and identity-oper models plus real IOS-XE CLI
+layouts (tests/fixtures/iosxe_vlan_oper.json, iosxe_stp_details.json,
+iosxe_matm_table.json, iosxe_identity_oper.json,
+iosxe_show_interfaces_trunk.txt, iosxe_show_vtp_status.txt) — richer than the
+lab (a stack, voice VLANs, a non-root bridge, sessions) — and with the
+sanitized ``*_lab`` captures of a C9300-48UXM for what the device actually
+fills. MACs and addresses are documentation-range values. No
+Nautobot, no network.
 """
 
 import copy
@@ -22,7 +25,13 @@ diffcore = _loader.diffcore
 J = _loader.fixture_json
 T = _loader.fixture_text
 
-EXPECTED_IDS = {"iosxe_vlans", "iosxe_trunks", "iosxe_stp", "iosxe_mac_table"}
+EXPECTED_IDS = {
+    "iosxe_vlans",
+    "iosxe_trunks",
+    "iosxe_stp",
+    "iosxe_mac_table",
+    "iosxe_access_sessions",
+}
 
 
 class _Http(Exception):
@@ -192,6 +201,36 @@ class TestVlans(unittest.TestCase):
         self.assertEqual(self.context["active"], 8)
         self.assertEqual(self.context["suspended"], 1)
         self.assertFalse(any(key.startswith("port|") for key in self.normalized))
+        # The assigned-ports list wins where a release fills it.
+        self.assertEqual(self.context["port_map_source"], "ports")
+        self.assertEqual(self.context["port_vlans"], ports)
+
+    def test_port_map_comes_from_whichever_list_the_release_fills(self):
+        # The lab: ``ports`` empty on every VLAN, ``vlan-interfaces`` lists
+        # every switchport once — access ports under their VLAN (up or down),
+        # each trunk under VLAN 1 only (Te1/0/48 allowed 1,3-4 native 1, and
+        # Te1/0/47 allowed 3-4,999 native 999: neither its native nor its
+        # allowed VLANs), the down Tw1/0/22 port-channel member under 1,
+        # Port-channel1 not at all.
+        _, context = l2._normalize_vlans(J("iosxe_vlan_oper_lab.json"))
+        self.assertEqual(context["port_map_source"], "vlan-interfaces")
+        self.assertEqual(context["port_vlans"], context["vlan_interfaces"])
+        self.assertEqual(context["ports"], {})
+        self.assertEqual(context["port_vlans"]["TenGigabitEthernet1/0/48"], [1])
+        self.assertEqual(context["port_vlans"]["TenGigabitEthernet1/0/47"], [1])
+        self.assertEqual(context["port_vlans"]["TwoGigabitEthernet1/0/20"], [3])
+        self.assertEqual(context["port_vlans"]["TwoGigabitEthernet1/0/21"], [3])
+        self.assertEqual(context["port_vlans"]["TwoGigabitEthernet1/0/1"], [2])
+        self.assertEqual(context["port_vlans"]["TwoGigabitEthernet1/0/22"], [1])
+        self.assertNotIn("Port-channel1", context["port_vlans"])
+        self.assertEqual(len(context["port_vlans"]), 49)
+        # Neither list filled: an empty map that says so.
+        _, bare = l2._normalize_vlans(
+            {"Cisco-IOS-XE-vlan-oper:vlans": {"vlan": [{"id": 1, "name": "default"}]}}
+        )
+        self.assertIsNone(bare["port_map_source"])
+        self.assertEqual(bare["port_vlans"], {})
+        self.assertTrue(bare["lists_agree"])
 
     def test_agreeing_lists_are_reported(self):
         payload = {
@@ -616,6 +655,8 @@ class TestStp(unittest.TestCase):
                 "ports": 6,
             },
         )
+        # a real timestamp is not an age: no derived seconds
+        self.assertNotIn("last_topology_change_age", self.context["instances"]["VLAN0001"])
         self.assertEqual(self.context["instance_total"], 2)
         self.assertEqual(self.context["ports_keyed"], 3)
         self.assertEqual(self.context["disabled_ports_listed"], 1)
@@ -658,6 +699,83 @@ class TestStp(unittest.TestCase):
         self.assertEqual(normalized["stp"]["mst_revision"], 3)
         self.assertEqual(context["instances"]["MST0"], {"designated_forwarding": 0, "ports": 0})
         self.assertEqual(context["disabled_ports_listed"], 0)
+
+    def test_lab_root_bridge_resolves_no_root_port_and_reads_ages(self):
+        # The lab: this bridge root on every instance (priority 61440+vlan on
+        # the four configured ones, the default 32768+999 on VLAN 999), ten
+        # designated-forwarding rows across five instances, link-down ports
+        # not listed: instance keys only, and no port keys at all.
+        normalized, context = l2._normalize_stp(J("iosxe_stp_details_lab.json"))
+        self.assertEqual(
+            sorted(normalized),
+            [
+                "instance|VLAN0001",
+                "instance|VLAN0002",
+                "instance|VLAN0003",
+                "instance|VLAN0004",
+                "instance|VLAN0999",
+                "stp",
+            ],
+        )
+        one = normalized["instance|VLAN0001"]
+        self.assertTrue(one["is_root"])
+        self.assertNotIn("root_port", one)  # port-num 0 on the root bridge
+        self.assertEqual(one["root_cost"], 0)  # the device sends "0" as a string
+        self.assertEqual(one["root_address"], normalized["instance|VLAN0003"]["root_address"])
+        self.assertEqual(normalized["instance|VLAN0999"]["bridge_priority"], 32768 + 999)
+        self.assertEqual(context["disabled_ports_listed"], 0)
+        self.assertEqual(context["ports_keyed"], 0)
+        # The device fills time-of-last-topology-change with an AGE from the
+        # 1970 epoch: the string moves every capture, the seconds are derived.
+        vlan2 = context["instances"]["VLAN0002"]
+        self.assertEqual(vlan2["last_topology_change"], "1970-01-01T00:23:52+00:00")
+        self.assertEqual(vlan2["last_topology_change_age"], 23 * 60 + 52)
+        self.assertEqual(context["instances"]["VLAN0999"]["last_topology_change_age"], 184)
+        self.assertEqual(l2._topology_change_age("1970-01-02T01:00:01+00:00"), 90001)
+        self.assertIsNone(l2._topology_change_age("2026-09-29T15:36:41+00:00"))
+        self.assertIsNone(l2._topology_change_age(None))
+        # were the switch behind Te1/0/47 to become root, the root port
+        # resolves through this instance's own port-num rows (47 -> Te1/0/47)
+        payload = copy.deepcopy(J("iosxe_stp_details_lab.json"))
+        detail = payload["Cisco-IOS-XE-spanning-tree-oper:stp-details"]["stp-detail"][2]
+        self.assertEqual(detail["instance"], "VLAN0003")
+        detail["designated-root-address"] = "00:00:5e:00:53:99"
+        detail["designated-root-priority"] = 4099
+        detail["root-port"] = 47
+        detail["root-cost"] = "3"
+        uplink = [i for i in detail["interfaces"]["interface"] if i["port-num"] == 47][0]
+        uplink["role"] = "stp-root"
+        moved, _ = l2._normalize_stp(payload)
+        self.assertEqual(
+            moved["instance|VLAN0003"],
+            {
+                "bridge_priority": 61443,
+                "root_address": "00:00:5e:00:53:99",
+                "root_priority": 4099,
+                "root_cost": 3,
+                "root_port": "TenGigabitEthernet1/0/47",
+                "is_root": False,
+            },
+        )
+        self.assertEqual(
+            moved["port|VLAN0003|TenGigabitEthernet1/0/47"],
+            {
+                "role": "root",
+                "state": "forwarding",
+                "guard": "default",
+                "bpdu_guard": "default",
+                "link_type": "auto",
+            },
+        )
+        diff = diffcore.diff_check(normalized, moved, registry.CHECKS["iosxe_stp"].compare)
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual(
+            [a["key"] for a in diff["added"]], ["port|VLAN0003|TenGigabitEthernet1/0/47"]
+        )
+        self.assertEqual(
+            {c["field"] for c in diff["changed"]},
+            {"root_address", "root_priority", "root_cost", "root_port", "is_root"},
+        )
 
     def test_collector_end_to_end_with_the_fields_filter(self):
         ctx = _Ctx({"stp-details": self.payload})
@@ -743,6 +861,50 @@ class TestMacTable(unittest.TestCase):
         for row in self.rows:
             self.assertEqual(set(row) - {"vlan", "port"}, {"mac", "type", "table"})
 
+    def test_lab_buckets_static_tables_and_the_port_name_form(self):
+        # The lab: 50 dynamic MACs behind the uplink, one on the AP port, one
+        # in the native VLAN of the Te1/0/47 trunk; 27 static rows — 21 CPU
+        # group addresses in the vlan-independent table (vlan-id-number 1,
+        # not VLAN 1), five SVI MACs on Vlan<n>, and the configured static
+        # entry on Tw1/0/21 — none of them a bucket. This release spells
+        # ports long.
+        normalized, context, rows = l2._normalize_mac_table(J("iosxe_matm_table_lab.json"))
+        self.assertEqual(
+            normalized,
+            {
+                "total": 52,
+                "vlan|1": 1,
+                "vlan|2": 50,
+                "vlan|999": 1,
+                "member|1": 52,
+                "port|TwoGigabitEthernet1/0/1": 50,
+                "port|TwoGigabitEthernet1/0/14": 1,
+                "port|TenGigabitEthernet1/0/47": 1,
+            },
+        )
+        self.assertNotIn("vlan|3", normalized)  # the static entry's VLAN: no dynamic rows
+        self.assertEqual(context["static_total"], 27)
+        self.assertEqual(context["static_on_ports"], ["TwoGigabitEthernet1/0/21"])
+        self.assertEqual(context["by_table_type"], {"vlan": 58, "vlan-independent": 21})
+        self.assertEqual(context["port_name_form"], "long")
+        cpu = [r for r in rows if r["table"] == "vlan-independent"]
+        self.assertEqual(len(cpu), 21)
+        self.assertTrue(all(r["port"] == "CPU" and r["type"] == "static" for r in cpu))
+        self.assertIn(
+            {
+                "mac": "ff:ff:ff:ff:ff:ff",
+                "vlan": 1,
+                "port": "CPU",
+                "type": "static",
+                "table": "vlan-independent",
+            },
+            rows,
+        )
+        # 17.15.6 spells the same ports long: the buckets follow the device.
+        self.assertEqual(self.context["port_name_form"], "long")
+        self.assertEqual(l2._port_name_form(["CPU", "Vl1"]), None)
+        self.assertEqual(l2._port_name_form(["Tw1/0/1", "TwoGigabitEthernet1/0/2"]), "mixed")
+
     def test_differing_aging_times_are_reported_per_vlan(self):
         payload = copy.deepcopy(self.payload)
         payload["Cisco-IOS-XE-matm-oper:matm-table"][1]["aging-time"] = 600
@@ -787,9 +949,165 @@ class TestMacTable(unittest.TestCase):
         self.assertEqual(outcome["context"]["entries_total"], 0)
 
     def test_no_username_or_hostname_is_ever_requested(self):
-        for token in ("username", "hostname", "device-name", "user"):
+        for token in ("username", "hostname", "device-name", "device-type", "user", "ipv"):
             self.assertNotIn(token, l2._MATM_FIELDS)
             self.assertNotIn(token, l2._STP_FIELDS)
+            self.assertNotIn(token, l2._IDENTITY_FIELDS)
+
+
+class TestAccessSessions(unittest.TestCase):
+    def setUp(self):
+        self.payload = J("iosxe_identity_oper.json")
+        self.normalized, self.context, self.rows = l2._normalize_access_sessions(self.payload)
+
+    def test_buckets_are_flat_counts_over_the_plan_dimensions(self):
+        self.assertEqual(
+            self.normalized,
+            {
+                "total": 15,
+                "authorized": 12,
+                "domain|data": 13,
+                "domain|voice": 1,
+                "domain|unknown": 1,
+                "method|dot1x": 9,
+                "method|mab": 4,
+                "method|webauth": 1,
+                "method|static": 1,
+                "vlan|10": 11,
+                "vlan|20": 1,
+                "vlan|30": 1,  # the RADIUS-assigned VLAN: where the session landed
+                "vlan|40": 1,
+                "vlan|999": 1,  # the auth-fail VLAN counts too
+                "member|1": 9,
+                "member|2": 5,  # Port-channel1 has no member
+            },
+        )
+        for key, value in self.normalized.items():
+            self.assertIsInstance(value, int, key)
+            self.assertNotIsInstance(value, bool, key)
+
+    def test_method_words_follow_the_model_enum(self):
+        for raw, word in (
+            ("dot1x-auth-id", "dot1x"),
+            ("mab-id", "mab"),
+            ("web-auth-id", "webauth"),
+            ("static-method-id", "static"),
+            ("eou", "eou"),
+            ("dot1x-supp-id", "dot1x-supplicant"),
+            ("invalid-method-id", "invalid"),
+            ("future-thing-id", "future-thing"),
+        ):
+            self.assertEqual(l2._method_word(raw), word, raw)
+        self.assertIsNone(l2._method_word(None))
+
+    def test_context_and_rows_name_no_person(self):
+        self.assertEqual(self.context["sessions_total"], 15)
+        self.assertEqual(self.context["unauthorized"], 3)
+        self.assertEqual(
+            self.context["by_state"],
+            {"authz-success": 12, "running": 1, "authc-failed": 1, "authz-failed": 1},
+        )
+        self.assertEqual(
+            self.context["by_policy"],
+            {"PMAP-DOT1X-MAB": 12, "PMAP-WEBAUTH": 1, "PMAP-STATIC": 1, "none": 1},
+        )
+        self.assertEqual(self.context["ports_with_sessions"], 14)
+        self.assertEqual(len(self.rows), 15)
+        self.assertEqual(
+            self.rows[0],
+            {
+                "mac": "00:00:5e:00:53:0f",
+                "port": "Port-channel1",
+                "method": "static",
+                "domain": "data",
+                "state": "authz-success",
+                "authorized": True,
+                "vlan": 10,
+                "policy": "PMAP-STATIC",
+            },
+        )
+        allowed = {"mac", "port", "method", "domain", "state", "authorized", "vlan", "policy"}
+        for row in self.rows:
+            self.assertTrue(set(row) <= allowed, row)
+
+    def test_empty_answer_is_total_zero(self):
+        # The lab (no 802.1X) answered the filtered read with an empty 2xx.
+        lab = J("iosxe_identity_session_context_lab.json")
+        self.assertEqual(lab, {})
+        normalized, context, rows = l2._normalize_access_sessions(lab)
+        self.assertEqual(normalized, {"total": 0, "authorized": 0})
+        self.assertEqual(context["sessions_total"], 0)
+        self.assertEqual(rows, [])
+        # rows without a MAC (the list key) are not sessions
+        self.assertEqual(
+            l2._normalize_access_sessions(
+                {"Cisco-IOS-XE-identity-oper:session-context-data": [{"intf-name": "x"}, 3]}
+            )[0],
+            {"total": 0, "authorized": 0},
+        )
+
+    def test_collector_reads_the_filter_only_and_keys_raw_by_it(self):
+        ctx = _Ctx({"session-context-data": self.payload})
+        outcome = l2._collect_access_sessions(ctx)
+        self.assertEqual(ctx.calls, [l2._IDENTITY_FILTERED])
+        self.assertTrue(ctx.calls[0].endswith("?fields=" + l2._IDENTITY_FIELDS))
+        self.assertEqual(outcome["normalized"], self.normalized)
+        self.assertEqual(outcome["context"], self.context)
+        self.assertEqual(list(outcome["raw"]), [l2._IDENTITY_FILTERED])
+        self.assertEqual(outcome["raw"][l2._IDENTITY_FILTERED]["rows_total"], 15)
+        self.assertFalse(outcome["raw"][l2._IDENTITY_FILTERED]["truncated"])
+
+    def test_a_400_is_not_present_with_the_reason_and_never_retried(self):
+        ctx = _Ctx({"session-context-data": _Http(400)})
+        with self.assertRaises(registry.SkipCheck) as caught:
+            l2._collect_access_sessions(ctx)
+        self.assertEqual(ctx.calls, [l2._IDENTITY_FILTERED])  # exactly one GET
+        self.assertIn("HTTP 400", str(caught.exception))
+        self.assertIn("usernames", str(caught.exception))
+
+    def test_404_is_not_present_but_an_empty_2xx_is_total_zero(self):
+        with self.assertRaises(registry.SkipCheck) as absent:
+            l2._collect_access_sessions(_Ctx())
+        self.assertIn("model absent", str(absent.exception))
+        outcome = l2._collect_access_sessions(
+            _Ctx({"session-context-data": J("iosxe_identity_session_context_lab.json")})
+        )
+        self.assertEqual(outcome["normalized"], {"total": 0, "authorized": 0})
+        self.assertIn("total 0", outcome["raw"]["note"])
+
+    def test_other_http_errors_propagate(self):
+        with self.assertRaises(_Http):
+            l2._collect_access_sessions(_Ctx({"session-context-data": _Http(500)}))
+
+    def test_raw_rows_are_capped_and_noted(self):
+        original = l2.MAC_TABLE_RAW_MAX
+        l2.MAC_TABLE_RAW_MAX = 4
+        try:
+            outcome = l2._collect_access_sessions(_Ctx({"session-context-data": self.payload}))
+        finally:
+            l2.MAC_TABLE_RAW_MAX = original
+        self.assertEqual(len(outcome["raw"][l2._IDENTITY_FILTERED]["rows"]), 4)
+        self.assertTrue(outcome["raw"][l2._IDENTITY_FILTERED]["truncated"])
+        self.assertIn("capped at 4 of 15", outcome["raw"]["note"])
+        self.assertEqual(outcome["normalized"]["total"], 15)
+
+    def test_a_member_that_stopped_authorizing_is_a_miss_and_ramping_is_not(self):
+        compare = registry.CHECKS["iosxe_access_sessions"].compare
+        payload = copy.deepcopy(self.payload)
+        rows = payload["Cisco-IOS-XE-identity-oper:session-context-data"]
+        # member 1 (9 sessions pre) has none post: absent bucket = zero = miss
+        payload["Cisco-IOS-XE-identity-oper:session-context-data"] = [
+            r for r in rows if not r["intf-name"].startswith("TwoGigabitEthernet1/")
+        ]
+        post, _, _ = l2._normalize_access_sessions(payload)
+        diff = diffcore.diff_check(self.normalized, post, compare)
+        self.assertEqual(diff["result"], "diffs")
+        misses = {e["key"]: e.get("note") for e in diff["evaluations"] if e["ok"] is False}
+        self.assertEqual(misses, {"member|1": "absent post (counts as zero)"})
+        # one session back on member 1 proves the path: no miss
+        payload["Cisco-IOS-XE-identity-oper:session-context-data"].append(rows[0])
+        back, _, _ = l2._normalize_access_sessions(payload)
+        self.assertEqual(diffcore.diff_check(self.normalized, back, compare)["result"], "pass")
 
 
 class TestStability(unittest.TestCase):
@@ -804,6 +1122,7 @@ class TestStability(unittest.TestCase):
             "vlans": J("iosxe_vlan_oper.json"),
             "stp-details": J("iosxe_stp_details.json"),
             "matm-table": J("iosxe_matm_table.json"),
+            "session-context-data": J("iosxe_identity_oper.json"),
         }
         return {
             check_id: registry.CHECKS[check_id].collector(_Ctx(payloads, ssh=ssh))
@@ -819,6 +1138,29 @@ class TestStability(unittest.TestCase):
                 registry.CHECKS[check_id].compare,
             )
             self.assertEqual(diff["result"], "pass", check_id)
+
+    def test_lab_captures_diff_to_nothing(self):
+        # The real payloads, twice (two harvests of the lab minutes apart
+        # produced identical normalized views for all five).
+        payloads = {
+            "vlans": J("iosxe_vlan_oper_lab.json"),
+            "stp-details": J("iosxe_stp_details_lab.json"),
+            "matm-table": J("iosxe_matm_table_lab.json"),
+            "session-context-data": J("iosxe_identity_session_context_lab.json"),
+        }
+        ssh = {
+            "show vtp status": T("iosxe_show_vtp_status_lab.txt"),
+            "show interfaces trunk": T("iosxe_show_interfaces_trunk_lab.txt"),
+        }
+        for check_id in EXPECTED_IDS:
+            check = registry.CHECKS[check_id]
+            pre = check.collector(_Ctx(payloads, ssh=ssh))
+            post = check.collector(_Ctx(payloads, ssh=ssh))
+            self.assertEqual(pre["normalized"], post["normalized"], check_id)
+            diff = diffcore.diff_check(pre["normalized"], post["normalized"], check.compare)
+            self.assertEqual(diff["result"], "pass", check_id)
+            for key, value in pre["normalized"].items():
+                self.assertIsInstance(value, (dict, int), "%s %s" % (check_id, key))
 
     def test_a_moved_counter_changes_context_not_normalized(self):
         payload = J("iosxe_stp_details.json")
@@ -862,6 +1204,13 @@ class TestRegistrations(unittest.TestCase):
             mac.compare,
             {"mode": "capability", "floor_pre": 5, "min_post": 1, "absent_post": "zero"},
         )
+        sessions = registry.CHECKS["iosxe_access_sessions"]
+        self.assertEqual(sessions.tier, 1)
+        self.assertEqual(
+            sessions.compare,
+            {"mode": "capability", "floor_pre": 5, "min_post": 1, "absent_post": "zero"},
+        )
+        self.assertIn("aaa", sessions.tags)
 
     def test_an_absent_mac_bucket_post_reads_as_zero(self):
         pre, _context, _rows = l2._normalize_mac_table(J("iosxe_matm_table.json"))
@@ -883,11 +1232,22 @@ class TestRegistrations(unittest.TestCase):
         self.assertIn("vtp_pruning", l2.SEMANTICS["iosxe_trunks"])  # the pruning branch
         self.assertIn("disabled", l2.SEMANTICS["iosxe_stp"])  # never keys
         self.assertIn("redacted", l2.SEMANTICS["iosxe_vlans"])  # the digest
+        self.assertIn("port_map_source", l2.SEMANTICS["iosxe_vlans"])  # which list was inverted
+        self.assertIn("VLAN 1 whatever its native VLAN", l2.SEMANTICS["iosxe_vlans"])  # the lab
+        self.assertIn("1970", l2.SEMANTICS["iosxe_stp"])  # the age-as-timestamp leaf
+        self.assertIn("port_name_form", l2.SEMANTICS["iosxe_mac_table"])  # release spelling
+        self.assertIn("never retried unfiltered", l2.SEMANTICS["iosxe_access_sessions"])
+        self.assertIn("total 0", l2.SEMANTICS["iosxe_access_sessions"])
 
     def test_key_models_for_the_shakedown(self):
         self.assertEqual(
             l2.KEY_MODELS,
-            ("Cisco-IOS-XE-vlan-oper", "Cisco-IOS-XE-spanning-tree-oper", "Cisco-IOS-XE-matm-oper"),
+            (
+                "Cisco-IOS-XE-vlan-oper",
+                "Cisco-IOS-XE-spanning-tree-oper",
+                "Cisco-IOS-XE-matm-oper",
+                "Cisco-IOS-XE-identity-oper",
+            ),
         )
 
     def test_raw_cap_constant_mirrors_the_client_cap(self):

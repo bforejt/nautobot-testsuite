@@ -1,0 +1,32 @@
+Sensor List: Environmental Monitoring 
+ Sensor          Location        State               Reading       Range(min-max)       
+ PS1 Vout        1               GOOD               56111 mV          na
+ PS1 Vin         1               GOOD              119750 mV        90 - 264
+ PS1 CURin       1               GOOD                1377 mA          na
+ PS1 Curout      1               GOOD                2609 mA          na
+ PS1 POWin       1               GOOD              167750 mW          na
+ PS1 POWout      1               GOOD              144500 mW          na
+ PS1 FAN         1               GOOD                6480 rpm         na
+ PS2 Vout        1               FAULTY                 0 mV          na
+ PS2 Vin         1               FAULTY                 0 mV        90 - 264
+ PS2 CURin       1               FAULTY                 0 mA          na
+ PS2 CURout      1               FAULTY                 0 mA          na
+ PS2 POWin       1               FAULTY                 0 mW          na
+ PS2 POWout      1               FAULTY                 0 mW          na
+ PS2 FAN         1               FAULTY                 0 rpm         na
+ SYSTEM INLET    1               GREEN                 28 Celsius   0 - 56
+ SYSTEM OUTLET   1               GREEN                 42 Celsius   0 - 125
+ SYSTEM HOTSPOT  1               GREEN                 66 Celsius   0 - 125
+
+Switch	 FAN	 Speed	 State	 Airflow direction
+---------------------------------------------------
+  1  	  1	5440 	  OK	 Front to Back
+  1  	  2	5440 	  OK	 Front to Back
+  1  	  3	5440 	  OK	 Front to Back
+
+SW  PID                 Serial#     Status           Sys Pwr  PoE Pwr  Watts
+--  ------------------  ----------  ---------------  -------  -------  -----
+1A  PWR-C1-1100WAC-P    DCC0394P6GA  OK              Good     Good     1100
+1B  Unknown             Unknown      No Input Power  Bad      Bad      Unknown    
+
+---------------------------------------------------

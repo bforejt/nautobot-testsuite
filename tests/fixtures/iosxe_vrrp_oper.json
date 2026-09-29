@@ -1,0 +1,100 @@
+{
+ "Cisco-IOS-XE-vrrp-oper:vrrp-oper-data": {
+  "vrrp-oper-state": [
+   {
+    "if-number": 83,
+    "group-id": 4,
+    "addr-type": "ipv4-address",
+    "version": "vrrp-v3",
+    "virtual-ip": "198.18.4.1",
+    "if-name": "Vlan4",
+    "vrrp-state": "proto-state-master",
+    "virtual-mac": "00:00:5e:00:01:04",
+    "master-ip": "198.18.4.2",
+    "is-owner": false,
+    "priority": 110,
+    "advertisement-timer": 1000,
+    "master-down-timer": 0,
+    "skew-time": 570,
+    "preempt": true,
+    "master-transitions": 2,
+    "new-master-reason": "reason-master-no-response",
+    "last-state-change-time": "2026-09-29T15:43:25.342+00:00",
+    "adv-interval-errors": 0,
+    "ip-ttl-errors": 0,
+    "rcvd-pri-zero-pak": 0,
+    "sent-pri-zero-pak": 1,
+    "rcvd-invalid-type-pak": 0,
+    "addr-list-errors": 0,
+    "pak-len-errors": 0,
+    "discontinuity-time": "2026-09-29T15:43:25.342+00:00",
+    "advertisement-sent": 411,
+    "advertisement-rcvd": 0,
+    "omp-state": "omp-down"
+   },
+   {
+    "if-number": 84,
+    "group-id": 20,
+    "addr-type": "ipv4-address",
+    "version": "vrrp-v3",
+    "virtual-ip": "198.18.20.1",
+    "if-name": "Vlan20",
+    "vrrp-state": "proto-state-backup",
+    "virtual-mac": "00:00:5e:00:01:14",
+    "master-ip": "198.18.20.3",
+    "is-owner": false,
+    "priority": 100,
+    "advertisement-timer": 1000,
+    "master-down-timer": 3609,
+    "skew-time": 609,
+    "preempt": false,
+    "master-transitions": 0,
+    "new-master-reason": "reason-not-master",
+    "last-state-change-time": "2026-09-29T15:37:26.000+00:00",
+    "adv-interval-errors": 0,
+    "ip-ttl-errors": 0,
+    "rcvd-pri-zero-pak": 0,
+    "sent-pri-zero-pak": 0,
+    "rcvd-invalid-type-pak": 0,
+    "addr-list-errors": 0,
+    "pak-len-errors": 0,
+    "discontinuity-time": "2026-09-29T15:37:26.000+00:00",
+    "advertisement-sent": 0,
+    "advertisement-rcvd": 412,
+    "track-list": [
+     {
+      "track-name": "10",
+      "track-obj-state": "vrrp-track-state-resolved"
+     },
+     {
+      "track-name": "20",
+      "track-obj-state": "vrrp-track-state-unresolved"
+     }
+    ],
+    "omp-state": "omp-down",
+    "secondary-vip-addresses": [
+     "198.18.20.2"
+    ],
+    "bfd-enabled": false,
+    "bfd-state": "vrrp-bfd-state-down",
+    "state-change-reason": "cr-not-master"
+   },
+   {
+    "if-number": 85,
+    "group-id": 6,
+    "addr-type": "ipv6-address",
+    "version": "vrrp-v3",
+    "virtual-ip": "fe80::5e:0:2:6",
+    "if-name": "Vlan6",
+    "vrrp-state": "proto-state-init",
+    "virtual-mac": "00:00:5e:00:02:06",
+    "master-ip": "::",
+    "is-owner": false,
+    "priority": 100,
+    "preempt": true,
+    "master-transitions": 0,
+    "new-master-reason": "reason-not-master"
+   }
+  ]
+ }
+}

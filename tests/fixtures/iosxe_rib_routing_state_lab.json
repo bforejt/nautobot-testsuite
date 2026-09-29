@@ -1,0 +1,358 @@
+{
+ "ietf-routing:routing-state": {
+  "routing-instance": [
+   {
+    "name": "default",
+    "type": "ietf-routing:default-routing-instance",
+    "router-id": "0.0.0.0",
+    "routing-protocols": {
+     "routing-protocol": [
+      {
+       "type": "ietf-routing:static",
+       "name": "0"
+      },
+      {
+       "type": "ietf-routing:direct",
+       "name": "0"
+      },
+      {
+       "type": "cisco-routing-ext:eigrp",
+       "name": "1"
+      },
+      {
+       "type": "ietf-ospf:ospfv2",
+       "name": "1"
+      }
+     ]
+    },
+    "ribs": {
+     "rib": [
+      {
+       "name": "ipv4-default",
+       "address-family": "ietf-routing:ipv4",
+       "default-rib": false,
+       "routes": {
+        "route": [
+         {
+          "destination-prefix": "0.0.0.0/0",
+          "route-preference": 254,
+          "metric": 0,
+          "next-hop": {
+           "outgoing-interface": "",
+           "next-hop-address": "192.0.2.1",
+           "cisco-xe-ietf-routing-ext:uptime": "2026-09-29T17:35:38.462+00:00",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "outgoing-interface": "",
+             "next-hop-address": "192.0.2.1",
+             "uptime": "2026-09-29T17:35:38.462+00:00"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:static",
+          "active": [
+           null
+          ],
+          "last-updated": "2026-09-29T17:35:38.462+00:00",
+          "update-source": "0.0.0.0"
+         },
+         {
+          "destination-prefix": "203.0.113.0/24",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "outgoing-interface": "Vlan3",
+           "next-hop-address": "0.0.0.0",
+           "cisco-xe-ietf-routing-ext:uptime": "2026-09-29T17:36:23.462+00:00",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "outgoing-interface": "Vlan3",
+             "next-hop-address": "0.0.0.0",
+             "uptime": "2026-09-29T17:36:23.462+00:00"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "2026-09-29T17:36:23.462+00:00",
+          "update-source": "0.0.0.0"
+         },
+         {
+          "destination-prefix": "203.0.113.2/32",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         },
+         {
+          "destination-prefix": "198.18.4.0/24",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "outgoing-interface": "Vlan4",
+           "next-hop-address": "0.0.0.0",
+           "cisco-xe-ietf-routing-ext:uptime": "2026-09-29T17:36:23.462+00:00",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "outgoing-interface": "Vlan4",
+             "next-hop-address": "0.0.0.0",
+             "uptime": "2026-09-29T17:36:23.462+00:00"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "2026-09-29T17:36:23.462+00:00",
+          "update-source": "0.0.0.0"
+         },
+         {
+          "destination-prefix": "198.18.4.2/32",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         },
+         {
+          "destination-prefix": "192.0.2.0/23",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "outgoing-interface": "Vlan2",
+           "next-hop-address": "0.0.0.0",
+           "cisco-xe-ietf-routing-ext:uptime": "2026-09-29T17:35:38.461+00:00",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "outgoing-interface": "Vlan2",
+             "next-hop-address": "0.0.0.0",
+             "uptime": "2026-09-29T17:35:38.461+00:00"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "2026-09-29T17:35:38.461+00:00",
+          "update-source": "0.0.0.0"
+         },
+         {
+          "destination-prefix": "192.0.2.148/32",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         }
+        ]
+       }
+      },
+      {
+       "name": "ipv6-default",
+       "address-family": "ietf-routing:ipv6",
+       "default-rib": false,
+       "routes": {
+        "route": [
+         {
+          "destination-prefix": "ff00::/8",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "Mgmt-vrf",
+    "type": "ietf-routing:vrf-routing-instance",
+    "router-id": "0.0.0.0",
+    "interfaces": {
+     "interface": [
+      "GigabitEthernet0/0",
+      "Bluetooth0/4"
+     ]
+    },
+    "ribs": {
+     "rib": [
+      {
+       "name": "ipv4-default",
+       "address-family": "ietf-routing:ipv4",
+       "default-rib": false
+      },
+      {
+       "name": "ipv6-default",
+       "address-family": "ietf-routing:ipv6",
+       "default-rib": false,
+       "routes": {
+        "route": [
+         {
+          "destination-prefix": "ff00::/8",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "__Platform_iVRF:_ID00_",
+    "type": "ietf-routing:vrf-routing-instance",
+    "router-id": "0.0.0.0",
+    "interfaces": {
+     "interface": [
+      "LIIN18/2"
+     ]
+    },
+    "routing-protocols": {
+     "routing-protocol": [
+      {
+       "type": "ietf-routing:direct",
+       "name": "0"
+      }
+     ]
+    },
+    "ribs": {
+     "rib": [
+      {
+       "name": "ipv4-default",
+       "address-family": "ietf-routing:ipv4",
+       "default-rib": false,
+       "routes": {
+        "route": [
+         {
+          "destination-prefix": "198.18.65.4/30",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "outgoing-interface": "LIIN18/2",
+           "next-hop-address": "0.0.0.0",
+           "cisco-xe-ietf-routing-ext:uptime": "2026-09-29T17:35:05.317+00:00",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "outgoing-interface": "LIIN18/2",
+             "next-hop-address": "0.0.0.0",
+             "uptime": "2026-09-29T17:35:05.317+00:00"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "2026-09-29T17:35:05.317+00:00",
+          "update-source": "0.0.0.0"
+         },
+         {
+          "destination-prefix": "198.18.65.6/32",
+          "route-preference": 0,
+          "metric": 0,
+          "next-hop": {
+           "special-next-hop": "receive",
+           "cisco-xe-ietf-routing-ext:next-hop-list": [
+            {
+             "index": 1,
+             "special-next-hop": "receive"
+            }
+           ]
+          },
+          "source-protocol": "ietf-routing:direct",
+          "active": [
+           null
+          ],
+          "last-updated": "1970-01-01T00:00:00+00:00",
+          "update-source": ""
+         }
+        ]
+       }
+      },
+      {
+       "name": "ipv6-default",
+       "address-family": "ietf-routing:ipv6",
+       "default-rib": false
+      }
+     ]
+    }
+   }
+  ]
+ }
+}

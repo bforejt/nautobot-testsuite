@@ -1,0 +1,169 @@
+Certificate
+  Status: Available
+  Certificate Serial Number (hex): <hex:20>
+  Certificate Usage: General Purpose
+  Issuer: 
+    cn=Cisco Manufacturing CA
+    o=Cisco Systems
+  Subject:
+    Name: C9300-48UXM-4401E4B45B26
+    Serial Number: PID:C9300-48UXM SN:FOC8704M57A
+    cn=C9300-48UXM-4401E4B45B26
+    serialNumber=PID:C9300-48UXM SN:FOC8704M57A
+  CRL Distribution Points: 
+    http://www.cisco.com/security/pki/crl/cmca.crl
+  Validity Date: 
+    start date: 11:01:46 UTC Jan 14 2019
+    end   date: 20:25:42 UTC May 14 2029
+  Associated Trustpoints: CISCO_IDEVID_CMCA_SUDI 
+
+Certificate
+  Status: Available
+  Certificate Serial Number (hex): <hex:20>
+  Certificate Usage: General Purpose
+  Issuer: 
+    cn=Cisco Manufacturing CA SHA2
+    o=Cisco
+  Subject:
+    Name: C9300-48UXM-4401E4B45B26
+    Serial Number: PID:C9300-48UXM SN:FOC8704M57A
+    cn=C9300-48UXM-4401E4B45B26
+    serialNumber=PID:C9300-48UXM SN:FOC8704M57A
+  CRL Distribution Points: 
+    http://www.cisco.com/security/pki/crl/cmca2.crl
+  Validity Date: 
+    start date: 11:16:26 UTC Jan 14 2019
+    end   date: 13:00:17 UTC Nov 12 2037
+  Associated Trustpoints: CISCO_IDEVID_CMCA2_SUDI 
+
+Certificate
+  Status: Available
+  Certificate Serial Number (hex): 036A8351
+  Certificate Usage: General Purpose
+  Issuer: 
+    cn=ACT2 SUDI CA
+    o=Cisco
+  Subject:
+    Name: C9300-48UXM
+    Serial Number: PID:C9300-48UXM SN:FOC8704M57A
+    cn=C9300-48UXM
+    ou=ACT-2 Lite SUDI
+    o=Cisco
+    serialNumber=PID:C9300-48UXM SN:FOC8704M57A
+  Validity Date: 
+    start date: 11:23:50 UTC Jan 14 2019
+    end   date: 20:25:41 UTC May 14 2029
+  Associated Trustpoints: CISCO_IDEVID_SUDI 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): <hex:20>
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Root CA 2048
+    o=Cisco Systems
+  Subject: 
+    cn=ACT2 SUDI CA
+    o=Cisco
+  CRL Distribution Points: 
+    http://www.cisco.com/security/pki/crl/crca2048.crl
+  Validity Date: 
+    start date: 17:56:57 UTC Jun 30 2011
+    end   date: 20:25:42 UTC May 14 2029
+  Associated Trustpoints: CISCO_IDEVID_SUDI Trustpool 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): 02
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Root CA M2
+    o=Cisco
+  Subject: 
+    cn=Cisco Manufacturing CA SHA2
+    o=Cisco
+  CRL Distribution Points: 
+    http://www.cisco.com/security/pki/crl/crcam2.crl
+  Validity Date: 
+    start date: 13:50:58 UTC Nov 12 2012
+    end   date: 13:00:17 UTC Nov 12 2037
+  Associated Trustpoints: CISCO_IDEVID_CMCA2_SUDI Trustpool 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): <hex:20>
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Root CA 2048
+    o=Cisco Systems
+  Subject: 
+    cn=Cisco Manufacturing CA
+    o=Cisco Systems
+  CRL Distribution Points: 
+    http://www.cisco.com/security/pki/crl/crca2048.crl
+  Validity Date: 
+    start date: 22:16:01 UTC Jun 10 2005
+    end   date: 20:25:42 UTC May 14 2029
+  Associated Trustpoints: CISCO_IDEVID_CMCA_SUDI Trustpool 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): <hex:32>
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Root CA 2048
+    o=Cisco Systems
+  Subject: 
+    cn=Cisco Root CA 2048
+    o=Cisco Systems
+  Validity Date: 
+    start date: 20:17:12 UTC May 14 2004
+    end   date: 20:25:42 UTC May 14 2029
+  Associated Trustpoints: CISCO_IDEVID_CMCA_SUDI0 CISCO_IDEVID_SUDI0 Trustpool Trustpool 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): 01
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Root CA M2
+    o=Cisco
+  Subject: 
+    cn=Cisco Root CA M2
+    o=Cisco
+  Validity Date: 
+    start date: 13:00:18 UTC Nov 12 2012
+    end   date: 13:00:18 UTC Nov 12 2037
+  Associated Trustpoints: CISCO_IDEVID_CMCA2_SUDI0 Trustpool Trustpool 
+
+Router Self-Signed Certificate
+  Status: Available
+  Certificate Serial Number (hex): 01
+  Certificate Usage: General Purpose
+  Issuer: 
+    cn=IOS-Self-Signed-Certificate-276118150
+  Subject:
+    Name: IOS-Self-Signed-Certificate-276118150
+    cn=IOS-Self-Signed-Certificate-276118150
+  Validity Date: 
+    start date: 00:05:39 UTC Jan 1 2015
+    end   date: 00:05:39 UTC Dec 31 2024
+  Associated Trustpoints: TP-self-signed-276118150 
+  Storage: nvram:IOS-Self-Sig#5.cer
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): 01
+  Certificate Usage: Signature
+  Issuer: 
+    cn=Cisco Licensing Root CA
+    o=Cisco
+  Subject: 
+    cn=Cisco Licensing Root CA
+    o=Cisco
+  Validity Date: 
+    start date: 19:48:47 UTC May 30 2013
+    end   date: 19:48:47 UTC May 30 2038
+  Associated Trustpoints: Trustpool Trustpool SLA-TrustPoint 
+  Storage: nvram:CiscoLicensi#1CA.cer
+

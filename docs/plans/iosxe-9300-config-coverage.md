@@ -1,10 +1,14 @@
 # Plan: Catalyst 9300 running-config coverage and the gaps worth closing
 
-Status tracker: `docs/coverage.md` records which recommendations have landed and ranks the open holes.
-
-Status: **analysis only. Nothing here is implemented.** The question is how
-much of a Catalyst 9300's running-config (and startup-config) the existing
-snapshot structure cannot show, and which of those gaps deserve a check.
+Status: **the ten recommendations of §8 and the defects of §10 have landed**
+(branch `iosxe-operational-state`, including the §10 hygiene remainder — the
+config header's `by <user>` account is no longer lifted into context); the
+per-item status, what the field capture on the lab 9300 settled from §9, and
+the holes that remain, ranked, are kept in [`docs/coverage.md`](../coverage.md) — read that page for the
+current state and this one for the analysis and the reasoning behind each
+check. The question this plan answered is how much of a Catalyst 9300's
+running-config (and startup-config) the snapshot structure of the time could
+not show, and which of those gaps deserved a check.
 
 Method:
 

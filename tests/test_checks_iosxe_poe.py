@@ -1,11 +1,14 @@
 """checks_iosxe_poe: enum vocabularies, the normalizers, context, and the collector.
 
-Driven by tests/fixtures/iosxe_poe_oper.json, hand-built from the published
-17.12.1 Cisco-IOS-XE-poe-oper.yang: a two-member stack whose port table is
-served in BOTH list shapes (poe-port-detail and poe-port, each in its own
-enum vocabulary), a StackPower ring with three supplies, sanitized neighbor
-MACs. The shakedown harvest replaces it with a sanitized real capture. No
-Nautobot, no network.
+Driven by tests/fixtures/iosxe_poe_oper.json, hand-built from the 17.15.1
+Cisco-IOS-XE-poe-oper.yang: a two-member stack whose port table is served in
+BOTH list shapes (poe-port-detail and poe-port, each in its own enum
+vocabulary), a StackPower ring with three supplies, sanitized neighbor MACs
+— richer than any one device. Beside it, what a C9300-48UXM actually
+answered: iosxe_poe_oper_lab.json (one access point powered: poe-port-detail
+with that ONE row) and iosxe_poe_oper_unpowered.json (an earlier probe of the
+same switch with nothing powered: no per-port list at all). No Nautobot, no
+network.
 """
 
 import copy
@@ -23,6 +26,8 @@ diffcore = _loader.diffcore
 J = _loader.fixture_json
 
 FIXTURE = "iosxe_poe_oper.json"
+LAB = "iosxe_poe_oper_lab.json"
+UNPOWERED = "iosxe_poe_oper_unpowered.json"
 CONTAINER = "Cisco-IOS-XE-poe-oper:poe-oper-data"
 
 EXPECTED_IDS = {"iosxe_poe"}
@@ -340,13 +345,108 @@ class TestContext(unittest.TestCase):
             empty,
             {
                 "port_source": None,
+                "port_family_served": False,
                 "ports_total": 0,
+                "poe_ports": None,
                 "ports_by_oper": {},
                 "ports_police_overdrawn": 0,
                 "watts_drawn": None,
                 "watts_remaining": None,
             },
         )
+
+
+class TestLabShapes(unittest.TestCase):
+    """What the device fills: powered ports only, in poe-port-detail."""
+
+    def test_lab_one_powered_access_point(self):
+        payload = J(LAB)
+        container = payload[CONTAINER]
+        self.assertNotIn("poe-port", container)
+        self.assertEqual(
+            [row["intf-name"] for row in container["poe-port-detail"]],
+            ["TwoGigabitEthernet1/0/14"],
+        )
+        self.assertEqual(
+            poe._normalize_poe(payload),
+            {
+                "port|TwoGigabitEthernet1/0/14": {"admin": "auto", "oper": "on", "class": "ieee4"},
+                "stack|Powerstack-1": {
+                    "mode": "sharing",
+                    "topology": "standalone",
+                    "switches": 1,
+                    "supplies": 1,
+                    "total_watts": 1100,
+                },
+                "switch|1": {"port_one": "not-connected", "port_two": "not-connected"},
+            },
+        )
+        context = poe._poe_context(payload)
+        self.assertEqual(context["port_source"], "poe-port-detail")
+        self.assertTrue(context["port_family_served"])
+        self.assertEqual(context["ports_total"], 1)
+        self.assertEqual(context["poe_ports"], 48)  # the module's num-ports
+        self.assertEqual(context["ports_by_oper"], {"on": 1})
+        self.assertEqual(context["watts_drawn"], 16.8)
+        self.assertEqual(context["watts_remaining"], 508.2)
+        self.assertEqual(
+            context["module|1"],
+            {
+                "chassis": 1,
+                "available": 525.0,
+                "used": 16.8,
+                "remaining": 508.2,
+                "ports": 48,
+                "used_ports": 1,
+                "free_ports": 47,
+            },
+        )
+        self.assertEqual(context["switch|1"]["ps_a"], 1100)
+        self.assertEqual(context["switch|1"]["ps_c"], 0)  # this release fills the third supply
+        outcome = poe._collect_poe(_Ctx({"poe-oper-data": payload}))
+        self.assertNotIn("note", outcome["raw"])
+        self.assertEqual(len(outcome["normalized"]), 3)
+
+    def test_17_15_nothing_powered_serves_no_port_list(self):
+        payload = J(UNPOWERED)
+        container = payload[CONTAINER]
+        self.assertEqual(set(container), {"poe-module", "poe-stack", "poe-switch"})
+        self.assertEqual(container["poe-module"][0]["num-ports"], 48)
+        ctx = _Ctx({"poe-oper-data": payload})
+        outcome = poe._collect_poe(ctx)
+        self.assertEqual(set(outcome["normalized"]), {"stack|Powerstack-1", "switch|1"})
+        self.assertIn("none is powered now", outcome["raw"]["note"])
+        self.assertIn("PoE module served", outcome["raw"]["note"])
+        self.assertNotIn("non-PoE", outcome["raw"]["note"])
+        context = outcome["context"]
+        self.assertIsNone(context["port_source"])
+        self.assertFalse(context["port_family_served"])
+        self.assertEqual(context["ports_total"], 0)
+        self.assertEqual(context["poe_ports"], 48)
+        self.assertEqual(
+            context["module|1"],
+            {
+                "chassis": 1,
+                "available": 525.0,
+                "used": 0.0,
+                "remaining": 525.0,
+                "ports": 48,
+                "used_ports": 0,
+                "free_ports": 48,
+            },
+        )
+        self.assertEqual(context["switch|1"]["ps_c"], 0)
+        self.assertIsNone(context["watts_drawn"])
+
+    def test_a_device_that_lost_power_is_a_removed_key(self):
+        # The lab's AP powered vs nothing powered: the port key goes.
+        powered = poe._normalize_poe(J(LAB))
+        dark = poe._normalize_poe(J(UNPOWERED))
+        diff = diffcore.diff_check(powered, dark, {"mode": "equality_set"})
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual([r["key"] for r in diff["removed"]], ["port|TwoGigabitEthernet1/0/14"])
+        self.assertEqual(diff["added"], [])
+        self.assertEqual(diff["changed"], [])  # stack and switch keys are release-stable
 
 
 class TestCollector(unittest.TestCase):
@@ -378,7 +478,9 @@ class TestCollector(unittest.TestCase):
         self.assertEqual(set(outcome["normalized"]), {"stack|Powerstack-1", "switch|1", "switch|2"})
         self.assertEqual(outcome["context"]["ports_total"], 0)
         self.assertIsNone(outcome["context"]["port_source"])
-        self.assertIn("no PoE ports reported", outcome["raw"]["note"])
+        # no poe-module either: a non-PoE member, not a PoE switch with nothing powered
+        self.assertIn("no PoE ports and no PoE module reported", outcome["raw"]["note"])
+        self.assertIn("non-PoE SKU", outcome["raw"]["note"])
 
     def test_fields_rejection_retries_unfiltered_once_and_notes_it(self):
         ctx = _Ctx({"poe-oper-data": _reject_fields(J(FIXTURE))})
@@ -447,7 +549,16 @@ class TestRegistrations(unittest.TestCase):
             self.assertIn(check_id, registry.SEMANTICS, check_id)
             self.assertEqual(registry.SEMANTICS[check_id], poe.SEMANTICS[check_id])
         text = poe.SEMANTICS["iosxe_poe"].lower()
-        for phrase in ("power twin", "topology", "port_source", "not-present", "never compared"):
+        for phrase in (
+            "power twin",
+            "topology",
+            "port_source",
+            "port_family_served",
+            "powered ports only",
+            "removed key",
+            "not-present",
+            "never compared",
+        ):
             self.assertIn(phrase, text, phrase)
 
     def test_key_models_for_the_shakedown(self):

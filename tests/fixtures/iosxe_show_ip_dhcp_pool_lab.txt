@@ -1,0 +1,11 @@
+
+Pool lab-vlan3 :
+ Utilization mark (high/low)    : 100 / 0
+ Subnet size (first/next)       : 0 / 0 
+ Total addresses                : 254
+ Leased addresses               : 0
+ Excluded addresses             : 10
+ Pending event                  : none
+ 1 subnet is currently in the pool :
+ Current index        IP address range                    Leased/Excluded/Total
+ 203.0.113.1             203.0.113.1         - 203.0.113.254        0     / 10    / 254  

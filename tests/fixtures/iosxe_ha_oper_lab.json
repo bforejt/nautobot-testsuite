@@ -1,0 +1,14 @@
+{
+ "Cisco-IOS-XE-ha-oper:ha-oper-data": {
+  "ha-infra": {
+   "ha-state": "db-rf-active",
+   "peer-state": "db-rf-disabled",
+   "last-switchover-time": "1970-01-01T00:00:00+00:00",
+   "last-switchover-reason": "none",
+   "image-version": "17.15.6",
+   "leaf-mode": "SSO",
+   "ha-enabled": false,
+   "has-switchover-occured": false
+  }
+ }
+}

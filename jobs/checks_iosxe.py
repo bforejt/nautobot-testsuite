@@ -18,6 +18,8 @@ import re
 from datetime import datetime, timezone
 
 from . import constants as C
+from . import iosxe_common as common
+from .checks_iosxe_layer2 import _parse_interfaces_trunk
 from .registry import CheckDef, CollectError, SkipCheck, register
 
 # --- RESTCONF paths ----------------------------------------------------------
@@ -31,76 +33,57 @@ _FIB_PATH = (
 _BGP_PATH = "/data/Cisco-IOS-XE-bgp-oper:bgp-state-data/neighbors"
 _OSPF_PATH = (
     "/data/Cisco-IOS-XE-ospf-oper:ospf-oper-data"
-    "?fields=ospfv2-instance(instance-id;vrf-name;"
+    "?fields=ospfv2-instance(instance-id;vrf-name;router-id;"
     "ospfv2-area(area-id;ospfv2-interface(name;state;"
     "ospfv2-neighbor(nbr-id;address;state))))"
 )
 _ARP_PATH = "/data/Cisco-IOS-XE-arp-oper:arp-data"
-_IFACE_BASE_PATH = "/data/Cisco-IOS-XE-interfaces-oper:interfaces"
-# One GET serves iosxe_interfaces and iosxe_errdisable (identical path and
-# kwargs, so the per-run cache issues it once). Every leaf is defined by the
-# interface-state grouping of Cisco-IOS-XE-interfaces-oper (17.12.1): the
-# effective config (vrf, mask, ipv6-addrs, mtu, the security ACLs, the
-# diffserv policy names), the negotiated Ethernet state (ether-state is the
-# interface-class-ethernet case; the model's own `speed` leaf is a bandwidth
-# estimate and is not requested), the extended state (valid only beside the
-# intf-ext-state-support presence leaf: err-disable type and reason, mGig
-# downshift), the storm-control filter states and the statistics counters.
-# diffserv-info is cut to its keys: its classifier statistics are volatile
-# and large. Unfiltered on HTTP 400 (see _fetch_interfaces).
-_IFACE_FIELDS = (
-    "interface(name;description;admin-status;oper-status;vrf;ipv4;ipv4-subnet-mask;"
-    "ipv6-addrs;mtu;input-security-acl;output-security-acl;"
-    "diffserv-info(direction;policy-name);storm-control;"
-    "intf-ext-state-support;intf-ext-state;statistics;"
-    "ether-state(negotiated-port-speed;negotiated-duplex-mode;auto-negotiate))"
-)
-_IFACE_PATH = "%s?fields=%s" % (_IFACE_BASE_PATH, _IFACE_FIELDS)
+# Paths more than one module reads live in iosxe_common so the per-run cache
+# issues each GET once: the widened interfaces read (iosxe_interfaces and
+# iosxe_errdisable), the VLAN database (iosxe_interfaces reads it, ok_404, to
+# tell access ports from trunks and routed ports; iosxe_vlans makes the same
+# GET), device hardware and the stack roster.
+_IFACE_BASE_PATH = common.IFACE_BASE_PATH
+_IFACE_FIELDS = common.IFACE_FIELDS
+_IFACE_PATH = common.IFACE_PATH
 _CDP_PATH = "/data/Cisco-IOS-XE-cdp-oper:cdp-neighbor-details"
-# The VLAN database (Cisco-IOS-XE-vlan-oper vlans/vlan[id], its `ports` list
-# is "Assigned ports"): iosxe_interfaces reads it, ok_404, to tell access
-# ports from trunks and routed ports. Identical path and kwargs to the GET
-# iosxe_vlans makes, so the per-run cache issues it once.
-_VLAN_PATH = "/data/Cisco-IOS-XE-vlan-oper:vlans"
+_VLAN_PATH = common.VLAN_PATH
 _LLDP_PATH = "/data/Cisco-IOS-XE-lldp-oper:lldp-entries"
-_HW_PATH = "/data/Cisco-IOS-XE-device-hardware-oper:device-hardware-data"
+_HW_PATH = common.HW_PATH
 _ENV_PATH = "/data/Cisco-IOS-XE-environment-oper:environment-sensors"
 
-
-# --- shared helpers ----------------------------------------------------------
-
-
-def _aslist(node):
-    """RESTCONF quirk: a single list entry may arrive as a bare dict, absent as None."""
-    if node is None:
-        return []
-    if isinstance(node, list):
-        return node
-    return [node]
-
-
-def _container(payload, qualified_name):
-    """Top-level container by its module-qualified name (bare-name fallback)."""
-    if not isinstance(payload, dict):
-        return None
-    if qualified_name in payload:
-        return payload[qualified_name]
-    return payload.get(qualified_name.split(":", 1)[-1])
-
-
-def _to_int(value):
-    """int() that tolerates None and non-numeric junk; RESTCONF may string-ify numbers."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+# yang-library module names this module's collectors read, reported by the
+# shakedown (merged with the platform base list, first occurrence wins) so a
+# switch shakedown shows at once which of these collectors CAN work on the
+# image. Every path below was checked against the 17.15.1 models on disk.
+KEY_MODELS = (
+    "ietf-routing",
+    "Cisco-IOS-XE-fib-oper",
+    "Cisco-IOS-XE-bgp-oper",
+    "Cisco-IOS-XE-ospf-oper",
+    "Cisco-IOS-XE-arp-oper",
+    "Cisco-IOS-XE-cdp-oper",
+    "Cisco-IOS-XE-lldp-oper",
+    "Cisco-IOS-XE-interfaces-oper",
+    "Cisco-IOS-XE-vlan-oper",
+    "Cisco-IOS-XE-device-hardware-oper",
+    "Cisco-IOS-XE-environment-oper",
+    "Cisco-IOS-XE-platform-software-oper",
+    "Cisco-IOS-XE-switch-cp-svl-oper",
+    "Cisco-IOS-XE-ntp-oper",
+    "Cisco-IOS-XE-lacp-oper",
+    "Cisco-IOS-XE-stack-oper",
+)
 
 
-def _strip_module(identityref):
-    """'ietf-routing:static' -> 'static'; identityrefs carry their YANG module prefix."""
-    if identityref is None:
-        return None
-    return str(identityref).split(":")[-1]
+# --- shared helpers (jobs/iosxe_common; historical names kept for callers) ---
+
+_aslist = common.aslist
+_container = common.container
+_to_int = common.to_int
+_short = common.short
+_strip_module = common.strip_module
+_text_or_none = common.text_or_none
 
 
 def _hop(ip, interface):
@@ -254,36 +237,88 @@ def _collect_route_rollups(ctx):
 # --- FIB ---------------------------------------------------------------------
 
 
-def _normalize_fib(payload):
-    """'instance|prefix' -> sorted programmed next-hops."""
+def _address_of(value):
+    """The address part of 'a.b.c.d/len' (or of a bare address); '' for None."""
+    return "" if value is None else str(value).split("/", 1)[0]
+
+
+def _attached_host(prefix, nh_entries):
+    """True for a CEF attached-host adjacency: a host route (/32 or /128) whose
+    every next-hop is the host itself, on the connected interface.
+
+    CEF programs one for each host the switch has resolved on a connected
+    subnet (a glean that completed); it follows ARP — appears when a host
+    sends or is sent traffic, ages out when it goes quiet — so it says
+    nothing about routing and never becomes a key. Field-verified on the
+    lab 9300 (17.15.6): 'ip-addr' 10.x.y.z/32 with one 'fib-nexthop-entries'
+    row 'nh-addr' 10.x.y.z/32 on the SVI, added between two captures five
+    minutes apart with the RIB unchanged.
+    """
+    if not str(prefix).endswith(("/32", "/128")) or not nh_entries:
+        return False
+    address = _address_of(prefix)
+    return all(_address_of(nh.get("nh-addr")) == address for nh in nh_entries)
+
+
+def _fib_entries(payload):
+    """(instance, entry dict, next-hop dict rows) per FIB entry with a prefix."""
     container = _container(payload, "Cisco-IOS-XE-fib-oper:fib-oper-data") or {}
-    normalized = {}
     for ni_entry in _aslist(container.get("fib-ni-entry")):
         if not isinstance(ni_entry, dict):
             continue
         instance = ni_entry.get("instance-name") or "default"
         for entry in _aslist(ni_entry.get("fib-entries")):
-            if not isinstance(entry, dict):
+            if not isinstance(entry, dict) or entry.get("ip-addr") is None:
                 continue
-            prefix = entry.get("ip-addr")
-            if prefix is None:
-                continue
-            hops = []
-            for nh_entry in _aslist(entry.get("fib-nexthop-entries")):
-                if not isinstance(nh_entry, dict):
-                    continue
-                hop = _hop(nh_entry.get("nh-addr"), nh_entry.get("ifname"))
-                if hop:
-                    hops.append(hop)
-            normalized["%s|%s" % (instance, prefix)] = {"next_hops": _sorted_hops(hops)}
+            hops = [nh for nh in _aslist(entry.get("fib-nexthop-entries")) if isinstance(nh, dict)]
+            yield instance, entry, hops
+
+
+def _normalize_fib(payload):
+    """'instance|prefix' -> sorted programmed next-hops; attached-host adjacencies left out."""
+    normalized = {}
+    for instance, entry, nh_entries in _fib_entries(payload):
+        prefix = entry["ip-addr"]
+        if _attached_host(prefix, nh_entries):
+            continue
+        hops = []
+        for nh_entry in nh_entries:
+            hop = _hop(nh_entry.get("nh-addr"), nh_entry.get("ifname"))
+            if hop:
+                hops.append(hop)
+        normalized["%s|%s" % (instance, prefix)] = {"next_hops": _sorted_hops(hops)}
     return normalized
+
+
+def _fib_context(payload):
+    """What the view left out and why: the attached-host adjacencies per interface
+    (they follow ARP), their total, and the entry counts."""
+    attached = {}
+    entries = 0
+    for _instance, entry, nh_entries in _fib_entries(payload):
+        entries += 1
+        if not _attached_host(entry["ip-addr"], nh_entries):
+            continue
+        ifname = str(nh_entries[0].get("ifname"))
+        attached[ifname] = attached.get(ifname, 0) + 1
+    total = sum(attached.values())
+    return {
+        "attached_hosts": dict(sorted(attached.items())),
+        "attached_hosts_total": total,
+        "entries": entries,
+        "keyed": entries - total,
+    }
 
 
 def _collect_routes_fib(ctx):
     payload = ctx.get(_FIB_PATH, timeout=C.BIG_GET_TIMEOUT)
     if _container(payload, "Cisco-IOS-XE-fib-oper:fib-oper-data") is None:
         raise CollectError("fib-oper-data container missing from RESTCONF reply")
-    return {"raw": {"fib-oper": payload}, "normalized": _normalize_fib(payload)}
+    return {
+        "raw": {"fib-oper": payload},
+        "normalized": _normalize_fib(payload),
+        "context": _fib_context(payload),
+    }
 
 
 # --- BGP ---------------------------------------------------------------------
@@ -355,6 +390,49 @@ def _normalize_ospf_neighbors(payload):
     return normalized
 
 
+def _ospf_context(payload):
+    """Why the view holds what it holds: every instance, area and interface.
+
+    ``instances`` is keyed ``'<instance-id>|<vrf>'`` (the model's empty vrf-name
+    is the default VRF) with the router-id as a dotted quad, the areas and,
+    per area, each interface's state word (``ospfv2-interface-state-dr`` reads
+    ``dr``) and neighbor count; ``neighbors`` is the total. An empty
+    normalized view is then self-explaining: an instance whose interfaces
+    are all DR/DROTHER with zero neighbors has nothing across its links.
+    Timers, LSDB contents and the DR/BDR addresses are excluded.
+    """
+    container = _container(payload, "Cisco-IOS-XE-ospf-oper:ospf-oper-data") or {}
+    instances = {}
+    total = 0
+    for inst in _aslist(container.get("ospfv2-instance")):
+        if not isinstance(inst, dict):
+            continue
+        vrf = _text_or_none(inst.get("vrf-name")) or "default"
+        key = "%s|%s" % (inst.get("instance-id"), vrf)
+        areas = {}
+        for area in _aslist(inst.get("ospfv2-area")):
+            if not isinstance(area, dict):
+                continue
+            interfaces = {}
+            for iface in _aslist(area.get("ospfv2-interface")):
+                if not isinstance(iface, dict):
+                    continue
+                state = _text_or_none(iface.get("state"))
+                if state is not None:
+                    for prefix in ("ospfv2-interface-state-", "ospf-iface-state-"):
+                        if state.startswith(prefix):
+                            state = state[len(prefix) :]
+                            break
+                count = len(
+                    [n for n in _aslist(iface.get("ospfv2-neighbor")) if isinstance(n, dict)]
+                )
+                total += count
+                interfaces[str(iface.get("name"))] = {"state": state, "neighbors": count}
+            areas[str(area.get("area-id"))] = {"interfaces": interfaces}
+        instances[key] = {"router_id": common.dotted(inst.get("router-id")), "areas": areas}
+    return {"instances": instances, "neighbors": total}
+
+
 def _collect_ospf_neighbors(ctx):
     payload = ctx.get(_OSPF_PATH, ok_404=True)
     if payload is None:
@@ -362,27 +440,49 @@ def _collect_ospf_neighbors(ctx):
     container = _container(payload, "Cisco-IOS-XE-ospf-oper:ospf-oper-data") or {}
     if not _aslist(container.get("ospfv2-instance")):
         raise SkipCheck("OSPF not running")
-    return {"raw": {"ospf-oper": payload}, "normalized": _normalize_ospf_neighbors(payload)}
+    return {
+        "raw": {"ospf-oper": payload},
+        "normalized": _normalize_ospf_neighbors(payload),
+        "context": _ospf_context(payload),
+    }
 
 
 # --- ARP ---------------------------------------------------------------------
 
 
-def _normalize_arp(payload):
-    """'vrf|address' -> mac / interface, from arp-vrf's arp-entry list.
+# The two per-VRF lists of arp-oper, in the order read: arp-entry (the list
+# the 17.x model keeps; the lab 9300 fills it) and the flat arp-oper list the
+# model marks deprecated, which older releases fill alone (the lab fills both
+# with the same rows). Both carry address, hardware, interface and the same
+# mode words; a VRF is read from the first list that has rows.
+_ARP_LISTS = (("arp-entry", "arp-entry"), ("arp-oper", "arp-oper (deprecated flat list)"))
 
-    The flat arp-oper list under arp-vrf is deprecated in 17.x and ignored
-    here. The volatile 'time' leaf is never emitted.
-    """
+
+def _arp_vrfs(payload):
+    """(vrf name, rows, source word) per arp-vrf entry; rows [] and source None when empty."""
     container = _container(payload, "Cisco-IOS-XE-arp-oper:arp-data") or {}
-    normalized = {}
     for vrf_entry in _aslist(container.get("arp-vrf")):
         if not isinstance(vrf_entry, dict):
             continue
         vrf = vrf_entry.get("vrf") or "default"
-        for entry in _aslist(vrf_entry.get("arp-entry")):
-            if not isinstance(entry, dict):
-                continue
+        for list_name, source in _ARP_LISTS:
+            rows = [e for e in _aslist(vrf_entry.get(list_name)) if isinstance(e, dict)]
+            if rows:
+                yield vrf, rows, source
+                break
+        else:
+            yield vrf, [], None
+
+
+def _normalize_arp(payload):
+    """'vrf|address' -> mac / interface, from each VRF's arp-entry list or, where a
+    release fills only the deprecated flat arp-oper list, from that one.
+
+    The volatile 'time' leaf is never emitted.
+    """
+    normalized = {}
+    for vrf, rows, _source in _arp_vrfs(payload):
+        for entry in rows:
             address = entry.get("address")
             if address is None:
                 continue
@@ -393,11 +493,30 @@ def _normalize_arp(payload):
     return normalized
 
 
+def _arp_context(payload):
+    """Which list the release filled ('arp-entry', 'arp-oper (deprecated flat
+    list)', both joined with ' + ' should VRFs differ, None when no VRF had a
+    row), the row and VRF counts."""
+    sources = []
+    entries = 0
+    vrfs = 0
+    for _vrf, rows, source in _arp_vrfs(payload):
+        vrfs += 1
+        entries += len(rows)
+        if source is not None and source not in sources:
+            sources.append(source)
+    return {"source": " + ".join(sources) if sources else None, "entries": entries, "vrfs": vrfs}
+
+
 def _collect_arp(ctx):
     payload = ctx.get(_ARP_PATH)
     if _container(payload, "Cisco-IOS-XE-arp-oper:arp-data") is None:
         raise CollectError("arp-data container missing from RESTCONF reply")
-    return {"raw": {"arp-data": payload}, "normalized": _normalize_arp(payload)}
+    return {
+        "raw": {"arp-data": payload},
+        "normalized": _normalize_arp(payload),
+        "context": _arp_context(payload),
+    }
 
 
 # --- CDP + LLDP --------------------------------------------------------------
@@ -456,22 +575,54 @@ def _normalize_lldp(payload):
     return normalized
 
 
+def _neighbor_source(payload, count):
+    """How a neighbor model answered: not served (404), served with an empty
+    container, or with n neighbors — so an empty cdp| set is a recorded model
+    fact (the lab 9300 served cdp-oper empty on earlier harvests while `show cdp
+    neighbors detail` listed its AP, and one to three neighbors on later runs),
+    never mistaken for no neighbors."""
+    if payload is None:
+        return "not served (404)"
+    if count:
+        return "%d neighbors" % (count,)
+    return "served, empty"
+
+
 def _collect_neighbors(ctx):
     cdp = ctx.get(_CDP_PATH, ok_404=True)
     lldp = ctx.get(_LLDP_PATH, ok_404=True)
     if cdp is None and lldp is None:
         raise SkipCheck("neither CDP nor LLDP oper data present")
-    normalized = {}
-    if cdp is not None:
-        normalized.update(_normalize_cdp(cdp))
-    if lldp is not None:
-        normalized.update(_normalize_lldp(lldp))
-    return {"raw": {"cdp": cdp, "lldp": lldp}, "normalized": normalized}
+    cdp_view = {} if cdp is None else _normalize_cdp(cdp)
+    lldp_view = {} if lldp is None else _normalize_lldp(lldp)
+    normalized = dict(cdp_view)
+    normalized.update(lldp_view)
+    context = {
+        "sources": {
+            "cdp-oper": _neighbor_source(cdp, len(cdp_view)),
+            "lldp-oper": _neighbor_source(lldp, len(lldp_view)),
+        },
+        "cdp_neighbors": len(cdp_view),
+        "lldp_neighbors": len(lldp_view),
+    }
+    return {"raw": {"cdp": cdp, "lldp": lldp}, "normalized": normalized, "context": context}
 
 
 # --- interfaces --------------------------------------------------------------
 
 _IFACE_UP = "if-oper-state-ready"
+# A port whose hardware is not there (an uplink-module slot with no
+# transceiver, a module bay left empty): its statistics container is served
+# but never counted, so nothing in it is a reading.
+_IFACE_NOT_PRESENT = "if-oper-state-not-present"
+# Field finding (C9300-48UXM, 17.15.6): num-flaps read 18446744073109295496 on
+# every not-present port and on two SVIs — a uint64 that wrapped below zero
+# (2^64 - N). No counter this module reads can honestly reach 2^63, so any
+# value at or above it is a wrapped register, not a reading.
+_COUNTER_INVALID_FROM = 2**63
+# The address value an unaddressed interface serves for ipv4 and
+# ipv4-subnet-mask (field finding on every lab capture): no address, so None.
+_UNADDRESSED = "0.0.0.0"
 
 # The statistics leaves raw keeps per interface (intf-statistics grouping),
 # in model order: the byte/packet totals, the error and discard counters, the
@@ -531,10 +682,37 @@ def _interface_entries(payload):
     return [entry for entry in _aslist(container.get("interface")) if isinstance(entry, dict)]
 
 
-def _text_or_none(value):
-    """A string leaf stripped; None when absent or blank."""
-    text = "" if value is None else str(value).strip()
-    return text or None
+def _ipv4_or_none(value):
+    """An ipv4 / ipv4-subnet-mask leaf; None when absent, blank or the 0.0.0.0 an
+    unaddressed port serves (a switchport has no address, whatever the device
+    prints in the slot)."""
+    text = _text_or_none(value)
+    return None if text == _UNADDRESSED else text
+
+
+def _counters(entry):
+    """(valid counters, wrapped leaves, not_present) of one interface's statistics.
+
+    valid: leaf -> int for every statistics leaf that is a reading; wrapped:
+    the sorted leaves whose value is a wrapped uint64 (at or above 2^63);
+    not_present: True when the port's oper state is not-present, in which
+    case nothing it serves is a reading and valid is empty.
+    """
+    stats = entry.get("statistics")
+    stats = stats if isinstance(stats, dict) else {}
+    not_present = entry.get("oper-status") == _IFACE_NOT_PRESENT
+    valid, wrapped = {}, []
+    for leaf, raw in stats.items():
+        if isinstance(raw, bool):
+            continue
+        value = _to_int(raw)
+        if value is None:
+            continue
+        if value >= _COUNTER_INVALID_FROM:
+            wrapped.append(leaf)
+        elif not not_present:
+            valid[leaf] = value
+    return valid, sorted(wrapped), not_present
 
 
 def _vrf_or_none(value):
@@ -581,21 +759,47 @@ def _ext_state(entry):
     return ext if isinstance(ext, dict) else {}
 
 
-def _access_ports(vlan_payload):
-    """The interfaces named in any VLAN's assigned-`ports` list of a vlan-oper
-    payload, or None when the model was not served (404) so every port keeps
-    its negotiated link state."""
+def _access_ports(vlan_payload, trunk_ports=()):
+    """The access ports a vlan-oper payload names, or None when the model was
+    not served (404) so every port keeps its negotiated link state.
+
+    The switchport set is whichever list the release fills — the assigned
+    `ports` list where it is filled, else `vlan-interfaces` (the lab 9300 fills
+    only that one, on every release captured; common.switchports is the one
+    rule iosxe_vlans shares). `vlan-interfaces` lists a trunk under VLAN 1
+    whatever its native VLAN, so the trunk ports the caller names (long names, from
+    `show interfaces trunk`) are taken back out: a trunk's link rate follows
+    no endpoint and stays a keyed fact.
+    """
     if vlan_payload is None:
         return None
-    container = _container(vlan_payload, "Cisco-IOS-XE-vlan-oper:vlans") or {}
-    names = set()
-    for vlan in _aslist(container.get("vlan") if isinstance(container, dict) else None):
-        if not isinstance(vlan, dict):
-            continue
-        for member in _aslist(vlan.get("ports")):
-            if isinstance(member, dict) and member.get("interface"):
-                names.add(str(member["interface"]))
-    return names
+    names, _source = common.switchports(vlan_payload)
+    return names - set(trunk_ports)
+
+
+_TRUNK_COMMAND = "show interfaces trunk"
+
+
+def _trunk_ports(ctx, notes):
+    """(long names of the ports `show interfaces trunk` lists, source word).
+
+    Best-effort and read-only: no SSH transport, a refused command or a failed
+    read each cost only the trunk exclusion (those ports' link state then rides
+    in context access_link like an access port's), never the check. The same
+    command iosxe_trunks runs (SSH reads are not cached).
+    """
+    if not ctx.has_ssh:
+        return set(), "no SSH transport"
+    try:
+        output = ctx.run_ssh(_TRUNK_COMMAND)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        notes.append("'%s' failed (%s); trunk link state rides in context" % (_TRUNK_COMMAND, exc))
+        return set(), "read failed"
+    if common.cli_rejected(output):
+        return set(), "rejected"
+    return {common.long_ifname(port) for port in _parse_interfaces_trunk(output)}, _TRUNK_COMMAND
 
 
 def _link_state(entry):
@@ -656,8 +860,8 @@ def _normalize_interfaces(payload, access_ports=None):
         normalized[name] = {
             "admin": entry.get("admin-status"),
             "oper": oper,
-            "ipv4": entry.get("ipv4"),
-            "mask": entry.get("ipv4-subnet-mask"),
+            "ipv4": _ipv4_or_none(entry.get("ipv4")),
+            "mask": _ipv4_or_none(entry.get("ipv4-subnet-mask")),
             "vrf": _vrf_or_none(entry.get("vrf")),
             "ipv6": sorted(str(addr).lower() for addr in _aslist(entry.get("ipv6-addrs"))),
             "mtu": _to_int(entry.get("mtu")),
@@ -680,9 +884,15 @@ def _interfaces_context(payload, access_ports=None):
     and the link scope: link_scope 'trunks_and_routed' when the VLAN database
     named the access ports (their negotiated speed, duplex and mgig_downshift
     then ride here under access_link, never in normalized), 'all' when it was
-    not served and every port's values stay normalized."""
+    not served and every port's values stay normalized. counters_invalid names,
+    per port, the statistics leaves whose value is a wrapped uint64, and
+    counters_not_present the ports whose oper state is not-present: neither
+    ever reaches counters.
+    """
     entries = _interface_entries(payload)
     counters = {}
+    counters_invalid = {}
+    counters_not_present = []
     access_link = {}
     access = access_ports or set()
     seen = {leaf: False for leaf in _IFACE_WIDENED}
@@ -697,19 +907,23 @@ def _interfaces_context(payload, access_ports=None):
                 "duplex": duplex,
                 "mgig_downshift": downshift,
             }
-        stats = entry.get("statistics")
-        stats = stats if isinstance(stats, dict) else {}
+        valid, wrapped, not_present = _counters(entry)
         nonzero = {}
         for leaf, field in _IFACE_CONTEXT_COUNTERS:
-            value = _to_int(stats.get(leaf))
-            if value:
-                nonzero[field] = value
+            if valid.get(leaf):
+                nonzero[field] = valid[leaf]
         if nonzero and entry.get("name") is not None:
             counters[entry["name"]] = nonzero
+        if wrapped and entry.get("name") is not None:
+            counters_invalid[entry["name"]] = wrapped
+        if not_present and entry.get("name") is not None and "statistics" in entry:
+            counters_not_present.append(entry["name"])
     return {
         "ports_total": len(entries),
         "ports_oper_up": sum(1 for e in entries if e.get("oper-status") == _IFACE_UP),
         "counters": counters,
+        "counters_invalid": dict(sorted(counters_invalid.items())),
+        "counters_not_present": sorted(counters_not_present),
         "leaves_seen": seen,
         "link_scope": "all" if access_ports is None else "trunks_and_routed",
         "access_ports_listed": None if access_ports is None else len(access_ports),
@@ -750,50 +964,69 @@ def _fetch_interfaces(ctx):
 
     Shared by iosxe_interfaces and iosxe_errdisable; the second caller is a
     cache hit. CollectError when the reply lacks the interfaces container.
+    The historical (payload, notes) shape of common.fetch_interfaces.
     """
-    notes = []
-    try:
-        payload = ctx.get(_IFACE_PATH)
-    except Exception as exc:
-        if getattr(exc, "status_code", None) != 400:
-            raise
-        notes.append("interfaces: fields filter rejected (HTTP 400); unfiltered read used")
-        # The unfiltered reply carries every leaf of every interface (the
-        # diffserv classifier statistics included), so it gets the budget every
-        # other unfiltered retry on the platform gets.
-        payload = ctx.get(_IFACE_BASE_PATH, timeout=C.BIG_GET_TIMEOUT)
-    if _container(payload, "Cisco-IOS-XE-interfaces-oper:interfaces") is None:
-        raise CollectError("interfaces container missing from RESTCONF reply")
-    return payload, notes
+    read = common.fetch_interfaces(ctx)
+    return read.payload, ([read.note] if read.note else [])
+
+
+_NO_LINK_SCOPE = {"access_port_source": None, "trunk_ports_excluded": [], "trunk_source": None}
 
 
 def _fetch_access_ports(ctx, notes):
-    """The VLAN database's assigned-port names; None when the model is absent
-    (context's link_scope records that) or the read failed (noted). A cache
-    hit beside iosxe_vlans, best-effort — a failed read costs the link scope,
-    never the check."""
+    """(access-port names, scope facts for context).
+
+    The names are None when the VLAN database is absent (context's link_scope
+    records that) or the read failed (noted). A cache hit beside iosxe_vlans,
+    best-effort — a failed read costs the link scope, never the check. The
+    scope facts say which vlan-oper list named the switchports
+    (access_port_source), which trunk ports were taken back out
+    (trunk_ports_excluded) and where they came from (trunk_source).
+    """
     try:
         vlan_payload = ctx.get(_VLAN_PATH, ok_404=True)
     except Exception as exc:  # best-effort read; transport failure modes vary
         if type(exc).__name__ == "SoftTimeLimitExceeded":
             raise  # the Celery abort signal is never a note
         notes.append("vlan-oper read failed (%s); link state kept for every port" % (exc,))
-        return None
-    return _access_ports(vlan_payload)
+        return None, dict(_NO_LINK_SCOPE)
+    if vlan_payload is None:
+        return None, dict(_NO_LINK_SCOPE)
+    switchports, source = common.switchports(vlan_payload)
+    trunks, trunk_source = (set(), None) if not switchports else _trunk_ports(ctx, notes)
+    scope = {
+        "access_port_source": source,
+        "trunk_ports_excluded": sorted(switchports & trunks),
+        "trunk_source": trunk_source,
+    }
+    return _access_ports(vlan_payload, trunks), scope
 
 
 def _collect_interfaces(ctx):
     payload, notes = _fetch_interfaces(ctx)
     filter_rejected = bool(notes)
-    access_ports = _fetch_access_ports(ctx, notes)
+    access_ports, scope = _fetch_access_ports(ctx, notes)
     raw = {
         "interfaces": _interfaces_without_statistics(payload),
         "statistics": _interface_statistics(payload),
     }
     context = _interfaces_context(payload, access_ports)
+    context.update(scope)
     context["fields_filter"] = (
         "rejected (HTTP 400); unfiltered read" if filter_rejected else "accepted"
     )
+    if context["counters_invalid"]:
+        notes.append(
+            "%d interface(s) served wrapped counter values (a uint64 at or above 2^63, not "
+            "a reading): left out of context counters, named in context counters_invalid, "
+            "verbatim in raw statistics" % (len(context["counters_invalid"]),)
+        )
+    if context["counters_not_present"]:
+        notes.append(
+            "%d not-present interface(s) served statistics that count nothing: left out of "
+            "context counters, named in context counters_not_present"
+            % (len(context["counters_not_present"]),)
+        )
     if notes:
         raw["note"] = "; ".join(notes)
     return {
@@ -820,6 +1053,46 @@ def _collect_interfaces(ctx):
 # An absent leaf is recorded in context, never an error and never a
 # fabricated value.
 _REBOOT_LEAVES = ("boot-time", "last-reboot-reason", "reason-severity")
+# boot-time is derived by the device (now minus uptime) and jitters by a second
+# between two reads of a switch that never reloaded (the lab 9300 read :30, :31,
+# :30 on three healthy reads and :44 / :43 on two more). Cutting the string to
+# the minute only moved the failure to the minute boundary (:59 -> :00 on the
+# next read), so the key holds the value as integer UTC seconds and the check's
+# compare gives that field an absolute tolerance: the jitter passes, a reload
+# (which moves the value by at least the reload's own minutes) diffs. The
+# exact served string rides in context.
+_BOOT_TIME_TOLERANCE_S = 60
+
+# The environment sensor state word is free text per release (the model's
+# `leaf state { type string }`): the lab 9300 serves 'Norm' / 'Shut', and older
+# releases spelled the same sensors 'Normal' / 'Shutdown' / 'GREEN'. The
+# key holds one vocabulary so an upgrade between captures does not move every
+# env key at once; the served word rides in context env_states.
+_ENV_STATE_WORDS = {
+    "norm": "normal",
+    "normal": "normal",
+    "green": "normal",
+    "ok": "normal",
+    "good": "normal",
+    "shut": "shutdown",
+    "shutdown": "shutdown",
+    "not present": "not-present",
+    "notpresent": "not-present",
+    "absent": "not-present",
+    "yellow": "warning",
+    "warning": "warning",
+    "warn": "warning",
+    "minor": "warning",
+    "red": "critical",
+    "critical": "critical",
+    "major": "critical",
+    "fault": "fault",
+    "faulty": "fault",
+    "fail": "fault",
+    "failed": "fault",
+    "failure": "fault",
+    "bad": "fault",
+}
 
 # The 'last-reboot' field each leaf feeds (boot-time keeps its own key).
 _LAST_REBOOT_FIELDS = (("last-reboot-reason", "reason"), ("reason-severity", "severity"))
@@ -845,7 +1118,7 @@ def _normalize_platform_health(hardware_payload, env_payload):
     system = system if isinstance(system, dict) else {}
     boot_time = system.get("boot-time")
     if boot_time is not None:
-        normalized["boot-time"] = {"value": str(boot_time)}
+        normalized["boot-time"] = _boot_time_fields(boot_time)
     last_reboot = {}
     for leaf, field in _LAST_REBOOT_FIELDS:
         if system.get(leaf) is not None:
@@ -862,19 +1135,46 @@ def _normalize_platform_health(hardware_payload, env_payload):
         _container(env_payload, "Cisco-IOS-XE-environment-oper:environment-sensors") or {}
     )
     readings = {}
+    env_states = {}
     for sensor in _aslist(env_container.get("environment-sensor")):
         if not isinstance(sensor, dict):
             continue
         key = "env|%s/%s" % (sensor.get("location"), sensor.get("name"))
-        normalized[key] = {"state": sensor.get("state")}
+        normalized[key] = {"state": _env_state(sensor.get("state"))}
+        env_states[key] = _text_or_none(sensor.get("state"))
         reading = _to_int(sensor.get("current-reading"))
         if reading is not None:
             readings[key] = {"reading": reading, "units": _strip_module(sensor.get("sensor-units"))}
     context = {
         "reboot_leaves_not_served": [leaf for leaf in _REBOOT_LEAVES if system.get(leaf) is None],
+        "boot_time": None if boot_time is None else str(boot_time),
         "readings": readings,
+        "env_states": env_states,
     }
     return normalized, context
+
+
+def _boot_time_fields(value):
+    """The boot-time key's fields: epoch (integer UTC seconds of the served
+    yang:date-and-time) and text (None; the served string only when it did not
+    parse, so a reload still diffs on a device that serves another shape).
+    """
+    stamp = common.parse_iso(value)
+    if stamp is None:
+        return {"epoch": None, "text": str(value)}
+    return {"epoch": int(stamp.timestamp()), "text": None}
+
+
+def _env_state(value):
+    """A sensor's state word in one vocabulary: normal (Norm, Normal, GREEN),
+    shutdown (Shut, Shutdown), not-present, warning (YELLOW), critical (RED),
+    fault (Fault, Failed); any other word lower-cased with spaces hyphenated;
+    None when the leaf is absent."""
+    text = _text_or_none(value)
+    if text is None:
+        return None
+    word = " ".join(text.lower().split())
+    return _ENV_STATE_WORDS.get(word, word.replace(" ", "-"))
 
 
 def _collect_platform_health(ctx):
@@ -928,7 +1228,10 @@ register(
     CheckDef(
         id="iosxe_routes_fib",
         platform="iosxe",
-        description="CEF FIB: programmed prefix -> next-hops per forwarding instance.",
+        description=(
+            "CEF FIB: programmed prefix -> next-hops per forwarding instance (attached-host "
+            "/32 adjacencies, which follow ARP, are counted in context, never keyed)."
+        ),
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
@@ -963,12 +1266,16 @@ register(
     CheckDef(
         id="iosxe_ospf_neighbors",
         platform="iosxe",
-        description="OSPFv2 adjacencies per instance/area/interface: neighbor state, address.",
+        description=(
+            "OSPFv2 adjacencies per instance/area/interface: neighbor state, address; "
+            "every instance, area and interface state in context, so an empty view "
+            "is explained."
+        ),
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "An OSPF adjacency is missing or not FULL — the new Vlan925 neighbors must "
-            "form and every other adjacency must be untouched."
+            "An OSPF adjacency is missing or not FULL — a neighbor the baseline had went "
+            "away or never re-formed, or one the change was expected to add did not form."
         ),
         collector=_collect_ospf_neighbors,
         tags=("routing", "ospf"),
@@ -979,12 +1286,17 @@ register(
     CheckDef(
         id="iosxe_arp",
         platform="iosxe",
-        description="ARP tables, all VRFs: resolved MAC and interface per address.",
+        description=(
+            "ARP tables, all VRFs: resolved MAC and interface per address, from arp-entry "
+            "or, where a release fills only the deprecated flat arp-oper list, from that "
+            "one (context source says which)."
+        ),
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "An adjacency did not resolve — a missing or incomplete entry for the new "
-            "Vlan925 next-hop means the VM-500 is not answering ARP."
+            "An adjacency did not resolve — a missing or incomplete entry for a next-hop "
+            "or gateway address means the device at that address is not answering ARP; a "
+            "MAC change for the same address means another device now answers it."
         ),
         collector=_collect_arp,
         tags=("adjacency",),
@@ -1037,13 +1349,17 @@ register(
         id="iosxe_platform_health",
         platform="iosxe",
         description=(
-            "Boot time, last reboot reason and severity, active hardware alarms, environment "
-            "sensor states (readings in context)."
+            "Boot time (epoch seconds with a 60 s tolerance for the device's own jitter), "
+            "last reboot reason and severity, active hardware alarms, environment sensor "
+            "states in one vocabulary (served words and readings in context)."
         ),
         tier=3,
-        compare={"mode": "equality_set"},
+        compare={
+            "mode": "equality_set",
+            "fields": {"epoch": {"tolerance": {"abs": _BOOT_TIME_TOLERANCE_S}}},
+        },
         miss_meaning=(
-            "The core itself changed — a reload (boot-time moved; last-reboot gives the "
+            "The device itself changed — a reload (boot-time moved; last-reboot gives the "
             "latest reload's reason, and severity 'abnormal' means the device did not "
             "intend it), a new alarm, or a degraded sensor during the window."
         ),
@@ -1061,7 +1377,10 @@ register(
 def _collect_dhcp_config(ctx):
     payload = ctx.get("/data/Cisco-IOS-XE-native:native/ip/dhcp", ok_404=True)
     if not payload:
-        raise SkipCheck("no DHCP server/relay configuration present")
+        raise SkipCheck(
+            "no DHCP configuration present: native/ip/dhcp holds no server pools, "
+            "excluded addresses, relay options or DHCP-snooping globals"
+        )
     # The container key carries an augment-module prefix that varies by train;
     # store the inner config as one stable blob rather than guessing leaves.
     container = next(iter(payload.values())) if isinstance(payload, dict) else payload
@@ -1073,12 +1392,15 @@ register(
     CheckDef(
         id="iosxe_dhcp",
         platform="iosxe",
-        description="DHCP server/relay configuration (not-present when unused)",
+        description=(
+            "DHCP configuration under native/ip/dhcp: server pools, excluded addresses, "
+            "relay options and the DHCP-snooping globals (not-present when unused)"
+        ),
         tier=3,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "The switch's DHCP configuration changed — pools or relay behavior differ "
-            "from the baseline."
+            "The switch's DHCP configuration changed — pools, excluded addresses, relay "
+            "options or the DHCP-snooping globals differ from the baseline."
         ),
         collector=_collect_dhcp_config,
         tags=("services",),
@@ -1087,36 +1409,228 @@ register(
 
 
 # --- iosxe_syslog_errors (informational) --------------------------------------
-# The finite logging buffer reduced to counts of error-and-worse events
-# (%FACILITY-N-MNEMONIC, severity 0..3). What an analyst reads across captures
-# is NOVELTY — an event type the baseline never logged. Severity 4+ (warnings,
-# config notices) is deliberately not counted.
+# The finite logging buffer reduced to counts of events (%FACILITY-N-MNEMONIC):
+# every severity 0-3 event, and the severity 4-5 events of a fixed facility
+# allowlist — the transients that heal before a capture and leave no trace in
+# any state check (an err-disable that recovered, an FHRP or STP change, a MAC
+# flap, a PoE denial, an 802.1X failure, a duplicate address). What an analyst
+# reads across captures is NOVELTY — an event type the baseline never logged.
+# Severity 6-7 and every other severity-4/5 facility (%LINEPROTO-5-UPDOWN,
+# %SYS-5-CONFIG_I, %SEC_LOGIN-5-*) are deliberately not counted: noise.
+# Context keeps the buffer header facts and the oldest buffered line's
+# timestamp and tag, never a line's text: log lines name users and, with
+# `archive log config` and no hidekeys, carry typed commands.
 
-# IOS syslog tag %FACILITY-SEVERITY-MNEMONIC; only severities 0..3 match.
-_SYSLOG_ERROR = re.compile(r"%([A-Z0-9_]+)-([0-3])-([A-Z0-9_]+)")
+# IOS syslog tag %FACILITY-SEVERITY-MNEMONIC, any severity.
+_SYSLOG_TAG = re.compile(r"%([A-Z0-9_]+)-([0-7])-([A-Z0-9_]+)")
+# Severities counted for every facility.
+_SYSLOG_ALWAYS_MAX_SEVERITY = 3
+# The facilities whose severity-4 and -5 events are counted as well (the
+# plan's rec. 8 allowlist: port and link; redundancy and routing; edge
+# services; platform and address). Field capture (C9300-48UXM): the
+# buffer carried %STACKMGR-4-SWITCH_ADDED, %SPANTREE-5-EXTENDED_SYSID,
+# %ILPOWER-5-DETECT and %ILPOWER-5-POWER_GRANTED from this list, beside 41
+# %LINEPROTO-5-UPDOWN and 15 %SEC_LOGIN-5-LOGIN_SUCCESS that stay uncounted.
+_SYSLOG_CURATED_FACILITIES = frozenset(
+    (
+        "PM",
+        "SPANTREE",
+        "EC",
+        "UDLD",
+        "CDP",
+        "HSRP",
+        "VRRP",
+        "OSPF",
+        "BGP",
+        "DUAL",
+        "ILPOWER",
+        "DOT1X",
+        "MAB",
+        "SESSION_MGR",
+        "AUTHMGR",
+        "RADIUS",
+        "DHCP_SNOOPING",
+        "SW_DAI",
+        "STACKMGR",
+        "PLATFORM_STACKPOWER",
+        "SW_MATM",
+        "IP",
+    )
+)
+_SYSLOG_CURATED_MAX_SEVERITY = 5
 
 # The buffer is bounded, but raw artifacts should stay small: keep the tail,
 # where the newest (most relevant) events live. Counting runs on full output.
 _SYSLOG_RAW_TAIL_CHARS = 20000
 
+# The `show logging` header, as IOS prints it (field-verified on the lab 9300):
+#   Syslog logging: enabled (0 messages dropped, 2 messages rate-limited,
+#                            0 flushes, 0 overruns, xml disabled, ...)
+#   Buffer logging:  level debugging, 189 messages logged, xml disabled,
+#   Log Buffer (102400 bytes):
+_SYSLOG_HEADER_RULES = (
+    (re.compile(r"Syslog logging:\s*(?P<syslog>enabled|disabled)"), None),
+    (re.compile(r"(?P<dropped>\d+) messages? dropped"), None),
+    (re.compile(r"(?P<rate_limited>\d+) messages? rate-limited"), None),
+    (re.compile(r"(?P<flushes>\d+) flushes"), None),
+    (re.compile(r"(?P<overruns>\d+) overruns"), None),
+    (
+        re.compile(
+            r"Buffer logging:\s*(?:level\s+(?P<level>\S+),\s*)?"
+            r"(?:(?P<messages_logged>\d+) messages? logged|(?P<buffer>disabled))"
+        ),
+        None,
+    ),
+    (re.compile(r"Log Buffer \((?P<bytes>\d+) bytes\)"), None),
+)
+_SYSLOG_HEADER_FIELDS = (
+    "syslog",
+    "level",
+    "messages_logged",
+    "bytes",
+    "dropped",
+    "rate_limited",
+    "flushes",
+    "overruns",
+)
+_SYSLOG_BUFFER_START = re.compile(r"^Log Buffer \(\d+ bytes\):")
+# A buffered line: an optional sequence number, an optional clock marker ('*'
+# the clock was never set, '.' NTP not in sync), the timestamp `service
+# timestamps log datetime [msec] [localtime] [show-timezone] [year]` prints,
+# and the tag. A line without timestamps (service timestamps off) still has
+# its tag.
+_SYSLOG_LINE = re.compile(
+    r"^(?:\d+:\s+)?"
+    r"(?:[*.]?(?P<timestamp>[A-Z][a-z]{2}\s+\d{1,2}(?:\s+\d{4})?\s+\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d+)?(?:\s+[A-Za-z]+)?):\s+)?"
+    r"(?P<tag>%[A-Z0-9_]+-[0-7]-[A-Z0-9_]+)"
+)
+
+
+def _syslog_counted(facility, severity):
+    """Whether one event type is counted: severity 0-3 always, 4-5 for the allowlist."""
+    if severity <= _SYSLOG_ALWAYS_MAX_SEVERITY:
+        return True
+    return severity <= _SYSLOG_CURATED_MAX_SEVERITY and facility in _SYSLOG_CURATED_FACILITIES
+
 
 def _parse_syslog_errors(text):
-    """'sev<N>|%FAC-N-MNEMONIC' -> {'count': n} for severity<=3 events in the buffer."""
+    """'sev<N>|%FAC-N-MNEMONIC' -> {'count': n} for every counted event in the buffer."""
     counts = {}
-    for facility, severity, mnemonic in _SYSLOG_ERROR.findall(text or ""):
+    for facility, severity, mnemonic in _SYSLOG_TAG.findall(text or ""):
+        if not _syslog_counted(facility, int(severity)):
+            continue
         key = "sev%s|%%%s-%s-%s" % (severity, facility, severity, mnemonic)
         counts.setdefault(key, {"count": 0})["count"] += 1
     return counts
 
 
+def _parse_syslog_header(text):
+    """The buffer header facts and the oldest buffered line, for context.
+
+    buffer: syslog (enabled/disabled), level (the buffered level), messages_logged,
+    bytes (the buffer size), dropped, rate_limited, flushes, overruns — None
+    where the header does not print the fact. oldest: the timestamp text and
+    tag of the first buffered line that carries a tag (None when the buffer
+    holds none), so a reader sees how far back the buffer reaches; never the
+    line's text. uncounted_events: tags in the buffer the counting rules skip.
+    """
+    header = dict.fromkeys(_SYSLOG_HEADER_FIELDS)
+    oldest = None
+    in_buffer = False
+    uncounted = 0
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not in_buffer:
+            for rule, _unused in _SYSLOG_HEADER_RULES:
+                match = rule.search(stripped)
+                if match is None:
+                    continue
+                for name, value in match.groupdict().items():
+                    if value is None or name == "buffer":
+                        continue
+                    header[name] = int(value) if value.isdigit() else value
+                if match.groupdict().get("buffer") == "disabled":
+                    header["level"] = "disabled"
+            if _SYSLOG_BUFFER_START.match(stripped):
+                in_buffer = True
+            continue
+        match = _SYSLOG_LINE.match(stripped)
+        if match is None:
+            continue
+        if oldest is None:
+            oldest = {"timestamp": match.group("timestamp"), "tag": match.group("tag")}
+        facility, severity, _mnemonic = _SYSLOG_TAG.match(match.group("tag")).groups()
+        if not _syslog_counted(facility, int(severity)):
+            uncounted += 1
+    return {"buffer": header, "oldest": oldest, "uncounted_events": uncounted}
+
+
+# Redaction of the buffer text before it enters the debug trace, raw or the
+# parser (ctx.run_ssh applies it to the output): the message part of a
+# tagged line, never its timestamp or tag, so counting still works.
+# The shapes the field buffer showed, and the CFGLOG one:
+#   %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: <name>] [Source: ...]
+#   %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: <name>] ...
+#   %SYS-6-LOGOUT: User <name> has exited tty session 1(...)
+#   %DMI-5-AUTH_PASSED: ... dmiauthd: User '<name>' authenticated successfully ...
+#   %SYS-5-CONFIG_I: Configured from console by <name> on vty0 (...)
+#   %PARSER-5-CFGLOG_LOGGEDCMD: User:<name>  logged command:<the typed line>
+# then the config-text rules for key / password / secret / community tokens
+# on whatever is left (over-redaction of a message is acceptable; a leak is
+# not).
+_SYSLOG_TAGGED = re.compile(r"^(?P<head>.*?%[A-Z0-9_]+-[0-7]-[A-Z0-9_]+:)(?P<message>.*)$")
+_SYSLOG_USER_BRACKET = re.compile(r"(\[user:\s*)[^\]]*(\])", re.IGNORECASE)
+# The token after the word "user" in any of its spellings — "User:<name>",
+# "User <name>", "User '<name>'", "user '<name>'" — quotes kept around the mark.
+# 'user jdoe', 'User:jdoe', "user 'jdoe'" and, from the %AAA-6-USERNAME_* and
+# USER_PRIVILEGE_UPDATE events a local-user edit logs, 'username: jdoe'.
+_SYSLOG_USER_WORD = re.compile(r"(\buser(?:name)?\b\s*:?\s*'?)[^\s'\]]+('?)", re.IGNORECASE)
+_SYSLOG_CONFIGURED_BY = re.compile(r"(\bConfigured from \S+ by )\S+")
+_SYSLOG_LOGGED_COMMAND = re.compile(r"(logged command:).*$")
+
+
+def _redact_syslog_line(line):
+    """One `show logging` line with usernames, logged commands and secrets masked."""
+    match = _SYSLOG_TAGGED.match(line)
+    if match is None:
+        return _redact_config_line(line)
+    message = match.group("message")
+    message = _SYSLOG_USER_BRACKET.sub(lambda m: m.group(1) + _SECRET_MARK + m.group(2), message)
+    message = _SYSLOG_USER_WORD.sub(lambda m: m.group(1) + _SECRET_MARK + m.group(2), message)
+    message = _SYSLOG_CONFIGURED_BY.sub(lambda m: m.group(1) + _SECRET_MARK, message)
+    message = _SYSLOG_LOGGED_COMMAND.sub(lambda m: m.group(1) + " " + _SECRET_MARK, message)
+    return match.group("head") + _redact_config_line(message)
+
+
+def _redact_syslog_text(text):
+    """Whole-output form of _redact_syslog_line — ctx.run_ssh's hook for `show logging`."""
+    return "\n".join(_redact_syslog_line(line) for line in str(text).splitlines())
+
+
 def _collect_syslog_errors(ctx):
     if not ctx.has_ssh:
         raise SkipCheck("no SSH transport")
-    output = ctx.run_ssh("show logging")
+    # The hook redacts the output before the trace keeps it and before it is
+    # returned: nothing below ever sees a username or a logged command.
+    output = ctx.run_ssh("show logging", redact=_redact_syslog_text)
     normalized = _parse_syslog_errors(output)
+    header = _parse_syslog_header(output)
     context = {
-        "error_events_total": sum(entry["count"] for entry in normalized.values()),
+        "error_events_total": sum(
+            entry["count"]
+            for key, entry in normalized.items()
+            if int(key[3 : key.index("|")]) <= _SYSLOG_ALWAYS_MAX_SEVERITY
+        ),
+        "curated_events_total": sum(
+            entry["count"]
+            for key, entry in normalized.items()
+            if int(key[3 : key.index("|")]) > _SYSLOG_ALWAYS_MAX_SEVERITY
+        ),
         "distinct_event_types": len(normalized),
+        "uncounted_events": header["uncounted_events"],
+        "buffer": header["buffer"],
+        "oldest": header["oldest"],
     }
     raw = {"show logging": (output or "")[-_SYSLOG_RAW_TAIL_CHARS:]}
     return {"raw": raw, "normalized": normalized, "context": context}
@@ -1126,7 +1640,12 @@ register(
     CheckDef(
         id="iosxe_syslog_errors",
         platform="iosxe",
-        description="Error-and-worse syslog event counts from the logging buffer",
+        description=(
+            "Syslog event counts from the logging buffer: every severity 0-3 event plus the "
+            "severity 4-5 events of the port, redundancy, edge-service and platform "
+            "facilities (buffer header and oldest-line facts in context; usernames and "
+            "logged commands redacted)"
+        ),
         tier=3,
         compare={"mode": "info_only"},
         miss_meaning="",
@@ -1138,18 +1657,22 @@ register(
 
 # --- iosxe_svl_health (always-on optional feature) ----------------------------
 # The StackWise Virtual link is the virtual-switch backbone: every packet
-# crossing chassis rides it. The 17.12.1 model nests location (keys fru/slot/
-# bay/chassis/node) -> svl-link-info -> member-port lists, but leaf spellings
-# drift across releases, so the walk recognizes members by shape rather than
-# trusting one spelling; when it finds locations but no recognizable link
-# fields it returns an empty view and the shakedown advisory drives refinement
-# against the live payload.
+# crossing chassis rides it. Cisco-IOS-XE-switch-cp-svl-oper (17.15.1, the
+# same shape since its first revision) nests location (keys fru/slot/bay/
+# chassis/node) -> svl-link-info[link-num] -> member-port (if-name, bundled,
+# is-control-port, the LMP counters) beside the link's SDP and OOB counters.
+# Field finding: the lab's standalone 9300 serves the container with ONE
+# location (fru-fp/0/0/chassis 1/node 0) and no svl-link-info at all, while
+# older releases do not serve the path (404) — both are "not an SVL system", so the
+# check reads not-present unless some location carries a link. The walk keeps
+# a few alternative spellings behind the model's own, so a release that
+# drifts still reads rather than silently emptying.
 
 _SVL_PATH = "/data/Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data"
 
-# Leaf-name candidates, most-likely spelling first.
+# Leaf-name candidates, the 17.15.1 model's spelling first.
 _SVL_LINK_NUM_LEAVES = ("link-num", "svl-link-num", "link-number")
-_SVL_PORT_LEAVES = ("port-name", "if-name", "port", "name")
+_SVL_PORT_LEAVES = ("if-name", "port-name", "port", "name")
 _SVL_BUNDLED_LEAVES = ("bundled", "is-bundled", "link-bundled")
 
 # Identity and state leaves are never counters.
@@ -1201,6 +1724,18 @@ def _svl_counters(node, counters):
             _svl_counters(item, counters)
 
 
+def _svl_locations(payload):
+    """The location entries (dicts) of a switch-cp-svl-oper-data payload; [] when unserved."""
+    container = _container(payload, "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data")
+    container = container if isinstance(container, dict) else {}
+    return [entry for entry in _aslist(container.get("location")) if isinstance(entry, dict)]
+
+
+def _svl_links(location):
+    """The svl-link-info entries (dicts) of one location; [] when it carries none."""
+    return [link for link in _aslist(location.get("svl-link-info")) if isinstance(link, dict)]
+
+
 def _normalize_svl(payload):
     """('svl-link|<chassis>/<link-num>' view, 'counters|<link>' context) as a pair.
 
@@ -1208,18 +1743,12 @@ def _normalize_svl(payload):
     under a link sums into context — counters are informational, never
     equality-compared.
     """
-    container = _container(payload, "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data")
-    container = container if isinstance(container, dict) else {}
     normalized = {}
     context = {}
-    for location in _aslist(container.get("location")):
-        if not isinstance(location, dict):
-            continue
+    for location in _svl_locations(payload):
         chassis = _first_leaf(location, ("chassis", "node", "slot"))
         chassis = chassis if chassis is not None else "unknown"
-        for link in _aslist(location.get("svl-link-info")):
-            if not isinstance(link, dict):
-                continue
+        for link in _svl_links(location):
             link_num = _first_leaf(link, _SVL_LINK_NUM_LEAVES)
             if link_num is None:
                 continue
@@ -1254,8 +1783,15 @@ def _collect_svl_health(ctx):
     payload = ctx.get(_SVL_PATH, ok_404=True)
     container = _container(payload, "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data")
     if not container:
-        raise SkipCheck("no StackWise Virtual data (not an SVL system)")
+        raise SkipCheck("no StackWise Virtual data: the model is not served (not an SVL system)")
+    locations = _svl_locations(payload)
+    if not any(_svl_links(location) for location in locations):
+        raise SkipCheck(
+            "no StackWise Virtual links: the model serves %d location(s) with no svl-link-info "
+            "(not an SVL system)" % (len(locations),)
+        )
     normalized, context = _normalize_svl(payload)
+    context["locations"] = len(locations)
     return {"raw": {"switch-cp-svl-oper": payload}, "normalized": normalized, "context": context}
 
 
@@ -1263,7 +1799,10 @@ register(
     CheckDef(
         id="iosxe_svl_health",
         platform="iosxe",
-        description="StackWise Virtual links: member ports and bundled state per chassis/link.",
+        description=(
+            "StackWise Virtual links: member ports and bundled state per chassis/link "
+            "(not-present when no location carries a link)"
+        ),
         tier=3,
         compare={"mode": "equality_set"},
         miss_meaning=(
@@ -1278,69 +1817,207 @@ register(
 
 # --- iosxe_ntp (always-on) ----------------------------------------------------
 # Time sync is the trust anchor for every timestamp this framework records.
-# ntp-status-info leaf spellings drift across releases; emit only what is
-# findable — an empty view is honest and the shakedown advisory drives
-# refinement. Offset/delay/dispersion are jitter: raw only.
+# Read from Cisco-IOS-XE-ntp-oper (17.15.1; the lab fills the same leaves):
+# ntp-status-info is a presence container (absent until NTP is configured)
+# built from the grouping ntp-container-data — `stratum`, a `refid` container
+# holding ONE case of the choice refid-pkt-type-choice (ip-addr; kod-data/
+# kod-type; ref-clk-src-data/ref-clk-src-type; exception-code) and the
+# ntp-associations list, each with `peer-selection-status` (the
+# peer-select-status enum), `peer-reach`, `peer-stratum`, `serv-type`,
+# `peer-authentication-status`, its own `refid` and its `ntp-address`
+# (ip-addr + vrf-name). The model has no synchronized leaf: it is derived.
+# Field finding (three reads, 8 minutes apart): the sys-peer moves between
+# healthy servers as the selection algorithm re-runs, so the system refid
+# address and each association's exact selection status are context; what
+# normalized keeps is what a healthy device holds steady — the stratum, the
+# KIND of reference (an address, a KoD code, a reference clock), and each
+# association's health class. Offset, delay, dispersion and reach are jitter:
+# raw and context only.
 
 _NTP_PATH = "/data/Cisco-IOS-XE-ntp-oper:ntp-oper-data"
+_NTP_CONTAINER = "Cisco-IOS-XE-ntp-oper:ntp-oper-data"
 
-_NTP_SYNC_LEAVES = ("sys-status", "clock-state", "assoc-status", "status")
-_NTP_STRATUM_LEAVES = ("sys-stratum", "stratum")
-_NTP_REFID_LEAVES = ("sys-refid", "refid", "server")
+# The refid choice cases, (leaf or container name, refid_kind) in model order.
+_NTP_REFID_CASES = (
+    ("ip-addr", "ip-addr"),
+    ("kod-data", "kod"),
+    ("ref-clk-src-data", "clock-source"),
+    ("exception-code", "exception"),
+)
+# peer-select-status values that make an association a usable time source
+# (selected, a candidate, or a survivor beyond the first six) against the
+# values that discard it (a loop, unreachable, bad distance, false ticker,
+# beyond the first ten, an outlier).
+_NTP_SELECTED = ("ntp-peer-sys-peer", "ntp-peer-pps-peer")
+_NTP_USABLE = _NTP_SELECTED + ("ntp-peer-candidate", "ntp-peer-as-backup")
+_NTP_REJECTED = (
+    "ntp-peer-rejected",
+    "ntp-peer-false-ticker",
+    "ntp-peer-excess",
+    "ntp-peer-outlier",
+)
+# NTP's unsynchronized stratum.
+_NTP_STRATUM_UNSYNC = 16
 
 
-def _ntp_selected_refid(status):
-    """The selected (syspeer) association's refid/address, when one is marked."""
-    for value in status.values():
-        for assoc in _aslist(value):
-            if not isinstance(assoc, dict):
-                continue
-            marker = str(_first_leaf(assoc, _NTP_SYNC_LEAVES) or "").lower()
-            if "syspeer" not in marker.replace("-", ""):
-                continue
-            refid = _first_leaf(assoc, _NTP_REFID_LEAVES + ("address", "ip-address"))
-            if refid is not None:
-                return refid
-    return None
+def _ntp_status(payload):
+    """The ntp-status-info container of a payload; {} when absent (NTP unconfigured)."""
+    container = _container(payload, _NTP_CONTAINER) or {}
+    status = container.get("ntp-status-info") if isinstance(container, dict) else None
+    return status if isinstance(status, dict) else {}
+
+
+def _ntp_refid(refid):
+    """(kind, value) of a refid container: which case of the choice the device filled.
+
+    kind is ip-addr, kod, clock-source or exception (None when the container
+    is absent or fills no case); value the address, the KoD code (kod-type,
+    'ntp-ref-init' style), the clock source type or the exception code as
+    text.
+    """
+    if not isinstance(refid, dict):
+        return None, None
+    for name, kind in _NTP_REFID_CASES:
+        if name not in refid:
+            continue
+        inner = refid[name]
+        if isinstance(inner, dict):
+            value = _text_or_none(inner.get("kod-type") or inner.get("ref-clk-src-type"))
+            if value is None:
+                value = _text_or_none(",".join("%s=%s" % item for item in sorted(inner.items())))
+        else:
+            value = _text_or_none(inner)
+        return kind, value
+    return None, None
+
+
+def _ntp_association_key(assoc):
+    """'<vrf>|<address>' of an association, else 'id:<assoc-id>' when it names no address."""
+    address = assoc.get("ntp-address")
+    address = address if isinstance(address, dict) else {}
+    ip = _text_or_none(address.get("ip-addr"))
+    if ip is not None:
+        return "%s|%s" % (_text_or_none(address.get("vrf-name")) or "default", ip)
+    return "id:%s" % (assoc.get("assoc-id"),)
+
+
+def _ntp_health(assoc):
+    """The association's health class: unreachable, usable, rejected or unknown."""
+    reach = _to_int(assoc.get("peer-reach"))
+    if reach == 0:
+        return "unreachable"
+    selection = _strip_module(assoc.get("peer-selection-status"))
+    if selection in _NTP_USABLE:
+        return "usable"
+    if selection in _NTP_REJECTED:
+        return "rejected"
+    return "unknown"
+
+
+def _ntp_associations(payload):
+    """The association entries (dicts) of ntp-status-info, in payload order."""
+    return [a for a in _aslist(_ntp_status(payload).get("ntp-associations")) if isinstance(a, dict)]
+
+
+def _ntp_synchronized(stratum, refid_kind, associations):
+    """Whether the clock is synchronized, derived (the model has no leaf for it).
+
+    True: a stratum below 16, a reference that is an address or a reference
+    clock, and — when associations are listed — one selected as the sys peer
+    (or PPS peer). False: stratum 16, a KoD or exception reference, or
+    associations with none selected. None: nothing served to judge by.
+    """
+    if stratum is None and refid_kind is None and not associations:
+        return None
+    if stratum is not None and stratum >= _NTP_STRATUM_UNSYNC:
+        return False
+    if refid_kind in ("kod", "exception"):
+        return False
+    if associations:
+        selections = [_strip_module(a.get("peer-selection-status")) for a in associations]
+        if not any(selection in _NTP_SELECTED for selection in selections):
+            return False
+    if stratum is None and refid_kind is None:
+        return None
+    return True
 
 
 def _normalize_ntp(payload):
-    """Best-effort {'synchronized', 'stratum', 'server'} scalars from ntp-status-info."""
-    container = _container(payload, "Cisco-IOS-XE-ntp-oper:ntp-oper-data") or {}
-    status = container.get("ntp-status-info")
-    status = status if isinstance(status, dict) else {}
-    normalized = {}
-    sync = _first_leaf(status, _NTP_SYNC_LEAVES)
-    if sync is not None:
-        normalized["synchronized"] = str(sync)
-    stratum = _to_int(_first_leaf(status, _NTP_STRATUM_LEAVES))
-    if stratum is not None:
-        normalized["stratum"] = stratum
-    server = _first_leaf(status, _NTP_REFID_LEAVES)
-    if server is None:
-        server = _ntp_selected_refid(status)
-    if server is not None:
-        normalized["server"] = str(server)
+    """Flat scalars: synchronized, stratum, refid_kind, and 'association|<vrf>|<address>'
+    -> health class (usable / rejected / unreachable / unknown) per association."""
+    status = _ntp_status(payload)
+    stratum = _to_int(status.get("stratum"))
+    refid_kind, _value = _ntp_refid(status.get("refid"))
+    associations = _ntp_associations(payload)
+    normalized = {
+        "synchronized": _ntp_synchronized(stratum, refid_kind, associations),
+        "stratum": stratum,
+        "refid_kind": refid_kind,
+    }
+    for assoc in associations:
+        normalized["association|%s" % (_ntp_association_key(assoc),)] = _ntp_health(assoc)
     return normalized
+
+
+def _ntp_context(payload):
+    """The moving parts: the system refid value and the peer it points at, and per
+    association its exact selection status, reach, stratum, type, authentication
+    status and refid."""
+    status = _ntp_status(payload)
+    _kind, refid = _ntp_refid(status.get("refid"))
+    associations = {}
+    sys_peer = None
+    for assoc in _ntp_associations(payload):
+        key = _ntp_association_key(assoc)
+        selection = _strip_module(assoc.get("peer-selection-status"))
+        if selection in _NTP_SELECTED and sys_peer is None:
+            sys_peer = key
+        _peer_kind, peer_refid = _ntp_refid(assoc.get("refid"))
+        associations[key] = {
+            "selection": selection,
+            "reach": _to_int(assoc.get("peer-reach")),
+            "stratum": _to_int(assoc.get("peer-stratum")),
+            "type": _short(assoc.get("serv-type"), "ntp-"),
+            "auth": _short(assoc.get("peer-authentication-status"), "ntp-auth-"),
+            "refid": peer_refid,
+        }
+    return {
+        "refid": refid,
+        "sys_peer": sys_peer,
+        "sys_poll": _to_int(status.get("sys-poll")),
+        "associations": dict(sorted(associations.items())),
+    }
 
 
 def _collect_ntp(ctx):
     payload = ctx.get(_NTP_PATH, ok_404=True)
-    if not payload:
-        raise SkipCheck("NTP oper data not available")
-    return {"raw": {"ntp-oper": payload}, "normalized": _normalize_ntp(payload)}
+    if not payload or not _ntp_status(payload):
+        raise SkipCheck(
+            "NTP not configured: ntp-oper-data serves no ntp-status-info (the presence "
+            "container appears once an ntp server or peer is configured)"
+        )
+    return {
+        "raw": {"ntp-oper": payload},
+        "normalized": _normalize_ntp(payload),
+        "context": _ntp_context(payload),
+    }
 
 
 register(
     CheckDef(
         id="iosxe_ntp",
         platform="iosxe",
-        description="NTP sync status: synchronized state, stratum, selected server.",
+        description=(
+            "NTP sync: synchronized (derived), stratum, the kind of reference (address, KoD "
+            "code, reference clock) and each association's health class; the selected peer "
+            "in context"
+        ),
         tier=3,
         compare={"mode": "equality_scalar"},
         miss_meaning=(
-            "Time sync changed — timestamps in every other capture and in device logs "
-            "become suspect."
+            "Time sync changed — the clock lost or gained synchronization, moved stratum, "
+            "or an NTP association became unusable — so timestamps in every other capture "
+            "and in device logs become suspect."
         ),
         collector=_collect_ntp,
         tags=("services",),
@@ -1803,8 +2480,35 @@ def _redact_config_lines(lines):
 
 
 def _redact_config_text(text):
-    """Whole-output form of _redact_config_lines — also ctx.run_ssh's trace hook."""
+    """Whole-output form of _redact_config_lines (secrets only; see _redact_config_output)."""
     return "\n".join(_redact_config_lines(str(text).splitlines()))
+
+
+# The two header comments that name the account that last changed or saved
+# the configuration ("! Last configuration change at <clock> by <user>",
+# "! NVRAM config last updated at <clock> by <user>"). Usernames never enter
+# a snapshot: the name is masked and the clock kept, wherever the header
+# line is stored (raw, the debug trace) — the normalized text drops the line.
+_CONFIG_HEADER_USER = re.compile(
+    r"^(?P<keep>\s*! (?:Last configuration change|NVRAM config last updated) at .+?\s+by\s+)"
+    r"\S.*$"
+)
+
+
+def _scrub_config_header_user(line):
+    """A header line with its 'by <user>' account masked; any other line unchanged."""
+    match = _CONFIG_HEADER_USER.match(line)
+    if match is None:
+        return line
+    return match.group("keep") + _SECRET_MARK
+
+
+def _redact_config_output(text):
+    """Every secret redacted AND the header accounts masked — ctx.run_ssh's trace hook
+    for the config reads, and the form raw stores."""
+    return "\n".join(
+        _scrub_config_header_user(line) for line in _redact_config_lines(str(text).splitlines())
+    )
 
 
 # Framing IOS prints around the configuration, never part of it, and each
@@ -1828,16 +2532,10 @@ _CONFIG_HEADER = tuple(
             r"(?P<uncompressed_bytes>\d+)\s+bytes",
             {},
         ),
-        (
-            r"! Last configuration change at (?P<last_change_at>.+?)"
-            r"(?: by (?P<last_change_by>.+?))?",
-            {},
-        ),
-        (
-            r"! NVRAM config last updated at (?P<nvram_updated_at>.+?)"
-            r"(?: by (?P<nvram_updated_by>.+?))?",
-            {},
-        ),
+        # The clock is lifted; the account after 'by' is matched and never
+        # captured, so no snapshot part — context included — carries a name.
+        (r"! Last configuration change at (?P<last_change_at>.+?)(?: by .+?)?", {}),
+        (r"! NVRAM config last updated at (?P<nvram_updated_at>.+?)(?: by .+?)?", {}),
         (r"! No configuration change since last restart", {"no_change_since_restart": True}),
         # `exec prompt timestamp` on the vty lines prefixes every show output
         # with the CPU load and the clock — different on every capture.
@@ -1973,9 +2671,14 @@ def _ssh_failure(command, exc):
 
 
 def _config_read(ctx, command, **kwargs):
-    """One SSH read traced through the redact hook; a failure fails the check, redacted."""
+    """One SSH read traced through the redact hook; a failure fails the check, redacted.
+
+    The verbatim text comes back (return_verbatim): running-vs-startup's
+    verbatim_in_sync compares the two texts before redaction and stores
+    neither; everything stored below is redacted here, line by line.
+    """
     try:
-        output = ctx.run_ssh(command, redact=_redact_config_text, **kwargs)
+        output = ctx.run_ssh(command, redact=_redact_config_output, return_verbatim=True, **kwargs)
     except Exception as exc:
         if type(exc).__name__ == "SoftTimeLimitExceeded":
             raise  # the Celery abort signal is never wrapped
@@ -1991,7 +2694,7 @@ def _session_privilege(ctx, raw, notes):
     except CollectError as exc:
         notes.append(str(exc))
         return None
-    raw[command] = _redact_config_lines(output.splitlines())
+    raw[command] = _redact_config_output(output).splitlines()
     match = _PRIVILEGE_LINE.search(output)
     if match is None:
         first = next((line.strip() for line in output.splitlines() if line.strip()), "")
@@ -2063,7 +2766,7 @@ def _collect_config(ctx):
                 % (command, len(lines), _redact_config_line(detail)[:120])
             )
         redacted = _redact_config_lines(lines)
-        raw[command] = redacted
+        raw[command] = [_scrub_config_header_user(line) for line in redacted]
         if kind == "absent":
             context[label] = {"present": False, "device_says": _redact_config_line(detail)[:200]}
             continue
@@ -2851,6 +3554,22 @@ def _collect_errdisable(ctx):
 _PO_LINE = re.compile(r"^\d+\s+(Po\d+)\(([\w-]*)\)\s+(\S+)\s*(.*)$")
 _PO_MEMBER = re.compile(r"([A-Za-z]{2}[A-Za-z]*[\d/\.]+)\(([\w-]+)\)")
 
+# LACP partner identity from Cisco-IOS-XE-lacp-oper (17.15.1, revision
+# 2024-03-01; older releases do not advertise it and answer 404):
+# lag-oper-data -> lag-info[channel-group] (link totals, port-channel-up,
+# layer-type) and lacp-port-channel[channel-group] -> lacp-member-state
+# [if-name] (system-id, partner-id, partner-key, oper-key, port-num,
+# partner-port-num, state ∈ lacp-bndl / -susp / -hot-sby / -indiv / -indep /
+# -down / -unkn, counters). `show etherchannel summary` stays the source of
+# the bundle keys (it is the operator's view and answers on every release);
+# the model adds per-member keys naming the far end. No port-channel existed
+# on the lab while the model was advertised, so what an empty release
+# answers ({} or a container with empty lists) is tolerated either way and
+# context records which source answered.
+_LACP_PATH = "/data/Cisco-IOS-XE-lacp-oper:lag-oper-data"
+_LACP_CONTAINER = "Cisco-IOS-XE-lacp-oper:lag-oper-data"
+_LACP_NO_PARTNER = "00:00:00:00:00:00"
+
 
 def _parse_etherchannel(cli_output):
     """'show etherchannel summary' -> {Po: {flags, protocol, members{port: flags}}}.
@@ -2876,6 +3595,84 @@ def _parse_etherchannel(cli_output):
     return normalized
 
 
+def _lacp_lists(payload):
+    """(lag-info entries, lacp-port-channel entries) of a lag-oper-data payload."""
+    container = _container(payload, _LACP_CONTAINER)
+    container = container if isinstance(container, dict) else {}
+    info = [e for e in _aslist(container.get("lag-info")) if isinstance(e, dict)]
+    channels = [e for e in _aslist(container.get("lacp-port-channel")) if isinstance(e, dict)]
+    return info, channels
+
+
+def _lacp_partner_mac(value):
+    """A partner-id / system-id as canonical MAC text; None when absent or all-zero
+    (no partner: the port is down or hears no LACPDUs)."""
+    text = common.mac_canonical(value)
+    return None if text in (None, _LACP_NO_PARTNER) else text
+
+
+def _normalize_lacp(payload):
+    """'PoN|<member>' -> LACP state and the partner's identity, from lacp-port-channel.
+
+    Members are keyed by the short interface name (the spelling `show
+    etherchannel summary` uses for the same port). state is the model's
+    port-state enum without its 'lacp-' prefix (bndl, susp, hot-sby, indiv,
+    indep, down, unkn); partner_system_id the far end's system MAC (None
+    when all-zero: no partner), partner_key and partner_port its key and port
+    number (None without a partner), oper_key this side's key. The LACPDU
+    counters never come here.
+    """
+    normalized = {}
+    _info, channels = _lacp_lists(payload)
+    for channel in channels:
+        group = _to_int(channel.get("channel-group"))
+        if group is None:
+            continue
+        for member in _aslist(channel.get("lacp-member-state")):
+            if not isinstance(member, dict):
+                continue
+            name = _text_or_none(member.get("if-name"))
+            if name is None:
+                continue
+            partner = _lacp_partner_mac(member.get("partner-id"))
+            normalized["Po%d|%s" % (group, common.short_ifname(name))] = {
+                "state": _short(_strip_module(member.get("state")), "lacp-"),
+                "partner_system_id": partner,
+                "partner_key": _to_int(member.get("partner-key")) if partner else None,
+                "partner_port": _to_int(member.get("partner-port-num")) if partner else None,
+                "oper_key": _to_int(member.get("oper-key")),
+            }
+    return normalized
+
+
+def _lacp_context(payload):
+    """Per channel-group the lag-info totals and up flag, and this side's system-id
+    per member (the local stack MAC: moves with the active, so context)."""
+    info, channels = _lacp_lists(payload)
+    groups = {}
+    for entry in info:
+        group = _to_int(entry.get("channel-group"))
+        if group is None:
+            continue
+        groups["Po%d" % (group,)] = {
+            "up": common.yes(entry.get("port-channel-up")),
+            "layer": _short(_strip_module(entry.get("layer-type")), ""),
+            "links": _to_int(entry.get("total-no-of-links")),
+            "bundled": _to_int(entry.get("total-no-of-links-bundled")),
+            "standby": _to_int(entry.get("total-no-of-links-standby")),
+            "down": _to_int(entry.get("total-no-of-links-down")),
+            "suspended": _to_int(entry.get("total-no-of-links-suspended")),
+        }
+    system_ids = {}
+    for channel in channels:
+        for member in _aslist(channel.get("lacp-member-state")):
+            if isinstance(member, dict) and member.get("if-name"):
+                system_ids[common.short_ifname(str(member["if-name"]))] = common.mac_canonical(
+                    member.get("system-id")
+                )
+    return {"groups": dict(sorted(groups.items())), "system_id": dict(sorted(system_ids.items()))}
+
+
 def _collect_port_channels(ctx):
     if not ctx.has_ssh:
         raise SkipCheck("no SSH transport")
@@ -2887,7 +3684,45 @@ def _collect_port_channels(ctx):
     normalized = _parse_etherchannel(output)
     if not normalized:
         raise SkipCheck("no port-channels configured")
-    return {"raw": {command: output}, "normalized": normalized}
+    raw = {command: output}
+    notes = []
+    # Best-effort widening: a failed model read costs the partner identity,
+    # never the check; context says which source answered.
+    try:
+        lacp = ctx.get(_LACP_PATH, ok_404=True)
+    except Exception as exc:  # best-effort read; transport failure modes vary
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise  # the Celery abort signal is never a note
+        lacp = None
+        lacp_source = "read failed"
+        notes.append("lacp-oper read failed (%s): no partner identity this capture" % (exc,))
+    else:
+        if lacp is None:
+            lacp_source = "not served"
+        elif not any(_lacp_lists(lacp)):
+            lacp_source = "served, empty"
+        else:
+            lacp_source = "served"
+    raw[_LACP_PATH] = lacp
+    members = _normalize_lacp(lacp) if lacp else {}
+    normalized.update(members)
+    context = {
+        "sources": {"show etherchannel summary": "answered", "lacp-oper": lacp_source},
+        "port_channels": sum(1 for key in normalized if "|" not in key),
+        "members_listed": sum(len(v["members"]) for k, v in normalized.items() if "|" not in k),
+        "members_bundled": sum(
+            1
+            for k, v in normalized.items()
+            if "|" not in k
+            for flags in v["members"].values()
+            if "P" in flags
+        ),
+        "lacp_members": len(members),
+    }
+    context.update(_lacp_context(lacp) if lacp else {"groups": {}, "system_id": {}})
+    if notes:
+        raw["note"] = "; ".join(notes)
+    return {"raw": raw, "normalized": normalized, "context": context}
 
 
 register(
@@ -2914,13 +3749,17 @@ register(
     CheckDef(
         id="iosxe_port_channels",
         platform="iosxe",
-        description="Port-channel bundles with per-member LACP flags",
+        description=(
+            "Port-channel bundles with per-member flags, plus each member's LACP state and "
+            "partner identity (system-id, key, port) where lacp-oper is served"
+        ),
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A bundle's membership or a member's flags changed — a suspended or "
             "standalone member quietly halves capacity without downing the "
-            "port-channel."
+            "port-channel — or a member now bundles with another partner system or "
+            "port, meaning the far end was re-cabled or replaced."
         ),
         collector=_collect_port_channels,
         tags=("interfaces",),
@@ -2955,7 +3794,7 @@ register(
 # platforms that do not stack reject the command and record as not-present;
 # a standalone switch or an SVL pair answers with one or two members.
 
-_STACK_OPER_PATH = "/data/Cisco-IOS-XE-stack-oper:stack-oper-data"
+_STACK_OPER_PATH = common.STACK_OPER_PATH
 
 _MAC = r"[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}"
 # "Switch/Stack Mac Address : 00a1.b2c3.0100 - Local Mac Address"
@@ -3163,77 +4002,14 @@ def _stack_nodes(stack_oper_payload):
     return nodes
 
 
-# `show inventory` prints every item as a NAME/DESCR line followed by its
-# PID/VID/SN line; empty fields print as nothing before the next comma.
-#   NAME: "Switch 2", DESCR: "C9300-48UXM"
-#   PID: C9300-48UXM       , VID: V02  , SN: FOC0000A002
-_INVENTORY_NAME_LINE = re.compile(r'^NAME:\s*"([^"]*)"', re.IGNORECASE)
-_INVENTORY_PID_LINE = re.compile(
-    r"^PID:\s*(.*?)\s*,\s*VID:\s*(.*?)\s*,\s*SN:\s*(.*?)\s*$", re.IGNORECASE
-)
-# A member's own chassis: "Switch <n>" in a 9300 stack, "Chassis <n>" in an
-# SVL pair. Anchored, so the stack-level "c93xx Stack" entry (a repeat of the
-# active's PID and SN) and sub-items such as "Switch 1 - Power Supply A" or
-# "Chassis 1 Fan Tray" never match.
-_INVENTORY_MEMBER_NAME = re.compile(r"^(?:Switch|Chassis)\s+(\d+)$", re.IGNORECASE)
-
-
-_INVENTORY_DESCR = re.compile(r',\s*DESCR:\s*"([^"]*)"', re.IGNORECASE)
-
-
-def _inventory_items(cli_output):
-    """The NAME/DESCR + PID/VID/SN pairs of ``show inventory`` in print order.
-
-    Each item is {name, descr, pid, vid, sn} with blank fields as ''. A
-    PID line with no NAME line before it is ignored.
-    """
-    items = []
-    name = None
-    descr = ""
-    for line in (cli_output or "").splitlines():
-        stripped = line.strip()
-        name_match = _INVENTORY_NAME_LINE.match(stripped)
-        if name_match:
-            name = name_match.group(1).strip()
-            descr_match = _INVENTORY_DESCR.search(stripped)
-            descr = descr_match.group(1).strip() if descr_match else ""
-            continue
-        pid_match = _INVENTORY_PID_LINE.match(stripped)
-        if pid_match is None or name is None:
-            continue
-        items.append(
-            {
-                "name": name,
-                "descr": descr,
-                "pid": pid_match.group(1),
-                "vid": pid_match.group(2),
-                "sn": pid_match.group(3),
-            }
-        )
-        name = None
-    return items
-
-
-def _parse_show_inventory(cli_output):
-    """'<n>' -> {model, serial} from the member chassis entries of ``show inventory``.
-
-    model is the PID and serial the SN, each only when printed. A switch
-    number listed twice with different facts maps to None: ambiguous, so it
-    names no member.
-    """
-    entries = {}
-    for item in _inventory_items(cli_output):
-        member = _INVENTORY_MEMBER_NAME.match(item["name"])
-        if member is None:
-            continue
-        facts = {}
-        if item["pid"]:
-            facts["model"] = item["pid"]
-        if item["sn"]:
-            facts["serial"] = item["sn"]
-        number = str(int(member.group(1)))
-        entries[number] = facts if entries.get(number, facts) == facts else None
-    return entries
+# `show inventory` parsing (NAME/DESCR + PID/VID/SN pairs, the member chassis
+# entries) lives in iosxe_common; the historical names stay bound here.
+_INVENTORY_NAME_LINE = common.INVENTORY_NAME_LINE
+_INVENTORY_PID_LINE = common.INVENTORY_PID_LINE
+_INVENTORY_MEMBER_NAME = common.INVENTORY_MEMBER_NAME
+_INVENTORY_DESCR = common.INVENTORY_DESCR
+_inventory_items = common.inventory_items
+_parse_show_inventory = common.parse_show_inventory
 
 
 # serial_source value for the last-resort pairing of a lone roster member
@@ -3487,9 +4263,18 @@ def _collect_switch_stack(ctx):
         # only where served. It holds until a reload, so a reload between
         # captures need not read unchanged; whether it is the member's own
         # or the stack's is unverified (see the section comment).
-        reload_reason = _stack_leaf(nodes.get(str(int(number))), "reload-reason")
+        node = nodes.get(str(int(number)))
+        reload_reason = _stack_leaf(node, "reload-reason")
         if reload_reason is not None:
             entry["reload_reason"] = reload_reason
+        # stack-oper's sso-ready-flag ("Standby SSO Ready flag", boolean): on
+        # the standby it says whether a switchover would be stateful; on the
+        # active and on plain members it reads false (field: false on a
+        # standalone active and on members 1, 3 and 4 of a 4-member stack;
+        # the standby was not captured). Only where served.
+        sso_ready = common.yes(node.get("sso-ready-flag")) if isinstance(node, dict) else None
+        if sso_ready is not None:
+            entry["sso_ready"] = sso_ready
         normalized["switch|%s" % (number,)] = entry
     for key, facts in ports.items():
         normalized["stack-port|%s" % (key,)] = facts
@@ -3516,8 +4301,8 @@ register(
         id="iosxe_switch_stack",
         platform="iosxe",
         description=(
-            "Switch stack members (role, state, model, serial, reload reason) and stack-port "
-            "ring health"
+            "Switch stack members (role, state, model, serial, reload reason, SSO-ready "
+            "flag) and stack-port ring health"
         ),
         tier=1,
         compare={"mode": "equality_set"},
@@ -3611,14 +4396,7 @@ def _inventory_place(normalized, key, facts, serial):
     return key
 
 
-def _inventory_entries(hardware_payload):
-    """The device-inventory list entries (dicts only) of a device-hardware-data payload."""
-    container = (
-        _container(hardware_payload, "Cisco-IOS-XE-device-hardware-oper:device-hardware-data") or {}
-    )
-    hardware = container.get("device-hardware")
-    hardware = hardware if isinstance(hardware, dict) else {}
-    return [entry for entry in _aslist(hardware.get("device-inventory")) if isinstance(entry, dict)]
+_inventory_entries = common.device_inventory
 
 
 def _normalize_inventory(hardware_payload):

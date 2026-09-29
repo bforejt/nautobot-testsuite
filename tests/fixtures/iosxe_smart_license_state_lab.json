@@ -1,0 +1,590 @@
+{
+ "cisco-smart-license:state": {
+  "always-enabled": true,
+  "smart-enabled": true,
+  "version": "6.1.4/6feb8bc10",
+  "state-info": {
+   "registration": {
+    "registration-state": "reg-state-not-registered",
+    "export-control-allowed": false
+   },
+   "authorization": {
+    "authorization-state": "auth-state-none"
+   },
+   "utility": {
+    "enabled": false,
+    "reporting": "utility-reporting-type-none",
+    "reporting-times": {
+     "last-report-time": "1970-01-01T00:00:00+00:00",
+     "last-report-success": false,
+     "fail-message": "",
+     "next-report-time": "1970-01-01T00:00:00+00:00"
+    },
+    "customer-info": {
+     "id": "",
+     "name": "",
+     "street": "",
+     "city": "",
+     "state": "",
+     "country": "",
+     "postal-code": ""
+    }
+   },
+   "custom-id": "",
+   "transport": {
+    "transport-type": "transport-type-callhome"
+   },
+   "privacy": {
+    "hostname": false,
+    "version": false
+   },
+   "evaluation": {
+    "eval-in-use": false,
+    "eval-expired": false,
+    "eval-period-left": {
+     "time-left": 0
+    }
+   },
+   "udi": {
+    "pid": "C9300-48UXM",
+    "sn": "FOC8704M57A",
+    "vid": "",
+    "uuid": "",
+    "suvi": "",
+    "host-identifier": "",
+    "mac-address": "00:00:00:00:00:00"
+   },
+   "usage": [
+    {
+     "entitlement-tag": "regid.2017-05.com.cisco.C9300_48P_NW_essentialsk9,1.0_26ac73af-40c0-4522-8eb6-8a465aea2e83",
+     "short-name": "C9300-48 Network Essentials",
+     "license-name": "network-essentials",
+     "description": "C9300-48 Network Essentials",
+     "count": 1,
+     "enforcement-mode": "enforcement-invalid-tag",
+     "post-paid": true,
+     "subscription-id": ""
+    },
+    {
+     "entitlement-tag": "regid.2017-05.com.cisco.C9300_48P_dna_essentials,1.0_e10dc374-2fa2-43c4-90c3-d73821f94477",
+     "short-name": "C9300-48 DNA Essentials",
+     "license-name": "dna-essentials",
+     "description": "C9300-48 DNA Essentials",
+     "count": 1,
+     "enforcement-mode": "enforcement-invalid-tag",
+     "post-paid": true,
+     "subscription-id": ""
+    }
+   ],
+   "policy": {
+    "policy-type": "policy-type-merged",
+    "policy-name": "",
+    "ack-required": true,
+    "policy-enforced": {
+     "reporting-first-time": 0,
+     "reporting-ongoing": 0,
+     "reporting-macd": 0
+    },
+    "policy-export": {
+     "reporting-first-time": 0,
+     "reporting-ongoing": 0,
+     "reporting-macd": 0
+    },
+    "policy-subscription": {
+     "reporting-first-time": 90,
+     "reporting-ongoing": 90,
+     "reporting-macd": 90
+    },
+    "policy-perpetual": {
+     "reporting-first-time": 365,
+     "reporting-ongoing": 0,
+     "reporting-macd": 90
+    }
+   },
+   "rum-reports-closed-keys": [
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717164",
+     "report-id": "1682717164",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:26:11+00:00",
+     "report-end-time": "2023-04-28T21:26:31+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717165",
+     "report-id": "1682717165",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:26:11+00:00",
+     "report-end-time": "2023-04-28T21:26:31+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717166",
+     "report-id": "1682717166",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:26:31+00:00",
+     "report-end-time": "2023-04-28T21:27:05+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717167",
+     "report-id": "1682717167",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:26:31+00:00",
+     "report-end-time": "2023-04-28T21:27:05+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717168",
+     "report-id": "1682717168",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:34:50+00:00",
+     "report-end-time": "2023-04-28T21:35:11+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717169",
+     "report-id": "1682717169",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:34:50+00:00",
+     "report-end-time": "2023-04-28T21:35:11+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717170",
+     "report-id": "1682717170",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:35:11+00:00",
+     "report-end-time": "2023-04-28T21:35:45+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717171",
+     "report-id": "1682717171",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:35:11+00:00",
+     "report-end-time": "2023-04-28T21:35:45+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717172",
+     "report-id": "1682717172",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:47:12+00:00",
+     "report-end-time": "2023-04-28T21:47:33+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717173",
+     "report-id": "1682717173",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:47:12+00:00",
+     "report-end-time": "2023-04-28T21:47:33+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717174",
+     "report-id": "1682717174",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:47:33+00:00",
+     "report-end-time": "2023-04-28T21:48:06+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717175",
+     "report-id": "1682717175",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:47:33+00:00",
+     "report-end-time": "2023-04-28T21:48:06+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717176",
+     "report-id": "1682717176",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:55:10+00:00",
+     "report-end-time": "2023-04-28T21:55:30+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717177",
+     "report-id": "1682717177",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:55:10+00:00",
+     "report-end-time": "2023-04-28T21:55:30+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717178",
+     "report-id": "1682717178",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:55:30+00:00",
+     "report-end-time": "2023-04-28T21:56:04+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717179",
+     "report-id": "1682717179",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-04-28T21:55:30+00:00",
+     "report-end-time": "2023-04-28T21:56:04+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717180",
+     "report-id": "1682717180",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-05-19T17:46:08+00:00",
+     "report-end-time": "2023-05-19T17:46:29+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717181",
+     "report-id": "1682717181",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-05-19T17:46:08+00:00",
+     "report-end-time": "2023-05-19T17:46:29+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717182",
+     "report-id": "1682717182",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-05-19T17:46:29+00:00",
+     "report-end-time": "2023-05-20T01:46:19+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717183",
+     "report-id": "1682717183",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2023-05-19T17:46:29+00:00",
+     "report-end-time": "2023-05-20T01:46:19+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717184",
+     "report-id": "1682717184",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2015-01-01T00:02:16+00:00",
+     "report-end-time": "2015-01-01T00:02:37+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717185",
+     "report-id": "1682717185",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2015-01-01T00:02:16+00:00",
+     "report-end-time": "2015-01-01T00:02:37+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717186",
+     "report-id": "1682717186",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2015-01-01T00:02:37+00:00",
+     "report-end-time": "2015-01-01T00:48:09+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717187",
+     "report-id": "1682717187",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2015-01-01T00:02:37+00:00",
+     "report-end-time": "2015-01-01T00:48:09+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717190",
+     "report-id": "1682717190",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2026-09-29T15:26:40+00:00",
+     "report-end-time": "2026-09-29T15:26:42+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717191",
+     "report-id": "1682717191",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2026-09-29T15:26:40+00:00",
+     "report-end-time": "2026-09-29T15:26:42+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717192",
+     "report-id": "1682717192",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2026-09-29T15:26:42+00:00",
+     "report-end-time": "2026-09-29T17:26:50+00:00",
+     "report-state": "rum-report-state-closed"
+    },
+    {
+     "rum-report-key": "P:C9300-48UXM,S:FOC8704M57A_1682717193",
+     "report-id": "1682717193",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     },
+     "report-start-time": "2026-09-29T15:26:42+00:00",
+     "report-end-time": "2026-09-29T17:26:50+00:00",
+     "report-state": "rum-report-state-closed"
+    }
+   ],
+   "rum-ack": {
+    "last-received-time": "1970-01-01T00:00:00+00:00",
+    "next-report-deadline": "2015-04-01T00:03:08+00:00"
+   },
+   "factory-purchase": [
+    {
+     "key_udi": "PID:C9300-48UXM,SN:FOC8704M57A",
+     "udi": {
+      "pid": "C9300-48UXM",
+      "sn": "FOC8704M57A",
+      "vid": "",
+      "uuid": "",
+      "suvi": "",
+      "host-identifier": "",
+      "mac-address": "00:00:00:00:00:00"
+     }
+    }
+   ],
+   "imported-authorizations": {
+    "overall-status": [
+     {
+      "key_udi": "PID:C9300-48UXM,SN:FOC8704M57A",
+      "udi": {
+       "pid": "C9300-48UXM",
+       "sn": "FOC8704M57A",
+       "vid": "",
+       "uuid": "",
+       "suvi": "",
+       "host-identifier": "",
+       "mac-address": "00:00:00:00:00:00"
+      }
+     }
+    ]
+   }
+  }
+ }
+}

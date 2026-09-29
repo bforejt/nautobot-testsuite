@@ -41,16 +41,17 @@ import re
 from collections import Counter
 
 from . import constants as C
+from . import iosxe_common as common
 from .registry import SEMANTICS as _REGISTRY_SEMANTICS
 from .registry import CheckDef, CollectError, SkipCheck, register
 
 # --- RESTCONF paths ----------------------------------------------------------
 
-# Identical string (and kwargs) to checks_iosxe's hardware read, so the
-# per-run cache serves platform-health, the stack check and this gate from
-# one GET.
-_HW_PATH = "/data/Cisco-IOS-XE-device-hardware-oper:device-hardware-data"
-_STACK_OPER_PATH = "/data/Cisco-IOS-XE-stack-oper:stack-oper-data"
+# Identical string (and kwargs) to checks_iosxe's hardware and stack reads,
+# so the per-run cache serves platform-health, the stack check and this gate
+# from one GET each.
+_HW_PATH = common.HW_PATH
+_STACK_OPER_PATH = common.STACK_OPER_PATH
 
 _AP_OPER = "/data/Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data"
 _AP_NAME_MAP_PATH = _AP_OPER + "/ap-name-mac-map"
@@ -198,85 +199,18 @@ _SECRET_LEAVES = frozenset(
 _SECRET_TOKENS = ("password", "secret", "passphrase")
 
 
-# --- shared helpers ----------------------------------------------------------
+# --- shared helpers (jobs/iosxe_common; historical names kept for callers) ---
 
-
-def _aslist(node):
-    """RESTCONF quirk: a single list entry may arrive as a bare dict, absent as None."""
-    if node is None:
-        return []
-    if isinstance(node, list):
-        return node
-    return [node]
-
-
-def _node(payload, name):
-    """Value of the module-qualified top-level node ``name``.
-
-    List reads answer ``{"mod:list": [...]}``; a container read (or a fixture
-    harvested from one) answers ``{"mod:container": {"list": [...]}}`` — the
-    second form is searched one level down so both shapes normalize alike.
-    """
-    if not isinstance(payload, dict):
-        return None
-    for key, value in payload.items():
-        if key.split(":")[-1] == name:
-            return value
-    for value in payload.values():
-        if isinstance(value, dict):
-            for key, inner in value.items():
-                if key.split(":")[-1] == name:
-                    return inner
-    return None
-
-
-def _entries(payload, name):
-    return [entry for entry in _aslist(_node(payload, name)) if isinstance(entry, dict)]
-
-
-def _sub(node, *names):
-    """Nested container lookup; {} when any level is missing or not a dict."""
-    for name in names:
-        node = node.get(name) if isinstance(node, dict) else None
-    return node if isinstance(node, dict) else {}
-
-
-def _leaf(node, *names):
-    """Nested leaf lookup; None when any level is missing."""
-    return _sub(node, *names[:-1]).get(names[-1])
-
-
-def _to_int(value):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _yes(value):
-    """Boolean leaf: RESTCONF JSON booleans, but tolerate 'true'/'false' strings."""
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return None
-    return str(value).strip().lower() in ("true", "yes", "1", "enabled")
-
-
-def _short(value, prefix):
-    """Strip a YANG enum prefix ('client-status-run' -> 'run'); None stays None."""
-    if value is None:
-        return None
-    value = str(value)
-    return value[len(prefix) :] if value.startswith(prefix) else value
-
-
-def _mac(value):
-    return str(value).strip().lower() if value else None
-
-
-def _compact(facts):
-    """Drop unmeasured (None) facets: absent means the device did not publish it."""
-    return {key: value for key, value in facts.items() if value is not None}
+_aslist = common.aslist
+_node = common.node
+_entries = common.entries
+_sub = common.sub
+_leaf = common.leaf
+_to_int = common.to_int
+_yes = common.yes
+_short = common.short
+_mac = common.mac
+_compact = common.compact
 
 
 def _ap_mode(value):
@@ -361,12 +295,10 @@ def _controller(ctx):
     )
 
 
-def _required(ctx, facts, path, **kwargs):
-    """A wireless read a controller MUST answer: 404 is a failed read, never emptiness.
-
-    A 2xx with no body ({}) is a positively read empty list and passes through.
-    """
-    payload = ctx.get(path, ok_404=True, **kwargs)
+def _required_payload(facts, path, payload):
+    """The payload of a read a controller MUST answer: None (HTTP 404) is a failed
+    read, never emptiness. A 2xx with no body ({}) is a positively read empty
+    list and passes through."""
     if payload is None:
         raise CollectError(
             "%s not served (HTTP 404) by this %s — missing wireless data on a controller "
@@ -376,26 +308,28 @@ def _required(ctx, facts, path, **kwargs):
     return payload
 
 
-def _fetch(ctx, facts, base, list_name, fields, timeout=C.GET_TIMEOUT, notes=None):
-    """(entries, payload) of a scoped list read.
+def _required(ctx, facts, path, **kwargs):
+    """A wireless read a controller MUST answer (see _required_payload)."""
+    return _required_payload(facts, path, ctx.get(path, ok_404=True, **kwargs))
 
-    A release that rejects the ``fields`` filter answers HTTP 400; the one
-    retry reads the list unfiltered (bigger, slower: BIG_GET_TIMEOUT) and the
-    fallback is noted so the raw bundle explains its size.
+
+def _fetch(ctx, facts, base, list_name, fields, timeout=C.GET_TIMEOUT, notes=None):
+    """(entries, payload) of a scoped list read a controller must answer.
+
+    common.get_filtered gives the ``fields`` read its one unfiltered retry on
+    HTTP 400 (noted so the raw bundle explains its size); a 404 on either
+    read is a failed read (_required_payload), never an unused feature.
     """
-    path = "%s/%s?fields=%s" % (base, list_name, fields)
-    try:
-        payload = _required(ctx, facts, path, timeout=timeout)
-    except CollectError:
-        raise
-    except Exception as exc:
-        if getattr(exc, "status_code", None) != 400:
-            raise
-        if notes is not None:
-            notes.append(
-                "%s: fields filter rejected (HTTP 400); unfiltered read used" % (list_name,)
-            )
-        payload = _required(ctx, facts, "%s/%s" % (base, list_name), timeout=C.BIG_GET_TIMEOUT)
+    read = common.get_filtered(
+        ctx,
+        "%s/%s" % (base, list_name),
+        fields,
+        label=list_name,
+        ok_404=True,
+        timeout=timeout,
+        notes=notes,
+    )
+    payload = _required_payload(facts, read.path, read.payload)
     return _entries(payload, list_name), payload
 
 
@@ -1450,15 +1384,18 @@ def _aaa_context(entries, normalized):
 def _collect_aaa_servers(ctx):
     # Not gated on the controller: a 9300 access switch doing 802.1X has the
     # same servers and the same failure mode.
-    path = "%s/aaa-radius-stats?fields=%s" % (_AAA_OPER, _AAA_FIELDS)
     notes = []
-    try:
-        payload = ctx.get(path, ok_404=True)
-    except Exception as exc:
-        if getattr(exc, "status_code", None) != 400:
-            raise
-        notes.append("aaa-radius-stats: fields filter rejected (HTTP 400); unfiltered read used")
-        payload = ctx.get(_AAA_OPER + "/aaa-radius-stats", ok_404=True)
+    # retry_timeout=None: this read has always retried with the transport's
+    # default timeout rather than BIG_GET_TIMEOUT (kept as is).
+    payload = common.get_filtered(
+        ctx,
+        _AAA_OPER + "/aaa-radius-stats",
+        _AAA_FIELDS,
+        label="aaa-radius-stats",
+        ok_404=True,
+        retry_timeout=None,
+        notes=notes,
+    ).payload
     if payload is None:
         raise SkipCheck("RADIUS server statistics not served (aaa-oper model absent)")
     entries = _entries(payload, "aaa-radius-stats")

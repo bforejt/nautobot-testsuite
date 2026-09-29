@@ -123,13 +123,16 @@ the humans reading the report.
 | --- | --- | --- | --- |
 | `iosxe_routes_rib` | iosxe | 2 | Full RIB (all VRFs, v4+v6): prefix → protocol, preference, next-hops |
 | `iosxe_route_rollups` | iosxe | 1 | Per-protocol route counts from the RIB, plus best-effort OSPF type splits |
-| `iosxe_routes_fib` | iosxe | 2 | CEF FIB: programmed prefix → next-hops per forwarding instance |
+| `iosxe_routes_fib` | iosxe | 2 | CEF FIB: programmed prefix → next-hops per forwarding instance (attached-host /32 adjacencies, which follow ARP, are counted in context and never keyed) |
 | `iosxe_bgp_peers` | iosxe | 1 | BGP sessions per AFI/VRF/peer: state, remote AS, installed prefixes |
-| `iosxe_ospf_neighbors` | iosxe | 1 | OSPFv2 adjacencies per instance/area/interface: neighbor state, address |
-| `iosxe_arp` | iosxe | 2 | ARP tables, all VRFs: resolved MAC and interface per address |
-| `iosxe_neighbors` | iosxe | 2 | CDP and LLDP neighbor tables combined: who is on which local port, with the CDP neighbor's platform string, native VLAN, duplex and voice VLAN |
-| `iosxe_interfaces` | iosxe | 2 | All interfaces: admin/oper status, auto-negotiation flag, negotiated speed and duplex (while up; on access ports named by the VLAN database they move to context, `link_scope` says which), storm-control blocking, mGig downshift, and the effective config (IPv4/mask, VRF, IPv6, MTU, ACLs, QoS policies); CRC, error and flap counters in context |
-| `iosxe_platform_health` | iosxe | 3 | Boot time, last reboot reason and severity (context names any reload leaf the device did not serve), active hardware alarms, environment sensor states (readings in context; PSU input presence visible as the P0/P1 sensor states) |
+| `iosxe_ospf_neighbors` | iosxe | 1 | OSPFv2 adjacencies per instance/area/interface: neighbor state, address; every instance, area and interface state in context, so an empty view is explained (not-present when no instance runs) |
+| `iosxe_fhrp` | iosxe | 1 | HSRP and VRRP gateway roles per interface/group: state, virtual IP, priority, preempt, active/standby (HSRP) or owner/master (VRRP); transitions, reasons and track states in context |
+| `iosxe_eigrp_neighbors` | iosxe | 1 | EIGRP adjacencies per AFI/AS/VRF/interface: neighbor stub flags and software version (a listed neighbor is an established adjacency); SRTT/RTO/retransmit readings in context |
+| `iosxe_isis_neighbors` | iosxe | 1 | IS-IS adjacencies per tag/level/interface: neighbor state and addresses; hold timers in context |
+| `iosxe_arp` | iosxe | 2 | ARP tables, all VRFs: resolved MAC and interface per address, from `arp-entry` or, on a release that fills only the deprecated flat `arp-oper` list, from that one — context `source`, `entries` and `vrfs` explain the view |
+| `iosxe_neighbors` | iosxe | 2 | CDP and LLDP neighbor tables combined: who is on which local port, with the CDP neighbor's platform string, native VLAN, duplex and voice VLAN; context `sources` says how each model answered (not served, served empty — as the lab 9300's `cdp-oper` was on earlier harvests — or n neighbors) |
+| `iosxe_interfaces` | iosxe | 2 | All interfaces: admin/oper status, auto-negotiation flag, negotiated speed and duplex (while up; on the access ports the VLAN database names — from whichever `vlan-oper` list the release fills, minus the trunks `show interfaces trunk` lists — they move to context; `link_scope`, `access_port_source` and `trunk_ports_excluded` say which), storm-control blocking, mGig downshift, and the effective config (IPv4/mask, VRF, IPv6, MTU, ACLs, QoS policies; an unaddressed port's 0.0.0.0 reads None); CRC, error and flap counters in context, with wrapped uint64 readings and not-present ports' statistics named in context and never counted |
+| `iosxe_platform_health` | iosxe | 3 | Boot time (epoch seconds with a 60 s compare tolerance for the device's own jitter, the served string in context), last reboot reason and severity (context names any reload leaf the device did not serve), active hardware alarms, environment sensor states in one vocabulary (normal / shutdown / not-present / warning / critical / fault; the served word — `Norm` on the lab 9300, `Normal` on older releases — and every reading in context; PSU input presence visible as the `Power Supply A/B` sensor states, or the P0/P1 family where a release reports it) |
 | `panos_system_info` | panos | 3 | Software/content versions, model, serial, and hostname |
 | `panos_ha` | panos | 1 | HA enablement, local/peer state, and running-config sync |
 | `panos_session_info` | panos | 1 | Global session counts within tolerance of the baseline |
@@ -144,12 +147,12 @@ the humans reading the report.
 | `panos_bgp_peers` | panos | 1 | BGP peer states, engine-aware (not-present when BGP is unused) |
 | `panos_globalprotect` | panos | 3 | GlobalProtect user count (not-present when GP is unused) |
 | `panos_dhcp` | panos | 3 | DHCP server lease overview (not-present when DHCP is unused) |
-| `iosxe_dhcp` | iosxe | 3 | DHCP server/relay configuration (not-present when unused) |
+| `iosxe_dhcp` | iosxe | 3 | DHCP configuration under native/ip/dhcp: server pools, excluded addresses, relay options and the DHCP-snooping globals (not-present when unused) |
 | `iosxe_routing_config` | iosxe | 2 | Static-route and router-stanza configuration (secrets scrubbed) |
-| `iosxe_config` | iosxe | 2 | Full running-config and startup-config text as line lists (secrets redacted, changes diff as line-level hunks) and whether the two match |
-| `iosxe_syslog_errors` | iosxe | 3 | Error-and-worse syslog event counts from the logging buffer |
-| `iosxe_svl_health` | iosxe | 3 | StackWise Virtual link membership and bundled state |
-| `iosxe_ntp` | iosxe | 3 | NTP synchronization state |
+| `iosxe_config` | iosxe | 2 | Full running-config and startup-config text as line lists (secrets redacted, the header's `by <user>` accounts masked with their clock kept, changes diff as line-level hunks) and whether the two match |
+| `iosxe_syslog_errors` | iosxe | 3 | Syslog event counts from the logging buffer: every severity 0-3 event plus the severity 4-5 events of the port, redundancy, edge-service and platform facilities; buffer header and oldest-line facts in context; usernames and logged commands redacted before the text is parsed, stored or traced |
+| `iosxe_svl_health` | iosxe | 3 | StackWise Virtual link membership and bundled state (not-present when the model is unserved or serves locations with no link) |
+| `iosxe_ntp` | iosxe | 3 | NTP sync from ntp-oper: synchronized (derived), stratum, the kind of reference (address, KoD code, reference clock) and each association's health class; the selected peer and per-peer selection status in context (not-present until NTP is configured) |
 | `panos_logging_status` | panos | 3 | Log forwarding status — is telemetry actually flowing |
 | `panos_url_cloud` | panos | 3 | URL-filtering cloud connectivity |
 | `panos_ntp` | panos | 3 | NTP synchronization state |
@@ -162,14 +165,19 @@ the humans reading the report.
 | `iosxe_optics` | iosxe | 3 | Transceiver DOM light levels (tx/rx dBm) per optical port |
 | `iosxe_crash_files` | iosxe | 1 | Crash/system-report files within the recency window on every stack member's filesystem (`dir`, field-verified), plus the q-filesystem model's core-file list (a YANG best guess pending a shakedown) |
 | `iosxe_errdisable` | iosxe | 1 | Ports in err-disabled state with the triggering reason, from the interfaces model's intf-ext-state (`show interfaces status err-disabled` fallback) |
-| `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member LACP flags |
-| `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, serial, model matched by serial, reload reason) and stack-port ring health (not-present when the platform does not stack) |
+| `iosxe_port_channels` | iosxe | 1 | Port-channel bundles with per-member flags, plus each member's LACP state and partner identity (system-id, key, port) from lacp-oper where the release serves it |
+| `iosxe_switch_stack` | iosxe | 1 | Switch stack members (role, state, serial, model matched by serial, reload reason, SSO-ready flag) and stack-port ring health (not-present when the platform does not stack) |
 | `iosxe_inventory` | iosxe | 1 | Hardware identity on every platform form: model, serial, description and version of each chassis, module, power supply, fan and transceiver, keyed by name, else serial, else part number (an item with none of the three is counted, never keyed; device-inventory, `show inventory` fallback; an empty inventory is a failed read, never not-present) |
-| `iosxe_vlans` | iosxe | 1 | Operational VLAN database (name, status) plus VTP mode/domain/revision (`show vtp status`, its MD5 digest redacted); per-port VLAN maps in context |
-| `iosxe_trunks` | iosxe | 1 | Trunk ports: mode, encapsulation, native VLAN and the allowed/active/forwarding VLAN sets; where VTP pruning is on the forwarding set moves to context (`vtp_pruning` says which) (not-present when no port trunks) |
-| `iosxe_stp` | iosxe | 1 | Spanning tree: mode and global guards, per-instance root facts, and every port that is neither designated-forwarding nor disabled (link down) |
-| `iosxe_mac_table` | iosxe | 2 | Dynamically learned MAC counts per VLAN, stack member and port, evaluated as capability (an absent bucket post counts as zero; rows in raw, capped) |
-| `iosxe_poe` | iosxe | 1 | PoE port admin/oper/class in one vocabulary whichever port list the release fills, plus StackPower mode, topology (ring/star/standalone), supply count, installed watts and each member's two cable ports; budgets and wattages in context (not-present on a non-PoE SKU or when the model is absent) |
+| `iosxe_vlans` | iosxe | 1 | Operational VLAN database (name, status) plus VTP mode/domain/revision (`show vtp status`, its MD5 digest redacted); per-port VLAN map in context inverted from whichever membership list the release fills (`port_map_source` says which; the 9300 fills `vlan-interfaces`, trunks under VLAN 1 whatever their native VLAN) |
+| `iosxe_trunks` | iosxe | 1 | Trunk ports (short CLI names): mode, encapsulation, native VLAN and the allowed/active/forwarding VLAN sets as canonical ranges; where VTP pruning is on the forwarding set moves to context (`vtp_pruning` says which) (not-present when no port trunks) |
+| `iosxe_stp` | iosxe | 1 | Spanning tree: mode and global guards, per-instance root facts (root port resolved to a name through port-num), and every port that is neither designated-forwarding nor disabled; topology-change counter and its age in context (the device serves the last-change time as an age from the 1970 epoch) |
+| `iosxe_mac_table` | iosxe | 2 | Dynamically learned MAC counts per VLAN, stack member and port, evaluated as capability (an absent bucket post counts as zero; port buckets keep the release's spelling, `port_name_form` in context; statics, CPU group addresses and SVI MACs in context only; rows in raw, capped) |
+| `iosxe_access_sessions` | iosxe | 1 | 802.1X/MAB/web-auth session counts per domain, method, landed VLAN and stack member from identity-oper, evaluated as capability (fields-filtered read only, never a username, never retried unfiltered; an empty answer is `total` 0; not-present only when the model is absent or rejects the filter) |
+| `iosxe_poe` | iosxe | 1 | PoE port admin/oper/class per listed port (the observed 9300 releases list powered ports only, so a device that lost power is a removed key there; context `port_source`, `ports_total` and `poe_ports` say what this capture's release listed) plus StackPower mode, topology (ring/star/standalone), supply count, installed watts and each member's two cable ports; budgets and wattages in context (not-present on a non-PoE SKU or when the model is absent) |
+| `iosxe_persistence` | iosxe | 1 | Would a reload bring back what runs now: whether the running config is saved (None where the release does not serve `unsaved-config`), the software version, the SDM template in effect and the one pending a reload (`show sdm prefer`, no model), and per install location the running image's version, commit state, auto-abort timer, boot mode and the full image list (abort-timer end time and ROMMON in context) |
+| `iosxe_license` | iosxe | 1 | Smart licensing level in effect (network and DNA), registration, authorization, transport and per-licence enforcement state from `cisco-smart-license` (`show license summary` fallback); evaluation and expiry countdowns in context; never licence keys, tokens, account names or the UDI |
+| `iosxe_pki` | iosxe | 1 | PKI trustpoints and certificates from `crypto-pki-oper` (`show crypto pki certificates` fallback when the model is absent or answers a server error): subject, issuer, usage, validity end, status and self-signed flag per certificate, including the factory SUDI chain and the self-signed default; an enrolled identity certificate (whose default CN is the hostname) is keyed by its issuer with its naming RDNs withheld in normalized and raw; days to expiry and expiring-soon tallies in context |
+| `iosxe_tcam` | iosxe | 3 | Forwarding-table capacity and utilisation per ASIC region (`tcam-oper`) and datapath feature (`switch-dp-resources-oper`); `used_pct` carries a 5-percentage-point tolerance, the band word and every reading in context (not-present when neither model is served) |
 | `panos_jobs` | panos | 1 | Unfinished commit/config jobs (history counts in context) |
 | `panos_chassis_ready` | panos | 1 | Dataplane readiness (show chassis-ready) |
 | `panos_disk_space` | panos | 3 | Filesystem use percentages within tolerance |
@@ -213,10 +221,25 @@ the humans reading the report.
 | `xcc_chassis_location` | xcc | 3 | Operator-maintained chassis Location record and the intrusion sensor state |
 
 What this catalog captures per network layer, and the holes still open ranked
-by general value, is tracked in `docs/coverage.md` (the living coverage map);
-the IOS-XE layer-2 and PoE checks live in `jobs/checks_iosxe_layer2.py` and
-`jobs/checks_iosxe_poe.py`, the rest of the switch catalog in
-`jobs/checks_iosxe.py`.
+by general value, is tracked in `docs/coverage.md` (the living coverage map).
+The IOS-XE switch catalog is split into self-contained *layer modules*, each
+holding its own checks, their `SEMANTICS` (merged into `registry.SEMANTICS` at
+import) and a `KEY_MODELS` tuple naming the yang-library modules it reads (the
+shakedown merges every module's list into `discovery.key_models`):
+`jobs/checks_iosxe_layer2.py` (VLANs, trunks, spanning tree, MAC learning,
+802.1X sessions), `jobs/checks_iosxe_layer3.py` (FHRP, EIGRP and IS-IS
+adjacencies), `jobs/checks_iosxe_platform.py` (persistence, licensing, PKI,
+TCAM), `jobs/checks_iosxe_poe.py` (inline power and StackPower) and
+`jobs/checks_iosxe_wireless.py` (the 9800 catalog, gated on a controller).
+`jobs/checks_iosxe.py` is the legacy core (routes, ARP, neighbors, interfaces,
+platform health, config text, syslog, NTP, stack, inventory, crash files) whose
+checks migrate into the layer modules one at a time; nothing new is added there.
+`jobs/iosxe_common.py` is not a catalog: it holds the RESTCONF paths, the
+filtered-GET-with-one-unfiltered-retry helper, interface-name and MAC
+normalisation and the parsers two or more modules must spell identically, so the
+per-run cache issues one GET per shared read. Modules are discovered by file
+name (`jobs/checks_*.py`), so a new layer module registers without editing the
+package, the jobs or the test loader.
 
 ## Always-everything capture
 
@@ -391,10 +414,102 @@ the read-only grep guard and the SOAP operation guard.
      deprecated live route table is still filled, and how large `config.option`
      is (it is curated before the raw cap). Every probe reuses the collectors'
      own fetches, so it costs no extra calls.
-3. Sanitize the interesting payloads from `shakedown-trace_*.json`
-   (RFC 5737/1918 addresses, invented hostnames) and commit them under
-   `tests/fixtures/`, replacing the synthetic ones, so CI locks in the real
-   shapes.
+3. Turn real payloads into fixtures and commit them under `tests/fixtures/`,
+   replacing the synthetic ones, so CI locks in the real shapes. Three
+   steps, all stdlib apart from the transports the harvest needs, none of
+   which ever prints a credential:
+
+   1. **Harvest** every payload the catalog reads from the device with
+      `tools/harvest_live.py` — every registered check through a real
+      `CollectorContext`, then the whole containers and `show` layouts a
+      fixture set wants — into a directory outside the repository (the raw
+      harvest is unsanitized). The login comes from the environment only:
+
+      ```
+      set -a; . /path/to/device.env; set +a
+      python3 tools/harvest_live.py --host 192.0.2.10 --platform iosxe \
+          --tag baseline --out /path/outside/the/repo \
+          --interface TenGigabitEthernet1/0/48 --interface Vlan3 \
+          --user-env user --password-env pass
+      ```
+
+      It prints the per-check table (ok / not-present / FAILED with the key
+      count), saves `get__*.json` / `ssh__*.txt` per request plus
+      `results.json`, `trace.json` and `manifest.json`, and exits 1 when a
+      check FAILED. A capture of an anomaly (a loop, a root elsewhere, a
+      native-VLAN mismatch) is just another `--tag`.
+   2. **Sanitize** one harvest into fixtures with `tools/make_fixtures.py`,
+      which maps each harvest file to its fixture name (`--list` prints the
+      table) and runs every one through the sanitizer with one mapping file
+      kept beside the raw payloads, so a re-harvest invents the same values
+      as the last one and diffs cleanly:
+
+      ```
+      python3 tools/make_fixtures.py --payloads /path/outside/the/repo/baseline \
+          --map /path/outside/the/repo/sanitize-map.json --out tests/fixtures \
+          --env /path/to/device.env \
+          --host sw-real-01=sw-lab-1 --host AP0000.1111.2222=ap-lab-1 \
+          --net 10.0.0.0/24=192.0.2.0/24 --net 10.0.1.0/24=198.51.100.0/24 \
+          [--replace OLD=NEW] [--suffix _lab_hairpin --only iosxe_stp_details_lab.json]
+      ```
+
+      It discovers the user names the device prints in its own config and
+      log texts (`username` lines, `[user: …]` login lines, `by <user>`
+      headers) and maps them to `netops`, scrubs every value of the `--env`
+      file, applies `--replace` literals (kept in the mapping file) for a
+      string that identifies nobody but must not reach the repository, then
+      scans every written fixture for anything real the mapping knows and
+      exits 1 on a hit (counts only, never a value). `--suffix` / `--only`
+      produce an anomaly capture's fixtures (`*_lab_hairpin.*`) beside the
+      baseline set without overwriting it.
+   3. **Grep** the written fixtures once more for the real hostnames,
+      addresses, names and serials before committing;
+      `tests/test_lab_fixtures.py` keeps a shape-based guard running in CI
+      (every serial, address and device name in a `_lab` fixture must be an
+      invention the sanitizer could have produced).
+
+   The sanitizer underneath, `tools/sanitize_trace.py`, also runs on its own
+   over a `shakedown-trace_*.json` or any payload file:
+
+   ```
+   python3 tools/sanitize_trace.py \
+       --env /path/to/device.env \
+       --host sw-real-01=sw-lab-1 --host AP0000.1111.2222=ap-lab-1 \
+       --user someone \
+       --net 10.0.0.0/24=192.0.2.0/24 --net 10.0.1.0/24=198.51.100.0/24 \
+       --mapping-out /tmp/sanitize-map.json \
+       --out-dir tests/fixtures  payload-a.json  show-b.txt ...
+   ```
+
+   It is deterministic: the same real value always becomes the same invented
+   value, within a run and across runs that share its mapping file, so a MAC
+   in the CDP fixture is the same MAC in the MAC-table fixture. In order:
+   every value in the `--env` credential file (the `user` value becomes
+   `netops`, the rest `REDACTED`; matched as whole tokens, so a user named
+   `admin` never eats the leaf `admin-status`, and the values never reach
+   stdout or the mapping file); `--host REAL=FAKE` hostnames and CDP/LLDP ids
+   (an id that embeds a MAC is listed whole, an advertised FQDN with its
+   domain); `--user` names to `netops`; PEM bodies, fingerprints, IOS
+   certificate-chain bodies and any 16+-digit hex run to a short `<hex:N>`
+   placeholder, self-signed trustpoint names renumbered; Cisco-shape serials
+   (`ABC1234D5EF`) and `--serial` values to invented serials of the same
+   letter/digit pattern; MACs in dotted, colon, dash or bare spelling to
+   invented MACs in the same spelling, keeping the multicast and
+   locally-administered bits (group addresses, the VRRP/HSRP virtual-MAC
+   blocks and the all-zero "no partner" MAC are left alone); IPv4 addresses
+   per `--net SRC/24=DST/24` with the host octet kept, any other real /24
+   deterministically into 198.18.0.0/16, with masks, wildcards, loopback,
+   multicast and the RFC 5737 ranges untouched — an integer `router-id` leaf
+   (OSPF, EIGRP) is the same address in host order and maps the same way;
+   IPv6 addresses with an EUI-64 identifier rebuilt from the invented MAC
+   (a neighbour's link-local is the same device as its MAC-table row), a
+   global or unique-local /64 landing in 2001:db8::/32, link-local prefixes,
+   multicast and the documentation range untouched. JSON files are walked
+   (keys and values); everything else is treated as text. Fixtures harvested
+   this way carry a `_lab` suffix when a richer hand-built fixture of the
+   same name stays beside them; `tests/test_lab_fixtures.py` pins what every
+   normalizer reads from them. Without `--out-dir` the result goes to
+   stdout; `--mapping-in` reloads an earlier run's mapping.
 4. Re-run the shakedown until every check reads `ok` — then the platform is
    ready for a real pre/post cycle.
 

@@ -1,0 +1,11 @@
+Switch  Ports    Model                Serial No.   MAC address     Hw Ver.       Sw Ver. 
+------  -----   ---------             -----------  --------------  -------       --------
+ 1       65     C9300-48UXM           FOC8704M57A  4401.e4b4.5b26  V02           17.15.06      
+Switch/Stack Mac Address : 4401.e4b4.5b26 - Local Mac Address
+Mac persistency wait time: Indefinite
+                                   Current
+Switch#   Role        Priority      State 
+-------------------------------------------
+*1       Active          15         Ready               
+
+

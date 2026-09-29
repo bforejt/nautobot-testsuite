@@ -1,0 +1,10 @@
+Account Information:
+  Smart Account: <none>
+  Virtual Account: <none>
+
+License Usage:
+  License                 Entitlement Tag               Count Status
+  -----------------------------------------------------------------------------
+  network-essentials      (C9300-48 Network Essen...)       1 IN USE
+  dna-essentials          (C9300-48 DNA Essentials)         1 IN USE
+

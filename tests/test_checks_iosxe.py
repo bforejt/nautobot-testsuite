@@ -1,5 +1,8 @@
 """checks_iosxe normalizers driven directly with committed RESTCONF fixtures."""
 
+import copy
+import json
+import re
 import unittest
 
 if __package__:
@@ -188,6 +191,56 @@ class TestFibNormalizer(unittest.TestCase):
             },
         )
 
+    def test_attached_host_adjacencies_are_counted_in_context_never_keyed(self):
+        # The lab 9300's CEF table: a host route whose only next-hop is the
+        # host itself on the SVI is an ARP-driven attached-host adjacency
+        # (four on Vlan2 here, 192.0.2.1/32 and 192.0.2.49/32 among them;
+        # live, one more appeared between two captures five minutes apart
+        # with the RIB unchanged). The default route, the receive entries (a
+        # prefix with no next-hop: 198.18.4.1/32, 198.18.4.2/32) and every
+        # other prefix stay.
+        payload = _loader.fixture_json("iosxe_fib_oper_lab.json")
+        normalized = checks._normalize_fib(payload)
+        self.assertNotIn("IPv4:Default|192.0.2.1/32", normalized)
+        self.assertNotIn("IPv4:Default|192.0.2.49/32", normalized)
+        self.assertEqual(
+            normalized["IPv4:Default|0.0.0.0/0"],
+            {"next_hops": [{"interface": "Vlan2", "ip": "192.0.2.1/32"}]},
+        )
+        for receive in ("198.18.4.1/32", "198.18.4.2/32", "192.0.2.148/32", "203.0.113.2/32"):
+            self.assertEqual(normalized["IPv4:Default|" + receive], {"next_hops": []})
+        context = checks._fib_context(payload)
+        self.assertEqual(context["attached_hosts"], {"Vlan2": 4})
+        self.assertEqual(context["attached_hosts_total"], 4)
+        self.assertEqual(context["entries"], context["keyed"] + 4)
+        self.assertEqual(context["keyed"], len(normalized))
+        # Two healthy captures: a host that started talking adds an adjacency
+        # and the view is unchanged under the check's own compare.
+        later = copy.deepcopy(payload)
+        default = later["Cisco-IOS-XE-fib-oper:fib-oper-data"]["fib-ni-entry"][0]
+        default["fib-entries"].append(
+            {
+                "ip-addr": "192.0.2.5/32",
+                "fib-nexthop-entries": [{"nh-addr": "192.0.2.5/32", "ifname": "Vlan2"}],
+            }
+        )
+        compare = registry.CHECKS["iosxe_routes_fib"].compare
+        diff = _loader.diffcore.diff_check(normalized, checks._normalize_fib(later), compare)
+        self.assertEqual(diff["result"], "pass")
+        self.assertEqual(checks._fib_context(later)["attached_hosts"], {"Vlan2": 5})
+        # A /32 whose next-hop is another address is a host ROUTE and stays keyed;
+        # an IPv6 /128 to itself is attached too.
+        self.assertFalse(
+            checks._attached_host("192.0.2.9/32", [{"nh-addr": "192.0.2.1/32", "ifname": "Vlan2"}])
+        )
+        self.assertTrue(
+            checks._attached_host(
+                "2001:db8::9/128", [{"nh-addr": "2001:db8::9", "ifname": "Vlan2"}]
+            )
+        )
+        self.assertFalse(checks._attached_host("192.0.2.9/32", []))
+        self.assertFalse(checks._attached_host("192.0.2.0/24", [{"nh-addr": "192.0.2.0/24"}]))
+
 
 class TestBgpNormalizer(unittest.TestCase):
     def test_full_normalized_view(self):
@@ -235,6 +288,75 @@ class TestOspfNormalizer(unittest.TestCase):
             },
         )
 
+    def test_context_explains_an_empty_view_on_the_lab_payload(self):
+        # The lab instance: two SVIs in the DR state, nothing across them.
+        payload = _loader.fixture_json("iosxe_ospf_oper_full_lab.json")
+        self.assertEqual(checks._normalize_ospf_neighbors(payload), {})
+        context = checks._ospf_context(payload)
+        self.assertEqual(context["neighbors"], 0)
+        self.assertEqual(list(context["instances"]), ["1|default"])
+        instance = context["instances"]["1|default"]
+        self.assertEqual(instance["router_id"], "203.0.113.2")  # the integer leaf, dotted
+        self.assertEqual(
+            instance["areas"],
+            {
+                "0": {
+                    "interfaces": {
+                        "Vlan3": {"state": "dr", "neighbors": 0},
+                        "Vlan4": {"state": "dr", "neighbors": 0},
+                    }
+                }
+            },
+        )
+        # The filtered lab read (the filter requests router-id; vrf-name is the
+        # empty string for the default VRF) explains itself the same way.
+        thin = checks._ospf_context(_loader.fixture_json("iosxe_ospf_oper_lab.json"))
+        self.assertEqual(thin["instances"]["1|default"]["router_id"], "203.0.113.2")
+        self.assertEqual(thin["neighbors"], 0)
+        self.assertIn("router-id", checks._OSPF_PATH)
+
+    def test_context_counts_neighbors_per_interface(self):
+        payload = _loader.fixture_json("iosxe_ospf_oper.json")
+        context = checks._ospf_context(payload)
+        self.assertEqual(context["neighbors"], 3)
+        areas = context["instances"]["10|default"]["areas"]
+        self.assertEqual(areas["0"]["interfaces"]["Vlan925"], {"state": "bdr", "neighbors": 2})
+        self.assertEqual(areas["0"]["interfaces"]["TenGigabitEthernet1/0/1"]["neighbors"], 1)
+        # Nothing volatile or address-like rides along.
+        self.assertNotIn("dr", areas["0"])
+        self.assertEqual(checks._ospf_context({}), {"instances": {}, "neighbors": 0})
+
+    def test_collector_returns_context_beside_an_empty_view(self):
+        payload = _loader.fixture_json("iosxe_ospf_oper_full_lab.json")
+
+        class _Ctx:
+            def get(self, path, **kwargs):
+                self.kwargs = kwargs
+                return payload
+
+        ctx = _Ctx()
+        result = checks._collect_ospf_neighbors(ctx)
+        self.assertEqual(ctx.kwargs, {"ok_404": True})
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["context"]["neighbors"], 0)
+        self.assertIn("1|default", result["context"]["instances"])
+        self.assertEqual(result["raw"], {"ospf-oper": payload})
+
+        class _Absent:
+            def get(self, path, **kwargs):
+                return None
+
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_ospf_neighbors(_Absent())
+
+    def test_dotted_is_the_shared_helper(self):
+        common = _loader.load("iosxe_common")
+        self.assertEqual(common.dotted(3405803778), "203.0.113.2")
+        self.assertEqual(common.dotted("0"), "0.0.0.0")
+        self.assertEqual(common.dotted(None), None)
+        self.assertEqual(common.dotted("10.0.0.1"), "10.0.0.1")
+        self.assertEqual(common.dotted(2**32), "4294967296")
+
 
 class TestArpNormalizer(unittest.TestCase):
     def test_full_normalized_view(self):
@@ -252,6 +374,50 @@ class TestArpNormalizer(unittest.TestCase):
                 },
             },
         )
+        self.assertEqual(
+            checks._arp_context(payload), {"source": "arp-entry", "entries": 4, "vrfs": 2}
+        )
+
+    def test_release_that_fills_only_the_deprecated_flat_list_keys_the_same_entries(self):
+        # The lab payload fills both lists with the same eight rows. A release
+        # that fills only the deprecated flat list (no arp-entry anywhere)
+        # keys the same eight entries, and context says which list was read.
+        payload = _loader.fixture_json("iosxe_arp_oper_lab.json")
+        flat_only = copy.deepcopy(payload)
+        for vrf in flat_only["Cisco-IOS-XE-arp-oper:arp-data"]["arp-vrf"]:
+            vrf.pop("arp-entry", None)
+        normalized = checks._normalize_arp(flat_only)
+        self.assertEqual(len(normalized), 8)
+        self.assertEqual(normalized, checks._normalize_arp(payload))
+        self.assertEqual(
+            normalized["Default|192.0.2.1"], {"mac": "70:35:39:cb:ab:39", "interface": "Vlan2"}
+        )
+        self.assertEqual(normalized["Default|198.18.4.1"]["interface"], "Vlan4")
+        self.assertNotIn("time", str(normalized))
+        self.assertEqual(
+            checks._arp_context(flat_only),
+            {"source": "arp-oper (deprecated flat list)", "entries": 8, "vrfs": 2},
+        )
+        self.assertEqual(
+            checks._arp_context(payload), {"source": "arp-entry", "entries": 8, "vrfs": 2}
+        )
+        # arp-entry wins where a VRF fills both; an empty table is explained too.
+        both = copy.deepcopy(payload)
+        vrf = both["Cisco-IOS-XE-arp-oper:arp-data"]["arp-vrf"][0]
+        vrf["arp-entry"] = [
+            {"address": "192.0.2.7", "hardware": "00:00:5e:00:53:07", "interface": "Vlan2"}
+        ]
+        self.assertEqual(list(checks._normalize_arp(both)), ["Default|192.0.2.7"])
+        self.assertEqual(checks._arp_context(both)["source"], "arp-entry")
+        empty = {"Cisco-IOS-XE-arp-oper:arp-data": {"arp-vrf": [{"vrf": "Default"}]}}
+        self.assertEqual(checks._normalize_arp(empty), {})
+        self.assertEqual(checks._arp_context(empty), {"source": None, "entries": 0, "vrfs": 1})
+        result = checks._collect_arp(_HealthCtx({checks._ARP_PATH: flat_only}))
+        self.assertEqual(result["context"]["source"], "arp-oper (deprecated flat list)")
+        self.assertEqual(len(result["normalized"]), 8)
+        result = checks._collect_arp(_HealthCtx({checks._ARP_PATH: payload}))
+        self.assertEqual(result["context"]["source"], "arp-entry")
+        self.assertEqual(len(result["normalized"]), 8)
 
 
 class TestNeighborNormalizers(unittest.TestCase):
@@ -346,6 +512,35 @@ class TestNeighborNormalizers(unittest.TestCase):
         self.assertEqual(len(combined), len(cdp) + len(lldp))
         self.assertIn("cdp|core-sw-02.example.net|TenGigabitEthernet1/0/48", combined)
         self.assertIn("lldp|core-sw-02.example.net|TenGigabitEthernet1/0/48", combined)
+
+    def test_collector_context_says_how_each_model_answered(self):
+        # A capture can serve cdp-oper as an empty container while LLDP lists
+        # the neighbors (the lab 9300 did, on earlier harvests): the empty
+        # cdp| set is then a recorded model fact, never "no neighbors".
+        lldp = _loader.fixture_json("iosxe_lldp_entries_lab.json")
+        empty_cdp = {"Cisco-IOS-XE-cdp-oper:cdp-neighbor-details": {}}
+        result = checks._collect_neighbors(
+            _HealthCtx({checks._CDP_PATH: empty_cdp, checks._LLDP_PATH: lldp})
+        )
+        self.assertEqual(
+            result["context"],
+            {
+                "sources": {"cdp-oper": "served, empty", "lldp-oper": "3 neighbors"},
+                "cdp_neighbors": 0,
+                "lldp_neighbors": 3,
+            },
+        )
+        self.assertEqual(sorted(result["normalized"]), sorted(checks._normalize_lldp(lldp)))
+        # Not served at all (404) reads differently from served-empty.
+        result = checks._collect_neighbors(_HealthCtx({checks._LLDP_PATH: lldp}))
+        self.assertEqual(result["context"]["sources"]["cdp-oper"], "not served (404)")
+        cdp = _loader.fixture_json("iosxe_cdp_neighbors.json")
+        result = checks._collect_neighbors(_HealthCtx({checks._CDP_PATH: cdp}))
+        self.assertEqual(result["context"]["sources"]["lldp-oper"], "not served (404)")
+        self.assertEqual(result["context"]["cdp_neighbors"], len(checks._normalize_cdp(cdp)))
+        self.assertRegex(result["context"]["sources"]["cdp-oper"], r"^\d+ neighbors$")
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_neighbors(_HealthCtx({}))
 
 
 class _IfaceCtx:
@@ -602,6 +797,34 @@ class TestInterfacesNormalizer(unittest.TestCase):
         self.assertEqual(empty, set())
         self.assertEqual(checks._interfaces_context(self.payload, empty)["access_ports_listed"], 0)
 
+    def test_access_set_follows_whichever_vlan_oper_list_the_release_fills(self):
+        # The lab 9300 fills vlan-interfaces only, with every trunk under
+        # VLAN 1: 49 members, Te1/0/48 among them.
+        vlans = _loader.fixture_json("iosxe_vlan_oper_lab.json")
+        access = checks._access_ports(vlans)
+        self.assertEqual(len(access), 49)
+        self.assertIn("TenGigabitEthernet1/0/48", access)
+        self.assertIn("TwoGigabitEthernet1/0/11", access)
+        # The trunk ports `show interfaces trunk` names come back out.
+        access = checks._access_ports(vlans, {"TenGigabitEthernet1/0/48"})
+        self.assertEqual(len(access), 48)
+        self.assertNotIn("TenGigabitEthernet1/0/48", access)
+        interfaces = _loader.fixture_json("iosxe_interfaces_oper_lab.json")
+        normalized = checks._normalize_interfaces(interfaces, access)
+        host = normalized["TwoGigabitEthernet1/0/11"]
+        self.assertEqual(
+            (host["speed"], host["duplex"], host["mgig_downshift"]), (None, None, None)
+        )
+        trunk = normalized["TenGigabitEthernet1/0/48"]
+        self.assertEqual((trunk["speed"], trunk["duplex"]), ("speed-2500mb", "full-duplex"))
+        context = checks._interfaces_context(interfaces, access)
+        self.assertEqual(context["link_scope"], "trunks_and_routed")
+        self.assertEqual(context["access_ports_listed"], 48)
+        self.assertEqual(context["access_link"]["TwoGigabitEthernet1/0/11"]["speed"], "speed-100mb")
+        self.assertNotIn("TenGigabitEthernet1/0/48", context["access_link"])
+        # A release that fills `ports` is read from that list (it wins).
+        self.assertEqual(checks._access_ports(_vlan_payload("Gi1/0/1")), {"Gi1/0/1"})
+
     def test_sleeping_host_flip_lands_in_context_not_normalized(self):
         # An access port whose endpoint went to standby: link still up, the
         # negotiated rate fell to 10 Mb/s half duplex and the mGig downshift
@@ -699,6 +922,8 @@ class TestInterfacesNormalizer(unittest.TestCase):
                     "TenGigabitEthernet1/0/1": {"crc": 3, "in_errors": 3, "flaps": 2},
                     "TwoGigabitEthernet1/0/12": {"flaps": 7},
                 },
+                "counters_invalid": {},
+                "counters_not_present": [],
                 "leaves_seen": {
                     "ether-state": True,
                     "intf-ext-state": True,
@@ -722,11 +947,97 @@ class TestInterfacesNormalizer(unittest.TestCase):
         )
         context = checks._interfaces_context(payload)
         self.assertEqual(context["counters"], {})
+        self.assertEqual(context["counters_invalid"], {})
+        self.assertEqual(context["counters_not_present"], [])
         self.assertEqual(set(context["leaves_seen"].values()), {False})
         self.assertEqual(
             checks._normalize_interfaces(payload)["Gi1/0/1"],
             {**_UNSET, "admin": "if-state-up", "oper": "if-oper-state-ready", "ipv4": "10.0.0.1"},
         )
+
+    def test_wrapped_and_not_present_counters_never_reach_context(self):
+        # Field capture (17.15.6): num-flaps reads 2^64 - N on every port
+        # whose hardware is not present and on two SVIs; an earlier release of
+        # the same switch served 0. A wrapped register is not a reading (named
+        # per leaf under counters_invalid), and nothing a not-present port
+        # serves counts (the port is named once under counters_not_present);
+        # neither reaches counters, and raw keeps the reply verbatim. A ready
+        # port's ordinary zeros stay zeros.
+        payload = _loader.fixture_json("iosxe_interfaces_oper_counters_17156_lab.json")
+        stats = {
+            e["name"]: e["statistics"]
+            for e in payload["Cisco-IOS-XE-interfaces-oper:interfaces"]["interface"]
+        }
+        self.assertEqual(stats["Vlan2"]["num-flaps"], "18446744073109295496")
+        self.assertGreaterEqual(int(stats["Vlan2"]["num-flaps"]), 2**63)
+        context = checks._interfaces_context(payload)
+        self.assertEqual(context["counters"], {})
+        self.assertEqual(
+            context["counters_invalid"],
+            {
+                "FortyGigabitEthernet1/1/1": ["num-flaps"],
+                "GigabitEthernet0/0": ["num-flaps"],
+                "Vlan2": ["num-flaps"],
+            },
+        )
+        self.assertEqual(context["counters_not_present"], ["FortyGigabitEthernet1/1/1"])
+        # A wrapped CRC counter on an up port, and a not-present port with a
+        # plausible flap count: the up port's other counters count, the
+        # not-present port's never do.
+        entry = {
+            "name": "Te1/1/1",
+            **_UP,
+            "statistics": {"in-crc-errors": str(2**63), "in-errors": 4, "num-flaps": 2},
+        }
+        absent = {
+            "name": "Te1/1/2",
+            "admin-status": "if-state-up",
+            "oper-status": "if-oper-state-not-present",
+            "statistics": {"num-flaps": 2, "in-errors": 0},
+        }
+        context = checks._interfaces_context(_iface_payload(entry, absent))
+        self.assertEqual(context["counters"], {"Te1/1/1": {"in_errors": 4, "flaps": 2}})
+        self.assertEqual(context["counters_invalid"], {"Te1/1/1": ["in-crc-errors"]})
+        self.assertEqual(context["counters_not_present"], ["Te1/1/2"])
+        self.assertEqual(
+            checks._counters(entry), ({"in-errors": 4, "num-flaps": 2}, ["in-crc-errors"], False)
+        )
+        self.assertEqual(checks._counters(absent), ({}, [], True))
+        # Raw statistics keep what the device served.
+        self.assertEqual(
+            checks._interface_statistics(payload)["Vlan2"]["num-flaps"], "18446744073109295496"
+        )
+
+    def test_collector_notes_invalid_counters(self):
+        payload = _loader.fixture_json("iosxe_interfaces_oper_counters_17156_lab.json")
+        ctx = _IfaceCtx({checks._IFACE_PATH: payload, checks._VLAN_PATH: None})
+        result = checks._collect_interfaces(ctx)
+        self.assertEqual(
+            sorted(result["context"]["counters_invalid"]),
+            ["FortyGigabitEthernet1/1/1", "GigabitEthernet0/0", "Vlan2"],
+        )
+        note = result["raw"]["note"]
+        self.assertIn("3 interface(s) served wrapped counter values", note)
+        self.assertIn("1 not-present interface(s) served statistics", note)
+        clean = _loader.fixture_json("iosxe_interfaces_oper.json")
+        result = checks._collect_interfaces(
+            _IfaceCtx({checks._IFACE_PATH: clean, checks._VLAN_PATH: None})
+        )
+        self.assertNotIn("note", result["raw"])
+
+    def test_unaddressed_ports_read_none_not_zero_address(self):
+        # Field capture: every switchport serves ipv4 and ipv4-subnet-mask
+        # as 0.0.0.0. No address is None.
+        payload = _loader.fixture_json("iosxe_interfaces_oper_counters_17156_lab.json")
+        normalized = checks._normalize_interfaces(payload)
+        port = normalized["TwoGigabitEthernet1/0/1"]
+        self.assertEqual((port["ipv4"], port["mask"]), (None, None))
+        svi = normalized["Vlan2"]
+        self.assertEqual((svi["ipv4"], svi["mask"]), ("192.0.2.148", "255.255.254.0"))
+        self.assertIsNone(checks._ipv4_or_none("0.0.0.0"))
+        self.assertIsNone(checks._ipv4_or_none(""))
+        self.assertIsNone(checks._ipv4_or_none(None))
+        self.assertEqual(checks._ipv4_or_none(" 10.0.0.1 "), "10.0.0.1")
 
     def test_raw_statistics_tuple_names_only_model_leaves(self):
         # Grouping intf-statistics (17.12.1) defines these 64-bit counters and
@@ -828,7 +1139,60 @@ class TestInterfacesNormalizer(unittest.TestCase):
         self.assertIn("auto-negotiate", checks._IFACE_PATH)
 
     def test_collector_link_scope_follows_the_vlan_database(self):
-        # Served: the listed access port's link state is context, the scope says so.
+        # Served, in the shape the lab 9300 returns (vlan-interfaces filled,
+        # ports empty): the access ports' link state is context, the trunk
+        # `show interfaces trunk` names keeps its keyed speed, the scope facts
+        # say which list and which command decided it.
+        interfaces = _loader.fixture_json("iosxe_interfaces_oper_lab.json")
+        trunk_text = _loader.fixture_text("iosxe_show_interfaces_trunk_lab.txt")
+        ctx = _IfaceCtx(
+            {
+                checks._IFACE_PATH: interfaces,
+                checks._VLAN_PATH: _loader.fixture_json("iosxe_vlan_oper_lab.json"),
+            },
+            outputs={"show interfaces trunk": trunk_text},
+        )
+        result = checks._collect_interfaces(ctx)
+        self.assertEqual(ctx.commands, ["show interfaces trunk"])
+        context = result["context"]
+        self.assertEqual(context["link_scope"], "trunks_and_routed")
+        self.assertEqual(context["access_port_source"], "vlan-interfaces")
+        self.assertEqual(
+            context["trunk_ports_excluded"],
+            ["TenGigabitEthernet1/0/47", "TenGigabitEthernet1/0/48"],
+        )
+        self.assertEqual(context["trunk_source"], "show interfaces trunk")
+        self.assertEqual(context["access_ports_listed"], 47)
+        self.assertIsNone(result["normalized"]["TwoGigabitEthernet1/0/11"]["speed"])
+        self.assertEqual(context["access_link"]["TwoGigabitEthernet1/0/11"]["speed"], "speed-100mb")
+        self.assertEqual(result["normalized"]["TenGigabitEthernet1/0/48"]["speed"], "speed-2500mb")
+        # (the lab payload's note is about its wrapped counters, never these reads)
+        self.assertNotIn("trunk", result["raw"]["note"])
+        self.assertNotIn("vlan-oper", result["raw"]["note"])
+        # Without SSH the trunk cannot be told apart: its link state rides in
+        # context like an access port's, and the scope facts say why.
+        ctx = _IfaceCtx(
+            {
+                checks._IFACE_PATH: interfaces,
+                checks._VLAN_PATH: _loader.fixture_json("iosxe_vlan_oper_lab.json"),
+            }
+        )
+        result = checks._collect_interfaces(ctx)
+        self.assertEqual(result["context"]["trunk_source"], "no SSH transport")
+        self.assertEqual(result["context"]["trunk_ports_excluded"], [])
+        self.assertEqual(result["context"]["access_ports_listed"], 49)
+        self.assertIsNone(result["normalized"]["TenGigabitEthernet1/0/48"]["speed"])
+        self.assertIn("TenGigabitEthernet1/0/48", result["context"]["access_link"])
+        # A refused command is the same outcome with its own word.
+        ctx = _IfaceCtx(
+            {
+                checks._IFACE_PATH: interfaces,
+                checks._VLAN_PATH: _loader.fixture_json("iosxe_vlan_oper_lab.json"),
+            },
+            outputs={"show interfaces trunk": "% Invalid input detected at '^' marker."},
+        )
+        self.assertEqual(checks._collect_interfaces(ctx)["context"]["trunk_source"], "rejected")
+        # A release that fills `ports` is read from it (the synthetic shape).
         ctx = _IfaceCtx(
             {
                 checks._IFACE_PATH: self.payload,
@@ -836,11 +1200,8 @@ class TestInterfacesNormalizer(unittest.TestCase):
             }
         )
         result = checks._collect_interfaces(ctx)
-        self.assertEqual(result["context"]["link_scope"], "trunks_and_routed")
+        self.assertEqual(result["context"]["access_port_source"], "ports")
         self.assertIsNone(result["normalized"]["TwoGigabitEthernet1/0/12"]["speed"])
-        self.assertEqual(
-            result["context"]["access_link"]["TwoGigabitEthernet1/0/12"]["speed"], "speed-1gb"
-        )
         self.assertNotIn("note", result["raw"])
         # A failed VLAN read is a note and scope 'all', never a failed check.
         ctx = _IfaceCtx(
@@ -849,6 +1210,7 @@ class TestInterfacesNormalizer(unittest.TestCase):
         )
         result = checks._collect_interfaces(ctx)
         self.assertEqual(result["context"]["link_scope"], "all")
+        self.assertIsNone(result["context"]["access_port_source"])
         self.assertEqual(result["context"]["fields_filter"], "accepted")
         self.assertIn("vlan-oper read failed", result["raw"]["note"])
         self.assertEqual(result["normalized"]["TwoGigabitEthernet1/0/12"]["speed"], "speed-1gb")
@@ -922,7 +1284,9 @@ class _HealthCtx:
 class TestPlatformHealthNormalizer(unittest.TestCase):
     NEITHER_SERVED = {
         "reboot_leaves_not_served": ["last-reboot-reason", "reason-severity"],
+        "boot_time": "2026-07-11T03:12:44+00:00",
         "readings": {},
+        "env_states": {},
     }
     # Every served current-reading with its units, keyed like normalized; the
     # 'Not Present' supply slot serves no reading and so has no entry.
@@ -940,17 +1304,60 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         self.assertEqual(
             normalized,
             {
-                "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
+                "boot-time": {"epoch": 1783739564, "text": None},
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
-                "env|Switch 1 R0/Temp: Coretemp": {"state": "Normal"},
-                "env|Switch 1 R0/Temp: OutletTemp": {"state": "Normal"},
-                "env|Switch 1 P0/P0 Vout": {"state": "Normal"},
-                "env|Switch 1 P0/P0 Iin": {"state": "Normal"},
+                "env|Switch 1 R0/Temp: Coretemp": {"state": "normal"},
+                "env|Switch 1 R0/Temp: OutletTemp": {"state": "normal"},
+                "env|Switch 1 P0/P0 Vout": {"state": "normal"},
+                "env|Switch 1 P0/P0 Iin": {"state": "normal"},
                 # A supply slot without input is a sensor state, visible here.
-                "env|Switch 1 P1/P1 Vout": {"state": "Not Present"},
+                "env|Switch 1 P1/P1 Vout": {"state": "not-present"},
             },
         )
         self.assertEqual(_context["readings"], self.READINGS)
+        # The served word per key, for the reader.
+        self.assertEqual(_context["env_states"]["env|Switch 1 P1/P1 Vout"], "Not Present")
+        self.assertEqual(_context["env_states"]["env|Switch 1 P0/P0 Iin"], "Normal")
+
+    def test_state_words_read_in_one_vocabulary_across_releases(self):
+        # Older releases served Normal / Shutdown / GREEN, the lab's serves
+        # Norm / Shut for the same sensors: the key must not move on an
+        # upgrade between captures.
+        for served, word in (
+            ("Normal", "normal"),
+            ("Norm", "normal"),
+            ("GREEN", "normal"),
+            ("Shutdown", "shutdown"),
+            ("Shut", "shutdown"),
+            ("Not Present", "not-present"),
+            ("YELLOW", "warning"),
+            ("RED", "critical"),
+            ("Fault", "fault"),
+            ("  Failed ", "fault"),
+            ("Some New Word", "some-new-word"),
+            (None, None),
+            ("", None),
+        ):
+            self.assertEqual(checks._env_state(served), word, served)
+        compare = registry.CHECKS["iosxe_platform_health"].compare
+        hardware = _loader.fixture_json("iosxe_device_hardware.json")
+
+        def env(state):
+            return {
+                "Cisco-IOS-XE-environment-oper:environment-sensors": {
+                    "environment-sensor": [
+                        {"name": "Power Supply B", "location": "Switch 1", "state": state}
+                    ]
+                }
+            }
+
+        pre, pre_context = checks._normalize_platform_health(hardware, env("Shutdown"))
+        post, post_context = checks._normalize_platform_health(hardware, env("Shut"))
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        self.assertEqual(pre_context["env_states"], {"env|Switch 1/Power Supply B": "Shutdown"})
+        self.assertEqual(post_context["env_states"], {"env|Switch 1/Power Supply B": "Shut"})
+        post, _ = checks._normalize_platform_health(hardware, env("Norm"))
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "diffs")
 
     def test_readings_are_context_never_normalized(self):
         hardware = _loader.fixture_json("iosxe_device_hardware.json")
@@ -973,7 +1380,7 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         self.assertEqual(
             normalized,
             {
-                "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
+                "boot-time": {"epoch": 1783739564, "text": None},
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
             },
         )
@@ -987,12 +1394,20 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         self.assertEqual(
             normalized,
             {
-                "boot-time": {"value": "2026-07-11T03:12:44+00:00"},
+                "boot-time": {"epoch": 1783739564, "text": None},
                 "last-reboot": {"reason": "Reload Command", "severity": "normal"},
                 "alarm|1058|1": {"desc": "Te1/0/5: Link down"},
             },
         )
-        self.assertEqual(context, {"reboot_leaves_not_served": [], "readings": {}})
+        self.assertEqual(
+            context,
+            {
+                "reboot_leaves_not_served": [],
+                "boot_time": "2026-07-11T03:12:44+00:00",
+                "readings": {},
+                "env_states": {},
+            },
+        )
 
     def test_last_reboot_one_leaf_served(self):
         # Only what the device served: no placeholder for the missing field.
@@ -1011,7 +1426,13 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                 )
                 self.assertEqual(normalized["last-reboot"], expected)
                 self.assertEqual(
-                    context, {"reboot_leaves_not_served": [not_served], "readings": {}}
+                    context,
+                    {
+                        "reboot_leaves_not_served": [not_served],
+                        "boot_time": "2026-07-11T03:12:44+00:00",
+                        "readings": {},
+                        "env_states": {},
+                    },
                 )
 
     def test_last_reboot_neither_leaf_served(self):
@@ -1035,7 +1456,9 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                         "last-reboot-reason",
                         "reason-severity",
                     ],
+                    "boot_time": None,
                     "readings": {},
+                    "env_states": {},
                 },
             )
 
@@ -1050,7 +1473,13 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                 )
                 self.assertEqual(normalized["last-reboot"], {"severity": text})
                 self.assertEqual(
-                    context, {"reboot_leaves_not_served": ["last-reboot-reason"], "readings": {}}
+                    context,
+                    {
+                        "reboot_leaves_not_served": ["last-reboot-reason"],
+                        "boot_time": "2026-07-11T03:12:44+00:00",
+                        "readings": {},
+                        "env_states": {},
+                    },
                 )
 
     def test_blank_reason_is_served_not_absent(self):
@@ -1063,7 +1492,15 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                     None,
                 )
                 self.assertEqual(normalized["last-reboot"], {"reason": "", "severity": "normal"})
-                self.assertEqual(context, {"reboot_leaves_not_served": [], "readings": {}})
+                self.assertEqual(
+                    context,
+                    {
+                        "reboot_leaves_not_served": [],
+                        "boot_time": "2026-07-11T03:12:44+00:00",
+                        "readings": {},
+                        "env_states": {},
+                    },
+                )
 
     def test_healthy_captures_normalize_identically(self):
         # Two healthy captures of an unchanged device: identical payloads, and
@@ -1097,6 +1534,54 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
                 self.assertEqual(post_context["readings"] == pre_context["readings"], same_readings)
                 self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
 
+    def test_boot_time_jitter_never_diffs(self):
+        # The lab 9300 served :30, :31, :30 across three reads without a
+        # reload, and :43 / :44 on two more: the key is the epoch second and
+        # the compare gives it a 60 s tolerance, so a value that straddles a
+        # minute boundary (:59 -> :00) passes as well — the truncation this
+        # replaces only moved the failure there.
+        compare = registry.CHECKS["iosxe_platform_health"].compare
+        self.assertEqual(compare["fields"]["epoch"]["tolerance"], {"abs": 60})
+        views = [
+            checks._normalize_platform_health(_hardware_with({"boot-time": stamp}), None)
+            for stamp in (
+                "2026-09-29T15:26:30+00:00",
+                "2026-09-29T15:26:31+00:00",
+                "2026-09-29T15:26:30.999+00:00",
+                "2026-09-29T15:26:30Z",
+            )
+        ]
+        for normalized, _context in views:
+            self.assertIn(normalized["boot-time"]["epoch"], (1790695590, 1790695591))
+            self.assertIsNone(normalized["boot-time"]["text"])
+        self.assertEqual(views[0][1]["boot_time"], "2026-09-29T15:26:30+00:00")
+        self.assertEqual(views[1][1]["boot_time"], "2026-09-29T15:26:31+00:00")
+        self.assertEqual(
+            _loader.diffcore.diff_check(views[0][0], views[1][0], compare)["result"], "pass"
+        )
+        before, _ = checks._normalize_platform_health(
+            _hardware_with({"boot-time": "2026-09-29T15:26:59+00:00"}), None
+        )
+        after, _ = checks._normalize_platform_health(
+            _hardware_with({"boot-time": "2026-09-29T15:27:00+00:00"}), None
+        )
+        self.assertEqual(_loader.diffcore.diff_check(before, after, compare)["result"], "pass")
+        # A reload takes minutes: 300 s apart diffs on the epoch field.
+        later, _ = checks._normalize_platform_health(
+            _hardware_with({"boot-time": "2026-09-29T15:31:30+00:00"}), None
+        )
+        diff = _loader.diffcore.diff_check(views[0][0], later, compare)
+        self.assertEqual(diff["result"], "diffs")
+        self.assertEqual(diff["changed"][0]["field"], "epoch")
+        # A served value of another shape keeps the string under text (epoch
+        # None, still one type per field) so a reload still diffs.
+        odd, context = checks._normalize_platform_health(
+            _hardware_with({"boot-time": "Sep 29 15:26:30 UTC"}), None
+        )
+        self.assertEqual(odd["boot-time"], {"epoch": None, "text": "Sep 29 15:26:30 UTC"})
+        self.assertEqual(context["boot_time"], "Sep 29 15:26:30 UTC")
+        self.assertEqual(_loader.diffcore.diff_check(odd, views[0][0], compare)["result"], "diffs")
+
     def test_changed_reason_diffs_under_the_checks_own_compare(self):
         # A reload between captures: boot-time moves, and last-reboot says why
         # field by field. The reason strings are synthetic, shaped like the
@@ -1122,12 +1607,7 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
         self.assertEqual(
             diff["changed"],
             [
-                {
-                    "key": "boot-time",
-                    "field": "value",
-                    "old": "2026-07-11T03:12:44+00:00",
-                    "new": "2026-08-23T20:41:07+00:00",
-                },
+                {"key": "boot-time", "field": "epoch", "old": 1783739564, "new": 1787517667},
                 {
                     "key": "last-reboot",
                     "field": "reason",
@@ -1149,7 +1629,19 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
             result["normalized"]["last-reboot"], {"reason": "Reload Command", "severity": "normal"}
         )
         self.assertEqual(
-            result["context"], {"reboot_leaves_not_served": [], "readings": self.READINGS}
+            result["context"],
+            {
+                "reboot_leaves_not_served": [],
+                "boot_time": "2026-07-11T03:12:44+00:00",
+                "readings": self.READINGS,
+                "env_states": {
+                    "env|Switch 1 R0/Temp: Coretemp": "Normal",
+                    "env|Switch 1 R0/Temp: OutletTemp": "Normal",
+                    "env|Switch 1 P0/P0 Vout": "Normal",
+                    "env|Switch 1 P0/P0 Iin": "Normal",
+                    "env|Switch 1 P1/P1 Vout": "Not Present",
+                },
+            },
         )
         self.assertEqual(result["raw"], {"device-hardware": hardware, "environment-sensors": env})
         # No request of its own: the same two GETs as before the reboot leaves.
@@ -1165,20 +1657,231 @@ class TestPlatformHealthNormalizer(unittest.TestCase):
 
 
 class TestSyslogErrorParser(unittest.TestCase):
-    def test_counts_severity_three_and_worse_only(self):
+    def test_counts_severity_0_to_3_and_the_curated_4_and_5(self):
+        # A real 9300 buffer (sanitized). Every sev 0-3 event counts (228
+        # %SELINUX-1-VIOLATION lines dominate this buffer); of the sev-4/5
+        # tags only the allowlisted facilities do — %CDP-4 here, the native
+        # VLAN mismatch the lab's hairpinned port raised once a second —
+        # while 28 %DMI-5-AUTH_PASSED, 54 %SSH-5-*, 18 %SEC_LOGIN-5-LOGIN_SUCCESS,
+        # %LINEPROTO-5-UPDOWN, %SYS-5-CONFIG_I, %ARCHIVE_DIFF-5-* and every
+        # sev-6/7 line are never counted.
         text = _loader.fixture_text("iosxe_show_logging.txt")
-        # %SYS-5-CONFIG_I and %LINEPROTO-5-UPDOWN are sev 5: never counted.
+        self.assertEqual(len(re.findall(r"%DMI-5-AUTH_PASSED", text)), 28)
+        self.assertEqual(len(re.findall(r"%LINEPROTO-5-UPDOWN", text)), 3)
         self.assertEqual(
             checks._parse_syslog_errors(text),
             {
-                "sev3|%LINK-3-UPDOWN": {"count": 2},
-                "sev3|%OSPF-3-DBEXIST": {"count": 1},
+                "sev1|%PLATFORM_FEP-1-FRU_PS_ACCESS": {"count": 1},
+                "sev1|%SELINUX-1-VIOLATION": {"count": 228},
+                "sev3|%LINK-3-UPDOWN": {"count": 1},
+                "sev4|%CDP-4-NATIVE_VLAN_MISMATCH": {"count": 48},
+            },
+        )
+
+    def test_the_allowlist_is_the_plans(self):
+        # Rec. 8's facilities exactly: port and link; redundancy and routing;
+        # edge services; platform and address. Severity 6+ never counts, even
+        # for a listed facility, and severity 3 counts for every facility.
+        self.assertEqual(
+            checks._SYSLOG_CURATED_FACILITIES,
+            {
+                "PM", "SPANTREE", "EC", "UDLD", "CDP",
+                "HSRP", "VRRP", "OSPF", "BGP", "DUAL",
+                "ILPOWER", "DOT1X", "MAB", "SESSION_MGR", "AUTHMGR", "RADIUS",
+                "DHCP_SNOOPING", "SW_DAI",
+                "STACKMGR", "PLATFORM_STACKPOWER", "SW_MATM", "IP",
+            },
+        )  # fmt: skip
+        text = (
+            "%PM-4-ERR_DISABLE: bpduguard error detected on Gi1/0/5\n"
+            "%HSRP-5-STATECHANGE: Vlan10 Grp 1 state Standby -> Active\n"
+            "%SW_MATM-4-MACFLAP_NOTIF: Host 0011.2233.4455 in vlan 10 is flapping\n"
+            "%IP-4-DUPADDR: Duplicate address 10.0.0.1 on Vlan10\n"
+            "%VRRP-6-STATE: Vlan4 Grp 4 state Backup -> Master\n"
+            "%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan10, changed state to up\n"
+            "%STORM_CONTROL-3-FILTERED: A Broadcast storm detected on Gi1/0/7\n"
+        )
+        self.assertEqual(
+            checks._parse_syslog_errors(text),
+            {
+                "sev4|%PM-4-ERR_DISABLE": {"count": 1},
+                "sev5|%HSRP-5-STATECHANGE": {"count": 1},
+                "sev4|%SW_MATM-4-MACFLAP_NOTIF": {"count": 1},
+                "sev4|%IP-4-DUPADDR": {"count": 1},
+                "sev3|%STORM_CONTROL-3-FILTERED": {"count": 1},
             },
         )
 
     def test_empty(self):
         self.assertEqual(checks._parse_syslog_errors(""), {})
         self.assertEqual(checks._parse_syslog_errors(None), {})
+
+    def test_header_facts_and_oldest_line(self):
+        text = _loader.fixture_text("iosxe_show_logging.txt")
+        header = checks._parse_syslog_header(text)
+        self.assertEqual(
+            header["buffer"],
+            {
+                "syslog": "enabled",
+                "level": "debugging",
+                "messages_logged": 601,
+                "bytes": 102400,
+                "dropped": 0,
+                "rate_limited": 2,
+                "flushes": 0,
+                "overruns": 0,
+            },
+        )
+        # The oldest buffered line: its timestamp (the leading '*' clock
+        # marker dropped) and tag, never its text.
+        self.assertEqual(
+            header["oldest"],
+            {"timestamp": "Sep 29 17:39:23.924", "tag": "%SELINUX-1-VIOLATION"},
+        )
+        self.assertNotIn("audispd", json.dumps(header))
+        counted = sum(e["count"] for e in checks._parse_syslog_errors(text).values())
+        self.assertEqual(
+            header["uncounted_events"] + counted, len(re.findall(r"%[A-Z0-9_]+-[0-7]-", text))
+        )
+        # Nothing served: every fact None, no oldest line.
+        self.assertEqual(
+            checks._parse_syslog_header(""),
+            {
+                "buffer": dict.fromkeys(checks._SYSLOG_HEADER_FIELDS),
+                "oldest": None,
+                "uncounted_events": 0,
+            },
+        )
+
+    def test_oldest_line_timestamp_variants(self):
+        for prefix, expected in (
+            ("*Sep 29 15:26:35.416: ", "Sep 29 15:26:35.416"),
+            (".Sep 29 15:26:35 UTC: ", "Sep 29 15:26:35 UTC"),
+            ("000123: Sep 29 2026 15:26:35.416 UTC: ", "Sep 29 2026 15:26:35.416 UTC"),
+            ("", None),  # service timestamps off: a bare tag
+        ):
+            with self.subTest(prefix=prefix):
+                text = "Log Buffer (4096 bytes):\n\n%sPAGP init text\n%s%%SYS-5-CONFIG_I: x\n" % (
+                    prefix,
+                    prefix,
+                )
+                self.assertEqual(
+                    checks._parse_syslog_header(text)["oldest"],
+                    {"timestamp": expected, "tag": "%SYS-5-CONFIG_I"},
+                )
+
+
+class TestSyslogRedaction(unittest.TestCase):
+    """The `show logging` redactor: usernames, logged commands and secrets go; tags stay."""
+
+    def test_usernames_and_logged_commands_are_masked_tags_kept(self):
+        lines = (
+            "*Sep 29 15:27:49.526: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: jdoe] "
+            "[Source: 192.0.2.49] [localport: 22] at 15:27:49 UTC Tue Sep 29 2026",
+            "*Sep 29 15:28:01.000: %SEC_LOGIN-4-LOGIN_FAILED: Login failed [user: root] "
+            "[Source: 192.0.2.9] [localport: 22] [Reason: Login Authentication Failed]",
+            "*Sep 29 15:30:00.000: %PARSER-5-CFGLOG_LOGGEDCMD: User:jdoe  logged command:"
+            "key config-key password-encrypt Hunter2",
+            "*Sep 29 15:31:00.000: %SYS-5-CONFIG_I: Configured from console by jdoe on vty0 "
+            "(192.0.2.49)",
+            # a local-user edit, as 17.15.6 logs it (seen live): the account after
+            # 'username:' is masked like the one after 'user'
+            "*Sep 29 15:35:04.173: %AAA-6-USERNAME_CONFIGURATION: user jdoe username: "
+            "j.doe-admin configured",
+            "*Sep 29 15:35:04.188: %AAA-6-USER_PRIVILEGE_UPDATE: username: j.doe-admin "
+            "privilege updated with priv-15",
+        )
+        out = checks._redact_syslog_text("\n".join(lines)).splitlines()
+        self.assertEqual(
+            out[0],
+            "*Sep 29 15:27:49.526: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success "
+            "[user: ***scrubbed***] [Source: 192.0.2.49] [localport: 22] "
+            "at 15:27:49 UTC Tue Sep 29 2026",
+        )
+        self.assertIn("[user: ***scrubbed***]", out[1])
+        self.assertEqual(
+            out[2],
+            "*Sep 29 15:30:00.000: %PARSER-5-CFGLOG_LOGGEDCMD: User:***scrubbed***  "
+            "logged command: ***scrubbed***",
+        )
+        self.assertEqual(
+            out[3],
+            "*Sep 29 15:31:00.000: %SYS-5-CONFIG_I: Configured from console by ***scrubbed*** "
+            "on vty0 (192.0.2.49)",
+        )
+        self.assertEqual(
+            out[4],
+            "*Sep 29 15:35:04.173: %AAA-6-USERNAME_CONFIGURATION: user ***scrubbed*** "
+            "username: ***scrubbed*** configured",
+        )
+        self.assertEqual(
+            out[5],
+            "*Sep 29 15:35:04.188: %AAA-6-USER_PRIVILEGE_UPDATE: username: ***scrubbed*** "
+            "privilege updated with priv-15",
+        )
+        joined = "\n".join(out)
+        for leak in ("jdoe", "root]", "Hunter2", "j.doe-admin"):
+            self.assertNotIn(leak, joined)
+        # Every tag survives, so counting the redacted text counts the same.
+        self.assertEqual(
+            checks._parse_syslog_errors(joined), checks._parse_syslog_errors("\n".join(lines))
+        )
+
+    def test_secret_tokens_use_the_config_rules_and_untagged_lines_are_covered(self):
+        text = (
+            "*Sep 29 15:32:00.000: %SYS-5-CONFIG_I: snmp-server community s3cr3t RO typed\n"
+            "some untagged continuation with password Hunter2 in it\n"
+            "*Sep 29 15:33:00.000: %CRYPTO_ENGINE-5-KEY_ADDITION: A key named TP-self-signed-1 "
+            "has been generated\n"
+        )
+        out = checks._redact_syslog_text(text)
+        self.assertNotIn("s3cr3t", out)
+        self.assertNotIn("Hunter2", out)
+        # Over-redaction of a message is acceptable; the tag never is touched.
+        self.assertIn("%CRYPTO_ENGINE-5-KEY_ADDITION: A key ***scrubbed***", out)
+        self.assertEqual(
+            checks._parse_syslog_errors(out),
+            {"sev5|%SPANTREE-5-X": {"count": 0}} if False else checks._parse_syslog_errors(text),
+        )
+
+    def test_the_real_buffer_keeps_no_username(self):
+        # The transport's redactor ran when the buffer was captured, so the
+        # fixture carries the marker where the login lines named the account;
+        # the redactor is a no-op on its own output and the parses agree.
+        text = _loader.fixture_text("iosxe_show_logging.txt")
+        self.assertEqual(text.count("[user: ***scrubbed***]"), 18)
+        self.assertNotIn("[user: netops]", text)
+        out = checks._redact_syslog_text(text)
+        self.assertNotIn("netops", out)
+        self.assertEqual(out, text)
+        self.assertEqual(checks._parse_syslog_errors(out), checks._parse_syslog_errors(text))
+        self.assertEqual(checks._parse_syslog_header(out), checks._parse_syslog_header(text))
+
+    def test_collector_passes_the_redactor_and_builds_context(self):
+        class _Ctx:
+            has_ssh = True
+
+            def __init__(self):
+                self.calls = []
+
+            def run_ssh(self, command, **kwargs):
+                self.calls.append((command, kwargs))
+                redact = kwargs.get("redact")
+                text = _loader.fixture_text("iosxe_show_logging.txt")
+                return redact(text) if redact else text
+
+        ctx = _Ctx()
+        result = checks._collect_syslog_errors(ctx)
+        self.assertEqual(ctx.calls, [("show logging", {"redact": checks._redact_syslog_text})])
+        self.assertNotIn("netops", json.dumps(result))
+        context = result["context"]
+        self.assertEqual(context["error_events_total"], 230)
+        self.assertEqual(context["curated_events_total"], 48)
+        self.assertEqual(context["distinct_event_types"], 4)
+        self.assertEqual(context["buffer"]["bytes"], 102400)
+        self.assertEqual(context["oldest"]["tag"], "%SELINUX-1-VIOLATION")
+        self.assertGreater(context["uncounted_events"], 100)
+        self.assertLessEqual(len(result["raw"]["show logging"]), checks._SYSLOG_RAW_TAIL_CHARS)
 
 
 class TestSvlNormalizer(unittest.TestCase):
@@ -1261,6 +1964,85 @@ class TestSvlNormalizer(unittest.TestCase):
             },
         )
 
+    def test_model_shape_of_17151(self):
+        # The 17.15.1 model's own spellings: member-port / if-name / bundled
+        # (boolean), the LMP and SDP counters summed per link.
+        payload = {
+            "Cisco-IOS-XE-switch-cp-svl-oper:switch-cp-svl-oper-data": {
+                "location": [
+                    {
+                        "fru": "fru-fp",
+                        "slot": 0,
+                        "bay": 0,
+                        "chassis": 1,
+                        "node": 0,
+                        "svl-link-info": [
+                            {
+                                "link-num": 1,
+                                "total-sdp-tx": "10",
+                                "total-sdp-rx": "11",
+                                "member-port": [
+                                    {
+                                        "if-name": "FortyGigabitEthernet1/1/1",
+                                        "bundled": True,
+                                        "is-control-port": True,
+                                        "total-lmp-tx": "5",
+                                        "total-lmp-rx": "6",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+        normalized, context = checks._normalize_svl(payload)
+        self.assertEqual(
+            normalized,
+            {"svl-link|1/1": {"member_ports": ["FortyGigabitEthernet1/1/1"], "bundled": True}},
+        )
+        self.assertEqual(
+            context,
+            {
+                "counters|1/1": {
+                    "total-sdp-tx": 10,
+                    "total-sdp-rx": 11,
+                    "total-lmp-tx": 5,
+                    "total-lmp-rx": 6,
+                }
+            },
+        )
+
+    def test_collector_not_present_without_links(self):
+        # Field capture: a release without the model answers 404; the lab
+        # release serves ONE location and no svl-link-info on a standalone
+        # 9300. Both read not-present, each with its own reason.
+        class _Ctx:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def get(self, path, **kwargs):
+                assert (path, kwargs) == (checks._SVL_PATH, {"ok_404": True})
+                return self.payload
+
+        with self.assertRaises(registry.SkipCheck) as absent:
+            checks._collect_svl_health(_Ctx(None))
+        self.assertIn("not served", str(absent.exception))
+        locations_only = _loader.fixture_json("iosxe_svl_oper_locations_only_lab.json")
+        with self.assertRaises(registry.SkipCheck) as empty:
+            checks._collect_svl_health(_Ctx(locations_only))
+        self.assertEqual(
+            str(empty.exception),
+            "no StackWise Virtual links: the model serves 1 location(s) with no svl-link-info "
+            "(not an SVL system)",
+        )
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_svl_health(_Ctx({}))
+        # A pair with links is a view, and context counts the locations.
+        result = checks._collect_svl_health(_Ctx(self.PAYLOAD))
+        self.assertEqual(sorted(result["normalized"]), ["svl-link|1/1", "svl-link|2/1"])
+        self.assertEqual(result["context"]["locations"], 2)
+
     def test_locations_without_recognizable_link_fields(self):
         # A drifted release spelling the link identity differently: the walk
         # found locations but recognized nothing — empty view, not garbage.
@@ -1277,45 +2059,190 @@ class TestSvlNormalizer(unittest.TestCase):
 
 
 class TestNtpNormalizer(unittest.TestCase):
-    def test_status_leaves(self):
+    """Against the leaves Cisco-IOS-XE-ntp-oper defines and the lab filled."""
+
+    def setUp(self):
+        self.payload = _loader.fixture_json("iosxe_ntp_oper_lab.json")
+
+    def test_lab_payload(self):
+        # Three servers, one selected, stratum 2, an address as reference.
+        self.assertEqual(
+            checks._normalize_ntp(self.payload),
+            {
+                "synchronized": True,
+                "stratum": 2,
+                "refid_kind": "ip-addr",
+                "association|default|192.0.2.1": "usable",
+                "association|default|198.18.154.28": "usable",
+                "association|default|198.18.89.0": "usable",
+            },
+        )
+        context = checks._ntp_context(self.payload)
+        self.assertEqual(context["refid"], "198.18.89.0")
+        self.assertEqual(context["sys_peer"], "default|198.18.89.0")
+        self.assertEqual(context["sys_poll"], 7)
+        self.assertEqual(
+            context["associations"]["default|198.18.89.0"],
+            {
+                "selection": "ntp-peer-sys-peer",
+                "reach": 255,
+                "stratum": 1,
+                "type": "server",
+                "auth": "none",
+                "refid": "198.18.102.71",
+            },
+        )
+        self.assertEqual(
+            context["associations"]["default|192.0.2.1"]["selection"], "ntp-peer-candidate"
+        )
+
+    def test_sys_peer_moving_between_healthy_servers_diffs_to_nothing(self):
+        # Field finding: the selection flips between servers across healthy
+        # reads. The exact status is context; the health class is not moved
+        # by it.
+        later = _loader.fixture_json("iosxe_ntp_oper_lab.json")
+        status = later["Cisco-IOS-XE-ntp-oper:ntp-oper-data"]["ntp-status-info"]
+        status["refid"] = {"ip-addr": "198.18.154.28"}
+        for assoc in status["ntp-associations"]:
+            ip = assoc["ntp-address"]["ip-addr"]
+            assoc["peer-selection-status"] = (
+                "ntp-peer-sys-peer" if ip == "198.18.154.28" else "ntp-peer-candidate"
+            )
+            assoc["peer-reach"] = 63
+            assoc["offset"] = "1.0"
+        pre, post = checks._normalize_ntp(self.payload), checks._normalize_ntp(later)
+        self.assertEqual(pre, post)
+        compare = registry.CHECKS["iosxe_ntp"].compare
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        self.assertNotEqual(checks._ntp_context(self.payload), checks._ntp_context(later))
+        self.assertEqual(checks._ntp_context(later)["sys_peer"], "default|198.18.154.28")
+
+    def test_loss_of_sync_reads_false(self):
+        status = self.payload["Cisco-IOS-XE-ntp-oper:ntp-oper-data"]["ntp-status-info"]
+        # Every association unreachable and rejected, stratum 16, a KoD refid.
+        status["stratum"] = 16
+        status["refid"] = {"kod-data": {"kod-type": "ntp-ref-init"}}
+        for assoc in status["ntp-associations"]:
+            assoc["peer-reach"] = 0
+            assoc["peer-selection-status"] = "ntp-peer-rejected"
+        normalized = checks._normalize_ntp(self.payload)
+        self.assertEqual(
+            (normalized["synchronized"], normalized["stratum"], normalized["refid_kind"]),
+            (False, 16, "kod"),
+        )
+        self.assertEqual(
+            {v for k, v in normalized.items() if k.startswith("association|")}, {"unreachable"}
+        )
+        self.assertEqual(checks._ntp_context(self.payload)["refid"], "ntp-ref-init")
+        self.assertIsNone(checks._ntp_context(self.payload)["sys_peer"])
+        # Reachable but every server rejected (a false ticker): not synchronized.
+        status["stratum"] = 2
+        status["refid"] = {"ip-addr": "198.18.154.28"}
+        for assoc in status["ntp-associations"]:
+            assoc["peer-reach"] = 255
+            assoc["peer-selection-status"] = "ntp-peer-false-ticker"
+        normalized = checks._normalize_ntp(self.payload)
+        self.assertIs(normalized["synchronized"], False)
+        self.assertEqual(normalized["association|default|192.0.2.1"], "rejected")
+
+    def test_refid_choice_cases(self):
+        self.assertEqual(
+            checks._ntp_refid({"ip-addr": "203.0.113.10"}), ("ip-addr", "203.0.113.10")
+        )
+        self.assertEqual(
+            checks._ntp_refid({"kod-data": {"kod-type": "ntp-ref-step"}}), ("kod", "ntp-ref-step")
+        )
+        self.assertEqual(
+            checks._ntp_refid({"ref-clk-src-data": {"ref-clk-src-type": "ntp-ref-gps"}}),
+            ("clock-source", "ntp-ref-gps"),
+        )
+        self.assertEqual(checks._ntp_refid({"exception-code": 5}), ("exception", "5"))
+        self.assertEqual(checks._ntp_refid({}), (None, None))
+        self.assertEqual(checks._ntp_refid(None), (None, None))
+        # A reference clock with no associations is synchronized on its own.
         payload = {
             "Cisco-IOS-XE-ntp-oper:ntp-oper-data": {
                 "ntp-status-info": {
-                    "sys-status": "clock is synchronized",
-                    # RESTCONF may string-ify numbers.
-                    "sys-stratum": "3",
-                    "sys-refid": "203.0.113.10",
-                    # Jitter leaves must never leak into normalized.
-                    "sys-offset": 0.42,
-                    "sys-root-dispersion": 12.1,
+                    "stratum": 1,
+                    "refid": {"ref-clk-src-data": {"ref-clk-src-type": "ntp-ref-gps"}},
+                }
+            }
+        }
+        self.assertEqual(
+            checks._normalize_ntp(payload),
+            {"synchronized": True, "stratum": 1, "refid_kind": "clock-source"},
+        )
+
+    def test_association_keys_and_health_classes(self):
+        payload = {
+            "ntp-oper-data": {
+                "ntp-status-info": {
+                    "stratum": "3",  # RESTCONF may string-ify numbers
+                    "refid": {"ip-addr": "203.0.113.10"},
+                    "ntp-associations": [
+                        {
+                            "assoc-id": 1,
+                            "peer-reach": 255,
+                            "peer-selection-status": "ntp-peer-as-backup",
+                            "ntp-address": {"ip-addr": "203.0.113.10", "vrf-name": "Mgmt-vrf"},
+                        },
+                        {
+                            "assoc-id": 2,
+                            "peer-reach": 3,
+                            "peer-selection-status": "ntp-peer-outlier",
+                            "ntp-address": {"ip-addr": "203.0.113.11"},
+                        },
+                        {
+                            "assoc-id": 3,
+                            "peer-reach": 255,
+                            "peer-selection-status": "ntp-peer-sys-peer",
+                        },
+                        {"assoc-id": 4, "peer-reach": 255},
+                    ],
                 }
             }
         }
         self.assertEqual(
             checks._normalize_ntp(payload),
             {
-                "synchronized": "clock is synchronized",
+                "synchronized": True,
                 "stratum": 3,
-                "server": "203.0.113.10",
+                "refid_kind": "ip-addr",
+                "association|Mgmt-vrf|203.0.113.10": "usable",
+                "association|default|203.0.113.11": "rejected",
+                "association|id:3": "usable",
+                "association|id:4": "unknown",
             },
         )
 
-    def test_server_falls_back_to_selected_association(self):
-        payload = {
-            "ntp-oper-data": {
-                "ntp-status-info": {
-                    "ntp-associations": [
-                        {"assoc-id": 1, "status": "candidate", "refid": "10.0.0.9"},
-                        {"assoc-id": 2, "status": "sys-peer", "refid": "203.0.113.10"},
-                    ]
-                }
-            }
-        }
-        self.assertEqual(checks._normalize_ntp(payload), {"server": "203.0.113.10"})
+    def test_missing_leaves_read_none(self):
+        empty = {"synchronized": None, "stratum": None, "refid_kind": None}
+        self.assertEqual(checks._normalize_ntp({}), empty)
+        self.assertEqual(checks._normalize_ntp({"Cisco-IOS-XE-ntp-oper:ntp-oper-data": {}}), empty)
+        self.assertEqual(
+            checks._ntp_context({}),
+            {"refid": None, "sys_peer": None, "sys_poll": None, "associations": {}},
+        )
 
-    def test_missing_leaves_emit_nothing(self):
-        self.assertEqual(checks._normalize_ntp({}), {})
-        self.assertEqual(checks._normalize_ntp({"Cisco-IOS-XE-ntp-oper:ntp-oper-data": {}}), {})
+    def test_collector_not_present_until_ntp_is_configured(self):
+        class _Ctx:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def get(self, path, **kwargs):
+                assert (path, kwargs) == (checks._NTP_PATH, {"ok_404": True})
+                return self.payload
+
+        # The 14:18Z probe of the unconfigured switch answered {}.
+        for payload in (None, {}, {"Cisco-IOS-XE-ntp-oper:ntp-oper-data": {}}):
+            with self.subTest(payload=payload):
+                with self.assertRaises(registry.SkipCheck) as skipped:
+                    checks._collect_ntp(_Ctx(payload))
+                self.assertIn("NTP not configured", str(skipped.exception))
+        result = checks._collect_ntp(_Ctx(self.payload))
+        self.assertEqual(result["normalized"]["stratum"], 2)
+        self.assertEqual(result["raw"], {"ntp-oper": self.payload})
+        self.assertIn("associations", result["context"])
 
 
 class TestRegistrations(unittest.TestCase):
@@ -2545,6 +3472,184 @@ class TestErrdisableAndPortChannels(unittest.TestCase):
         self.assertEqual(normalized["Po1"]["members"]["Te1/0/48"], "P")
         self.assertEqual(normalized["Po2"]["members"], {"Te2/0/1": "s", "Te2/0/2": "D"})
 
+    def test_lacp_members_from_the_model_shape(self):
+        # Shaped from the 17.15.1 Cisco-IOS-XE-lacp-oper model (no lab
+        # payload exists: the lab had no port-channel while the model was
+        # advertised): one bundled member with a partner, one down member
+        # whose partner reads all-zero (no partner). Keys use the short
+        # interface spelling `show etherchannel summary` prints.
+        payload = _loader.fixture_json("iosxe_lacp_oper_model_shape.json")
+        self.assertEqual(
+            checks._normalize_lacp(payload),
+            {
+                "Po1|Tw1/0/22": {
+                    "state": "bndl",
+                    "partner_system_id": "c0:92:2a:31:35:08",
+                    "partner_key": 9,
+                    "partner_port": 7,
+                    "oper_key": 1,
+                },
+                "Po1|Tw1/0/23": {
+                    "state": "down",
+                    "partner_system_id": None,
+                    "partner_key": None,
+                    "partner_port": None,
+                    "oper_key": 1,
+                },
+            },
+        )
+        self.assertEqual(
+            checks._lacp_context(payload),
+            {
+                "groups": {
+                    "Po1": {
+                        "up": True,
+                        "layer": "l2-etherchannel",
+                        "links": 2,
+                        "bundled": 1,
+                        "standby": 0,
+                        "down": 1,
+                        "suspended": 0,
+                    }
+                },
+                "system_id": {"Tw1/0/22": "44:01:e4:b4:5b:26", "Tw1/0/23": "44:01:e4:b4:5b:26"},
+            },
+        )
+        # Bare-dict lists and a dotted partner MAC normalize alike; a partner
+        # given as a MAC with a key of 0 is still a partner.
+        bare = {
+            "lag-oper-data": {
+                "lacp-port-channel": {
+                    "channel-group": "2",
+                    "lacp-member-state": {
+                        "if-name": "Gi1/0/1",
+                        "partner-id": "c092.2a31.3508",
+                        "partner-key": 0,
+                        "partner-port-num": 1,
+                        "state": "Cisco-IOS-XE-lacp-oper:lacp-hot-sby",
+                    },
+                }
+            }
+        }
+        self.assertEqual(
+            checks._normalize_lacp(bare),
+            {
+                "Po2|Gi1/0/1": {
+                    "state": "hot-sby",
+                    "partner_system_id": "c0:92:2a:31:35:08",
+                    "partner_key": 0,
+                    "partner_port": 1,
+                    "oper_key": None,
+                }
+            },
+        )
+        self.assertEqual(checks._normalize_lacp({}), {})
+        self.assertEqual(checks._normalize_lacp(None), {})
+
+    def test_port_channels_collector_widens_with_lacp_when_served(self):
+        cli = _loader.fixture_text("iosxe_show_etherchannel_summary_lab.txt")
+        lacp = _loader.fixture_json("iosxe_lacp_oper_model_shape.json")
+        # Served: the CLI keys plus one key per LACP member; context names both sources.
+        ctx = _IfaceCtx({checks._LACP_PATH: lacp}, outputs={"show etherchannel summary": cli})
+        result = checks._collect_port_channels(ctx)
+        self.assertEqual(ctx.gets, [(checks._LACP_PATH, {"ok_404": True})])
+        self.assertEqual(sorted(result["normalized"]), ["Po1", "Po1|Tw1/0/22", "Po1|Tw1/0/23"])
+        self.assertEqual(result["normalized"]["Po1"]["members"], {"Tw1/0/22": "D", "Tw1/0/23": "D"})
+        self.assertEqual(
+            result["normalized"]["Po1|Tw1/0/22"]["partner_system_id"], "c0:92:2a:31:35:08"
+        )
+        self.assertEqual(
+            result["context"]["sources"],
+            {"show etherchannel summary": "answered", "lacp-oper": "served"},
+        )
+        self.assertEqual(
+            (
+                result["context"]["port_channels"],
+                result["context"]["members_listed"],
+                result["context"]["members_bundled"],
+                result["context"]["lacp_members"],
+            ),
+            (1, 2, 0, 2),
+        )
+        self.assertEqual(result["raw"][checks._LACP_PATH], lacp)
+        self.assertNotIn("note", result["raw"])
+        # 404 (a release without the model): the CLI view alone, source recorded.
+        ctx = _IfaceCtx({checks._LACP_PATH: None}, outputs={"show etherchannel summary": cli})
+        result = checks._collect_port_channels(ctx)
+        self.assertEqual(sorted(result["normalized"]), ["Po1"])
+        self.assertEqual(result["context"]["sources"]["lacp-oper"], "not served")
+        self.assertEqual(result["context"]["groups"], {})
+        self.assertIsNone(result["raw"][checks._LACP_PATH])
+        # Served but empty (a release advertising the model with no bundle rows).
+        ctx = _IfaceCtx({checks._LACP_PATH: {}}, outputs={"show etherchannel summary": cli})
+        self.assertEqual(
+            checks._collect_port_channels(ctx)["context"]["sources"]["lacp-oper"], "served, empty"
+        )
+        ctx = _IfaceCtx(
+            {checks._LACP_PATH: {"Cisco-IOS-XE-lacp-oper:lag-oper-data": {}}},
+            outputs={"show etherchannel summary": cli},
+        )
+        self.assertEqual(
+            checks._collect_port_channels(ctx)["context"]["sources"]["lacp-oper"], "served, empty"
+        )
+        # A failed model read is a note, never a failed check; the abort signal escapes.
+        ctx = _IfaceCtx(
+            {},
+            raise_for={checks._LACP_PATH: RuntimeError("boom")},
+            outputs={"show etherchannel summary": cli},
+        )
+        result = checks._collect_port_channels(ctx)
+        self.assertEqual(result["context"]["sources"]["lacp-oper"], "read failed")
+        self.assertIn("lacp-oper read failed (boom)", result["raw"]["note"])
+
+        class SoftTimeLimitExceeded(Exception):
+            pass
+
+        ctx = _IfaceCtx(
+            {},
+            raise_for={checks._LACP_PATH: SoftTimeLimitExceeded()},
+            outputs={"show etherchannel summary": cli},
+        )
+        with self.assertRaises(SoftTimeLimitExceeded):
+            checks._collect_port_channels(ctx)
+
+    def test_port_channels_not_present_rules_unchanged(self):
+        # No SSH, a rejected command, or no bundles: not-present, and the
+        # model is never consulted first.
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_port_channels(_IfaceCtx({}))
+        ctx = _IfaceCtx({}, outputs={"show etherchannel summary": "% Invalid input detected"})
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_port_channels(ctx)
+        ctx = _IfaceCtx(
+            {}, outputs={"show etherchannel summary": "Number of channel-groups in use: 0"}
+        )
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_port_channels(ctx)
+        self.assertEqual(ctx.gets, [])
+
+    def test_two_captures_of_an_unchanged_bundle_diff_to_nothing(self):
+        cli = _loader.fixture_text("iosxe_show_etherchannel_summary_lab.txt")
+        first = _loader.fixture_json("iosxe_lacp_oper_model_shape.json")
+        second = _loader.fixture_json("iosxe_lacp_oper_model_shape.json")
+        for member in second["Cisco-IOS-XE-lacp-oper:lag-oper-data"]["lacp-port-channel"][0][
+            "lacp-member-state"
+        ]:
+            member["counters"]["lacp-in-pkts"] = "99999"
+            member["counters"]["lacp-out-pkts"] = "99998"
+        pre = checks._collect_port_channels(
+            _IfaceCtx({checks._LACP_PATH: first}, outputs={"show etherchannel summary": cli})
+        )
+        post = checks._collect_port_channels(
+            _IfaceCtx({checks._LACP_PATH: second}, outputs={"show etherchannel summary": cli})
+        )
+        compare = registry.CHECKS["iosxe_port_channels"].compare
+        self.assertEqual(
+            _loader.diffcore.diff_check(pre["normalized"], post["normalized"], compare)["result"],
+            "pass",
+        )
+        self.assertEqual(pre["context"], post["context"])
+
 
 class _StackCtx:
     """Fake CollectorContext: canned SSH output per command, RESTCONF payload per path."""
@@ -2660,6 +3765,7 @@ def _stack_members():
             "model": model,
             "serial": "FOC0000A00%s" % (number,),
             "reload_reason": "Image Install",
+            "sso_ready": False,
         }
         for number, role, priority, model in roster
     }
@@ -3014,6 +4120,7 @@ class TestSwitchStack(unittest.TestCase):
         self.assertEqual(ctx.commands[-1], "show inventory")
         for key, expected in _stack_members().items():
             del expected["reload_reason"]
+            del expected["sso_ready"]
             self.assertEqual(result["normalized"][key], expected, key)
         context = result["context"]
         self.assertEqual(
@@ -3102,6 +4209,7 @@ class TestSwitchStack(unittest.TestCase):
         self.assertIn("show inventory", ctx.commands)
         expected = _stack_members()
         del expected["switch|4"]["reload_reason"]
+        del expected["switch|4"]["sso_ready"]
         for key, facts in expected.items():
             self.assertEqual(result["normalized"][key], facts, key)
         self.assertEqual(
@@ -3256,6 +4364,7 @@ class TestSwitchStack(unittest.TestCase):
             }
         )
         del node["reload-reason"]
+        del node["sso-ready-flag"]
         inventory = self.inventory.split('NAME: "Switch 4"')[0]
         hardware = _hardware(_STACK_INVENTORY[:3] + _STACK_INVENTORY[4:])
         ctx, result = self._collect(hardware=hardware, inventory=inventory, detail=detail)
@@ -3359,7 +4468,11 @@ class TestSwitchStack(unittest.TestCase):
         self.assertEqual((diff["added"], diff["removed"]), ([], []))
         self.assertEqual(
             {(change["key"], change["field"], change["new"]) for change in diff["changed"]},
-            {("switch|%d" % (number,), "reload_reason", None) for number in range(1, 5)},
+            {
+                ("switch|%d" % (number,), field, None)
+                for number in range(1, 5)
+                for field in ("reload_reason", "sso_ready")
+            },
         )
         self.assertNotEqual(first["context"]["serial_source"], second["context"]["serial_source"])
         self.assertEqual(
@@ -3490,6 +4603,7 @@ class TestSwitchStack(unittest.TestCase):
         self.assertIn("show inventory", ctx.commands)
         for key, expected in _stack_members().items():
             del expected["reload_reason"]
+            del expected["sso_ready"]
             self.assertEqual(result["normalized"][key], expected, key)
         self.assertEqual(result["context"]["stack_oper"], "served without stack-node entries")
         self.assertEqual(result["raw"]["note"], "stack-oper answered without stack-node entries")
@@ -3506,7 +4620,7 @@ class TestSwitchStack(unittest.TestCase):
         self.assertEqual(len(normalized), 13)
         self.assertEqual(normalized["stack-port|2/1"]["link_ok_changes"], 1)
         for key, expected in _stack_members().items():
-            for field in ("serial", "model", "reload_reason"):
+            for field in ("serial", "model", "reload_reason", "sso_ready"):
                 del expected[field]
             self.assertEqual(normalized[key], expected, key)
         self.assertNotIn("show inventory", result["raw"])
@@ -3935,3 +5049,171 @@ class TestInventory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDoctrine(unittest.TestCase):
+    """Nothing in this module or its semantics names a particular change."""
+
+    CHANGE_WORDS = re.compile(r"Vlan925|VM-500|cutover|floor\b|migration", re.IGNORECASE)
+
+    def test_no_check_text_names_a_specific_change(self):
+        for check in registry.CHECKS.values():
+            if check.collector.__module__ != checks.__name__:
+                continue
+            for text in (
+                check.description,
+                check.miss_meaning,
+                registry.SEMANTICS.get(check.id, ""),
+            ):
+                self.assertIsNone(self.CHANGE_WORDS.search(text), (check.id, text[:80]))
+
+    def test_key_models_are_the_modules_reads(self):
+        self.assertIn("Cisco-IOS-XE-lacp-oper", checks.KEY_MODELS)
+        self.assertIn("Cisco-IOS-XE-ntp-oper", checks.KEY_MODELS)
+        self.assertIn("Cisco-IOS-XE-switch-cp-svl-oper", checks.KEY_MODELS)
+        self.assertEqual(len(checks.KEY_MODELS), len(set(checks.KEY_MODELS)))
+
+
+class TestConfigHeaderUser(unittest.TestCase):
+    """The config header's 'by <user>' never reaches raw or the trace; the clock does."""
+
+    HEADER = [
+        "Building configuration...",
+        "",
+        "Current configuration : 13877 bytes",
+        "!",
+        "! Last configuration change at 15:35:19 UTC Tue Sep 29 2026 by jdoe",
+        "! NVRAM config last updated at 15:36:39 UTC Tue Sep 29 2026 by j.doe-admin",
+        "!",
+        "version 17.3",
+    ]
+
+    def test_scrub_keeps_the_clock_and_masks_the_account(self):
+        self.assertEqual(
+            checks._scrub_config_header_user(self.HEADER[4]),
+            "! Last configuration change at 15:35:19 UTC Tue Sep 29 2026 by ***scrubbed***",
+        )
+        self.assertEqual(
+            checks._scrub_config_header_user(self.HEADER[5]),
+            "! NVRAM config last updated at 15:36:39 UTC Tue Sep 29 2026 by ***scrubbed***",
+        )
+        for line in ("version 17.3", "! No configuration change since last restart", "!", ""):
+            self.assertEqual(checks._scrub_config_header_user(line), line)
+        out = checks._redact_config_output(
+            "\n".join(self.HEADER + ["enable secret 9 $9$abc", "end"])
+        )
+        self.assertNotIn("jdoe", out)
+        self.assertNotIn("j.doe-admin", out)
+        self.assertIn("15:35:19 UTC Tue Sep 29 2026 by ***scrubbed***", out)
+        self.assertIn("enable secret 9 ***scrubbed***", out)
+
+    def test_lab_shaped_secret_lines_are_scrubbed(self):
+        # `service password-encryption` is on: type-7 passwords, the type-9
+        # enable secret, SNMP communities and the TACACS/RADIUS keys.
+        lines = [
+            "enable secret 9 $9$XlM3O2c8hB6l1p$W8qP1sVh0kK2R3Q4T5U6V7W8X9Y0Z1A2B3C4D5E6F7G",
+            "username admin privilege 15 password 7 0822455D0A16",
+            "snmp-server community public RO",
+            "snmp-server community c0mplex RW SNMP-ACL",
+            "tacacs server ISE-1",
+            " address ipv4 192.0.2.10",
+            " key 7 121A0C041104",
+            "radius server ISE-2",
+            " key 7 045802150C2E",
+            "key chain OSPF-KEYS",
+            " key 1",
+            "  key-string 7 06120A3256",
+            "ntp authentication-key 1 md5 072C285F4D06 7",
+        ]
+        out = checks._redact_config_lines(lines)
+        for original, redacted in zip(lines, out):
+            secret = original.rsplit(" ", 1)[-1] if "key-string" in original else None
+            self.assertNotIn("0822455D0A16", redacted)
+            self.assertNotIn("121A0C041104", redacted)
+            self.assertNotIn("045802150C2E", redacted)
+            if secret:
+                self.assertNotIn(secret, redacted)
+        self.assertEqual(out[0], "enable secret 9 ***scrubbed***")
+        self.assertEqual(out[1], "username admin privilege 15 password 7 ***scrubbed***")
+        self.assertEqual(out[2], "snmp-server community ***scrubbed*** RO")
+        self.assertEqual(out[3], "snmp-server community ***scrubbed*** RW SNMP-ACL")
+        self.assertEqual(out[6], " key 7 ***scrubbed***")
+        self.assertEqual(out[8], " key 7 ***scrubbed***")
+        self.assertEqual(out[10], " key 1")  # a key NUMBER under a key chain
+        self.assertEqual(out[11], "  key-string 7 ***scrubbed***")
+        self.assertEqual(out[12], "ntp authentication-key 1 md5 ***scrubbed*** 7")
+        self.assertNotIn("public", "\n".join(out))
+        self.assertNotIn("c0mplex", "\n".join(out))
+
+    def test_collector_stores_scrubbed_headers_and_traces_them_scrubbed(self):
+        body = self.HEADER + ["hostname sw", "enable secret 9 $9$abc", "end", ""]
+        text = "\n".join(body)
+
+        class _Ssh:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, command, **kwargs):
+                self.calls.append((command, kwargs))
+                if command == "show privilege":
+                    return "Current privilege level is 15"
+                return text
+
+            def close(self):
+                pass
+
+        ctx = _loader.context.CollectorContext("sw", "iosxe", ssh=_Ssh(), debug=True)
+        result = checks._collect_config(ctx)
+        blob = json.dumps(result)
+        self.assertNotIn("jdoe", blob)  # context included: the account is never lifted
+        self.assertNotIn("last_change_by", blob)
+        self.assertNotIn("nvram_updated_by", blob)
+        self.assertEqual(
+            result["context"]["running-config"]["last_change_at"], "15:35:19 UTC Tue Sep 29 2026"
+        )
+        self.assertIn(
+            "! Last configuration change at 15:35:19 UTC Tue Sep 29 2026 by ***scrubbed***",
+            result["raw"]["show running-config"],
+        )
+        self.assertIn(
+            "! NVRAM config last updated at 15:36:39 UTC Tue Sep 29 2026 by ***scrubbed***",
+            result["raw"]["show startup-config"],
+        )
+        self.assertNotIn("jdoe", json.dumps(result["raw"]))
+        self.assertNotIn("jdoe", json.dumps(result["normalized"]))
+        # The debug trace kept only the scrubbed copy, and the redact keywords
+        # never reached the transport.
+        for entry in ctx.trace:
+            self.assertNotIn("jdoe", json.dumps(entry))
+            self.assertNotIn("$9$abc", json.dumps(entry))
+        for _command, kwargs in ctx.ssh.calls:
+            self.assertNotIn("redact", kwargs)
+            self.assertNotIn("return_verbatim", kwargs)
+        # verbatim_in_sync still compares the verbatim texts (return_verbatim).
+        self.assertEqual(
+            result["normalized"]["running-vs-startup"],
+            {"in_sync": True, "verbatim_in_sync": True},
+        )
+
+
+class TestDhcpNotPresent(unittest.TestCase):
+    def test_message_names_the_snooping_globals(self):
+        class _Ctx:
+            def get(self, path, **kwargs):
+                return {}
+
+        with self.assertRaises(registry.SkipCheck) as skipped:
+            checks._collect_dhcp_config(_Ctx())
+        self.assertIn("DHCP-snooping globals", str(skipped.exception))
+        self.assertIn("snooping", registry.SEMANTICS["iosxe_dhcp"])
+        self.assertIn("snooping", registry.CHECKS["iosxe_dhcp"].description)
+
+    def test_lab_payload_is_one_blob(self):
+        payload = _loader.fixture_json("iosxe_native_ip_dhcp_lab.json")
+
+        class _Ctx:
+            def get(self, path, **kwargs):
+                return payload
+
+        result = checks._collect_dhcp_config(_Ctx())
+        self.assertEqual(sorted(result["normalized"]), ["dhcp-config"])

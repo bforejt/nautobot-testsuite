@@ -531,14 +531,37 @@ OUTPUT: plain text, short lines, readable on a phone. No preamble.
    cannot see.
 
 THIS DATA CANNOT SEE the items below. Never claim these were checked; when
-a finding points at one, name the command to run by hand.
-- CRC/FCS error counters, on switch ports or host NICs.
-- Switch-port speed/duplex. Host vmnic and AP port speeds ARE in the data.
-- PoE draw and budget, StackPower, spanning tree.
-- Switch trunk and VLAN config (vmware_vlan_hints is the host-side
-  proxy).
-- MAC address tables.
-- Whether redundant supplies sit on separate circuits.
+a finding points at one, name the command to run by hand. (Switch-port
+speed/duplex, CRC/error/flap counters, PoE per port and budgets, StackPower,
+spanning tree, trunks, the VLAN database, MAC learning, 802.1X outcomes,
+FHRP roles, whether the config is saved and the image committed, licence
+level, certificates and TCAM use ARE in the switch files now: read
+iosxe_interfaces, iosxe_poe, iosxe_stp, iosxe_trunks, iosxe_vlans,
+iosxe_mac_table, iosxe_access_sessions, iosxe_fhrp, iosxe_persistence,
+iosxe_license, iosxe_pki and iosxe_tcam, each file's "describe" says how.)
+- Error-counter DELTAS. CRC, in-error and flap counters are levels in the
+  iosxe_interfaces context of each capture, never evaluated; a port that
+  took errors during the move is found by comparing the two contexts by
+  hand. Host NIC counters are not captured at all.
+- PoE state of a port that is not powering anything: the switch lists
+  powered ports only, so a device that lost power is a REMOVED iosxe_poe
+  key, and the reason (denied, fault, budget) is only in
+  iosxe_syslog_errors (%ILPOWER-*), never a per-port value.
+- CDP facts where the CDP model is empty (a 9300 fills it for nothing
+  while LLDP is populated): a phone or AP that speaks only CDP, its
+  platform, native and voice VLAN are then unobservable; a native-VLAN
+  mismatch is never flagged either way.
+- UDLD state, port-security secure MACs, IPv6 neighbors, DHCP-snooping and
+  device-tracking bindings.
+- Whether a secret was rotated (every secret redacts to the same marker),
+  and TACACS+ server liveness (RADIUS only).
+- Who is behind a session: 802.1X keys are counts per method, domain, VLAN
+  and member, never a username or endpoint name; the session MAC and port
+  are in the iosxe_access_sessions raw rows (capped) and learned MACs per
+  port in iosxe_mac_table raw — join OUIs there, but no identity beyond the
+  MAC exists in the data.
+- Whether redundant supplies sit on separate circuits (supply presence and
+  state ARE in iosxe_platform_health).
 - Anything inside OOB, and console-port mapping (open each console session
   once before leaving).
 - The SE350s' out-of-band view while XCC capture is off: power-adapter

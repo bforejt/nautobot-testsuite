@@ -1,0 +1,9 @@
+ TwoGigabitEthernet1/0/20 
+
+  Service-policy input: LAB-MARK
+
+    Class-map: class-default (match-any)  
+      0 packets
+      Match: any 
+      QoS Set
+        dscp cs1

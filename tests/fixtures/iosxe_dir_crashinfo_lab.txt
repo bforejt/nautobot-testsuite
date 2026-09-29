@@ -1,0 +1,13 @@
+Directory of crashinfo:/
+
+55217   drwx            24576  Sep 29 2026 17:54:18 +00:00  tracelogs
+23665   drwx             4096  Sep 29 2026 17:35:07 +00:00  license_evlog
+17      -rw-           216144  Sep 16 2019 18:56:19 +00:00  system-report_1_20190916-185618-Universal.tar.gz
+16      -rw-            34459  Sep 16 2019 18:56:06 +00:00  RP_0_trace_archive_0-20190916-185559.tar.gz
+15      -rw-           217336  Sep 16 2019 18:53:43 +00:00  system-report_1_20190916-185343-Universal.tar.gz
+14      -rw-            40286  Sep 16 2019 18:53:35 +00:00  RP_0_trace_archive_0-20190916-185323.tar.gz
+13      -rw-           878647  Sep 16 2019 18:48:41 +00:00  system-report_1_20190916-144840-EDT.tar.gz
+12      -rw-           113658  Sep 16 2019 18:48:35 +00:00  swilabspt2_1_RP_0_trace_archive_0-20190916-144828.tar.gz
+11      -rw-                0  Jan 29 2019 14:14:22 +00:00  koops.dat
+
+1651314688 bytes total (1560764416 bytes free)

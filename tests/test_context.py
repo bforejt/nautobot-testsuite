@@ -335,23 +335,51 @@ def _mask(text):
 
 
 class TestRunSshRedaction(unittest.TestCase):
-    """The redact hook: config reads keep only a redacted copy in the debug trace."""
+    """The redact hook: the output is redacted before the trace keeps it and before
+    the caller receives it; return_verbatim hands the caller the verbatim text."""
 
     def _ctx(self, ssh, debug=True):
         return context.CollectorContext("dev1", "iosxe", ssh=ssh, debug=debug)
 
-    def test_trace_keeps_only_the_redacted_copy(self):
+    def test_output_is_redacted_before_the_trace_and_the_return(self):
         ssh = _RecordingSsh()
         ctx = self._ctx(ssh)
-        output = ctx.run_ssh("show running-config", redact=_mask, timeout=300)
-        # The caller still receives the verbatim text: it redacts what it stores.
+        output = ctx.run_ssh("show logging", redact=_mask, timeout=300)
+        # The caller receives the redacted text: nothing it stores can leak.
+        self.assertEqual(output, "enable secret 9 ***")
+        self.assertEqual(ctx.trace[0]["output"], "enable secret 9 ***")
+        # chars counts the device's output, not the redacted copy.
+        self.assertEqual(ctx.trace[0]["chars"], len("enable secret 9 CANARYE1"))
+        # The hook never reaches the transport; every other kwarg does.
+        self.assertEqual(ssh.calls, [("show logging", {"timeout": 300})])
+
+    def test_return_verbatim_keeps_the_trace_redacted(self):
+        ssh = _RecordingSsh()
+        ctx = self._ctx(ssh)
+        output = ctx.run_ssh("show running-config", redact=_mask, return_verbatim=True, timeout=300)
+        # The caller asked for the verbatim text (a comparison it never stores)
+        # and owns redacting what it stores; the trace copy is redacted anyway.
         self.assertEqual(output, "enable secret 9 CANARYE1")
         self.assertEqual(ctx.trace[0]["output"], "enable secret 9 ***")
         self.assertEqual(ctx.trace[0]["chars"], len(output))
-        # The hook never reaches the transport; every other kwarg does.
+        # Neither keyword reaches the transport.
         self.assertEqual(ssh.calls, [("show running-config", {"timeout": 300})])
 
-    def test_without_debug_nothing_is_kept_or_redacted(self):
+    def test_without_debug_the_return_is_still_redacted(self):
+        seen = []
+
+        def redact(text):
+            seen.append(text)
+            return _mask(text)
+
+        ctx = self._ctx(_RecordingSsh(), debug=False)
+        output = ctx.run_ssh("show running-config", redact=redact)
+        self.assertNotIn("output", ctx.trace[0])
+        self.assertEqual(output, "enable secret 9 ***")
+        # Applied once, whatever the debug setting.
+        self.assertEqual(seen, ["enable secret 9 CANARYE1"])
+
+    def test_return_verbatim_without_debug_calls_nothing(self):
         seen = []
 
         def redact(text):
@@ -359,9 +387,10 @@ class TestRunSshRedaction(unittest.TestCase):
             return text
 
         ctx = self._ctx(_RecordingSsh(), debug=False)
-        ctx.run_ssh("show running-config", redact=redact)
+        output = ctx.run_ssh("show running-config", redact=redact, return_verbatim=True)
         self.assertNotIn("output", ctx.trace[0])
-        self.assertEqual(seen, [])
+        self.assertEqual(output, "enable secret 9 CANARYE1")
+        self.assertEqual(seen, ["enable secret 9 CANARYE1"])
 
     def test_a_traced_error_is_redacted(self):
         ssh = _RecordingSsh(error=RuntimeError("died after: enable secret 9 CANARYE1"))
@@ -375,11 +404,29 @@ class TestRunSshRedaction(unittest.TestCase):
         def broken(text):
             raise ValueError("bad pattern")
 
+        # Fail-closed: the trace withholds the text and, since the caller
+        # would otherwise get the verbatim copy, the read fails — naming the
+        # exception type, never the text.
         ctx = self._ctx(_RecordingSsh())
-        output = ctx.run_ssh("show running-config", redact=broken)
-        self.assertEqual(output, "enable secret 9 CANARYE1")
+        with self.assertRaises(RuntimeError) as failed:
+            ctx.run_ssh("show running-config", redact=broken)
+        self.assertEqual(
+            str(failed.exception),
+            "'show running-config': output withheld, its redactor failed with ValueError",
+        )
         self.assertNotIn("CANARYE1", ctx.trace[0]["output"])
+        self.assertIn("withheld: redaction failed with ValueError", ctx.trace[0]["output"])
+        self.assertEqual(ctx.trace[0]["outcome"], "ok")
+        # return_verbatim: the caller still gets the text (it redacts what it
+        # stores) and only the trace copy is withheld.
+        ctx = self._ctx(_RecordingSsh())
+        output = ctx.run_ssh("show running-config", redact=broken, return_verbatim=True)
+        self.assertEqual(output, "enable secret 9 CANARYE1")
         self.assertIn("withheld", ctx.trace[0]["output"])
+        # Without debug there is no trace copy, but the fail-closed return holds.
+        ctx = self._ctx(_RecordingSsh(), debug=False)
+        with self.assertRaises(RuntimeError):
+            ctx.run_ssh("show running-config", redact=broken)
 
     def test_the_abort_signal_escapes_the_redactor(self):
         class SoftTimeLimitExceeded(Exception):

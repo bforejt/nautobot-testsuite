@@ -1,0 +1,2 @@
+  Interface          Grp  A-F Pri  Time Own Pre State   Master addr/Group addr
+  Vl4                  4 IPv4 110     0  N   Y  MASTER  198.18.4.2(local) 198.18.4.1

@@ -1,0 +1,59 @@
+{
+ "Cisco-IOS-XE-lacp-oper:lag-oper-data": {
+  "lag-info": [
+   {
+    "channel-group": 1,
+    "total-no-of-links": 2,
+    "total-no-of-links-bundled": 1,
+    "total-no-of-links-standby": 0,
+    "total-no-of-links-down": 1,
+    "port-channel-up": true,
+    "layer-type": "l2-etherchannel",
+    "total-no-of-links-suspended": 0
+   }
+  ],
+  "lacp-port-channel": [
+   {
+    "channel-group": 1,
+    "lacp-member-state": [
+     {
+      "if-name": "TwoGigabitEthernet1/0/22",
+      "system-id": "44:01:e4:b4:5b:26",
+      "partner-id": "c0:92:2a:31:35:08",
+      "partner-key": 9,
+      "oper-key": 1,
+      "port-num": 23,
+      "counters": {
+       "lacp-in-pkts": "1204",
+       "lacp-out-pkts": "1199",
+       "lacp-rx-errors": "0",
+       "lacp-tx-errors": "0",
+       "lacp-errors": "0",
+       "lacp-unknown-errors": "0"
+      },
+      "partner-port-num": 7,
+      "state": "lacp-bndl"
+     },
+     {
+      "if-name": "TwoGigabitEthernet1/0/23",
+      "system-id": "44:01:e4:b4:5b:26",
+      "partner-id": "00:00:00:00:00:00",
+      "partner-key": 0,
+      "oper-key": 1,
+      "port-num": 24,
+      "counters": {
+       "lacp-in-pkts": "0",
+       "lacp-out-pkts": "0",
+       "lacp-rx-errors": "0",
+       "lacp-tx-errors": "0",
+       "lacp-errors": "0",
+       "lacp-unknown-errors": "0"
+      },
+      "partner-port-num": 0,
+      "state": "lacp-down"
+     }
+    ]
+   }
+  ]
+ }
+}
