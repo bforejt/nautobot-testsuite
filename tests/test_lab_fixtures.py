@@ -2473,6 +2473,7 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
         self.assertEqual(
             ctx.gets,
             ["/redfish/v1/", "/redfish/v1/Systems", self.SYS, self.CH, self.CH + "/Power", self.MGR]
+            + ["/redfish/v1/JobService"]  # bmc_tasks' read, cached between the two
             + [path + _XCC_EXPAND for path in collections],
         )
         self.assertIn((self.JOBS + _XCC_EXPAND, "_redact_task_page"), ctx.redacted)
@@ -2499,13 +2500,13 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
         self.assertEqual({(job["HidePayload"], "Payload" in job) for job in jobs}, {(True, False)})
 
     def test_the_lab_layout_without_expand_fits_the_budget(self):
-        # resolution 5, then the Chassis, Power and the Manager, the Controls 1 + 1 + 1 (the
-        # $expand refusal is paid there, once), the scheduled actions 1 + 3, the watchdogs
-        # 1 + 4, the jobs 1 + 3
+        # resolution 5, then the Chassis, Power, the Manager and the JobService, the Controls
+        # 1 + 1 + 1 (the $expand refusal is paid there, once), the scheduled actions 1 + 3,
+        # the watchdogs 1 + 4, the jobs 1 + 3
         payloads, errors = TestBmcLabInventory._walked()
         ctx = _FakeCtx(payloads, errors=errors)
         walked = bmc._collect_power_policy(ctx)
-        self.assertEqual(len(ctx.gets), 5 + 3 + 3 + 4 + 5 + 4)
+        self.assertEqual(len(ctx.gets), 5 + 4 + 3 + 4 + 5 + 4)
         self.assertLessEqual(len(ctx.gets), bmc._BUDGET_POWER_POLICY)
         self.assertEqual(
             [path for path in ctx.gets if "?" in path], [self.CH + "/Controls" + _XCC_EXPAND]

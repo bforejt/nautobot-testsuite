@@ -608,7 +608,10 @@ collector through a real `CollectorContext` (Appendix C). What remains:
    widened twelve: three real captures at 04:44, 04:52 and 05:26 UTC — every
    pair diffs to nothing on all twelve checks. For the family of 22 with PR
    C: captures at 06:28 and 07:12 UTC diff to nothing on all 21 compared
-   checks (`bmc_tasks` is informational, never compared).
+   checks (`bmc_tasks` is informational, never compared). After the review
+   fixes, captures at 10:06 and 10:11 UTC diff to nothing again, and 06:28
+   against 10:11 (3.7 hours) differs only where the fixes changed
+   `bmc_power_policy`'s keys (the job rows added, the watchdog fields renamed).
 
 ## 8. Tests
 
@@ -720,8 +723,9 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    then ran live on the lab unit through the dev stack: capture 22/22 ok
    (87 GETs in 100 s), shakedown 22/22 ok (117 GETs) with the log's
    sequence numbers 140/176 before and after; local account names appear
-   only where decision 5 puts them (`bmc_accounts`' keys, its raw Accounts
-   read and that read's trace entry), nowhere else in any artifact. The
+   only where decision 5 puts them (`bmc_accounts`' keys and context, its
+   raw Accounts read and that read's trace entry, and the shakedown report's
+   sample of that check's keys), nowhere else in any artifact. The
    review is §10a item 14. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
@@ -1016,6 +1020,17 @@ Recorded as they were found, each with how it was resolved.
     followed them (those now come first). Two findings were refuted. The
     hand-built family set now serves the FoD service its Manager links, so a
     linked resource answering 404 there is no longer an accident of the set.
+    The fifth lens (the family's seams, re-run after a usage limit stopped it)
+    measured the whole family through the real `CollectorContext` over a
+    paced fake transport — 87 GETs and about 100 s per lab BMC capture, 117
+    for the shakedown, far inside the job limits — found no cache or
+    redactor conflict between checks in any order, and confirmed one more
+    seam, fixed in a second commit: `bmc_power_policy` read the JobService's
+    Jobs more laxly than `bmc_tasks` (a linked 404 read as "not served", a
+    paged answer as whole), which the new `job|` rows would have turned into
+    "every scheduled job removed"; it now reads them the way `bmc_tasks`
+    does, and one family guard refuses a paged or short collection in all
+    three checks.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

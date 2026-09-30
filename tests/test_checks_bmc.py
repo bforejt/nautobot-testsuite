@@ -5449,6 +5449,7 @@ class TestPowerPolicy(unittest.TestCase):
         """The hand-built set with every source of this check linked from its parent."""
         payloads = _base_payloads()
         payloads["/redfish/v1/"]["JobService"] = {"@odata.id": "/redfish/v1/JobService"}
+        payloads["/redfish/v1/JobService"] = _fx("xcc_jobservice_lab.json")  # links its Jobs
         system = _fx("xcc_system_dmtf_policy.json")
         system["Oem"]["Lenovo"]["ScheduledPowerActions"] = {"@odata.id": self.SPA}
         payloads[SYS] = system
@@ -5631,7 +5632,10 @@ class TestPowerPolicy(unittest.TestCase):
     def test_one_expand_get_per_collection_and_the_shared_reads_come_from_the_cache(self):
         ctx, result = self._collect(self._payloads())
         collections = [path + EXPAND for path, _name in self.COLLECTIONS]
-        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Power", MGR] + collections)
+        # the JobService is bmc_tasks' read (cached between the two in a capture)
+        self.assertEqual(
+            ctx.gets, RESOLVE + [CH, CH + "/Power", MGR, "/redfish/v1/JobService"] + collections
+        )
         self.assertEqual(ctx.budgets, [("bmc_power_policy", checks._BUDGET_POWER_POLICY)])
         self.assertEqual(
             {
@@ -5642,13 +5646,23 @@ class TestPowerPolicy(unittest.TestCase):
         )
         self.assertEqual(set(result["raw"]), {CH + "/Power"} | set(collections))
         self.assertNotIn("@odata.etag", json.dumps(result["raw"]))
-        # after bmc_power (the same Power read) and bmc_system (the Manager): the collections only
+        # after bmc_power (the same Power read) and bmc_system (the Manager): the JobService
+        # and the collections only; after bmc_tasks too, the collections only
         ctx = _FakeCtx(self._payloads())
         checks._collect_power(ctx)
         checks._collect_system(ctx)
         before = len(ctx.gets)
         checks._collect_power_policy(ctx)
-        self.assertEqual(ctx.gets[before:], collections)
+        self.assertEqual(ctx.gets[before:], ["/redfish/v1/JobService"] + collections)
+        ctx = _FakeCtx(self._payloads())
+        for collect in (checks._collect_power, checks._collect_system, checks._collect_tasks):
+            try:
+                collect(ctx)
+            except registry.SkipCheck:
+                pass
+        before = len(ctx.gets)
+        checks._collect_power_policy(ctx)
+        self.assertEqual(ctx.gets[before:], collections[:-1])  # Jobs too: bmc_tasks' read
 
     def test_the_expand_refusal_is_remembered_and_the_worst_walk_fits_the_budget(self):
         payloads = self._payloads(expand=False)
@@ -5663,7 +5677,7 @@ class TestPowerPolicy(unittest.TestCase):
         self.assertEqual({report["strategy"] for report in collections.values()}, {"members"})
         # resolution 5, the Chassis, Power and the Manager, the Controls 1 + 1 + 2, the scheduled
         # actions 1 + 3, the watchdogs 1 + 4, the jobs 1 + 3
-        self.assertEqual(len(ctx.gets), 5 + 3 + 4 + 4 + 5 + 4)
+        self.assertEqual(len(ctx.gets), 5 + 4 + 4 + 4 + 5 + 4)  # + the JobService
         self.assertLessEqual(len(ctx.gets), checks._BUDGET_POWER_POLICY)
         expanded = self._collect(self._payloads())[1]
         self.assertEqual(result["normalized"], expanded["normalized"])
@@ -5698,12 +5712,43 @@ class TestPowerPolicy(unittest.TestCase):
         reports = result["context"]["collections"].values()
         self.assertEqual({report["resource"] for report in reports}, {None})
         self.assertIsNone(result["context"]["jobs"])
-        # the Jobs path is the linked JobService's mandated child: a 404 there is "not served"
+        # the Jobs collection the JobService links, answering 404: a failed read, never
+        # "no scheduled job" (its job| rows would read as removed)
         payloads = self._payloads(expand=False)
         del payloads[self.JOBS]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("%s is linked but answered 404" % (self.JOBS,), str(caught.exception))
+        # so is a JobService the root links answering 404
+        payloads = self._payloads()
+        del payloads["/redfish/v1/JobService"]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("links /redfish/v1/JobService but it answered 404", str(caught.exception))
+        # only the service's unlinked, schema-mandated child answering 404 is "not served"
+        payloads = self._payloads(expand=False)
+        del payloads[self.JOBS]
+        payloads["/redfish/v1/JobService"] = {
+            key: value for key, value in payloads["/redfish/v1/JobService"].items() if key != "Jobs"
+        }
         _ctx, result = self._collect(payloads)
         self.assertIsNone(result["context"]["jobs"])
         self.assertEqual(result["context"]["collections"]["jobs"]["strategy"], "absent")
+        self.assertFalse([key for key in result["normalized"] if key.startswith("job|")])
+
+    def test_a_paged_or_short_collection_is_refused_never_recorded_partially(self):
+        # a scheduled job missing from a page would read as removed: refused, as in
+        # bmc_tasks, which reads the very same collection
+        payloads = self._payloads()
+        payloads[self.JOBS + EXPAND]["Members@odata.nextLink"] = self.JOBS + "?$skip=3"
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("one page of the collection", str(caught.exception))
+        payloads = self._payloads()
+        payloads[self.DOGS + EXPAND]["Members@odata.count"] = 5  # lists four
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("counts 5 members but listed 4", str(caught.exception))
 
     def test_empty_collections_are_an_empty_family_never_absence(self):
         payloads = self._payloads()
@@ -5727,7 +5772,9 @@ class TestPowerPolicy(unittest.TestCase):
         # no Manager read and no Lenovo path: the Controls and the JobService's jobs only
         self.assertEqual(
             ctx.gets,
-            RESOLVE + [CH, CH + "/Power", self.CONTROLS + EXPAND, self.JOBS + EXPAND],
+            RESOLVE
+            + [CH, CH + "/Power", "/redfish/v1/JobService"]
+            + [self.CONTROLS + EXPAND, self.JOBS + EXPAND],
         )
         for field in self.LENOVO_SCALARS:
             self.assertIsNone(view[field], field)  # although the payloads carry Oem.Lenovo

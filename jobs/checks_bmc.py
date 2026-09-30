@@ -548,6 +548,31 @@ def _require_budget(budget, needed, label, what):
         )
 
 
+def _require_whole(raw, meta, path):
+    """Refuse a collection answer that is not the whole collection: one page of it, or short.
+
+    ``raw`` and ``meta`` are _fetch_collection's; the payload that listed the
+    members is the $expand answer or the plain collection, whichever answered.
+    A paged answer is never followed here (no firmware seen pages these):
+    refused, never recorded partially.
+    """
+    listing = raw.get(path + _EXPAND) if meta["strategy"] == "expand" else raw.get(path)
+    if not isinstance(listing, dict):
+        return
+    if _text(listing.get("Members@odata.nextLink")):
+        raise CollectError(
+            "%s answered one page of the collection (Members@odata.nextLink) — the view would "
+            "be partial; refused, never recorded partially" % (path,)
+        )
+    count = listing.get("Members@odata.count")
+    listed = meta["members_total"]
+    if isinstance(count, int) and not isinstance(count, bool) and count > listed:
+        raise CollectError(
+            "%s counts %d members but listed %d — refused, never recorded partially"
+            % (path, count, listed)
+        )
+
+
 def _expand_advertised(root):
     """True/False when the service root states $expand support, None when it is silent."""
     expand = _dig(root, "ProtocolFeaturesSupported", "ExpandQuery")
@@ -4009,29 +4034,6 @@ def _normalize_sensors(members, environment=None, metrics=None, lenovo=False):
     return normalized, context
 
 
-def _sensors_require_whole(raw, meta, path):
-    """Refuse a Sensors answer that is not the whole collection: one page of it, or short.
-
-    ``raw`` and ``meta`` are _fetch_collection's; the payload that listed the
-    members is the $expand answer or the plain collection, whichever answered.
-    """
-    listing = raw.get(path + _EXPAND) if meta["strategy"] == "expand" else raw.get(path)
-    if not isinstance(listing, dict):
-        return
-    if _text(listing.get("Members@odata.nextLink")):
-        raise CollectError(
-            "%s answered one page of the collection (Members@odata.nextLink) — the sensor view "
-            "would be partial; refused, never recorded partially" % (path,)
-        )
-    count = listing.get("Members@odata.count")
-    listed = meta["members_total"]
-    if isinstance(count, int) and not isinstance(count, bool) and count > listed:
-        raise CollectError(
-            "%s counts %d members but listed %d — refused, never recorded partially"
-            % (path, count, listed)
-        )
-
-
 def _collect_sensors(ctx):
     raw = {}
     environment = metrics = metrics_path = None
@@ -4066,7 +4068,7 @@ def _collect_sensors(ctx):
         if sensors_link is not None:
             raise CollectError("the Chassis links %s but it answered 404" % (path,))
         raise SkipCheck("%s is not served and the Chassis links no Sensors collection" % (path,))
-    _sensors_require_whole(sensors_raw, meta, path)
+    _require_whole(sensors_raw, meta, path)
     if not members:
         raise CollectError(
             "%s answered with zero members (host PowerState %s) — a chassis always carries "
@@ -4437,12 +4439,13 @@ def _collect_boot(ctx):
 # actions mirrored by three JobService jobs, four watchdogs): the System, the
 # Chassis, its Power resource and the Manager are the reads bmc_system,
 # bmc_chassis and bmc_power make (cached per run); beyond them one $expand GET
-# each for the Controls, the ScheduledPowerActions, the Watchdogs and the Jobs
-# — 7 beyond the id resolution on a cold cache. The per-member fallback,
-# $expand advertised but refused or ignored (the attempt is paid once, on the
-# first collection read, and never again): the Chassis, Power and the Manager
-# 3, then Controls 1 + 1 + 1, ScheduledPowerActions 1 + 3, Watchdogs 1 + 4 and
-# Jobs 1 + 3 — 19 beyond the id resolution. _BUDGET_POWER_POLICY = 24 +
+# each for the Controls, the ScheduledPowerActions, the Watchdogs and the Jobs,
+# and the JobService (bmc_tasks' read, cached between the two) — 8 beyond the id
+# resolution on a cold cache. The per-member fallback, $expand advertised but
+# refused or ignored (the attempt is paid once, on the first collection read,
+# and never again): the Chassis, Power, the Manager and the JobService 4, then
+# Controls 1 + 1 + 1, ScheduledPowerActions 1 + 3, Watchdogs 1 + 4 and Jobs
+# 1 + 3 — 20 beyond the id resolution. _BUDGET_POWER_POLICY = 24 +
 # _TARGET_GETS leaves room for the PowerSubsystem read a firmware without the
 # legacy Power resource needs and for a few more members; a walk the rest of
 # the budget cannot cover is refused loudly, with the counts, before its first
@@ -4742,6 +4745,8 @@ def _power_policy_collection(
         try_expand = False
     if members is None and required:
         raise CollectError("bmc_power_policy: %s is linked but answered 404" % (link,))
+    if members is not None:
+        _require_whole(raw, meta, link)
     report.update(
         strategy=meta["strategy"],
         members=len(members) if members is not None else None,
@@ -4815,20 +4820,24 @@ def _collect_power_policy(ctx):
                     True,
                 )
             )
-        # The JobService (DMTF, every vendor) as the service root links it; its Jobs
-        # collection is the service's mandated child path, so a 404 there is "not
-        # served", never a failed read.
-        job_service = _fenced_link(
+        # The JobService (DMTF, every vendor) as the service root links it, read the
+        # way bmc_tasks reads it (one cached GET between the two checks): the Jobs
+        # collection it links answering 404 fails the check (a broken tree, never "no
+        # job"); only its unlinked, schema-mandated child answering 404 is "not served".
+        jobs_link, jobs_required = None, False
+        job_service_link = _fenced_link(
             _dig(_get(ctx, _ROOT), "JobService"), "bmc_power_policy JobService"
         )
-        plan.append(
-            (
-                "jobs",
-                _sub(job_service, "Jobs") if job_service is not None else None,
-                _redact_task_page,
-                False,
-            )
-        )
+        if job_service_link is not None:
+            job_service = _get_optional(ctx, job_service_link)
+            if job_service is None:
+                raise CollectError(
+                    "the service root links %s but it answered 404" % (job_service_link,)
+                )
+            jobs_link = _fenced_link(_dig(job_service, "Jobs"), "bmc_power_policy Jobs")
+            jobs_required = jobs_link is not None
+            jobs_link = jobs_link or _sub(job_service_link, "Jobs")
+        plan.append(("jobs", jobs_link, _redact_task_page, jobs_required))
         for family, link, redact, required in plan:
             members[family], reports[family], family_raw, try_expand = _power_policy_collection(
                 ctx, link, family, budget, try_expand, redact=redact, required=required
@@ -4917,8 +4926,9 @@ def _collect_power_policy(ctx):
 _BUDGET_NETWORK_ADAPTERS = 28 + _TARGET_GETS
 
 # DMTF NetworkDeviceFunction.iSCSIBoot carries the iSCSI boot credentials. The
-# family's exact-name list does not name them, so no row or context field reads
-# that block and this check's raw scrubs them on top of _curate.
+# family scrubber names them (before the trace and the cache see them); no row
+# or context field reads that block, and this check's raw scrubs them once more
+# on top of _curate, should a payload ever reach it another way.
 _NETWORK_ADAPTERS_CREDENTIALS = frozenset(
     name.lower()
     for name in ("CHAPUsername", "CHAPSecret", "MutualCHAPUsername", "MutualCHAPSecret")
@@ -7592,29 +7602,6 @@ def _normalize_tasks(task_service=None, tasks=None, job_service=None, jobs=None)
     return normalized, context
 
 
-def _tasks_require_whole(raw, meta, path):
-    """Refuse a Tasks or Jobs answer that is not the whole collection: one page of it, or short.
-
-    ``raw`` and ``meta`` are _fetch_collection's; the payload that listed the
-    members is the $expand answer or the plain collection, whichever answered.
-    """
-    listing = raw.get(path + _EXPAND) if meta["strategy"] == "expand" else raw.get(path)
-    if not isinstance(listing, dict):
-        return
-    if _text(listing.get("Members@odata.nextLink")):
-        raise CollectError(
-            "%s answered one page of the collection (Members@odata.nextLink) — the view would "
-            "be partial; refused, never recorded partially" % (path,)
-        )
-    count = listing.get("Members@odata.count")
-    listed = meta["members_total"]
-    if isinstance(count, int) and not isinstance(count, bool) and count > listed:
-        raise CollectError(
-            "%s counts %d members but listed %d — refused, never recorded partially"
-            % (path, count, listed)
-        )
-
-
 def _tasks_collection(ctx, service, service_path, family, budget, try_expand):
     """(members, report, raw, try_expand) of a service's Tasks or Jobs collection.
 
@@ -7643,7 +7630,7 @@ def _tasks_collection(ctx, service, service_path, family, budget, try_expand):
     if members is None and link is not None:
         raise CollectError("%s links %s but it answered 404" % (service_path, path))
     if members is not None:
-        _tasks_require_whole(raw, meta, path)
+        _require_whole(raw, meta, path)
     report = {
         "resource": path,
         "linked": link is not None,
