@@ -1,0 +1,62 @@
+{
+ "MediaType": "SSD",
+ "StatusIndicator": null,
+ "@odata.context": "/redfish/v1/$metadata#Drive.Drive",
+ "Links": {
+  "PCIeFunctions": [],
+  "Volumes": [],
+  "Chassis": {
+   "@odata.id": "/redfish/v1/Chassis/1"
+  }
+ },
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "Protocol": "SATA",
+ "PhysicalLocation": {
+  "InfoFormat": "Slot Number",
+  "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+  "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+  "PartLocation": {
+   "LocationOrdinalValue": 2,
+   "ServiceLabel": "M.2 - Slot 2",
+   "LocationType": "Slot"
+  },
+  "Info": "Slot 2"
+ },
+ "HotspareType": "None",
+ "@odata.etag": "\"<hex:21>\"",
+ "PredictedMediaLifeLeftPercent": null,
+ "Manufacturer": "ATA",
+ "BlockSizeBytes": null,
+ "CapacityBytes": 480000000000,
+ "RotationSpeedRPM": 0,
+ "AssetTag": "",
+ "SerialNumber": "Q1054325",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoDrive.v1_0_0.LenovoDrive"
+  }
+ },
+ "CapableSpeedGbs": null,
+ "Id": "Drive.Slot_2",
+ "NegotiatedSpeedGbs": null,
+ "EncryptionStatus": null,
+ "FailurePredicted": false,
+ "Identifiers": [
+  {
+   "DurableNameFormat": "UUID",
+   "DurableName": "N/A"
+  }
+ ],
+ "Name": "480GB M.2 SATA SSD",
+ "SKU": "02JG500",
+ "@odata.type": "#Drive.v1_14_0.Drive",
+ "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2/Drives/Slot_2",
+ "PartNumber": "SSS7A23269",
+ "Description": "This resource is used to represent a drive for a Redfish implementation.",
+ "Model": "ATPAF480GSTIC-LV2",
+ "Revision": "T001YB33",
+ "EncryptionAbility": null
+}

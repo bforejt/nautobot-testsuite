@@ -1,0 +1,153 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#AccountService.AccountService",
+ "LocalAccountAuth": "Enabled",
+ "Roles": {
+  "@odata.id": "/redfish/v1/AccountService/Roles"
+ },
+ "OAuth2": {
+  "ServiceEnabled": true,
+  "OAuth2Service": {
+   "Audience": [
+    "<hex:32>"
+   ],
+   "Issuer": "",
+   "OAuthServiceSigningKeys": null,
+   "Mode": "Offline"
+  }
+ },
+ "MaxPasswordLength": 32,
+ "AccountLockoutThreshold": 10,
+ "@odata.etag": "\"<hex:22>\"",
+ "AccountLockoutCounterResetEnabled": true,
+ "ServiceEnabled": true,
+ "LocalAccountAuth@Redfish.AllowableValues": [
+  "Enabled",
+  "Disabled",
+  "LocalFirst",
+  "Fallback"
+ ],
+ "Accounts": {
+  "@odata.id": "/redfish/v1/AccountService/Accounts"
+ },
+ "Id": "AccountService",
+ "MinPasswordLength": 6,
+ "@odata.type": "#AccountService.v1_10_0.AccountService",
+ "Oem": {
+  "Lenovo": {
+   "ComplexPassword": false,
+   "PasswordChangeOnFirstAccess": true,
+   "CurrentLoggedUsers": [],
+   "PasswordLength": 6,
+   "@odata.type": "#LenovoAccountService.v1_0_0.LenovoAccountServiceProperties",
+   "MinimumPasswordChangeIntervalHours": 24,
+   "MinimumPasswordReuseCycle": 2,
+   "PasswordChangeOnNextLogin": true,
+   "WebInactivitySessionTimeout": 20,
+   "GroupProfiles@Redfish.Deprecated": "The property is deprecated. Please use RemoteRoleMapping instead.",
+   "GroupProfiles": {
+    "@odata.id": "/redfish/v1/AccountService/Oem/Lenovo/GroupProfiles"
+   },
+   "PasswordExpirationPeriodDays": 365,
+   "PasswordExpirationWarningPeriod": 5
+  }
+ },
+ "@odata.id": "/redfish/v1/AccountService",
+ "AccountLockoutCounterResetAfter": 60,
+ "Description": "This resource is used to represent a management account service for a Redfish implementation.",
+ "LDAP": {
+  "PasswordSet": false,
+  "RemoteRoleMapping": [
+   {
+    "LocalRole": "GroupRole1",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole2",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole3",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole4",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole5",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole6",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole7",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole8",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole9",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole10",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole11",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole12",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole13",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole14",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole15",
+    "RemoteGroup": null
+   },
+   {
+    "LocalRole": "GroupRole16",
+    "RemoteGroup": null
+   }
+  ],
+  "ServiceEnabled": true,
+  "LDAPService": {
+   "SearchSettings": {
+    "BaseDistinguishedNames": [
+     ""
+    ],
+    "GroupsAttribute": "",
+    "GroupNameAttribute": "memberOf",
+    "UsernameAttribute": "sAMAccountName"
+   }
+  },
+  "Authentication": {
+   "AuthenticationType": "UsernameAndPassword",
+   "Password": null,
+   "Username": ""
+  },
+  "Certificates": {
+   "@odata.id": "/redfish/v1/AccountService/LDAP/Certificates"
+  },
+  "ServiceAddresses": [
+   "0.0.0.0:389",
+   ":389",
+   ":389",
+   ":389"
+  ]
+ },
+ "AccountLockoutDuration": 60,
+ "Name": "AccountService"
+}

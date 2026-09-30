@@ -1,0 +1,23 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PCIeDeviceCollection.PCIeDeviceCollection",
+ "Name": "PCIeDeviceCollection",
+ "@odata.type": "#PCIeDeviceCollection.PCIeDeviceCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices",
+ "Members@odata.count": 4,
+ "Description": "A collection of NetworkInterface resource instances."
+}

@@ -1,0 +1,142 @@
+{
+  "@odata.type": "#TaskCollection.TaskCollection",
+  "@odata.id": "/redfish/v1/TaskService/Tasks",
+  "@odata.etag": "\"c0ffee01\"",
+  "Name": "Task Collection",
+  "Description": "Hand-built from the DMTF Task schema: one task per kind of state, every value an invention.",
+  "Members@odata.count": 8,
+  "Members": [
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/1",
+      "@odata.etag": "\"c0ffee11\"",
+      "Id": "1",
+      "Name": "Task 1",
+      "TaskState": "Completed",
+      "TaskStatus": "OK",
+      "PercentComplete": 100,
+      "StartTime": "2026-09-28T10:00:00+00:00",
+      "EndTime": "2026-09-28T10:05:12+00:00",
+      "HidePayload": false,
+      "Payload": {
+        "HttpOperation": "POST",
+        "TargetUri": "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate",
+        "HttpHeaders": [
+          "Content-Type: application/json"
+        ],
+        "JsonBody": "{\"ImageURI\": \"https://203.0.113.20/fw/lxpm.uxz\"}"
+      },
+      "Messages": [
+        {
+          "MessageId": "TaskEvent.1.0.TaskCompletedOK",
+          "Message": "The task with Id '1' has completed.",
+          "MessageArgs": [
+            "1"
+          ],
+          "Severity": "OK"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/2",
+      "Id": "2",
+      "Name": "Task 2",
+      "TaskState": "Exception",
+      "TaskStatus": "Critical",
+      "PercentComplete": 12,
+      "StartTime": "2026-09-29T23:30:00-05:00",
+      "EndTime": "2026-09-29T23:31:30-05:00",
+      "HidePayload": true,
+      "Messages": [
+        {
+          "MessageId": "TaskEvent.1.0.TaskAborted",
+          "Message": "The task with Id '2' has been aborted.",
+          "MessageArgs": [
+            "2"
+          ],
+          "Severity": "Critical"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/3",
+      "Id": "3",
+      "Name": "Task 3",
+      "TaskState": "Killed",
+      "TaskStatus": "Warning",
+      "StartTime": "2026-09-27T12:00:00Z",
+      "EndTime": "2026-09-27T12:02:00Z",
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/4",
+      "Id": "4",
+      "Name": "Task 4",
+      "TaskState": "Cancelled",
+      "TaskStatus": "OK",
+      "StartTime": "2026-09-26T08:00:00.123+00:00",
+      "EndTime": "2026-09-26T08:00:05.5+00:00",
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/5",
+      "Id": "5",
+      "Name": "Firmware update",
+      "TaskState": "Running",
+      "TaskStatus": "OK",
+      "PercentComplete": 40,
+      "StartTime": "2026-09-30T06:10:00+02:00",
+      "EndTime": null,
+      "TaskMonitor": "/redfish/v1/TaskService/TaskMonitors/5",
+      "HidePayload": false,
+      "Payload": {
+        "HttpOperation": "POST",
+        "TargetUri": "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate",
+        "HttpHeaders": [
+          "Authorization: Basic bm90LWEtcmVhbC1zZWNyZXQ=",
+          "Content-Type: application/json"
+        ],
+        "JsonBody": "{\"ImageURI\": \"https://203.0.113.20/fw/xcc.uxz\", \"Password\": \"not-a-real-password\"}"
+      },
+      "Messages": [
+        {
+          "Message": "Firmware update requested by user jane.",
+          "MessageArgs": [
+            "jane"
+          ],
+          "Severity": "OK"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/6",
+      "Id": "6",
+      "Name": "Task 6",
+      "TaskState": "Interrupted",
+      "TaskStatus": "Warning",
+      "PercentComplete": 70,
+      "StartTime": "2026-09-30T03:00:00Z",
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/7",
+      "Id": "7",
+      "Name": "Task 7",
+      "TaskState": "New",
+      "TaskStatus": "OK",
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Task.v1_4_3.Task",
+      "@odata.id": "/redfish/v1/TaskService/Tasks/8",
+      "Id": "8",
+      "Name": "Task 8"
+    }
+  ]
+}

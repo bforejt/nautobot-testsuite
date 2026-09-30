@@ -1,0 +1,34 @@
+{
+  "@odata.type": "#LenovoSNMPProtocol.v1_0_0.LenovoSNMPProtocol",
+  "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP",
+  "@odata.etag": "\"hand-built\"",
+  "Id": "SNMP",
+  "Name": "SNMP Protocol",
+  "Description": "Hand-built in the lab unit's LenovoSNMPProtocol shape with traps on: the lab unit serves traps off and empty targets.",
+  "CommunityNames": ["hand-built-community", null, null],
+  "SNMPv3Agent": {
+    "Links": {
+      "UsersSNMPv3Settings": {"@odata.id": "/redfish/v1/AccountService/Accounts"}
+    },
+    "Port": 161,
+    "ContactPerson": "Jane Roe",
+    "Location": "rack 1",
+    "ProtocolEnabled": false
+  },
+  "SNMPTraps": {
+    "SNMPv1TrapEnabled": true,
+    "Port": 162,
+    "AlertRecipient": {
+      "SystemEvents": {"Enabled": false, "AcceptedEvents": []},
+      "CriticalEvents": {"Enabled": true, "AcceptedEvents": []},
+      "WarningEvents": {"Enabled": true, "AcceptedEvents": []}
+    },
+    "Targets": [
+      {"Addresses": ["trap-b.example.com", "0.0.0.0", "192.0.2.62"]},
+      {"Addresses": []},
+      {"Addresses": ["192.0.2.61", "::"]}
+    ],
+    "SNMPv2TrapEnabled": false,
+    "ProtocolEnabled": true
+  }
+}

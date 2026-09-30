@@ -1,0 +1,53 @@
+{
+  "@odata.type": "#LenovoSecureKeyLifecycle.v1_0_0.LenovoSecureKeyLifecycle",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService",
+  "@odata.etag": "\"sklm1\"",
+  "Id": "SecureKeyLifecycleService",
+  "Name": "SecureKeyLifecycleService",
+  "Description": "This resource is used to represent a secure key lifecycle service for a Redfish implementation.",
+  "Protocol": "KMIP",
+  "DeviceGroup": "SED_GROUP_1",
+  "TestConnectionTimeoutInSec": 10,
+  "KeyRepoServers": [
+    {
+      "Index": 2,
+      "HostName": "kms-b.example.net",
+      "Port": 5696
+    },
+    {
+      "Index": 1,
+      "HostName": "kms-a.example.net",
+      "Port": 5696
+    },
+    {
+      "Index": 3,
+      "HostName": "",
+      "Port": 5696
+    }
+  ],
+  "EKMS": {
+    "EKMSLocalCachedKeySettings": {
+      "LocalCachedKeyEnabled": true,
+      "CacheExpirationIntervalHours": 24
+    },
+    "EKMSLocalCachedKeyStatus": "Valid",
+    "EKMSPollingSettings": {
+      "PollingEnabled": true,
+      "PollIntervalMinutes": 60
+    },
+    "EKMSPollingStatus": "Success",
+    "EKMSLastPollingTime": "2026-09-30T02:00:00+00:00"
+  },
+  "ClientCertificatePassword": "not-a-real-password",
+  "ClientCertificate": {
+    "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ClientCertificate"
+  },
+  "ServerCertificate": {
+    "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ServerCertificate"
+  },
+  "Actions": {
+    "#LenovoSecureKeyLifecycle.TestConnection": {
+      "target": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/Actions/LenovoSecureKeyLifecycle.TestConnection"
+    }
+  }
+}

@@ -1,0 +1,248 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "PartNumber": "N/A",
+   "Model": "N/A",
+   "Controllers": [
+    {
+     "FirmwarePackageVersion": "1.2203.0",
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationType": "Slot",
+       "LocationOrdinalValue": 2,
+       "ServiceLabel": "OnBoard"
+      },
+      "Info": "OnBoard",
+      "InfoFormat": "OnBoard",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     },
+     "ControllerCapabilities": {
+      "NetworkPortCount": 2,
+      "NetworkDeviceFunctionCount": 2
+     },
+     "Links": {
+      "NetworkDeviceFunctions": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/1.1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/2.1"
+       }
+      ],
+      "PCIeDevices": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+       }
+      ],
+      "NetworkPorts": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkPorts/1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkPorts/2"
+       }
+      ],
+      "Ports": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports/1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports/2"
+       }
+      ]
+     }
+    }
+   ],
+   "@odata.etag": "\"<hex:21>\"",
+   "Id": "ob-2",
+   "Name": "Intel X722 LOM (onboard)",
+   "@odata.type": "#NetworkAdapter.v1_9_0.NetworkAdapter",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoDeviceInfo.v1_0_0.LenovoDeviceInfo",
+     "UUID": "<hex:32>"
+    }
+   },
+   "NetworkDeviceFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions"
+   },
+   "SerialNumber": "N/A",
+   "Manufacturer": "Intel",
+   "@odata.context": "/redfish/v1/$metadata#NetworkAdapter.NetworkAdapter",
+   "Description": "A NetworkAdapter represents the physical network adapter capable of connecting to a computer network.",
+   "SKU": "N/A",
+   "NetworkPorts": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkPorts"
+   },
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Ports": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports"
+   }
+  },
+  {
+   "PartNumber": "N/A",
+   "@odata.context": "/redfish/v1/$metadata#NetworkAdapter.NetworkAdapter",
+   "Controllers": [
+    {
+     "Links": {
+      "Ports": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+       }
+      ],
+      "NetworkPorts": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/2"
+       }
+      ],
+      "PCIeDevices": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+       }
+      ],
+      "NetworkDeviceFunctions": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/1.1"
+       },
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/2.1"
+       }
+      ]
+     },
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationType": "Slot",
+       "LocationOrdinalValue": 4,
+       "ServiceLabel": "OnBoard"
+      },
+      "Info": "OnBoard",
+      "InfoFormat": "OnBoard",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     },
+     "ControllerCapabilities": {
+      "NetworkPortCount": 2,
+      "NetworkDeviceFunctionCount": 2
+     },
+     "FirmwarePackageVersion": "N/A"
+    }
+   ],
+   "@odata.etag": "\"<hex:21>\"",
+   "Id": "ob-4",
+   "Name": "Intel I350 LOM (onboard)",
+   "@odata.type": "#NetworkAdapter.v1_9_0.NetworkAdapter",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoDeviceInfo.v1_0_0.LenovoDeviceInfo",
+     "UUID": "<hex:32>"
+    }
+   },
+   "NetworkDeviceFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions"
+   },
+   "SerialNumber": "N/A",
+   "Manufacturer": "Intel",
+   "Model": "N/A",
+   "Description": "A NetworkAdapter represents the physical network adapter capable of connecting to a computer network.",
+   "SKU": "N/A",
+   "NetworkPorts": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts"
+   },
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Ports": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports"
+   }
+  },
+  {
+   "PartNumber": "",
+   "Model": "",
+   "Controllers": [
+    {
+     "Links": {
+      "Ports": [],
+      "PCIeDevices": [
+       {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+       }
+      ],
+      "NetworkPorts": [],
+      "NetworkDeviceFunctions": []
+     },
+     "ControllerCapabilities": {
+      "NetworkPortCount": 0,
+      "NetworkDeviceFunctionCount": 0
+     },
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationType": "Slot",
+       "LocationOrdinalValue": 6,
+       "ServiceLabel": "PCIe 6"
+      },
+      "Info": "Slot 6",
+      "InfoFormat": "Slot X",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     },
+     "FirmwarePackageVersion": "",
+     "PCIeInterface": {
+      "MaxPCIeType": null,
+      "PCIeType": null,
+      "LanesInUse": 0,
+      "MaxLanes": 0
+     }
+    }
+   ],
+   "@odata.etag": "\"<hex:21>\"",
+   "Id": "slot-6",
+   "Name": "Slot 6",
+   "@odata.type": "#NetworkAdapter.v1_9_0.NetworkAdapter",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-6",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoDeviceInfo.v1_0_0.LenovoDeviceInfo",
+     "UUID": ""
+    }
+   },
+   "NetworkDeviceFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-6/NetworkDeviceFunctions"
+   },
+   "SerialNumber": "",
+   "@odata.context": "/redfish/v1/$metadata#NetworkAdapter.NetworkAdapter",
+   "Manufacturer": "",
+   "Description": "A NetworkAdapter represents the physical network adapter capable of connecting to a computer network.",
+   "SKU": "",
+   "NetworkPorts": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-6/NetworkPorts"
+   },
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Ports": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-6/Ports"
+   }
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#NetworkAdapterCollection.NetworkAdapterCollection",
+ "Name": "NetworkAdapterCollection",
+ "@odata.type": "#NetworkAdapterCollection.NetworkAdapterCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters",
+ "Members@odata.count": 3,
+ "Description": "A collection of NetworkAdapter resource instances."
+}

@@ -1,0 +1,179 @@
+{
+  "@odata.type": "#JobCollection.JobCollection",
+  "@odata.id": "/redfish/v1/JobService/Jobs",
+  "@odata.etag": "\"c0ffee02\"",
+  "Name": "Jobs",
+  "Description": "Hand-built from the DMTF Job and Schedule schemas: one job per kind of state, every value an invention.",
+  "Members@odata.count": 8,
+  "Members": [
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/PowerOff",
+      "@odata.etag": "\"c0ffee21\"",
+      "Id": "PowerOff",
+      "Name": "Power Off",
+      "JobState": "Pending",
+      "JobStatus": "OK",
+      "PercentComplete": 0,
+      "HidePayload": true,
+      "MaxExecutionTime": null,
+      "StepOrder": [],
+      "Messages": [],
+      "Schedule": {
+        "Name": "Lenovo:Power Off",
+        "InitialStartTime": "2026-10-03T22:00:00-04:00",
+        "RecurrenceInterval": "P1D",
+        "EnabledDaysOfWeek": [
+          "Saturday",
+          "Monday"
+        ],
+        "EnabledDaysOfWeek@Redfish.AllowableValues": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+          "Every"
+        ]
+      }
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/PowerOn",
+      "Id": "PowerOn",
+      "Name": "Power On",
+      "JobState": "Suspended",
+      "JobStatus": "OK",
+      "PercentComplete": null,
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": [],
+      "Schedule": {
+        "Name": "Lenovo:Power On",
+        "InitialStartTime": null,
+        "RecurrenceInterval": null,
+        "EnabledDaysOfWeek": []
+      }
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/Restart",
+      "Id": "Restart",
+      "Name": "Restart",
+      "JobState": "Interrupted",
+      "JobStatus": "Warning",
+      "PercentComplete": 30,
+      "StartTime": "2026-09-30T01:00:00Z",
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": [],
+      "Schedule": {
+        "Name": "Lenovo:Restart",
+        "InitialStartTime": "2026-10-01T02:00:00Z",
+        "RecurrenceInterval": "P1M",
+        "EnabledDaysOfMonth": [
+          15,
+          1
+        ],
+        "EnabledMonthsOfYear": [
+          "July",
+          "January"
+        ],
+        "EnabledIntervals": [
+          "2026-10-01T00:00:00Z/2027-09-30T00:00:00Z"
+        ],
+        "Lifetime": "P365D",
+        "MaxOccurrences": 12
+      }
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/FirmwareUpdate",
+      "Id": "FirmwareUpdate",
+      "Name": "Firmware update",
+      "JobState": "Running",
+      "JobStatus": "OK",
+      "PercentComplete": 55,
+      "StartTime": "2026-09-30T08:00:00+00:00",
+      "MaxExecutionTime": "PT1H",
+      "CreatedBy": "jane",
+      "HidePayload": false,
+      "Payload": {
+        "HttpOperation": "POST",
+        "TargetUri": "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate",
+        "HttpHeaders": [
+          "Authorization: Bearer bm90LWEtcmVhbC10b2tlbg==",
+          "Content-Type: application/json"
+        ],
+        "JsonBody": "{\"ImageURI\": \"https://203.0.113.21/fw/uefi.uxz\", \"Password\": \"not-a-real-password\"}"
+      },
+      "StepOrder": [],
+      "Messages": [
+        {
+          "Message": "Job FirmwareUpdate created by user jane.",
+          "MessageArgs": [
+            "FirmwareUpdate",
+            "jane"
+          ],
+          "Severity": "OK"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/Collect",
+      "Id": "Collect",
+      "Name": "Service data collection",
+      "JobState": "UserIntervention",
+      "JobStatus": "Warning",
+      "PercentComplete": 90,
+      "StartTime": "2026-09-30T07:30:00Z",
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/Backup",
+      "Id": "Backup",
+      "Name": "Configuration backup",
+      "JobState": "Completed",
+      "JobStatus": "OK",
+      "PercentComplete": 100,
+      "StartTime": "2026-09-29T01:00:00Z",
+      "EndTime": "2026-09-29T01:04:00Z",
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/Reset",
+      "Id": "Reset",
+      "Name": "Reset to defaults",
+      "JobState": "Cancelled",
+      "JobStatus": "OK",
+      "StartTime": "2026-09-28T01:00:00Z",
+      "EndTime": "2026-09-28T01:00:10Z",
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": []
+    },
+    {
+      "@odata.type": "#Job.v1_0_7.Job",
+      "@odata.id": "/redfish/v1/JobService/Jobs/Restore",
+      "Id": "Restore",
+      "Name": "Configuration restore",
+      "JobState": "Exception",
+      "JobStatus": "Critical",
+      "PercentComplete": 20,
+      "StartTime": "2026-09-30T02:30:00-06:00",
+      "EndTime": "2026-09-30T02:31:00-06:00",
+      "HidePayload": true,
+      "StepOrder": [],
+      "Messages": []
+    }
+  ]
+}

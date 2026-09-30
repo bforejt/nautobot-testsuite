@@ -1,0 +1,23 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#StorageCollection.StorageCollection",
+ "Name": "StorageCollection",
+ "@odata.type": "#StorageCollection.StorageCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Storage",
+ "Description": "A collection of storage resource instances",
+ "Members@odata.count": 4
+}

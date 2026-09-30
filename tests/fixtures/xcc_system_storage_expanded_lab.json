@@ -1,0 +1,267 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "StorageControllers": [
+    {
+     "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+     },
+     "MemberId": "0",
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot Number",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationOrdinalValue": 2,
+       "ServiceLabel": "M.2 - Slot 2",
+       "LocationType": "Slot"
+      },
+      "Info": "Slot 2"
+     },
+     "Name": "Operation System",
+     "SupportedControllerProtocols": [
+      "AHCI"
+     ],
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2#/StorageControllers/0",
+     "AssetTag": "",
+     "SupportedDeviceProtocols": [
+      "SATA"
+     ]
+    }
+   ],
+   "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+   "Name": "M.2 Storage",
+   "@odata.type": "#Storage.v1_14_0.Storage",
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2",
+   "Drives": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2/Drives/Slot_2"
+    }
+   ],
+   "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2/Volumes"
+   },
+   "StorageControllers@odata.count": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Links": {
+    "Enclosures": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1"
+     }
+    ],
+    "Enclosures@odata.count": 1
+   },
+   "Id": "M.2_Slot_2",
+   "Description": "This resource is used to represent a storage for a Redfish implementation.",
+   "StoragePools": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_2/StoragePools"
+   },
+   "Drives@odata.count": 1,
+   "@odata.etag": "\"<hex:21>\""
+  },
+  {
+   "Links": {
+    "Enclosures": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1"
+     }
+    ],
+    "Enclosures@odata.count": 1
+   },
+   "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+   "Name": "M.2 Storage",
+   "@odata.type": "#Storage.v1_14_0.Storage",
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3",
+   "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3/Volumes"
+   },
+   "Drives": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3/Drives/Slot_3"
+    }
+   ],
+   "StorageControllers@odata.count": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "StoragePools": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3/StoragePools"
+   },
+   "Description": "This resource is used to represent a storage for a Redfish implementation.",
+   "Id": "M.2_Slot_3",
+   "Drives@odata.count": 1,
+   "StorageControllers": [
+    {
+     "Name": "Operation System",
+     "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+     },
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3#/StorageControllers/0",
+     "SupportedDeviceProtocols": [
+      "SATA"
+     ],
+     "SupportedControllerProtocols": [
+      "AHCI"
+     ],
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot Number",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationOrdinalValue": 3,
+       "ServiceLabel": "M.2 - Slot 3",
+       "LocationType": "Slot"
+      },
+      "Info": "Slot 3"
+     },
+     "AssetTag": "",
+     "MemberId": "0"
+    }
+   ]
+  },
+  {
+   "@odata.type": "#Storage.v1_14_0.Storage",
+   "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+   "Name": "M.2 Storage",
+   "StoragePools": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4/StoragePools"
+   },
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4",
+   "Drives": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4/Drives/Slot_4"
+    }
+   ],
+   "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4/Volumes"
+   },
+   "StorageControllers@odata.count": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "M.2_Slot_4",
+   "Links": {
+    "Enclosures": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1"
+     }
+    ],
+    "Enclosures@odata.count": 1
+   },
+   "Description": "This resource is used to represent a storage for a Redfish implementation.",
+   "StorageControllers": [
+    {
+     "SupportedDeviceProtocols": [
+      "SATA"
+     ],
+     "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+     },
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot Number",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationOrdinalValue": 4,
+       "ServiceLabel": "M.2 - Slot 4",
+       "LocationType": "Slot"
+      },
+      "Info": "Slot 4"
+     },
+     "Name": "Operation System",
+     "SupportedControllerProtocols": [
+      "AHCI"
+     ],
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4#/StorageControllers/0",
+     "AssetTag": "",
+     "MemberId": "0"
+    }
+   ],
+   "Drives@odata.count": 1,
+   "@odata.etag": "\"<hex:21>\""
+  },
+  {
+   "Drives": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5/Drives/Slot_5"
+    }
+   ],
+   "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+   "Name": "M.2 Storage",
+   "@odata.type": "#Storage.v1_14_0.Storage",
+   "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5",
+   "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5/Volumes"
+   },
+   "StoragePools": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5/StoragePools"
+   },
+   "StorageControllers@odata.count": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "StorageControllers": [
+    {
+     "SupportedDeviceProtocols": [
+      "SATA"
+     ],
+     "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+     },
+     "Location": {
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot Number",
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "PartLocation": {
+       "LocationOrdinalValue": 5,
+       "ServiceLabel": "M.2 - Slot 5",
+       "LocationType": "Slot"
+      },
+      "Info": "Slot 5"
+     },
+     "Name": "Operation System",
+     "SupportedControllerProtocols": [
+      "AHCI"
+     ],
+     "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_5#/StorageControllers/0",
+     "AssetTag": "",
+     "MemberId": "0"
+    }
+   ],
+   "Id": "M.2_Slot_5",
+   "Description": "This resource is used to represent a storage for a Redfish implementation.",
+   "Links": {
+    "Enclosures": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1"
+     }
+    ],
+    "Enclosures@odata.count": 1
+   },
+   "Drives@odata.count": 1,
+   "@odata.etag": "\"<hex:21>\""
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#StorageCollection.StorageCollection",
+ "Name": "StorageCollection",
+ "@odata.type": "#StorageCollection.StorageCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Storage",
+ "Description": "A collection of storage resource instances",
+ "Members@odata.count": 4
+}

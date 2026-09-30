@@ -1,0 +1,66 @@
+{
+  "@odata.type": "#ControlCollection.ControlCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/Controls",
+  "@odata.etag": "\"policy-controls\"",
+  "Name": "Chassis Controls",
+  "Description": "Hand-built from the DMTF Control schema: the lab unit's PowerLimit control with a cap set, and a Range-type temperature control the lab unit does not have.",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#Control.v1_1_0.Control",
+      "@odata.id": "/redfish/v1/Chassis/1/Controls/PowerLimit",
+      "@odata.etag": "\"policy-power-limit\"",
+      "Id": "PowerLimit",
+      "Name": "System Power Limit",
+      "ControlType": "Power",
+      "ControlMode": "Automatic",
+      "SetPoint": 450,
+      "SetPointUnits": "Watt",
+      "SetPointType": "Single",
+      "SetPointUpdateTime": "2026-09-28T06:14:02+00:00",
+      "AllowableMin": 310,
+      "AllowableMax": 750,
+      "Increment": 1,
+      "Implementation": "Programmable",
+      "PhysicalContext": "Chassis",
+      "Sensor": {
+        "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/204L0",
+        "Reading": 212
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "RelatedItem": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Control.v1_1_0.Control",
+      "@odata.id": "/redfish/v1/Chassis/1/Controls/IntakeTemperature",
+      "@odata.etag": "\"policy-intake\"",
+      "Id": "IntakeTemperature",
+      "Name": "Intake Temperature Control",
+      "ControlType": "Temperature",
+      "ControlMode": "Override",
+      "SetPointType": "Range",
+      "SetPointUnits": "Cel",
+      "SettingMin": 18,
+      "SettingMax": 27,
+      "AllowableMin": 10,
+      "AllowableMax": 35,
+      "Implementation": "Direct",
+      "PhysicalContext": "Intake",
+      "Sensor": {
+        "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/IntakeTemp",
+        "Reading": 22.5
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ]
+}

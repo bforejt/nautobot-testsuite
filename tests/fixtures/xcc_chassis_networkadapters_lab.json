@@ -1,0 +1,20 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-6"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#NetworkAdapterCollection.NetworkAdapterCollection",
+ "Name": "NetworkAdapterCollection",
+ "@odata.type": "#NetworkAdapterCollection.NetworkAdapterCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters",
+ "Members@odata.count": 3,
+ "Description": "A collection of NetworkAdapter resource instances."
+}

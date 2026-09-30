@@ -1,0 +1,63 @@
+{
+  "@odata.type": "#LenovoLEDCollection.LenovoLEDCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs",
+  "Name": "LenovoLEDCollection",
+  "Members@odata.count": 5,
+  "Members": [
+    {
+      "@odata.type": "#LenovoLED.v1_0_0.LenovoLED",
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/1",
+      "Id": "1",
+      "Name": "Identify",
+      "Color": "Blue",
+      "State": "Off",
+      "Location": "Front Panel",
+      "DutyCycle": 0,
+      "PeriodInMillSec": 0
+    },
+    {
+      "@odata.type": "#LenovoLED.v1_0_0.LenovoLED",
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/2",
+      "Id": "2",
+      "Name": "Fault",
+      "Color": "Yellow",
+      "State": "On",
+      "Location": "Front Panel",
+      "DutyCycle": 255,
+      "PeriodInMillSec": 0
+    },
+    {
+      "@odata.type": "#LenovoLED.v1_0_0.LenovoLED",
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/5",
+      "Id": "5",
+      "Name": "Fan Fault",
+      "Color": "Yellow",
+      "State": "Off",
+      "Location": "Fan 1",
+      "DutyCycle": 0,
+      "PeriodInMillSec": 0
+    },
+    {
+      "@odata.type": "#LenovoLED.v1_0_0.LenovoLED",
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/6",
+      "Id": "6",
+      "Name": "Fan Fault",
+      "Color": "Yellow",
+      "State": "On",
+      "Location": "Fan 2",
+      "DutyCycle": 255,
+      "PeriodInMillSec": 0
+    },
+    {
+      "@odata.type": "#LenovoLED.v1_0_0.LenovoLED",
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/9",
+      "Id": "9",
+      "Name": null,
+      "Color": "Amber",
+      "State": "Off",
+      "Location": "",
+      "DutyCycle": 0,
+      "PeriodInMillSec": 0
+    }
+  ]
+}

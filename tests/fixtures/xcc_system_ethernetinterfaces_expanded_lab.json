@@ -1,0 +1,130 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "InterfaceEnabled": true,
+   "PermanentMACAddress": "fa:f7:7d:c3:a3:ae",
+   "Name": "Host Ethernet Interface",
+   "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+   "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/ToManager",
+   "@odata.etag": "\"<hex:19>\"",
+   "Links": {
+    "HostInterface": {
+     "@odata.id": "/redfish/v1/Managers/1/HostInterfaces/1"
+    },
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "SpeedMbps": 100,
+   "LinkStatus": "LinkUp",
+   "Id": "ToManager",
+   "MACAddress": "fa:f7:7d:c3:a3:ae",
+   "Description": "Host Network Interface",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface",
+   "EthernetInterfaceType": "Physical"
+  },
+  {
+   "InterfaceEnabled": true,
+   "PermanentMACAddress": "BC:18:C3:3F:97:12",
+   "Name": "External Ethernet Interface",
+   "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+   "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC1",
+   "SpeedMbps": null,
+   "@odata.etag": "\"<hex:19>\"",
+   "LinkStatus": "NoLink",
+   "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface",
+   "MACAddress": "BC:18:C3:3F:97:12",
+   "Description": "External Ethernet Interface",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "Id": "NIC1"
+  },
+  {
+   "InterfaceEnabled": true,
+   "PermanentMACAddress": "84:B6:42:0D:C6:8D",
+   "Name": "External Ethernet Interface",
+   "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+   "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC2",
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "@odata.etag": "\"<hex:19>\"",
+   "LinkStatus": "NoLink",
+   "SpeedMbps": null,
+   "MACAddress": "84:B6:42:0D:C6:8D",
+   "Description": "External Ethernet Interface",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "NIC2",
+   "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface"
+  },
+  {
+   "InterfaceEnabled": true,
+   "PermanentMACAddress": "90:7C:CC:C3:81:CE",
+   "Name": "External Ethernet Interface",
+   "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+   "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC3",
+   "SpeedMbps": null,
+   "@odata.etag": "\"<hex:19>\"",
+   "LinkStatus": "NoLink",
+   "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface",
+   "MACAddress": "90:7C:CC:C3:81:CE",
+   "Description": "External Ethernet Interface",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "NIC3",
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   }
+  },
+  {
+   "InterfaceEnabled": true,
+   "PermanentMACAddress": "80:43:1E:80:A8:71",
+   "Name": "External Ethernet Interface",
+   "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+   "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC4",
+   "SpeedMbps": null,
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "LinkStatus": "NoLink",
+   "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface",
+   "MACAddress": "80:43:1E:80:A8:71",
+   "Description": "External Ethernet Interface",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "NIC4",
+   "@odata.etag": "\"<hex:19>\""
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#EthernetInterfaceCollection.EthernetInterfaceCollection",
+ "Name": "EthernetInterfaceCollection",
+ "@odata.type": "#EthernetInterfaceCollection.EthernetInterfaceCollection",
+ "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces",
+ "Members@odata.count": 5,
+ "Description": "A collection of EthernetInterface resource instances."
+}

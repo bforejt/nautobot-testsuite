@@ -1,0 +1,104 @@
+{
+ "@odata.etag": "\"<hex:21>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/Administrator"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/Operator"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/ReadOnly"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole1"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole2"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole3"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole4"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole5"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole6"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole7"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole8"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole9"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole10"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole11"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole12"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole1"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole2"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole3"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole4"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole5"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole6"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole7"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole8"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole9"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole10"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole11"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole12"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole13"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole14"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole15"
+  },
+  {
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole16"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#RoleCollection.RoleCollection",
+ "Name": "RoleCollection",
+ "@odata.type": "#RoleCollection.RoleCollection",
+ "@odata.id": "/redfish/v1/AccountService/Roles",
+ "Description": "A collection of Role resource instances.",
+ "Members@odata.count": 31
+}

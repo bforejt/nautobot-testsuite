@@ -1,0 +1,10 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [],
+ "@odata.context": "/redfish/v1/$metadata#VolumeCollection.VolumeCollection",
+ "Name": "VolumeCollection",
+ "@odata.type": "#VolumeCollection.VolumeCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4/Volumes",
+ "Members@odata.count": 0,
+ "Description": "A collection of volume resource instances."
+}

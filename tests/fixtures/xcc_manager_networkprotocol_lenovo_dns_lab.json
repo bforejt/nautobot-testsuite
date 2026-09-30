@@ -1,0 +1,29 @@
+{
+ "LXCADNSDiscovery": {
+  "XClarityManager": null,
+  "DiscoverLXCAEnabled": false,
+  "XClarityManagerList": []
+ },
+ "@odata.context": "/redfish/v1/$metadata#LenovoDNS.LenovoDNS",
+ "IPv6Address2": "::",
+ "IPv4Address2": "0.0.0.0",
+ "IPv4Address1": "0.0.0.0",
+ "@odata.etag": "\"<hex:19>\"",
+ "Id": "LenovoDNS",
+ "Name": "LenovoDNS",
+ "@odata.type": "#LenovoDNS.v1_0_0.LenovoDNS",
+ "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/DNS",
+ "DNSEnable": false,
+ "DDNS": [
+  {
+   "DomainNameSource": "DHCP",
+   "DDNSEnable": false,
+   "DomainName": ""
+  }
+ ],
+ "PreferredAddresstype": "IPv4",
+ "Description": "This resource is used to represent a DNS resource for a Redfish implementation.",
+ "IPv6Address1": "::",
+ "IPv4Address3": "0.0.0.0",
+ "IPv6Address3": "::"
+}

@@ -1,0 +1,102 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports",
+  "@odata.type": "#PortCollection.PortCollection",
+  "Name": "PortCollection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/1",
+      "@odata.type": "#Port.v1_6_0.Port",
+      "@odata.etag": "\"hand-built\"",
+      "Id": "1",
+      "Name": "Physical Port 1",
+      "PortId": "P1",
+      "LinkStatus": "LinkUp",
+      "LinkState": "Enabled",
+      "LinkNetworkTechnology": "Ethernet",
+      "PortMedium": "Optical",
+      "CurrentSpeedGbps": 25,
+      "MaxSpeedGbps": 25,
+      "LinkConfiguration": [
+        {
+          "AutoSpeedNegotiationCapable": true,
+          "AutoSpeedNegotiationEnabled": true,
+          "CapableLinkSpeedGbps": [
+            25,
+            10
+          ]
+        }
+      ],
+      "Ethernet": {
+        "AssociatedMACAddresses": [
+          "00:00:5E:00:53:01"
+        ],
+        "FlowControlConfiguration": "TX_RX",
+        "FlowControlStatus": "TX_RX",
+        "LLDPEnabled": true
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+          "PhysicalPortNumber": "1",
+          "PhysicalPortMacAddress": "00005E005301",
+          "PortMaximumMTU": 9600
+        }
+      },
+      "Actions": {
+        "#Port.Reset": {
+          "target": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/1/Actions/Port.Reset"
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/2",
+      "@odata.type": "#Port.v1_6_0.Port",
+      "Id": "2",
+      "Name": "Physical Port 2",
+      "PortId": "P2",
+      "LinkStatus": "LinkDown",
+      "LinkState": "Enabled",
+      "LinkNetworkTechnology": "Ethernet",
+      "PortMedium": "Optical",
+      "CurrentSpeedGbps": null,
+      "MaxSpeedGbps": 25,
+      "LinkConfiguration": [
+        {
+          "AutoSpeedNegotiationCapable": true,
+          "AutoSpeedNegotiationEnabled": false,
+          "CapableLinkSpeedGbps": [
+            10,
+            25
+          ]
+        }
+      ],
+      "Ethernet": {
+        "AssociatedMACAddresses": [
+          "00:00:5E:00:53:02"
+        ],
+        "FlowControlConfiguration": "None",
+        "FlowControlStatus": "None",
+        "LLDPEnabled": false
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+          "PhysicalPortNumber": "2",
+          "PhysicalPortMacAddress": "00005E005302",
+          "PortMaximumMTU": 9600
+        }
+      }
+    }
+  ]
+}

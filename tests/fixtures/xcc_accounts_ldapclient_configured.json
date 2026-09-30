@@ -1,0 +1,42 @@
+{
+  "@odata.type": "#LenovoLDAPClient.v1_0_0.LenovoLDAPClient",
+  "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient",
+  "@odata.etag": "\"ldap1\"",
+  "Id": "LDAPClient",
+  "Name": "LDAP Client",
+  "Description": "The resource is used to represent the LDAP client for the manager for a Redfish implementation.",
+  "ProtocolEnabled": true,
+  "Authorization": "LDAPServer",
+  "LDAPServers": {
+    "Method": "Pre_Configured",
+    "SearchDomain": null,
+    "Server1HostName_IPAddress": "ldap-b.example.net",
+    "Server1Port": "636",
+    "Server2HostName_IPAddress": "198.51.100.41",
+    "Server2Port": "636",
+    "Server3HostName_IPAddress": "0.0.0.0",
+    "Server3Port": "389",
+    "Server4HostName_IPAddress": null,
+    "Server4Port": "389"
+  },
+  "RootDN": "dc=example,dc=net",
+  "UIDSearchAttribute": "uid",
+  "GroupSearchAttribute": "memberOf",
+  "GroupFilter": "bmc-",
+  "LoginPermissionAttribute": "bmcLoginPermission",
+  "BindingMethod": {
+    "Method": "Anonymously",
+    "ClientDN": "cn=bmc-bind,ou=Services,dc=example,dc=net",
+    "ClientPassword": "not-a-real-password"
+  },
+  "ActiveDirectory": {
+    "RoleBasedSecurity": true,
+    "ServerTargetName": "bmc-lab-1",
+    "ForestName": "example.net",
+    "Links": {
+      "GroupProfiles": {
+        "@odata.id": "/redfish/v1/AccountService/Oem/Lenovo/GroupProfiles"
+      }
+    }
+  }
+}

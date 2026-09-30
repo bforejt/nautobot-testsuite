@@ -1,0 +1,107 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "StepOrder": [],
+   "@odata.context": "/redfish/v1/$metadata#Job.Job",
+   "Name": "Power Off",
+   "JobStatus": "OK",
+   "@odata.id": "/redfish/v1/JobService/Jobs/PowerOff",
+   "Schedule": {
+    "EnabledDaysOfWeek@Redfish.AllowableValues": [
+     "Monday",
+     "Tuesday",
+     "Wednesday",
+     "Thursday",
+     "Friday",
+     "Saturday",
+     "Sunday",
+     "Every"
+    ],
+    "InitialStartTime": null,
+    "RecurrenceInterval": null,
+    "Name": "Lenovo:Power Off",
+    "EnabledDaysOfWeek": []
+   },
+   "@odata.type": "#Job.v1_0_7.Job",
+   "@odata.etag": "\"<hex:19>\"",
+   "PercentComplete": null,
+   "Id": "PowerOff",
+   "Description": "The resource is used to represent the settings of scheduled Power Off actions for a Redfish implementation.",
+   "HidePayload": true,
+   "Messages": [],
+   "MaxExecutionTime": null,
+   "JobState": "Suspended"
+  },
+  {
+   "Name": "Power On",
+   "@odata.context": "/redfish/v1/$metadata#Job.Job",
+   "StepOrder": [],
+   "JobStatus": "OK",
+   "@odata.id": "/redfish/v1/JobService/Jobs/PowerOn",
+   "Schedule": {
+    "EnabledDaysOfWeek@Redfish.AllowableValues": [
+     "Monday",
+     "Tuesday",
+     "Wednesday",
+     "Thursday",
+     "Friday",
+     "Saturday",
+     "Sunday",
+     "Every"
+    ],
+    "InitialStartTime": null,
+    "RecurrenceInterval": null,
+    "Name": "Lenovo:Power On",
+    "EnabledDaysOfWeek": []
+   },
+   "@odata.type": "#Job.v1_0_7.Job",
+   "@odata.etag": "\"<hex:19>\"",
+   "PercentComplete": null,
+   "Id": "PowerOn",
+   "Description": "The resource is used to represent the settings of scheduled Power On actions for a Redfish implementation.",
+   "HidePayload": true,
+   "Messages": [],
+   "MaxExecutionTime": null,
+   "JobState": "Suspended"
+  },
+  {
+   "@odata.type": "#Job.v1_0_7.Job",
+   "@odata.context": "/redfish/v1/$metadata#Job.Job",
+   "Name": "Restart",
+   "JobStatus": "OK",
+   "@odata.id": "/redfish/v1/JobService/Jobs/Restart",
+   "Schedule": {
+    "EnabledDaysOfWeek@Redfish.AllowableValues": [
+     "Monday",
+     "Tuesday",
+     "Wednesday",
+     "Thursday",
+     "Friday",
+     "Saturday",
+     "Sunday",
+     "Every"
+    ],
+    "InitialStartTime": null,
+    "Name": "Lenovo:Restart",
+    "RecurrenceInterval": null,
+    "EnabledDaysOfWeek": []
+   },
+   "StepOrder": [],
+   "@odata.etag": "\"<hex:19>\"",
+   "PercentComplete": null,
+   "Id": "Restart",
+   "Description": "The resource is used to represent the settings of scheduled Restart actions for a Redfish implementation.",
+   "HidePayload": true,
+   "Messages": [],
+   "MaxExecutionTime": null,
+   "JobState": "Suspended"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#JobCollection.JobCollection",
+ "Name": "Jobs",
+ "@odata.type": "#JobCollection.JobCollection",
+ "@odata.id": "/redfish/v1/JobService/Jobs",
+ "Description": "A collection of Job resource instances.",
+ "Members@odata.count": 3
+}

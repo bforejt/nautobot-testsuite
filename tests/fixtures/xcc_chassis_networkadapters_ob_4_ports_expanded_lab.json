@@ -1,0 +1,89 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.etag": "\"<hex:19>\"",
+   "@odata.context": "/redfish/v1/$metadata#Port.Port",
+   "Name": "Phyical Port 1",
+   "@odata.type": "#Port.v1_6_0.Port",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+     "PhysicalPortMacAddress": "907CCCC381CE",
+     "PortMaximumMTU": 12000,
+     "PhysicalPortNumber": "1"
+    }
+   },
+   "Ethernet": {
+    "AssociatedMACAddresses": [
+     "90:7c:cc:c3:81:ce"
+    ]
+   },
+   "FunctionMaxBandwidth": [
+    {
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/1.1"
+     },
+     "AllocationPercent": null
+    }
+   ],
+   "CurrentSpeedGbps": null,
+   "LinkStatus": "NoLink",
+   "MaxSpeedGbps": 1,
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "LinkNetworkTechnology": "Ethernet",
+   "Id": "1",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+  },
+  {
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "@odata.context": "/redfish/v1/$metadata#Port.Port",
+   "Name": "Phyical Port 2",
+   "@odata.type": "#Port.v1_6_0.Port",
+   "LinkStatus": "NoLink",
+   "CurrentSpeedGbps": null,
+   "FunctionMaxBandwidth": [
+    {
+     "AllocationPercent": null,
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/2.1"
+     }
+    }
+   ],
+   "@odata.etag": "\"<hex:19>\"",
+   "Id": "2",
+   "MaxSpeedGbps": 1,
+   "LinkNetworkTechnology": "Ethernet",
+   "Ethernet": {
+    "AssociatedMACAddresses": [
+     "80:43:1e:80:a8:71"
+    ]
+   },
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+     "PhysicalPortMacAddress": "80431E80A871",
+     "PortMaximumMTU": 12000,
+     "PhysicalPortNumber": "2"
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PortCollection.PortCollection",
+ "Name": "PortCollection",
+ "@odata.type": "#PortCollection.PortCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports",
+ "Members@odata.count": 2,
+ "Description": "A collection of Port resource instances."
+}

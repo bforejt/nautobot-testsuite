@@ -1,0 +1,89 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "MaxSpeedGbps": 10,
+   "CurrentSpeedGbps": null,
+   "@odata.context": "/redfish/v1/$metadata#Port.Port",
+   "Name": "Phyical Port 1",
+   "LinkNetworkTechnology": "Ethernet",
+   "Ethernet": {
+    "AssociatedMACAddresses": [
+     "bc:18:c3:3f:97:12"
+    ]
+   },
+   "@odata.type": "#Port.v1_6_0.Port",
+   "@odata.etag": "\"<hex:19>\"",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports/1",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+     "PortMaximumMTU": 12000,
+     "PhysicalPortNumber": "1",
+     "PhysicalPortMacAddress": "BC18C33F9712"
+    }
+   },
+   "Id": "1",
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "FunctionMaxBandwidth": [
+    {
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/1.1"
+     },
+     "AllocationPercent": null
+    }
+   ],
+   "LinkStatus": "NoLink",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   }
+  },
+  {
+   "MaxSpeedGbps": 10,
+   "CurrentSpeedGbps": null,
+   "@odata.context": "/redfish/v1/$metadata#Port.Port",
+   "Name": "Phyical Port 2",
+   "LinkNetworkTechnology": "Ethernet",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoPort.v1_0_0.LenovoPort",
+     "PortMaximumMTU": 12000,
+     "PhysicalPortNumber": "2",
+     "PhysicalPortMacAddress": "84B6420DC68D"
+    }
+   },
+   "@odata.type": "#Port.v1_6_0.Port",
+   "@odata.etag": "\"<hex:19>\"",
+   "FunctionMaxBandwidth": [
+    {
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/2.1"
+     },
+     "AllocationPercent": null
+    }
+   ],
+   "Ethernet": {
+    "AssociatedMACAddresses": [
+     "84:b6:42:0d:c6:8d"
+    ]
+   },
+   "Id": "2",
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "LinkStatus": "NoLink",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports/2"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PortCollection.PortCollection",
+ "Name": "PortCollection",
+ "@odata.type": "#PortCollection.PortCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/Ports",
+ "Members@odata.count": 2,
+ "Description": "A collection of Port resource instances."
+}

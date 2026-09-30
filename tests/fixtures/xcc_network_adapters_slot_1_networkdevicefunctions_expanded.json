@@ -1,0 +1,107 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions",
+  "@odata.type": "#NetworkDeviceFunctionCollection.NetworkDeviceFunctionCollection",
+  "Name": "NetworkDeviceFunctionCollection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions/1.1",
+      "@odata.type": "#NetworkDeviceFunction.v1_8_0.NetworkDeviceFunction",
+      "Id": "1.1",
+      "Name": "Function 1",
+      "NetDevFuncType": "Ethernet",
+      "NetDevFuncCapabilities": [
+        "Ethernet",
+        "iSCSI"
+      ],
+      "DeviceEnabled": true,
+      "BootMode": "PXE",
+      "VirtualFunctionsEnabled": true,
+      "MaxVirtualFunctions": 64,
+      "Ethernet": {
+        "PermanentMACAddress": "00:00:5E:00:53:01",
+        "MACAddress": "00:00:5E:00:53:01",
+        "MTUSize": 9000
+      },
+      "AssignablePhysicalNetworkPorts": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/1"
+        }
+      ],
+      "Links": {
+        "PhysicalNetworkPortAssignment": {
+          "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/1"
+        },
+        "PhysicalPortAssignment": {
+          "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/1"
+        },
+        "EthernetInterface": {
+          "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC5"
+        },
+        "PCIeFunction": {
+          "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_1/PCIeFunctions/slot_1.00"
+        }
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions/2.1",
+      "@odata.type": "#NetworkDeviceFunction.v1_8_0.NetworkDeviceFunction",
+      "Id": "2.1",
+      "Name": "Function 2",
+      "NetDevFuncType": "Ethernet",
+      "NetDevFuncCapabilities": [
+        "Ethernet",
+        "iSCSI"
+      ],
+      "DeviceEnabled": true,
+      "BootMode": "iSCSI",
+      "VirtualFunctionsEnabled": false,
+      "MaxVirtualFunctions": 64,
+      "Ethernet": {
+        "PermanentMACAddress": "00:00:5E:00:53:02",
+        "MACAddress": "00:00:5E:00:53:22",
+        "MTUSize": 1500
+      },
+      "iSCSIBoot": {
+        "IPAddressType": "IPv4",
+        "InitiatorName": "iqn.2026-09.example.lab:hand-built-initiator",
+        "InitiatorIPAddress": "192.0.2.61",
+        "InitiatorNetmask": "255.255.255.0",
+        "TargetInfoViaDHCP": false,
+        "PrimaryTargetName": "iqn.2026-09.example.lab:hand-built-target",
+        "PrimaryTargetIPAddress": "192.0.2.62",
+        "PrimaryTargetTCPPort": 3260,
+        "PrimaryLUN": 0,
+        "AuthenticationMethod": "MutualCHAP",
+        "CHAPUsername": "hand-built-chap-user",
+        "CHAPSecret": "hand-built-chap-secret",
+        "MutualCHAPUsername": "hand-built-mutual-user",
+        "MutualCHAPSecret": "hand-built-mutual-secret"
+      },
+      "PhysicalPortAssignment@Redfish.Deprecated": "The property is deprecated. Please use Links/PhysicalPortAssignment instead.",
+      "PhysicalPortAssignment": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/2"
+      },
+      "Links": {
+        "EthernetInterfaces": [
+          {
+            "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC6"
+          }
+        ],
+        "PCIeFunction": {
+          "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_1/PCIeFunctions/slot_1.01"
+        }
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      }
+    }
+  ]
+}

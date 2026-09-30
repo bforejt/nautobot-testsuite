@@ -1,0 +1,14 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Managers/1"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#ManagerCollection.ManagerCollection",
+ "Name": "ManagerCollection",
+ "@odata.type": "#ManagerCollection.ManagerCollection",
+ "@odata.id": "/redfish/v1/Managers",
+ "Description": "A collection of Manager resource instances.",
+ "Members@odata.count": 1
+}

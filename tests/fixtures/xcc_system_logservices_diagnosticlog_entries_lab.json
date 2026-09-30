@@ -1,0 +1,54 @@
+{
+ "@odata.etag": "\"<hex:21>\"",
+ "Members": [
+  {
+   "AdditionalDataSizeBytes": 0,
+   "DiagnosticDataType": "Manager",
+   "@odata.context": "/redfish/v1/$metadata#LogEntry.LogEntry",
+   "Name": "FFDC",
+   "@odata.type": "#LogEntry.v1_11_0.LogEntry",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries/FFDC",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemRecordFormat": "Lenovo",
+   "Description": "This resource is used to represent a log entry for log services for a Redfish implementation.",
+   "EntryType": "Oem",
+   "AdditionalDataURI": null,
+   "Id": "FFDC"
+  },
+  {
+   "AdditionalDataSizeBytes": 0,
+   "DiagnosticDataType": "OS",
+   "@odata.context": "/redfish/v1/$metadata#LogEntry.LogEntry",
+   "Name": "Failure Screen",
+   "@odata.type": "#LogEntry.v1_11_0.LogEntry",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries/FailureScreen",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemRecordFormat": "Lenovo",
+   "Description": "This resource is used to represent a log entry for log services for a Redfish implementation.",
+   "EntryType": "Oem",
+   "AdditionalDataURI": null,
+   "Id": "FailureScreen"
+  },
+  {
+   "AdditionalDataSizeBytes": 0,
+   "DiagnosticDataType": "OEM",
+   "@odata.context": "/redfish/v1/$metadata#LogEntry.LogEntry",
+   "Name": "Memory PFA Data",
+   "@odata.type": "#LogEntry.v1_11_0.LogEntry",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries/MPFA",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemRecordFormat": "Lenovo",
+   "OEMDiagnosticDataType": "MPFA",
+   "Description": "This resource is used to represent a log entry for log services for a Redfish implementation.",
+   "EntryType": "Oem",
+   "AdditionalDataURI": null,
+   "Id": "MPFA"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LogEntryCollection.LogEntryCollection",
+ "Name": "DiagnosticLogEntryCollection",
+ "@odata.type": "#LogEntryCollection.LogEntryCollection",
+ "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries",
+ "Members@odata.count": 3,
+ "Description": "A collection of DiagnosticLogEntry resource instances."
+}

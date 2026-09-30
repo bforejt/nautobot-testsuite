@@ -1,0 +1,83 @@
+{
+  "@odata.type": "#StorageCollection.StorageCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Storage",
+  "Name": "StorageCollection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.type": "#Storage.v1_9_0.Storage",
+      "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3",
+      "@odata.etag": "\"r1\"",
+      "Id": "RAID_Slot3",
+      "Name": "ThinkSystem RAID 530-8i PCIe 12Gb Adapter",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "StorageControllers": [
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3#/StorageControllers/0",
+          "MemberId": "0",
+          "Name": "RAID 530-8i",
+          "Manufacturer": "Lenovo",
+          "Model": "ThinkSystem RAID 530-8i PCIe 12Gb Adapter",
+          "FirmwareVersion": "50.9.1-3639",
+          "SerialNumber": "SP00000001",
+          "CacheSummary": {
+            "TotalCacheSizeMiB": 2048
+          },
+          "SupportedDeviceProtocols": [
+            "SAS",
+            "SATA"
+          ],
+          "Status": {
+            "State": "Enabled",
+            "Health": "OK"
+          },
+          "Oem": {
+            "Lenovo": {
+              "@odata.type": "#LenovoStorage.v1_0_0.LenovoStorageController",
+              "SupportedRaidLevels": "RAID 1, RAID 0,RAID 10, RAID 5",
+              "Mode": "RAID",
+              "MinStripeSizeBytes": 65536,
+              "MaxStripeSizeBytes": 1048576,
+              "Battery": {
+                "DesignCapacity": "3500 J",
+                "FullChargeCapacity": "3300 J",
+                "RemainingCapacity": "3100 J",
+                "DesignVoltageMV": 9500,
+                "VoltageMV": 9420,
+                "CurrentMA": 0,
+                "TemperatureCelsius": 31,
+                "ProductName": "CacheVault",
+                "Manufacturer": "LSI",
+                "SerialNumber": "CV00000001",
+                "BatteryType": "SuperCap",
+                "OperationalStatus": "Optimal",
+                "Chemistry": "N/A"
+              }
+            }
+          }
+        }
+      ],
+      "Drives": [
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.0"
+        },
+        {
+          "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.1"
+        }
+      ],
+      "Drives@odata.count": 2,
+      "Volumes": {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Volumes"
+      },
+      "Actions": {
+        "#Storage.SetEncryptionKey": {
+          "target": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Actions/Storage.SetEncryptionKey"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "@odata.type": "#Certificate.v1_5_0.Certificate",
+  "@odata.id": "/redfish/v1/AccountService/LDAP/Certificates/1",
+  "@odata.etag": "\"c2\"",
+  "@odata.context": "/redfish/v1/$metadata#Certificate.Certificate",
+  "Id": "1",
+  "Name": "LDAP Certificate",
+  "Description": "Hand-built from the DMTF Certificate schema: the self-signed root CA an LDAP-over-TLS server is trusted by, naming a contact e-mail; every value an invention.",
+  "CertificateString": "-----BEGIN CERTIFICATE-----\nTk9UIEEgUkVBTCBDRVJUSUZJQ0FURQ==\n-----END CERTIFICATE-----\n",
+  "CertificateType": "PEM",
+  "Subject": {
+    "CommonName": "Example Root CA",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "PKI",
+    "Country": "US",
+    "Email": "pki-contact@example.com"
+  },
+  "Issuer": {
+    "CommonName": "Example Root CA",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "PKI",
+    "Country": "US",
+    "Email": "pki-contact@example.com"
+  },
+  "ValidNotBefore": "2016-06-01T00:00:00Z",
+  "ValidNotAfter": "2026-06-01T00:00:00Z",
+  "KeyUsage": [
+    "KeyCertSign",
+    "CRLSigning"
+  ],
+  "SerialNumber": "01",
+  "Fingerprint": "F9:E8:D7:C6:B5:A4:93:82:71:60:5F:4E:3D:2C:1B:0A:F9:E8:D7:C6:B5:A4:93:82:71:60:5F:4E:3D:2C:1B:0A",
+  "FingerprintHashAlgorithm": "TPM_ALG_SHA256",
+  "SignatureAlgorithm": "sha256WithRSAEncryption"
+}

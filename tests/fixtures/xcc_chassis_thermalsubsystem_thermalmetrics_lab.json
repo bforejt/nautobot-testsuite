@@ -1,0 +1,40 @@
+{
+ "TemperatureSummaryCelsius": {
+  "Exhaust": {
+   "Reading": null,
+   "DataSourceUri": null
+  },
+  "Ambient": {
+   "Reading": 21,
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/208L0"
+  },
+  "Intake": {
+   "Reading": 21,
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/208L0"
+  }
+ },
+ "@odata.context": "/redfish/v1/$metadata#ThermalMetrics.ThermalMetrics",
+ "Name": "Thermal Metrics",
+ "@odata.type": "#ThermalMetrics.v1_0_1.ThermalMetrics",
+ "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/ThermalMetrics",
+ "@odata.etag": "\"<hex:19>\"",
+ "Description": "This resource shall represent the thermal metrics of a chassis for a Redfish implementation.",
+ "Id": "ThermalMetrics",
+ "TemperatureReadingsCelsius": [
+  {
+   "PhysicalContext": "CPU",
+   "Reading": 43,
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/228L0"
+  },
+  {
+   "PhysicalContext": "CPU",
+   "Reading": -51,
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/235L0"
+  },
+  {
+   "PhysicalContext": "Intake",
+   "Reading": 21,
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/208L0"
+  }
+ ]
+}

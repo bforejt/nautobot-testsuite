@@ -1,0 +1,25 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#EventDestinationCollection.EventDestinationCollection",
+ "Name": "Subscriptions",
+ "@odata.type": "#EventDestinationCollection.EventDestinationCollection",
+ "@odata.id": "/redfish/v1/EventService/Subscriptions",
+ "@Redfish.CollectionCapabilities": {
+  "@odata.type": "#CollectionCapabilities.v1_3_0.CollectionCapabilities",
+  "Capabilities": [
+   {
+    "Links": {
+     "TargetCollection": {
+      "@odata.id": "/redfish/v1/EventService/Subscriptions"
+     }
+    },
+    "CapabilitiesObject": {
+     "@odata.id": "/redfish/v1/EventService/Subscriptions/Capabilities"
+    }
+   }
+  ]
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [],
+ "Description": "This resource represents a Resource Collection of EventDestination instances for a Redfish implementation.",
+ "Members@odata.count": 0
+}

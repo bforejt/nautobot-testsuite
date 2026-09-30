@@ -1,0 +1,40 @@
+{
+ "Id": "CertificateService",
+ "Name": "Certificate Service",
+ "@odata.type": "#CertificateService.v1_0_4.CertificateService",
+ "@odata.id": "/redfish/v1/CertificateService",
+ "CertificateLocations": {
+  "@odata.id": "/redfish/v1/CertificateService/CertificateLocations"
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "Description": "This resource is used to represent a certificate service for a Redfish implementation.",
+ "Actions": {
+  "#CertificateService.GenerateCSR": {
+   "target": "/redfish/v1/CertificateService/Actions/CertificateService.GenerateCSR",
+   "title": "Generate a CSR file.",
+   "KeyCurveId@Redfish.AllowableValues": [
+    "TPM_ECC_NIST_P384"
+   ],
+   "KeyPairAlgorithm@Redfish.AllowableValues": [
+    "TPM_ALG_ECDH",
+    "TPM_ALG_RSA"
+   ],
+   "KeyBitLength@Redfish.AllowableValues": [
+    "2048"
+   ],
+   "KeyUsage@Redfish.AllowableValues": [
+    "DigitalSignature",
+    "NonRepudiation",
+    "KeyEncipherment"
+   ]
+  },
+  "#CertificateService.ReplaceCertificate": {
+   "target": "/redfish/v1/CertificateService/Actions/CertificateService.ReplaceCertificate",
+   "CertificateType@Redfish.AllowableValues": [
+    "PEM"
+   ],
+   "title": "Replace an existing certificate."
+  }
+ },
+ "@odata.context": "/redfish/v1/$metadata#CertificateService.CertificateService"
+}

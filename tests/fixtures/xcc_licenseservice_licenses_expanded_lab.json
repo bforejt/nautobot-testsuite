@@ -1,0 +1,10 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [],
+ "@odata.context": "/redfish/v1/$metadata#LicenseCollection.LicenseCollection",
+ "Name": "LicenseCollection",
+ "@odata.type": "#LicenseCollection.LicenseCollection",
+ "@odata.id": "/redfish/v1/LicenseService/Licenses",
+ "Description": "A collection of Licenses resource instances.",
+ "Members@odata.count": 0
+}

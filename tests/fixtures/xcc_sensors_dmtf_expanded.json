@@ -1,0 +1,161 @@
+{
+  "@odata.type": "#SensorCollection.SensorCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/Sensors",
+  "@odata.etag": "\"s-dmtf\"",
+  "Name": "Sensor Collection",
+  "Members@odata.count": 12,
+  "Members": [
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/InletTemp",
+      "@odata.etag": "\"s1\"",
+      "Id": "InletTemp",
+      "Name": "Inlet Temperature",
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Reading": 22.5,
+      "ReadingTime": "2026-09-30T10:15:00+00:00",
+      "PeakReading": 26.0,
+      "PeakReadingTime": "2026-09-29T14:02:00+00:00",
+      "PhysicalContext": "Intake",
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Thresholds": {
+        "UpperCaution": {"Reading": 40, "Activation": "Increasing"},
+        "UpperCautionUser": {"Reading": 35, "Activation": "Increasing"},
+        "UpperCritical": {"Reading": 45, "Activation": "Increasing"},
+        "LowerCritical": {"Reading": null, "Activation": "Decreasing"}
+      }
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/ExhaustTemp",
+      "Id": "ExhaustTemp",
+      "Name": "Exhaust Temperature",
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Reading": 31.0,
+      "ReadingTime": "2026-09-30T10:15:00+00:00",
+      "PhysicalContext": "Exhaust",
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Thresholds": {"UpperCritical": {"Reading": 70, "Activation": "Increasing"}}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/CPU1Temp",
+      "Id": "CPU1Temp",
+      "Name": "CPU1 Temperature",
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Reading": 58.0,
+      "PhysicalContext": "CPU",
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Thresholds": {
+        "UpperCritical": {"Reading": 95, "Activation": "Increasing"},
+        "UpperFatal": {"Reading": 100, "Activation": "Increasing"}
+      }
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/DIMMA1Temp",
+      "Id": "DIMMA1Temp",
+      "Name": "DIMM Temperature",
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Reading": 41.0,
+      "PhysicalContext": "Memory",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/DIMMB1Temp",
+      "Id": "DIMMB1Temp",
+      "Name": "DIMM Temperature",
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Reading": 39.0,
+      "PhysicalContext": "Memory",
+      "Status": {"State": "Enabled", "Health": "Warning"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/VR_CPU1",
+      "Id": "VR_CPU1",
+      "Name": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Reading": 1.8,
+      "VoltageType": "DC",
+      "PhysicalContext": "VoltageRegulator",
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Thresholds": {}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/PS1InputPower",
+      "Id": "PS1InputPower",
+      "Name": "PSU1 Input Power",
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Reading": 212.0,
+      "PhysicalContext": "PowerSupply",
+      "PhysicalSubContext": "Input",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/PS2InputPower",
+      "Id": "PS2InputPower",
+      "Name": "PSU2 Input Power",
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Reading": null,
+      "PhysicalContext": "PowerSupply",
+      "PhysicalSubContext": "Input",
+      "Status": {"State": "Absent"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/AmbientHumidity",
+      "Id": "AmbientHumidity",
+      "Name": "Ambient Humidity",
+      "ReadingType": "Humidity",
+      "ReadingUnits": "%",
+      "Reading": 38.0,
+      "PhysicalContext": "Room",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/ChassisEnergy",
+      "Id": "ChassisEnergy",
+      "Name": "Chassis Energy",
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kW.h",
+      "Reading": 1234.5,
+      "PhysicalContext": "Chassis",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/Fan1",
+      "Id": "Fan1",
+      "Name": "Fan 1",
+      "ReadingType": "Rotational",
+      "ReadingUnits": "{rev}/min",
+      "Reading": 7200,
+      "SpeedRPM": 7200,
+      "PhysicalContext": "Fan",
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Thresholds": {"LowerCritical": {"Reading": 1000, "Activation": "Decreasing"}}
+    },
+    {
+      "@odata.type": "#Sensor.v1_5_0.Sensor",
+      "@odata.id": "/redfish/v1/Chassis/1/Sensors/Intrusion",
+      "Id": "Intrusion",
+      "Name": "Chassis Intrusion",
+      "Reading": 0,
+      "PhysicalContext": "Chassis",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    }
+  ]
+}

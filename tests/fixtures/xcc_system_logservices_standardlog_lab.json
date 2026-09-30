@@ -1,0 +1,63 @@
+{
+ "MaxNumberOfRecords": 2048,
+ "OverWritePolicy": "WrapsWhenFull",
+ "Id": "StandardLog",
+ "Name": "LogService",
+ "@odata.type": "#LogService.v1_3_0.LogService",
+ "Actions": {
+  "Oem": {
+   "#LenovoLogService.GetLogEntriesBySequenceNumber": {
+    "title": "GetLogEntriesBySequenceNumber",
+    "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.GetLogEntriesBySequenceNumber"
+   },
+   "#LenovoLogService.GetLogEntriesByTotalSequenceNumber": {
+    "title": "GetLogEntriesByTotalSequenceNumber",
+    "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.GetLogEntriesByTotalSequenceNumber"
+   },
+   "#LenovoLogService.ClearSpecifiedLog": {
+    "title": "ClearSpecifiedLog",
+    "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.ClearSpecifiedLog"
+   }
+  },
+  "#LogService.ClearLog": {
+   "title": "ClearLog",
+   "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/LogService.ClearLog"
+  }
+ },
+ "DateTimeLocalOffset": "-05:00",
+ "@odata.id": "/redfish/v1/Systems/1/LogServices/StandardLog",
+ "@odata.etag": "\"<hex:21>\"",
+ "DateTime": "2026-09-29T22:29:32-05:00",
+ "ServiceEnabled": true,
+ "LogEntryType": "Multiple",
+ "Description": "This resource is used to represent a log service for a Redfish implementation.",
+ "Entries": {
+  "@odata.id": "/redfish/v1/Systems/1/LogServices/StandardLog/Entries"
+ },
+ "Oem": {
+  "Lenovo": {
+   "PlatformLastSeqNum": 140,
+   "AuditHiddenLastSeqNum": 40,
+   "AuditLastSeqNum": 176,
+   "AuditLogCapabilities": [
+    "None"
+   ],
+   "PlatformFirstSeqNum": 1,
+   "PlatformHiddenLastSeqNum": 45,
+   "DesiredCategories": 2147483684,
+   "SupportedCategories": 3087007935,
+   "PlatformHiddenFirstSeqNum": 1,
+   "AuditHiddenFirstSeqNum": 1,
+   "VMMoveCategory": [
+    {
+     "VMMoveCategoryBit": 0,
+     "VMMoveCategoryType": "VMEFlag",
+     "VMMoveCategoryName": "RAS event VM movement support"
+    }
+   ],
+   "AuditFirstSeqNum": 1,
+   "@odata.type": "#LenovoLogService.v1_0_0.LenovoLogServiceProperties"
+  }
+ },
+ "@odata.context": "/redfish/v1/$metadata#LogService.LogService"
+}

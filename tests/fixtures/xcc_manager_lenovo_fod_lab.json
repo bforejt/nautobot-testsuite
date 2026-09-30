@@ -1,0 +1,13 @@
+{
+ "Id": "FoD",
+ "Name": "Activation Key Management",
+ "@odata.type": "#LenovoFoDService.v1_0_0.LenovoFoDService",
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD",
+ "@odata.etag": "\"<hex:19>\"",
+ "Keys": {
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD/Keys"
+ },
+ "Tier": "Tier1",
+ "Description": "This resource is used to represent a FoD service for a Redfish implementation.",
+ "@odata.context": "/redfish/v1/$metadata#LenovoFoDService.LenovoFoDService"
+}

@@ -1,0 +1,14 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Managers/1/HostInterfaces/1"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#HostInterfaceCollection.HostInterfaceCollection",
+ "Name": "HostInterfaceCollection",
+ "@odata.type": "#HostInterfaceCollection.HostInterfaceCollection",
+ "@odata.id": "/redfish/v1/Managers/1/HostInterfaces",
+ "Members@odata.count": 1,
+ "Description": "A collection of HostInterface resource instances."
+}

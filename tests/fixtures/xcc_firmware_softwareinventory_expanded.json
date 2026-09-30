@@ -1,0 +1,35 @@
+{
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "@odata.id": "/redfish/v1/UpdateService/SoftwareInventory",
+  "@odata.etag": "\"s1\"",
+  "Name": "Software Inventory Collection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#SoftwareInventory.v1_4_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/SoftwareInventory/Driver-i40e",
+      "@odata.etag": "\"s2\"",
+      "Id": "Driver-i40e",
+      "Name": "Intel(R) Ethernet driver",
+      "Version": "2.22.20",
+      "SoftwareId": "DRV-i40e",
+      "Updateable": false,
+      "ReleaseDate": "2024-05-01T00:00:00Z",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#SoftwareInventory.v1_4_0.SoftwareInventory",
+      "@odata.id": "/redfish/v1/UpdateService/SoftwareInventory/Agent-ISM",
+      "@odata.etag": "\"s3\"",
+      "Id": "Agent-ISM",
+      "Name": "Integrated service module",
+      "Version": "4.1.0",
+      "SoftwareId": "AGENT-ISM",
+      "Updateable": true,
+      "ReleaseDate": "2025-01-15T00:00:00Z"
+    }
+  ]
+}

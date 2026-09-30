@@ -1,0 +1,24 @@
+{
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService",
+ "@odata.context": "/redfish/v1/$metadata#LenovoDateTimeService.LenovoDateTimeService",
+ "Name": "Date Time",
+ "@odata.type": "#LenovoDateTimeService.v1_0_0.LenovoDateTimeService",
+ "Actions": {
+  "#LenovoDateTimeService.ImmediatelySync": {
+   "title": "ImmediatelySync",
+   "target": "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService/Actions/LenovoDateTimeService.ImmediatelySync"
+  }
+ },
+ "NTPServerAddresses": [
+  "192.0.2.1"
+ ],
+ "SettingMethod": "SyncwithNTP",
+ "@odata.etag": "\"<hex:19>\"",
+ "HostTimeFormat": "UTC",
+ "UTCOffset": "-5:00-Eastern",
+ "AutoDST": true,
+ "Description": "This resource is used to represent the manager Date and Time setting for a Redfish implementation.",
+ "Id": "DateTimeService",
+ "Frequency": 600,
+ "DateTime": "2026-09-29T22:30:22-05:00"
+}

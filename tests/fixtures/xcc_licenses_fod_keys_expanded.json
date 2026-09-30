@@ -1,0 +1,45 @@
+{
+  "@odata.type": "#LenovoFoDKeyCollection.LenovoFoDKeyCollection",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD/Keys",
+  "@odata.etag": "\"fod-keys\"",
+  "@odata.context": "/redfish/v1/$metadata#LenovoFoDKeyCollection.LenovoFoDKeyCollection",
+  "Name": "LenovoFoDKeyCollection",
+  "Description": "Hand-built: two activation keys spelled as Lenovo's LenovoFoDKey schema names its leaves (plan Appendix B: IdTypes[], Identifier, DescTypeCode, Status, Expires, UseCount, UseLimit, Bytes[]) — one with every leaf, one serving none. The lab SE350 serves an empty Keys collection and no populated key has been observed, so each <placeholder:...> string stands for a value this repository has not seen served; every other value is an invention. Identifier and Bytes are seeded to prove they never reach raw, context or a key.",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#LenovoFoDKey.v1_0_0.LenovoFoDKey",
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD/Keys/1",
+      "@odata.etag": "\"fod-key-1\"",
+      "Id": "1",
+      "Name": "Example Feature Key",
+      "Description": "Example feature activation key",
+      "IdTypes": [
+        "<placeholder:IdTypes 2>",
+        "<placeholder:IdTypes 1>"
+      ],
+      "Identifier": "IDENTIFIER-INVENTED-0001",
+      "DescTypeCode": "<placeholder:DescTypeCode>",
+      "Status": "<placeholder:Status>",
+      "Expires": "<placeholder:Expires>",
+      "UseCount": 1,
+      "UseLimit": 5,
+      "Bytes": [
+        73,
+        78,
+        86,
+        69,
+        78,
+        84,
+        69,
+        68
+      ]
+    },
+    {
+      "@odata.type": "#LenovoFoDKey.v1_0_0.LenovoFoDKey",
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD/Keys/2",
+      "@odata.etag": "\"fod-key-2\"",
+      "Id": "2"
+    }
+  ]
+}

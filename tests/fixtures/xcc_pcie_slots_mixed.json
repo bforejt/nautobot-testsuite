@@ -1,0 +1,110 @@
+{
+  "@odata.type": "#PCIeSlots.v1_5_0.PCIeSlots",
+  "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots",
+  "@odata.etag": "\"ps1\"",
+  "@odata.context": "/redfish/v1/$metadata#PCIeSlots.PCIeSlots",
+  "Id": "PCIeSlots",
+  "Name": "PCIe Slots",
+  "Slots": [
+    {
+      "SlotType": "FullLength",
+      "PCIeType": "Gen4",
+      "Lanes": 16,
+      "HotPluggable": false,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "PCIe 1",
+          "LocationType": "Slot",
+          "LocationOrdinalValue": 1
+        }
+      },
+      "Links": {
+        "PCIeDevice@odata.count": 1,
+        "PCIeDevice": [
+          {
+            "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_1"
+          }
+        ]
+      }
+    },
+    {
+      "SlotType": "HalfLength",
+      "PCIeType": "Gen3",
+      "Lanes": 8,
+      "HotPluggable": true,
+      "Status": {
+        "State": "Absent"
+      },
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "PCIe 2",
+          "LocationType": "Slot",
+          "LocationOrdinalValue": 2
+        }
+      },
+      "Links": {
+        "PCIeDevice@odata.count": 0,
+        "PCIeDevice": []
+      }
+    },
+    {
+      "SlotType": "LowProfile",
+      "PCIeType": "Gen3",
+      "Lanes": 4,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "",
+          "LocationType": "Slot"
+        }
+      }
+    },
+    {
+      "SlotType": "FullLength",
+      "PCIeType": "Gen4",
+      "Lanes": 8,
+      "HotPluggable": false,
+      "Status": {
+        "State": "Enabled",
+        "Health": "Warning"
+      },
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "Riser 1",
+          "LocationType": "Slot",
+          "LocationOrdinalValue": 3
+        }
+      },
+      "Links": {
+        "PCIeDevice@odata.count": 2,
+        "PCIeDevice": [
+          {
+            "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/riser_1b"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/riser_1a"
+          }
+        ]
+      }
+    },
+    {
+      "Status": {
+        "State": "Absent"
+      },
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "Riser 1",
+          "LocationType": "Slot",
+          "LocationOrdinalValue": 4
+        }
+      }
+    }
+  ]
+}

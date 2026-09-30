@@ -1,0 +1,158 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "UUID": "7FA59B17-2C3C-1CC6-B740-167C4FEA6C9F",
+   "ThermalSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem"
+   },
+   "Location": {
+    "Placement": {
+     "Rack": "",
+     "RackOffset": 1,
+     "RackOffsetUnits": "EIA_310"
+    },
+    "Contacts": [
+     {
+      "ContactName": ""
+     }
+    ],
+    "PostalAddress": {
+     "Name": "REDACTED",
+     "Location": "",
+     "Building": "",
+     "Room": ""
+    },
+    "PartLocation": {}
+   },
+   "@odata.etag": "\"<hex:22>\"",
+   "AssetTag": "",
+   "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal"
+   },
+   "Oem": {
+    "Lenovo": {
+     "HasSwitchBoard": false,
+     "ProductName": "ThinkSystem SE350",
+     "FruPartNumber": "02JJ056",
+     "@odata.type": "#LenovoChassis.v1_0_0.LenovoChassisProperties",
+     "LEDs": {
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs"
+     },
+     "SystemBoardSerialNumber": "S2AQ3W89896",
+     "Slots": {
+      "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots"
+     }
+    }
+   },
+   "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+   },
+   "IndicatorLED": "Off",
+   "PCIeDevices": {
+    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices"
+   },
+   "EnvironmentMetrics": {
+    "@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics"
+   },
+   "EnvironmentalClass": "A4",
+   "PartNumber": "SB27A67152",
+   "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters"
+   },
+   "Links": {
+    "ManagersInChassis": [
+     {
+      "@odata.id": "/redfish/v1/Managers/1"
+     }
+    ],
+    "PoweredBy": [],
+    "ComputerSystems": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1"
+     }
+    ],
+    "Drives": [],
+    "CooledBy": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0"
+     },
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1"
+     },
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2"
+     }
+    ],
+    "Processors": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+     }
+    ],
+    "ManagedBy": [
+     {
+      "@odata.id": "/redfish/v1/Managers/1"
+     }
+    ],
+    "PCIeDevices": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+     },
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+     },
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+     },
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+     }
+    ],
+    "Storage": []
+   },
+   "HeightMm": 44.45,
+   "PowerState": "On",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Model": "7Z46CTO1WW",
+   "MaxPowerWatts": null,
+   "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/1/Sensors"
+   },
+   "MinPowerWatts": null,
+   "SerialNumber": "L261500J",
+   "Id": "1",
+   "Name": "Chassis",
+   "@odata.type": "#Chassis.v1_19_0.Chassis",
+   "@odata.id": "/redfish/v1/Chassis/1",
+   "SKU": "7Z46CTO1WW",
+   "Description": "This resource is used to represent a chassis or other physical enclosure for a Redfish implementation.",
+   "Memory": {
+    "@odata.id": "/redfish/v1/Systems/1/Memory"
+   },
+   "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+   },
+   "Manufacturer": "Lenovo",
+   "@odata.context": "/redfish/v1/$metadata#Chassis.Chassis",
+   "ChassisType": "StandAlone",
+   "Controls": {
+    "@odata.id": "/redfish/v1/Chassis/1/Controls"
+   },
+   "Power": {
+    "@odata.id": "/redfish/v1/Chassis/1/Power"
+   },
+   "PCIeSlots": {
+    "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots"
+   }
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#ChassisCollection.ChassisCollection",
+ "Name": "ChassisCollection",
+ "@odata.type": "#ChassisCollection.ChassisCollection",
+ "@odata.id": "/redfish/v1/Chassis",
+ "Description": "A collection of Chassis resource instances.",
+ "Members@odata.count": 1
+}

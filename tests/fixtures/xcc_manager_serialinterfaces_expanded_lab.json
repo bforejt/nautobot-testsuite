@@ -1,0 +1,35 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "BitRate": "115200",
+   "InterfaceEnabled": true,
+   "@odata.context": "/redfish/v1/$metadata#SerialInterface.SerialInterface",
+   "FlowControl": "None",
+   "@odata.type": "#SerialInterface.v1_1_8.SerialInterface",
+   "@odata.id": "/redfish/v1/Managers/1/SerialInterfaces/1",
+   "Name": "Serial Interface",
+   "@odata.etag": "\"<hex:19>\"",
+   "Id": "1",
+   "DataBits": "8",
+   "SignalType": "Rs232",
+   "Description": "Serial port redirection of the host.",
+   "Oem": {
+    "Lenovo": {
+     "CLIMode": "UserDefined",
+     "@odata.type": "#LenovoSerialInterface.v1_0_0.LenovoSerialInterfaceProperties",
+     "SerialInterfaceState": "Enabled",
+     "EnterCLIKeySequence": "^[("
+    }
+   },
+   "StopBits": "1",
+   "Parity": "None"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#SerialInterfaceCollection.SerialInterfaceCollection",
+ "Name": "SerialInterfaceCollection",
+ "@odata.type": "#SerialInterfaceCollection.SerialInterfaceCollection",
+ "@odata.id": "/redfish/v1/Managers/1/SerialInterfaces",
+ "Members@odata.count": 1,
+ "Description": "A collection of SerialInterface resource instances."
+}

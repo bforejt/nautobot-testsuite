@@ -1,0 +1,61 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "TransferProtocolType": null,
+   "ImageName": null,
+   "@odata.context": "/redfish/v1/$metadata#VirtualMedia.VirtualMedia",
+   "@odata.etag": "\"<hex:19>\"",
+   "UserName": null,
+   "Password": null,
+   "Id": "RDOC1",
+   "Name": "VirtualMedia",
+   "MediaTypes": [
+    "CD",
+    "DVD",
+    "Floppy",
+    "USBStick"
+   ],
+   "@odata.id": "/redfish/v1/Managers/1/VirtualMedia/RDOC1",
+   "@odata.type": "#VirtualMedia.v1_5_1.VirtualMedia",
+   "ConnectedVia": "NotConnected",
+   "TransferMethod": null,
+   "VerifyCertificate": false,
+   "Description": "This resource shall be used to represent a virtual media service for a Redfish implementation.",
+   "Inserted": false,
+   "Image": null,
+   "WriteProtected": true
+  },
+  {
+   "TransferProtocolType": null,
+   "ImageName": null,
+   "@odata.context": "/redfish/v1/$metadata#VirtualMedia.VirtualMedia",
+   "@odata.etag": "\"<hex:19>\"",
+   "UserName": null,
+   "Password": null,
+   "Id": "RDOC2",
+   "Name": "VirtualMedia",
+   "@odata.type": "#VirtualMedia.v1_5_1.VirtualMedia",
+   "@odata.id": "/redfish/v1/Managers/1/VirtualMedia/RDOC2",
+   "MediaTypes": [
+    "CD",
+    "DVD",
+    "Floppy",
+    "USBStick"
+   ],
+   "ConnectedVia": "NotConnected",
+   "TransferMethod": null,
+   "VerifyCertificate": false,
+   "Description": "This resource shall be used to represent a virtual media service for a Redfish implementation.",
+   "Inserted": false,
+   "Image": null,
+   "WriteProtected": true
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#VirtualMediaCollection.VirtualMediaCollection",
+ "Name": "VirtualMediaCollection",
+ "@odata.type": "#VirtualMediaCollection.VirtualMediaCollection",
+ "@odata.id": "/redfish/v1/Managers/1/VirtualMedia",
+ "Members@odata.count": 2,
+ "Description": "A collection of VirtualMedia resource instances"
+}

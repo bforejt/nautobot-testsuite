@@ -1,0 +1,54 @@
+{
+  "@odata.type": "#Drive.v1_9_0.Drive",
+  "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.1",
+  "@odata.etag": "\"d1\"",
+  "Id": "Disk.1",
+  "Name": "960GB 2.5in SATA SSD",
+  "Manufacturer": "Samsung",
+  "Model": "MZ7LH960HAJR",
+  "Revision": "HXT7404Q",
+  "SerialNumber": "S4NFNA0000002",
+  "CapacityBytes": 960197124096,
+  "MediaType": "SSD",
+  "Protocol": "SATA",
+  "BlockSizeBytes": 512,
+  "NegotiatedSpeedGbs": 6,
+  "CapableSpeedGbs": 6,
+  "RotationSpeedRPM": 0,
+  "HotspareType": "None",
+  "WriteCacheEnabled": false,
+  "FailurePredicted": false,
+  "PredictedMediaLifeLeftPercent": 97,
+  "EncryptionAbility": "None",
+  "EncryptionStatus": "Unencrypted",
+  "PhysicalLocation": {
+    "PartLocation": {
+      "ServiceLabel": "Bay 1",
+      "LocationType": "Bay"
+    }
+  },
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Links": {
+    "Volumes": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Volumes/1"
+      }
+    ]
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoDrive.v1_0_0.LenovoDrive",
+      "Temperature": 35,
+      "DriveStatus": "Online",
+      "SMARTData": "AAEC"
+    }
+  },
+  "Actions": {
+    "#Drive.SecureErase": {
+      "target": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.1/Actions/Drive.SecureErase"
+    }
+  }
+}

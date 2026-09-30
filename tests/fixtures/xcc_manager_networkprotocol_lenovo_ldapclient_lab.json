@@ -1,0 +1,44 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#LenovoLDAPClient.LenovoLDAPClient",
+ "RootDN": null,
+ "LDAPServers": {
+  "SearchDomain": null,
+  "Server1HostName_IPAddress": "0.0.0.0",
+  "Server1Port": "389",
+  "Method": "Pre_Configured",
+  "Server2HostName_IPAddress": null,
+  "Server2Port": "389",
+  "Server3HostName_IPAddress": null,
+  "Server3Port": "389",
+  "Server4HostName_IPAddress": null,
+  "Server4Port": "389"
+ },
+ "Authorization": "LDAPServer",
+ "@odata.etag": "\"<hex:21>\"",
+ "LoginPermissionAttribute": null,
+ "Id": "LDAPClient",
+ "UIDSearchAttribute": "sAMAccountName",
+ "@odata.type": "#LenovoLDAPClient.v1_0_0.LenovoLDAPClient",
+ "GroupSearchAttribute": "memberOf",
+ "ActiveDirectory": {
+  "ForestName": null,
+  "ServerTargetName": null,
+  "RoleBasedSecurity": false,
+  "Links": {
+   "GroupProfiles": {
+    "@odata.id": "/redfish/v1/AccountService/Oem/Lenovo/GroupProfiles"
+   },
+   "GroupProfiles@Redfish.Deprecated": "The property is deprecated. Please use AccountService/RemoteRoleMapping instead."
+  }
+ },
+ "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient",
+ "BindingMethod": {
+  "ClientDN": null,
+  "ClientPassword": null,
+  "Method": "Anonymously"
+ },
+ "Description": "The resource is used to represent the LDAP client for the manager for a Redfish implementation.",
+ "Name": "LDAP Client",
+ "GroupFilter": null,
+ "ProtocolEnabled": true
+}

@@ -1,0 +1,87 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "ClassCode": "0x020000",
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "DeviceClass": "NetworkController",
+   "SubsystemId": "0x4016",
+   "FunctionType": "Physical",
+   "FunctionId": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "ob_4.00",
+   "Name": "Intel I350 LOM 04:00:00",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.00",
+   "SubsystemVendorId": "0x17aa",
+   "@odata.etag": "\"<hex:19>\"",
+   "Links": {
+    "NetworkDeviceFunctions": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/1.1"
+     }
+    ],
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+    },
+    "EthernetInterfaces": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC3"
+     }
+    ]
+   },
+   "RevisionId": "0x01",
+   "DeviceId": "0x1521",
+   "VendorId": "0x8086",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System."
+  },
+  {
+   "ClassCode": "0x020000",
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "DeviceClass": "NetworkController",
+   "SubsystemId": "0x4016",
+   "FunctionType": "Physical",
+   "FunctionId": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "ob_4.01",
+   "Name": "Intel I350 LOM 04:00:01",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.01",
+   "SubsystemVendorId": "0x17aa",
+   "@odata.etag": "\"<hex:19>\"",
+   "Links": {
+    "NetworkDeviceFunctions": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/2.1"
+     }
+    ],
+    "EthernetInterfaces": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC4"
+     }
+    ],
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+    }
+   },
+   "RevisionId": "0x01",
+   "DeviceId": "0x1521",
+   "VendorId": "0x8086",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System."
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PCIeFunctionCollection.PCIeFunctionCollection",
+ "Name": "PCIeFunctionCollection",
+ "@odata.type": "#PCIeFunctionCollection.PCIeFunctionCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions",
+ "Members@odata.count": 2,
+ "Description": "A collection of PCIeFunction resource instances."
+}

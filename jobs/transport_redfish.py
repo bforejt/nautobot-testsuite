@@ -1,23 +1,26 @@
-"""Read-only Redfish client for the Lenovo XClarity Controller. GET is the only verb.
+"""Read-only Redfish client for a server's BMC (Lenovo XCC first). GET is the only verb.
 
 Same contract as RestconfClient — ``get(path, timeout=, ok_404=)``, a
 ``RedfishError`` carrying the HTTP status, ``ping()``/``probe_get()`` for
 the reachability gate — so the CollectorContext's restconf slot takes it
-unchanged and every ``xcc_*`` check shares the per-run cache.
+unchanged and every ``bmc_*`` check shares the per-run cache.
 
 Three things are specific to a BMC and live here:
 
 - the path fence (``redfish_paths``) runs before every request, on literal
   paths and on server-supplied ``@odata.id`` links alike;
-- GETs to one XCC are paced at least ``REDFISH_MIN_INTERVAL`` apart (SE350
+- GETs to one BMC are paced at least ``REDFISH_MIN_INTERVAL`` apart (SE350
   Redfish has been reported to go out of service under request stress);
 - a per-check GET budget (``budget()``, reached through ``ctx.budget``):
   the GET that would exceed a declared budget raises instead of being sent,
   so a capture is complete-or-refused, never silently partial.
 
-Authentication is HTTP Basic on every GET (``requests.Session.auth``): XCC
-accepts it and no ``SessionService`` session is ever created. Depends only
-on ``requests``.
+Authentication is HTTP Basic on every GET (``requests.Session.auth``): the
+BMC accepts it and no ``SessionService`` session is ever created. On XCC 6.10
+the footprint was measured (2026-09-30): 779 Basic-auth GETs wrote no entry
+to any BMC log and created no session; the pacing stays as prudence, and the
+envelope's transport block still records the GET count and the account.
+Depends only on ``requests``.
 """
 
 import json
@@ -52,27 +55,59 @@ def probe_hint(record):
     """Operator-facing interpretation of a failed reachability probe record."""
     error = str((record or {}).get("error") or "")
     status = (record or {}).get("status")
+    message_id = str((record or {}).get("message_id") or "")
     if _is_tls_failure(record):
         return (
-            "TLS handshake refused by the XCC (default and legacy TLS both tried). "
-            "Check the BMC's HTTPS certificate/TLS settings under BMC Configuration > "
-            "Security in the XCC web UI."
+            "TLS handshake refused by the BMC (default and legacy TLS both tried). "
+            "Check the BMC's HTTPS certificate and TLS settings (on an XCC: BMC "
+            "Configuration > Security in its web UI)."
+        )
+    if "PasswordChangeRequired" in message_id:
+        return (
+            "HTTP %s %s — the account's first-login password change is pending; complete "
+            "it once in the BMC web UI (the suite never writes to a BMC), then re-run."
+            % (status, message_id)
         )
     if status == 401:
-        return "HTTP 401 — credentials rejected; check the Secrets Group values."
+        return "HTTP 401 — credentials rejected; check the BMC's Secrets Group values."
     if status == 403:
         return (
-            "HTTP 403 — authenticated but not authorized; the XCC user needs at least "
-            "the ReadOnly role and Redfish access enabled."
+            "HTTP 403 — authenticated but not authorized; the BMC account needs at least "
+            "a ReadOnly role and Redfish access enabled."
         )
     if status == 404:
         return (
-            "HTTP 404 — HTTPS answers but %s is absent; this is not an XCC (or its "
-            "Redfish service is disabled)." % (C.REDFISH_PROBE_SYSTEM,)
+            "HTTP 404 — HTTPS answers but %s is absent; this is not a Redfish BMC (or its "
+            "Redfish service is disabled)." % (C.REDFISH_PROBE_SYSTEMS,)
         )
     if status is None:
         return "No HTTP response — TCP connectivity problem: %s" % (error or "unknown")
-    return "HTTP %s from the XCC." % (status,)
+    return "HTTP %s from the BMC." % (status,)
+
+
+def _error_message(resp):
+    """(MessageId, Message) of a Redfish error body, or (None, None) when it is not one.
+
+    Redfish errors are ``{"error": {"code": ..., "message": ...,
+    "@Message.ExtendedInfo": [{"MessageId": ..., "Message": ...}]}}``; the
+    first extended-info entry is the specific one (Base.1.12.PasswordChangeRequired
+    on an XCC account whose first-login change is pending).
+    """
+    try:
+        body = resp.json()
+    except ValueError:
+        return None, None
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return None, None
+    infos = error.get("@Message.ExtendedInfo")
+    first = infos[0] if isinstance(infos, list) and infos and isinstance(infos[0], dict) else {}
+    message_id = first.get("MessageId") or error.get("code")
+    message = first.get("Message") or error.get("message")
+    return (
+        str(message_id) if message_id is not None else None,
+        str(message) if message is not None else None,
+    )
 
 
 class _GetBudget:
@@ -105,7 +140,7 @@ class _GetBudget:
 
 
 class RedfishClient:
-    """One XCC, one session. Basic auth over HTTPS, JSON in, GET only."""
+    """One BMC, one requests session. Basic auth over HTTPS, JSON in, GET only."""
 
     transport_label = "redfish"
 
@@ -114,13 +149,17 @@ class RedfishClient:
     ):
         self.host = host
         self.username = username
-        self.base = "https://%s:%s" % (host, port)
+        # An IPv6 literal must be bracketed in a URL (RFC 3986), or the HTTP
+        # library refuses to parse it and no packet is ever sent.
+        literal = "[%s]" % (host,) if ":" in str(host) and not str(host).startswith("[") else host
+        self.base = "https://%s:%s" % (literal, port)
         self.verify = verify
         self.logger = logger
         self.tls_mode = "default"
-        self.gets = 0  # every GET sent, probes included — the AuditLog footprint
+        self.gets = 0  # every GET sent, probes included — the capture's footprint
         self._last_request = None
         self._budget = None
+        self.last_probe = None  # the record of ping()'s last failing (or final) probe
         self.session = requests.Session()
         self.session.auth = (username, password)
         self.session.headers.update({"Accept": "application/json", "OData-Version": "4.0"})
@@ -136,7 +175,7 @@ class RedfishClient:
         self.tls_mode = "legacy"
 
     def budget(self, label, max_gets):
-        """``with client.budget("xcc_inventory", 16):`` — GETs inside count against the cap."""
+        """``with client.budget("bmc_inventory", 16):`` — GETs inside count against the cap."""
         if not isinstance(max_gets, int) or max_gets < 1 or max_gets > C.REDFISH_MAX_CHECK_BUDGET:
             raise RedfishError(
                 "%s: budget must be 1..%d GETs, got %r"
@@ -149,7 +188,7 @@ class RedfishClient:
         return {"account": self.username, "gets": self.gets, "tls_mode": self.tls_mode}
 
     def _pace(self):
-        """Never two GETs closer than REDFISH_MIN_INTERVAL to one XCC."""
+        """Never two GETs closer than REDFISH_MIN_INTERVAL to one BMC."""
         if self._last_request is not None:
             wait = self._last_request + C.REDFISH_MIN_INTERVAL - time.monotonic()
             if wait > 0:
@@ -201,38 +240,49 @@ class RedfishClient:
             ) from exc
 
     def probe_get(self, path, *, timeout=C.REDFISH_GET_TIMEOUT, anonymous=False):
-        """Never-raising evidence recorder: {status, elapsed_ms, content_bytes, error}."""
+        """Never-raising evidence recorder.
+
+        ``{path, status, elapsed_ms, content_bytes, error, message_id, message}``
+        — the last two from a Redfish error body when the BMC sent one (a
+        pending first-login password change is only visible there).
+        """
         record = {
             "path": path,
             "status": None,
             "elapsed_ms": None,
             "content_bytes": 0,
             "error": None,
+            "message_id": None,
+            "message": None,
         }
         try:
             resp = self._send(path, timeout, auth=_Anonymous() if anonymous else None)
             record["status"] = resp.status_code
             record["elapsed_ms"] = int(resp.elapsed.total_seconds() * 1000)
             record["content_bytes"] = len(resp.content)
+            if not resp.ok:
+                record["message_id"], record["message"] = _error_message(resp)
         except (requests.RequestException, RedfishError) as exc:
             record["error"] = str(exc)
         return record
 
     def _probe_all(self):
         """Service root anonymously (reachability, no login recorded), then the
-        system resource with credentials (auth + role). Both must answer 2xx."""
+        Systems collection with credentials (auth + role). Both must answer 2xx."""
         record = self.probe_get(C.REDFISH_SERVICE_ROOT, timeout=30, anonymous=True)
+        self.last_probe = record
         if record["status"] is None or not 200 <= record["status"] < 300:
             return False, record
-        record = self.probe_get(C.REDFISH_PROBE_SYSTEM, timeout=30)
+        record = self.probe_get(C.REDFISH_PROBE_SYSTEMS, timeout=30)
+        self.last_probe = record
         if record["status"] is not None and 200 <= record["status"] < 300:
             return True, record
         return False, record
 
     def ping(self):
-        """True when the service root answers anonymously AND Systems/1 answers
-        with the credentials. One legacy-TLS retry mirrors RestconfClient.ping
-        (BMC HTTPS stacks are the classic TLS-1.3 casualties)."""
+        """True when the service root answers anonymously AND the Systems
+        collection answers with the credentials. One legacy-TLS retry mirrors
+        RestconfClient.ping (BMC HTTPS stacks are the classic TLS-1.3 casualties)."""
         ok, record = self._probe_all()
         if ok:
             return True

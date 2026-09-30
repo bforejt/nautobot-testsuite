@@ -1,0 +1,54 @@
+{
+  "@odata.type": "#VolumeCollection.VolumeCollection",
+  "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Volumes",
+  "Name": "VolumeCollection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.type": "#Volume.v1_6_0.Volume",
+      "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Volumes/1",
+      "@odata.etag": "\"v1\"",
+      "Id": "1",
+      "Name": "boot_mirror",
+      "RAIDType": "RAID1",
+      "VolumeType": "Mirrored",
+      "CapacityBytes": 959656755200,
+      "Encrypted": false,
+      "ReadCachePolicy": "ReadAhead",
+      "WriteCachePolicy": "ProtectedWriteBack",
+      "StripSizeBytes": 262144,
+      "IsBootCapable": true,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Links": {
+        "Drives": [
+          {
+            "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.1"
+          }
+        ]
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoVolume.v1_0_0.LenovoVolumeProperties",
+          "RaidLevel": "RAID 1",
+          "Bootable": true,
+          "AccessPolicy": "ReadWrite",
+          "IOPolicy": "DirectIO",
+          "DriveCachePolicy": "Disable",
+          "SpanDepth": 1,
+          "DiskPerSpan": 2
+        }
+      },
+      "Actions": {
+        "#Volume.Initialize": {
+          "target": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Volumes/1/Actions/Volume.Initialize"
+        }
+      }
+    }
+  ]
+}

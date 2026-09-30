@@ -205,11 +205,142 @@ stays at link state, speed/duplex and CDP/LLDP neighbor; VLAN hints, port
 groups, vmknics, routes, services, sensors and VM state are captured. Walk it
 and rank in this shape.
 
-## Lenovo XCC — switched off
+## BMC (server baseboard management controllers over Redfish; Lenovo XCC walked)
 
-Built and tested, disabled by `constants.XCC_ENABLED` because the BMCs are
-unreachable from the capture worker at present. Nothing to iterate until
-they are reachable.
+A server's BMC is modelled as an Interface on its host Device and captured in
+the host's own snapshot by the vendor-neutral `bmc` family (every entry
+`target: "bmc"`; the envelope's `device.bmc` names the interface, the
+address, the transport and the vendor). The DMTF resources are the family:
+the System, Manager and Chassis ids are resolved per run and recorded in
+every check's `context.resolution`, and a vendor OEM read branches on the
+vendor the BMC reports, recording `not-present` with that vendor where no
+mapping exists. Only Lenovo is mapped. Every row below was walked
+against a gen-1 ThinkSystem SE350 on XCC 6.10: a GET-only crawl of its whole
+Redfish tree (`tools/redfish_walk.py`, 425 resources) and a live run of the
+twelve collectors under their earlier `xcc_*` names (eleven ok, the security
+check not-present by its own rule, none failed, 30 GETs), both repeated with
+the capture account on a ReadOnly-privilege role with identical results; the
+normalizer fixes coded from that walk (the 6.10 spelling of the log sequence
+numbers, the DNS placeholders, SNMP enablement from the Lenovo agent, the
+account names in log messages) are pinned by tests on hand-built payloads.
+The `bmc` family then ran through the capture job on a Nautobot 3.2.5 dev
+stack against the same unit: eleven ok and `bmc_security` not-present again,
+32 GETs in 33 s, no account or person name in raw or the debug trace. Widened
+per `docs/plans/bmc-capture-handoff.md` §5a (PR B), all twelve are ok there
+(48 GETs in 49 s; the shakedown 12/12 ok in 80 GETs, the log's sequence
+numbers unchanged across it). With PR C's ten new checks the family of 22
+is ok there too (87 GETs in 100 s; the shakedown 22/22 in 117 GETs).
+*Captured today* is what the checks carry now.
+
+| Layer | Captured today | Holes remaining | General value of closing each hole |
+| --- | --- | --- | --- |
+| Identity / platform | `bmc_system` (system identity — manufacturer, model, serial, SKU, part number, UUID, asset tag, host name, BIOS version — CPU and memory summaries with health, power state, health and rollup, Lenovo `system_status` verbatim; the TPM modules as keys (count, interface types, firmware); the BMC's own firmware, model, UUID, health, state and console services; reboot count, power-on hours, the BMC clock, boot progress and last reset times in context), `bmc_inventory` (every DIMM with ranks, widths, allowed speeds, module type and the Lenovo FRU number, manufacture date and predictive-failure health — empty slots keyed `Absent` with null identity; every CPU with its CPUID signature, microcode (null on XCC 6.10), maximum speed, TDP and turbo state; every PCIe device, and every PCIe function as a `pciefn\|<device>\|<function>` row with class, vendor/device/subsystem ids and state, which is what names the parts whose device row serves null identity; POST-populated, so an empty collection — or a listed device whose function collection answers empty — is a failed read), `bmc_chassis` (tier 1: chassis and system-board identity, the Lenovo LEDs as `led\|<Name>` rows with colour and state, the indicator LED, the operator-maintained Location record with empty fields read null, and the DMTF intrusion sensor — null on the SE350, which serves no `PhysicalSecurity`), `bmc_pcie_slots` (the DMTF slot table — one slot on the SE350, `PCIe 6`, holding the add-in NIC; its type, generation and lanes are unserved on XCC 6.10 — with state, health, hot-plug and the devices each slot holds, the join to `bmc_inventory`; Lenovo's slot table — five M.2 sockets and the x16 — with connector layout and data width; POST-populated, so an empty table is a failed read) | (a) Whether SR-IOV virtual-function rows follow the host OS's VF enablement (a capture of a host with VFs enabled settles it). (b) Whether XCC 6.10 keeps listing an emptied slot as `Absent` or drops it (a card pull settles it). | (a) Settled by one capture, not a check. (b) Settled by the host-off / card-pull shakedown (plan §7 item 4), not a check. |
+| Firmware & persistence | `bmc_firmware` (every firmware-inventory member — both BMC banks, UEFI, the provisioning manager and its drivers, adapter option ROMs, drives — with version, software id, updateable flag and health, a version on a `-Pending` member being a staged update; `SoftwareInventory` where linked; the image the BMC runs from and Lenovo's backup auto-promotion), `bmc_bios` (every UEFI attribute keyed — 126 on the lab unit — plus `pending\|<Attribute>` for a setting armed for the next reset that differs from the current one, reset-to-defaults pending, and the UEFI admin / power-on password-set flags), `bmc_system` (boot override enabled/target/mode, the SecureBoot trio, the DMTF power-restore policy, power-on/off/cycle delays, power mode and host watchdog — the DMTF policy leaves are unserved on XCC 6.10 and read null there), `bmc_boot` (the boot path: the DMTF order, override, BootNext, retry, fault and TPM policy and HTTP boot URI — on XCC 6.10 only the override and the retry configuration are served; UEFI boot options where linked; on Lenovo the boot manager's current and next orders per member, kept in order, where XCC 6.10 keeps the order; the virtual media slots with any inserted image; the Lenovo remote-control images; a UEFI-populated collection that answers empty is a failed read), `bmc_licenses` (the licence service and Lenovo's tier — Tier1 on the lab unit — every installed licence and every Lenovo feature-on-demand key as rows, both empty on the lab unit, the healthy empty view; licence strings, key bytes and entitlement ids never stored; install dates, remaining time and use counts in context), `bmc_power_policy` (the AC power-restore policy — DMTF and Lenovo, neither served on XCC 6.10, so null there — the Lenovo Wake-on-LAN, power-permission and local-power flags, the host watchdog, the power cap and the Lenovo capping and redundancy settings, the chassis controls — one power-limit control on the lab unit — the Lenovo scheduled power actions and watchdogs as rows; control readings, expired flags and the scheduled actions' JobService twins as rows with the days each fires on — their state in context) | (a) The AC power-restore policy itself: not served over Redfish on XCC 6.10 (plan §12). (b) Whether XCC mirrors each feature-on-demand key as a DMTF licence (both collections are empty on the lab unit). (c) Lenovo remote-map (network share) images: the service is not linked on XCC 6.10, so `bmc_boot` does not read it. | (a) Settled by a firmware that serves it, or read from the UEFI settings if one names it; not a check. (b) Settled by one capture of a unit with a key installed; not a check. (c) Settled by a firmware that links it; one GET. |
+| Environment | `bmc_thermal` (temperature sensors and fans — from `Thermal`, else from `ThermalSubsystem/Fans` keyed the same way: health, state and physical context; a reading keyed only for ambient/intake/inlet/exhaust-class sensors, within 8 °C, and for fans banded at 25 %; every other reading, every threshold, the DTS-style margins and the `ThermalMetrics` temperature summary in context), `bmc_power` (supplies from `Power`, else from `PowerSubsystem/PowerSupplies` with their metrics and `LineInputStatus`; redundancy groups and voltage rails with an in-threshold flag; consumption in context — on the SE350 only the four rails, because its external power adapters are not modelled as supplies), `bmc_sensors` (every member of the Chassis Sensors collection — 89 on the lab unit, 12 numeric and 77 discrete by the `ReadingUnits` rule — keyed by name with reading type, physical context, state, health, units and thresholds; a discrete sensor's reading as an asserted flag, utilisation-class and DTS-style margin readings to context; ambient-class temperatures within 8 °C; the only Redfish view of the SE350's external power adapters, lockdown and chassis-intrusion/movement state, drive, DIMM and M.2 presence and the TPM, Secure Boot and firmware error latches; `EnvironmentMetrics` and the `ThermalMetrics` summary in context; one `$expand` GET, a member walk the budget cannot fit refused) | (a) How an asserted discrete sensor reads (1, a health change, or both) and whether discrete sensors such as the IPMI watchdog, SMM mode, boot progress or TPM lock move between healthy captures. | (a) Settled by a capture with an adapter unplugged and by the stability pair (plan §7 items 4–5); not a check. |
+| L1 | `bmc_host_nics` (host ports as the BMC sees them: link status verbatim, burned-in MAC lower-cased so it joins to `vmware_pnics`, enabled, health; the USB host interface excluded; speed and the collection that carried the ports in context). On the lab unit every onboard port reads `NoLink` with the host up: the host runs on an add-in NIC the BMC has no sideband to. `bmc_network_adapters` (every adapter of the Chassis with its identity, controller firmware — the only adapter-level firmware string beside `bmc_firmware`'s rows — port and function counts, NPAR and LLDP; every port with link status, configured maximum and capable speeds, autonegotiation, flow control and LLDP, from `Ports`, the older `NetworkPorts` spelling in context; every device function with its burned-in MAC — equal to `bmc_host_nics`' MACs on the lab unit — SR-IOV, boot mode, assigned port and its joins to `bmc_host_nics` and `bmc_inventory`; the add-in NIC the BMC has no sideband to keyed with zero rows; iSCSI CHAP credentials scrubbed family-wide; POST-populated, so an empty or contradicted collection is a failed read). | (a) Whether a port's link state follows its cable with the host off. | (a) Settled by one capture with the host off and a cable pulled, not a check. |
+| Storage | `bmc_storage` (controllers — from `StorageControllers[]` or the `Controllers` collection, whichever is filled — with cache size, supported RAID levels, the Lenovo mode and battery status; drives with serial, model, revision, capacity, media type, protocol, health, state, predicted failure, encryption ability and status, location, negotiated speed, rotation, block size, hot-spare type, write cache and Lenovo drive status; volumes with RAID type, encryption, member drives, cache, strip and boot policies and the Lenovo RAID level, access and IO policies; drives only the Chassis lists; predicted media life and drive temperatures in context). Non-RAID M.2 SATA drives enumerate one Storage member per slot with one AHCI controller. | (a) Verification on a RAID unit: every RAID-depth field is coded from the DMTF and Lenovo schemas and hand-built fixtures — the lab unit's M.2 slots serve none of them. | (a) Consumed by disk, RAID and controller-firmware changes on RAID units; settled by one capture of such a unit, not a check. |
+| Management-plane config | `bmc_manager_network` (host name and FQDN; NTP enablement and servers and the Lenovo date-time service — method, servers, UTC offset, DST, sync interval; the DMTF protocol blocks (HTTP, HTTPS, SSH, IPMI, SNMP — the Lenovo SNMPv3 agent answers where the DMTF block does not — VirtualMedia, KVMIP, SSDP, Telnet) and the Lenovo ones (CIM over HTTPS, SLP, SFTP, web over HTTPS), the open-ports list, the SNMPv3 agent and trap enablement, KCS; the management port's addressing, DHCP, DNS servers with the unset placeholders dropped, the Lenovo NIC mode, failover mode, domain and DNS settings (enablement, preferred family, configured servers, dynamic DNS, management-server discovery), IPv6, MTU, VLAN; the Redfish host interface with its credential bootstrapping — enabled with an Administrator role on the lab unit — and the BMC's own address on that USB LAN; link state and the host's OS address as the BMC sees it in context), `bmc_system` (the BMC's address, origin, mask, gateway, VLAN and MAC), `bmc_certificates` (every certificate CertificateLocations lists — on the lab unit the one self-signed HTTPS certificate — with type, subject and issuer names, validity in UTC, key usage and the self-signed flag; PEM bodies never stored, a user certificate's holder names and any certificate e-mail scrubbed; serial, fingerprint where served and days to expiry in context) | (a) The services the plan's `bmc_manager_services` listed that no check keys yet: remote control and remote map, server profile, USB port forwarding and its maps, the serial interfaces, the SNMP agent's contact and location, configuration backup status — whether they become a check of their own is open. (b) Whether XCC 6.10's CertificateLocations lists the LDAP, key-manager, single-sign-on and virtual-media trust certificates once they are configured (all empty on the lab unit). | (a) Consumed by hardening, firmware and BMC-network changes; not derivable; configuration, so stable; 4–6 GETs. (b) Settled by one capture of a unit with a trust certificate installed; if they are not listed, a read of each collection would have to be added. |
+| Security posture | `bmc_security` (every leaf of the vendor security resource keyed by dotted path — TLS mode and minimum level, HTTPS/LDAPS/CIM enablement, firmware rollback, encapsulation mode and allowlist, supported actions on XCC 6.10 — the external key manager's configuration with its certificate collections counted, and the ThinkEdge Security Pack state as nullable scalars; not-present only without a security resource or a vendor mapping), `bmc_system` (the SecureBoot trio, TPM modules), `bmc_manager_network` (which protocols are on, credential bootstrapping), `bmc_accounts` (local accounts keyed by name on the `iosxe_config` local-user precedent — role, enabled, locked, account types, SNMP protocols, bootstrap flag, SSH key count; three accounts and nine empty slots on the lab unit — the roles with their privileges, the password and lockout policy, and every directory provider — LDAP, Active Directory, TACACS+, OAuth2, Lenovo's LDAP client — with its bind name — never its password; logged-in users a count only), and the lockdown and chassis-movement state that the SE350's security resource does not carry, from its discrete sensors (`bmc_sensors`) | (a) Whether the lockout durations XCC 6.10 serves (60 and 60) are seconds, as the DMTF schema says, or minutes, as Lenovo's interface speaks of them. | (a) Settled by reading the configured value in the XCC web interface once; not a check. |
+| Alerting | `bmc_alerting` (the event service's state and retry policy and its SMTP relay; every Redfish subscription with its destination — userinfo, query and fragment never kept — filters, retry policy and state, the subscriber's Context a set/unset flag; the Lenovo alert recipients with their event classes; SNMP traps and targets with communities never keyed; the Lenovo SMTP client; e-mail addresses by domain only, recipient names never kept. On the lab unit subscriptions, recipients and trap targets are empty — the healthy empty view — and the SMTP relay is unconfigured.) | (a) A configured unit: every subscription and recipient row is coded from the schemas and pinned on hand-built payloads only. | (a) Settled by one capture of a unit with a subscription or recipient configured; not a check. |
+| Logs | `bmc_event_log` (the platform log — `PlatformLog`, else `StandardLog`, which on XCC 6.10 interleaves platform and audit events — read whole with no query window: Warning/Critical entries keyed `sel\|<code>\|<Id>` with serviceable flag and who services it (Lenovo or the customer), failing FRU and log type, the rest counted per event code; every unresolved `ActiveLog` condition keyed `active\|<code>\|<Id>` whatever its severity, empty when healthy; the `MaintenanceLog` — firmware-update, configuration and hardware add/remove history — as newest rows in raw with counts and the newest time in context; the platform and audit sequence numbers from the log service resource, SEL wrapping and the SEL service as a probe; every account name a message carries scrubbed before the trace or raw keep a copy, client addresses kept) | (a) Whether `ActiveLog` entry ids are stable per condition (the lab unit's ActiveLog is empty). (b) Whether `SEL` ever exposes entries. | (a) Settled by raising and clearing one condition on the lab unit; if ids renumber, the key moves to the condition's own time. (b) Settled by a capture, not a check. |
+| Tasks | `bmc_tasks` (tier 3, informational: the task and job services' enablement and completed-task retention; every unfinished task and job — a firmware update or configuration restore still running at capture time — with state, status, progress and the request it carries, a job with its recurrence schedule; terminal ones counted by state, with the newest start and end times, in context. On the lab unit `Tasks` is empty and `Jobs` holds the three Suspended scheduled power actions, standing configuration and `bmc_power_policy`'s twins.) | (a) A populated task or a running job: coded from the DMTF schema and pinned on hand-built payloads only. | (a) Settled by a capture taken while a firmware update runs; not a check. |
+
+### BMC open items, ranked by general value
+
+The ten checks of the plan's §5b landed in PR C; what stays open:
+
+1. **The shakedowns the lab unit can still run** (plan §7 items 4–5): the
+   host off (which POST-populated views empty, and whether a port's link
+   state or a slot's occupancy survives), a cable pull, an unplugged power
+   adapter (how an asserted discrete sensor reads), a card pull. Each settles
+   a rule the checks now assume; none is a new check.
+2. **The remaining manager services** — remote control and remote map,
+   server profile, USB port forwarding, the serial interfaces, the SNMP
+   agent's contact and location, configuration backup status: whether they
+   become a `bmc_manager_services` check of their own is the user's call.
+   BMC-network, hardening and management-tool changes.
+3. **Verification on units that have what the lab lacks**: RAID depth in
+   `bmc_storage`, a populated `ActiveLog`, SR-IOV virtual functions, a
+   ThinkEdge security resource, a firmware serving only the Subsystem
+   resources, a configured subscription, recipient, licence, trust
+   certificate or running task — every one coded from the schemas and
+   pinned on hand-built payloads until a capture shows the real shape.
+4. **`bmc_telemetry`** — deferred by decision (metric report definitions;
+   never the values).
+
+**Closed by doctrine or not observable here:** AuditLog entries (never read,
+by doctrine: the capture's own logins would land there; audit sequence
+numbers come from the log service resource, never from its entries — on XCC
+6.10 the audit events share the StandardLog, where `bmc_event_log` counts
+them by code with account names scrubbed); host-OS facts the BMC does not see
+(the booted OS's configuration, VMs and services are the host platform's job
+— `vmware_*` on ESXi; a host whose platform is not supported yet gets its BMC
+captured alone, and `device.host_captured` says so); power-feed circuit
+diversity (whether two feeds sit on separate circuits is a facility record,
+as on IOS-XE); diagnostic dumps (FFDC, screenshots), which are not state; and
+`SessionService`, which the path fence refuses.
+
+**Held by decision:** telemetry metric values (`TelemetryService` reports and
+the Lenovo history containers are volatile and bulky; only the report
+definitions are a candidate, `bmc_telemetry`, deferred).
+
+### What the BMC lab walk settled
+
+From the walk of the gen-1 SE350 on XCC 6.10; the BMC plan's §4 and §12
+hold the detail.
+
+- Resolution and paging: one System, Manager and Chassis, each with member
+  id `1`; the service root names the vendor but no product;
+  `$expand=.($levels=1)` inlines a collection's members, while `$levels=2`
+  inlines a member's own sub-collection resources with their members still
+  bare links (adapter ports and functions, PCIe functions), so those take
+  one `$expand` GET each.
+- Access: all 425 resources answered HTTP 200 to the capture account, on a
+  Supervisor-privilege role and again on a ReadOnly-privilege one, with
+  identical trees, leaves and collector results. The one first-attempt
+  failure was the account's pending first-login password change (an error
+  body carrying `PasswordChangeRequired`), which the probe hint now names.
+- Footprint: 779 Basic-auth GETs, and the collector runs after them, wrote no
+  entry to any BMC log and created no session; the shakedown job measured it
+  again (its platform and audit sequence numbers read the same before and
+  after its own run) and does so on any other firmware
+  (`log_sequence_before` / `log_sequence_after`), while the pacing stays as
+  prudence. Typical answers take 100–250 ms; the 89-member Sensors `$expand`
+  about 11 s for 55 KB; the twelve collectors 30 GETs in about 30 s.
+- Environment: legacy `Thermal`/`Power` are served beside `ThermalSubsystem`,
+  `ThermalMetrics`, `EnvironmentMetrics` and `Sensors` (21 numeric, 68
+  discrete); no power supply is modelled anywhere — the external adapters
+  exist only as presence sensors — and `ReadingType` cannot classify a
+  sensor (watts typed `Current`, presence typed `Power`).
+- Security: the security resource carries no ThinkEdge property on a gen-1
+  SE350; lockdown and chassis movement are discrete sensors, and there is no
+  `PhysicalSecurity`.
+- Logs: six log services and no `PlatformLog`; `StandardLog` interleaves
+  platform and audit events (an OEM log type tells them apart), spells its
+  sequence numbers `PlatformFirstSeqNum` / `AuditLastSeqNum` and so on, and
+  names accounts and client addresses in its login, logoff and
+  password-change messages; `ActiveLog` is empty; `SEL` has no `Entries`
+  link.
+- Firmware, BIOS, boot and power policy: fifteen firmware members, with
+  `-Pending` twins (version null while nothing is staged) and a standby BMC
+  bank, and no `SoftwareInventory`; 126 BIOS attributes, the pending set a
+  separate settings resource; the boot order only in the Lenovo boot manager
+  (no DMTF `BootOrder`, no `BootOptions`); the DMTF and Lenovo
+  power-restore-policy leaves both absent.
+- Host side: non-RAID M.2 SATA drives enumerate one `Storage` member per
+  slot (no `Controllers`, empty `Volumes`); with the host booted every
+  onboard port reads `NoLink`, because the OS runs on a slot NIC the BMC has
+  no sideband to (that adapter lists no ports or functions); unset DNS slots
+  are served as `::` / `0.0.0.0` placeholders, and the DMTF SNMP block
+  carries no `ProtocolEnabled` (the Lenovo SNMPv3 agent block does).
+
+Still open, for the next shakedowns rather than a check: whether port link
+state follows a cable with the host off; how an asserted discrete sensor
+reads; where, if anywhere, this firmware exposes the AC power-restore
+policy; what a de-powered adapter does to its sensors; whether `SEL` ever
+lists entries; how the `-Pending` firmware members read while an update is
+staged; and the populated shapes of subscriptions, recipients, licences,
+tasks and `PhysicalSecurity`.
 
 ## Console servers — not yet a platform
 

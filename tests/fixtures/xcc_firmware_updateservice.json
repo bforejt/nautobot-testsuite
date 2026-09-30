@@ -1,0 +1,32 @@
+{
+  "@odata.type": "#UpdateService.v1_11_0.UpdateService",
+  "@odata.id": "/redfish/v1/UpdateService",
+  "@odata.etag": "\"u1\"",
+  "Id": "UpdateService",
+  "Name": "Update Service",
+  "ServiceEnabled": true,
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "FirmwareInventory": {
+    "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory"
+  },
+  "SoftwareInventory": {
+    "@odata.id": "/redfish/v1/UpdateService/SoftwareInventory"
+  },
+  "Actions": {
+    "#UpdateService.SimpleUpdate": {
+      "target": "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoUpdateService.v1_0_0.LenovoUpdateService",
+      "XCCBackupAutoPromote": true,
+      "FirmwareServices": {
+        "@odata.id": "/redfish/v1/UpdateService/Oem/Lenovo/FirmwareServices"
+      }
+    }
+  }
+}

@@ -1,0 +1,165 @@
+{
+ "IPv6Addresses": [],
+ "InterfaceEnabled": true,
+ "EthernetInterfaceType": "Physical",
+ "@odata.etag": "\"<hex:21>\"",
+ "HostName": "bmc-lab-1",
+ "LinkStatus": "LinkUp",
+ "IPv6StaticDefaultGateways": [
+  {
+   "Address": "::",
+   "PrefixLength": 0
+  }
+ ],
+ "MACAddress": "d4:49:cd:2f:b0:0e",
+ "IPv6AddressPolicyTable": [
+  {
+   "Prefix": "::1/128",
+   "Label": 0,
+   "Precedence": 50
+  },
+  {
+   "Prefix": "::/96",
+   "Label": 3,
+   "Precedence": 11
+  },
+  {
+   "Prefix": "::ffff:0.0.0.0/96",
+   "Label": 4,
+   "Precedence": 35
+  },
+  {
+   "Prefix": "2001:db8:8c3a:f2d6::/32",
+   "Label": 6,
+   "Precedence": 10
+  },
+  {
+   "Prefix": "2001:db8:8c8a:89fc::/28",
+   "Label": 7,
+   "Precedence": 10
+  },
+  {
+   "Prefix": "2001:db8:7c67:735e::/16",
+   "Label": 12,
+   "Precedence": 1
+  },
+  {
+   "Prefix": "2001:db8:4dd:fa39::/16",
+   "Label": 2,
+   "Precedence": 30
+  },
+  {
+   "Prefix": "2001:db8:98b4:82d2::/10",
+   "Label": 11,
+   "Precedence": 1
+  },
+  {
+   "Prefix": "2001:db8:cacf:47cd::/7",
+   "Label": 5,
+   "Precedence": 5
+  },
+  {
+   "Prefix": "::/0",
+   "Label": 1,
+   "Precedence": 40
+  }
+ ],
+ "StaticNameServers": [
+  "0.0.0.0",
+  "0.0.0.0",
+  "0.0.0.0",
+  "::",
+  "::",
+  "::"
+ ],
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoEthernetInterface.v1_0_0.LenovoEthernetInterfaceProperties",
+   "HostNameFromDHCPEnabled": false,
+   "IPv6Enabled": false,
+   "IPv6AddressAssignedby": [],
+   "IPv4Enabled": true,
+   "DomainName": "",
+   "InterfaceNicMode": "Dedicated",
+   "IPv4AddressAssignedby": "Static",
+   "NetworkSettingSync": true
+  }
+ },
+ "MTUSize": 1500,
+ "Description": "Manager Ethernet Interface",
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "SpeedMbps": null,
+ "FQDN": "bmc-lab-1",
+ "@odata.context": "/redfish/v1/$metadata#EthernetInterface.EthernetInterface",
+ "Links": {
+  "Chassis": {
+   "@odata.id": "/redfish/v1/Chassis/1"
+  }
+ },
+ "StatelessAddressAutoConfig": {
+  "IPv4AutoConfigEnabled": null,
+  "IPv6AutoConfigEnabled": false
+ },
+ "MaxIPv6StaticAddresses": 1,
+ "IPv6StaticAddresses": [
+  {
+   "Address": "::",
+   "PrefixLength": 64
+  }
+ ],
+ "PermanentMACAddress": "d4:49:cd:2f:b0:0e",
+ "AutoNeg": true,
+ "IPv4StaticAddresses": [
+  {
+   "SubnetMask": "255.255.254.0",
+   "Gateway": "192.0.2.1",
+   "Address": "192.0.2.39",
+   "AddressOrigin": "Static"
+  }
+ ],
+ "FullDuplex": null,
+ "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces/NIC",
+ "DHCPv6": {
+  "UseNTPServers": null,
+  "OperatingMode": "Disabled",
+  "UseRapidCommit": null,
+  "UseDNSServers": false,
+  "UseDomainName": false
+ },
+ "IPv4Addresses": [
+  {
+   "SubnetMask": "255.255.254.0",
+   "Gateway": "192.0.2.1",
+   "Address": "192.0.2.39",
+   "AddressOrigin": "Static"
+  }
+ ],
+ "@odata.type": "#EthernetInterface.v1_8_0.EthernetInterface",
+ "Id": "NIC",
+ "NameServers": [
+  "",
+  "",
+  "",
+  "::",
+  "::",
+  "::"
+ ],
+ "DHCPv4": {
+  "UseNTPServers": null,
+  "UseStaticRoutes": null,
+  "DHCPEnabled": false,
+  "UseDNSServers": true,
+  "UseDomainName": true,
+  "FallbackAddress": "None",
+  "UseGateway": null
+ },
+ "IPv6DefaultGateway": "::",
+ "Name": "Manager Ethernet Interface",
+ "VLAN": {
+  "VLANEnable": false,
+  "VLANId": 1
+ }
+}

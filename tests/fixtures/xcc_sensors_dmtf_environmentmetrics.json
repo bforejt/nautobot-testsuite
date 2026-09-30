@@ -1,0 +1,43 @@
+{
+  "@odata.type": "#EnvironmentMetrics.v1_2_0.EnvironmentMetrics",
+  "@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics",
+  "@odata.etag": "\"em-dmtf\"",
+  "Id": "EnvironmentMetrics",
+  "Name": "Chassis Environment Metrics",
+  "TemperatureCelsius": {
+    "Reading": 22.5,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/InletTemp"
+  },
+  "HumidityPercent": {
+    "Reading": 38.0,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/AmbientHumidity"
+  },
+  "PowerWatts": {
+    "Reading": 212.0,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/PS1InputPower"
+  },
+  "EnergykWh": {
+    "Reading": 1234.5,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/ChassisEnergy"
+  },
+  "FanSpeedsPercent": [
+    {
+      "DeviceName": "Fan 1",
+      "PhysicalContext": "Fan",
+      "Reading": 45,
+      "SpeedRPM": 7200,
+      "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/Fan1"
+    },
+    {
+      "DeviceName": "Fan 2",
+      "PhysicalContext": "Fan",
+      "Reading": 44,
+      "SpeedRPM": 7100
+    }
+  ],
+  "Actions": {
+    "#EnvironmentMetrics.ResetMetrics": {
+      "target": "/redfish/v1/Chassis/1/EnvironmentMetrics/Actions/EnvironmentMetrics.ResetMetrics"
+    }
+  }
+}

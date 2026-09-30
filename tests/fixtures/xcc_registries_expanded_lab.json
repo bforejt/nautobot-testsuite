@@ -1,0 +1,217 @@
+{
+ "@odata.etag": "\"<hex:32>\"",
+ "Members": [
+  {
+   "Id": "ResourceEvent.1.2.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/ResourceEvent.1.2.0.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "\"<hex:32>\"",
+   "Name": "Resource Event Message Registry File",
+   "Description": "This represents Resource Event Message Registry File locator resource for a Redfish implementation.",
+   "Registry": "ResourceEvent.1.2",
+   "@odata.id": "/redfish/v1/Registries/ResourceEvent.1.2.0",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile"
+  },
+  {
+   "Id": "ExtendedError.1.2.2",
+   "Name": "Extended Error Message Registry File",
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/ExtendedError.1.2.2.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "This represents Extended Error Message Registry File locator resource for a Redfish implementation.",
+   "Languages": [
+    "en"
+   ],
+   "@odata.id": "/redfish/v1/Registries/ExtendedError.1.2.2",
+   "Registry": "ExtendedError.1.2"
+  },
+  {
+   "Id": "Base.1.12.1",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/Base.1.12.1.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "This represents Base Message Registry File locator resource for a Redfish implementation.",
+   "Registry": "Base.1.12",
+   "@odata.id": "/redfish/v1/Registries/Base.1.12.1",
+   "Name": "Base Message Registry File"
+  },
+  {
+   "Id": "LenovoPrivilegeRegistry.1.0.0",
+   "Name": "Lenovo Privilege Registry File",
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/LenovoPrivilegeRegistry.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "W/\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "Lenovo Privilege Registry File locations",
+   "Registry": "LenovoPrivilegeRegistry.1.0",
+   "@odata.id": "/redfish/v1/Registries/LenovoPrivilegeRegistry.1.0.0",
+   "Languages": [
+    "en"
+   ]
+  },
+  {
+   "Id": "EventRegistry.1.0.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/EventRegistry.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "Registry": "Event.1.0",
+   "Description": "Event Registry File locations",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "@odata.id": "/redfish/v1/Registries/EventRegistry.1.0.0",
+   "Name": "Event Registry File"
+  },
+  {
+   "Id": "BiosAttributeRegistry.1.0.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/BiosAttributeRegistry.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "W/\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "Bios Attribute Registry",
+   "Registry": "BiosAttributeRegistry.1.0",
+   "@odata.id": "/redfish/v1/Registries/BiosAttributeRegistry.1.0.0",
+   "Name": "Bios Attribute Registry Version 1"
+  },
+  {
+   "Id": "TaskEvent.1.0.3",
+   "Name": "Task Event Message Registry File",
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "@odata.id": "/redfish/v1/Registries/TaskEvent.1.0.3",
+   "@odata.etag": "\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "This represents Task Event Message Registry File locator resource for a Redfish implementation.",
+   "Registry": "TaskEvent.1.0",
+   "Languages": [
+    "en"
+   ],
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/TaskEvent.1.0.3.json",
+     "Language": "en"
+    }
+   ]
+  },
+  {
+   "Id": "LenovoFirmwareUpdateRegistry.1.0.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/LenovoFirmwareUpdateRegistry.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "Registry": "LenovoFirmwareUpdateRegistry.1.0",
+   "Description": "Lenovo Firmware Update Registry File locations",
+   "Name": "Lenovo Firmware Update Registry File",
+   "@odata.id": "/redfish/v1/Registries/LenovoFirmwareUpdateRegistry.1.0.0",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile"
+  },
+  {
+   "Id": "LenovoExtendedWarning.1.0.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/LenovoExtendedWarning.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "Registry": "LenovoExtendedWarning.1.0",
+   "Description": "Lenovo Extended Warning Registry File locations",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "@odata.id": "/redfish/v1/Registries/LenovoExtendedWarning.1.0.0",
+   "Name": "Lenovo Extended Warning Registry File"
+  },
+  {
+   "Id": "License.1.0.0",
+   "Name": "License Message Registry File",
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/License.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "\"<hex:32>\"",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile",
+   "Description": "This represents License Message Registry File locator resource for a Redfish implementation.",
+   "Registry": "License.1.0",
+   "@odata.id": "/redfish/v1/Registries/License.1.0.0",
+   "Languages": [
+    "en"
+   ]
+  },
+  {
+   "Id": "LogService.1.0.0",
+   "Languages": [
+    "en"
+   ],
+   "@odata.type": "#MessageRegistryFile.v1_1_3.MessageRegistryFile",
+   "Location": [
+    {
+     "Uri": "/redfish/v1/schemas/registries/LogService.1.0.0.json",
+     "Language": "en"
+    }
+   ],
+   "@odata.etag": "\"<hex:32>\"",
+   "Name": "LogService Message Registry File",
+   "Description": "This represents LogService Message Registry File locator resource for a Redfish implementation.",
+   "Registry": "LogService.1.0",
+   "@odata.id": "/redfish/v1/Registries/LogService.1.0.0",
+   "@odata.context": "/redfish/v1/$metadata#MessageRegistryFile.MessageRegistryFile"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#MessageRegistryFileCollection.MessageRegistryFileCollection",
+ "Name": "Registry Repository",
+ "Description": "This resource represents a Resource Collection of MessageRegistryFile instances for a Redfish implementation.",
+ "@odata.id": "/redfish/v1/Registries",
+ "Members@odata.count": 11,
+ "@odata.type": "#MessageRegistryFileCollection.MessageRegistryFileCollection"
+}

@@ -1,7 +1,11 @@
 # Plan: the NFV core move (floors 6 → 5) and the VMware/SE350 test bundle
 
 Status: **partly implemented.** The `vmware` platform shipped. The `xcc` platform
-shipped switched off (`constants.XCC_ENABLED`). The sibling IOS-XE/PAN-OS checks
+shipped switched off (`constants.XCC_ENABLED`). **Superseded for the XCC:** this
+plan's XCC decisions (a separate `-xcc` artifact, a second Device per SE350, the
+`XCC_ENABLED` tabling) are replaced by `docs/plans/bmc-capture-handoff.md` — the
+BMC is an interface on the host Device, captured as the `bmc` family in the
+host's own snapshot. The sibling IOS-XE/PAN-OS checks
 and the expectations wiring in §6–§7 are still proposals. This document is the
 output of a research-and-design pass (repo readers, VMware/Lenovo/Palo Alto
 source research, three independent transport designs judged through three

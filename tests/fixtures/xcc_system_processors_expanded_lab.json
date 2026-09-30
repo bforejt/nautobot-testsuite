@@ -1,0 +1,124 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#ProcessorCollection.ProcessorCollection",
+ "Name": "ProcessorCollection",
+ "@odata.type": "#ProcessorCollection.ProcessorCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Processors",
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "Version": "Intel(R) Xeon(R) D-2123IT CPU @ 2.20GHz",
+   "@odata.context": "/redfish/v1/$metadata#Processor.Processor",
+   "ProcessorId": {
+    "EffectiveModel": "0x55",
+    "IdentificationRegisters": "0x00050654bfebfbff",
+    "VendorId": "GenuineIntel",
+    "Step": "0x04",
+    "EffectiveFamily": "0x06",
+    "MicrocodeInfo": null
+   },
+   "InstructionSet": "x86-64",
+   "Location": {
+    "PartLocation": {
+     "ServiceLabel": "CPU 1",
+     "LocationType": "Socket",
+     "LocationOrdinalValue": 0
+    }
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "ProcessorArchitecture": "x86",
+   "TotalCores": 4,
+   "ProcessorType": "CPU",
+   "PartNumber": "",
+   "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+   },
+   "MaxSpeedMHz": 3000,
+   "SerialNumber": "",
+   "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/1/Processors/1/ProcessorMetrics"
+   },
+   "Model": "Intel(R) Xeon(R) D-2123IT CPU @ 2.20GHz",
+   "Id": "1",
+   "Name": "Processor 1",
+   "@odata.type": "#Processor.v1_14_0.Processor",
+   "@odata.id": "/redfish/v1/Systems/1/Processors/1",
+   "TotalThreads": 8,
+   "TotalEnabledCores": 4,
+   "ProcessorMemory": [
+    {
+     "CapacityMiB": 0,
+     "MemoryType": "L1Cache",
+     "SpeedMHz": null,
+     "IntegratedMemory": true
+    },
+    {
+     "CapacityMiB": 4,
+     "MemoryType": "L2Cache",
+     "SpeedMHz": null,
+     "IntegratedMemory": true
+    },
+    {
+     "CapacityMiB": 8,
+     "MemoryType": "L3Cache",
+     "SpeedMHz": null,
+     "IntegratedMemory": true
+    }
+   ],
+   "TDPWatts": 60,
+   "Socket": "CPU 1",
+   "SystemInterface": {
+    "InterfaceType": "UPI"
+   },
+   "Description": "This resource is used to represent a processor for a Redfish implementation.",
+   "Oem": {
+    "Lenovo": {
+     "NumberOfEnabledCores": 4,
+     "CacheInfo": [
+      {
+       "InstalledSizeKByte": 256,
+       "MaxCacheSizeKByte": 256,
+       "CacheLevel": "L1"
+      },
+      {
+       "InstalledSizeKByte": 4096,
+       "MaxCacheSizeKByte": 4096,
+       "CacheLevel": "L2"
+      },
+      {
+       "InstalledSizeKByte": 8448,
+       "MaxCacheSizeKByte": 8448,
+       "CacheLevel": "L3"
+      }
+     ],
+     "CurrentClockSpeedMHz": 2200,
+     "@odata.type": "#LenovoProcessor.v1_0_0.LenovoProcessor",
+     "ProcessorFamily": 179,
+     "ExternalBusClockSpeedMHz": 100
+    }
+   },
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "Manufacturer": "Intel(R) Corporation"
+  }
+ ],
+ "Description": "A collection of Processor resource instances.",
+ "Oem": {
+  "Lenovo": {
+   "HistoryCPUMetric": {
+    "@odata.etag": "\"<hex:19>\"",
+    "Description": "This resource is used to represent an array of history metric value containers which are categorized by ContainerName.",
+    "@odata.context": "/redfish/v1/$metadata#LenovoHistoryMetricValue.LenovoHistoryMetricValue",
+    "Name": "Metric Value",
+    "@odata.type": "#LenovoHistoryMetricValue.v1_0_0.LenovoHistoryMetricValue",
+    "@odata.id": "/redfish/v1/Systems/1/Processors/Oem/Lenovo/HistoryCPUMetric",
+    "HistoryMetricValue": [],
+    "Id": "HistoryCPUMetric"
+   }
+  }
+ },
+ "Members@odata.count": 1
+}

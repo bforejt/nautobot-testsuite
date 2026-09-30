@@ -1,0 +1,20 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces/1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces/2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces/3"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#NetworkInterfaceCollection.NetworkInterfaceCollection",
+ "Name": "NetworkInterfaceCollection",
+ "@odata.type": "#NetworkInterfaceCollection.NetworkInterfaceCollection",
+ "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces",
+ "Members@odata.count": 3,
+ "Description": "A collection of NetworkInterface resource instances."
+}

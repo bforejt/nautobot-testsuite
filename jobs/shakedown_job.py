@@ -7,6 +7,15 @@ absent, and what failed outright — with the full transport trace attached so
 every verdict comes with its evidence. The trace doubles as the fixture
 harvest for the CI battery: sanitize real captures before committing them.
 
+A BMC modelled as an interface on the device (jobs/bmc_target.py) is shaken
+down in the same run: its ``bmc`` family runs through a second debug context,
+``discovery["bmc"]`` answers the questions a first run against a new BMC
+vendor or firmware must (service root, resolved ids, OEM links, log services,
+collection sizes, ``$expand`` depth, legacy versus subsystem environment
+resources, the security resource's properties, the capture account's role and
+privileges, and the platform log's sequence numbers before and after the run),
+and every report entry names its ``target``.
+
 This job never participates in pre/post comparison and check failures do not
 fail the JobResult — finding them is its purpose. It is hidden from the
 default job list (development tooling, not an operator surface).
@@ -19,7 +28,7 @@ from nautobot.apps.jobs import Job, ObjectVar
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
-from . import catalog, creds, envelope, registry
+from . import bmc_target, catalog, checks_bmc, creds, envelope, registry
 from . import constants as C
 from .checks_iosxe import _Q_FS_LIST_PATH, _summarize_q_filesystem
 from .checks_vmware import (
@@ -30,19 +39,6 @@ from .checks_vmware import (
     _OPTION_PATHS,
     _SERVICE_PATHS,
 )
-from .checks_xcc import (
-    _FIRMWARE,
-    _HOST_NICS,
-    _LOG_SERVICES,
-    _MANAGER,
-    _MANAGER_NICS,
-    _MEMORY,
-    _PCIE,
-    _PROCESSORS,
-    _ROOT,
-    _STORAGE,
-    _SYSTEM,
-)
 from .context import CollectorContext
 from .registry import SkipCheck
 from .snapshot_job import (
@@ -51,10 +47,10 @@ from .snapshot_job import (
     SoftTimeLimitExceeded,
     _attach_artifact,
     _device_host,
+    _find_bmc,
     _map_platform,
+    _open_bmc,
 )
-from .transport_redfish import RedfishClient
-from .transport_redfish import probe_hint as redfish_probe_hint
 from .transport_restconf import RestconfClient, probe_hint
 from .transport_ssh import SshRunner
 from .transport_vsphere import VsphereClient, VsphereError
@@ -159,76 +155,9 @@ def _q_filesystem(ctx):
     return summary
 
 
-# --- xcc discovery -----------------------------------------------------------
-# The Redfish questions the collectors were written around (plan §8). Every
-# path is the collectors' own spelling, so the per-run cache serves both.
-
-# Collections the inventory/firmware/storage/NIC checks walk: their member
-# counts with the host on AND off are what sizes the per-check GET budgets.
-XCC_COLLECTIONS = (
-    ("memory", _MEMORY),
-    ("processors", _PROCESSORS),
-    ("pcie_devices", _PCIE),
-    ("host_nics", _HOST_NICS),
-    ("firmware_inventory", _FIRMWARE),
-    ("storage", _STORAGE),
-    ("manager_nics", _MANAGER_NICS),
-)
-
-
-def _xcc_service_root(ctx):
-    """RedfishVersion and ProtocolFeaturesSupported ($expand decides the GET budget strategy)."""
-    root = ctx.get(_ROOT) or {}
-    return {
-        "redfish_version": root.get("RedfishVersion"),
-        "protocol_features": root.get("ProtocolFeaturesSupported"),
-        "vendor": root.get("Vendor"),
-        "product": root.get("Product"),
-    }
-
-
-def _xcc_manager_links(ctx):
-    """Which Oem.Lenovo resources Managers/1 links — Security is the ThinkEdge one."""
-    manager = ctx.get(_MANAGER) or {}
-    oem = (manager.get("Oem") or {}).get("Lenovo") or {}
-    links, scalars = {}, []
-    for key, value in sorted(oem.items()):
-        if isinstance(value, dict) and value.get("@odata.id"):
-            links[key] = value["@odata.id"]
-        elif not isinstance(value, (dict, list)):
-            scalars.append(key)
-    return {
-        "firmware_version": manager.get("FirmwareVersion"),
-        "model": manager.get("Model"),
-        "oem_lenovo_links": links,
-        "oem_lenovo_scalars": scalars,
-    }
-
-
-def _xcc_log_services(ctx):
-    """LogServices members under Systems/1 (PlatformLog vs StandardLog picks the log branch)."""
-    services = ctx.get(_LOG_SERVICES) or {}
-    return {
-        "members": [
-            member.get("@odata.id")
-            for member in _aslist(services.get("Members"))
-            if isinstance(member, dict)
-        ]
-    }
-
-
-def _xcc_collection_counts(ctx):
-    """Member count per collection with the host power state (inventory is POST-populated)."""
-    system = ctx.get(_SYSTEM) or {}
-    counts = {}
-    for label, path in XCC_COLLECTIONS:
-        payload = ctx.get(path, ok_404=True)
-        if payload is None:
-            counts[label] = "absent (404)"
-            continue
-        count = payload.get("Members@odata.count")
-        counts[label] = count if isinstance(count, int) else len(_aslist(payload.get("Members")))
-    return {"host_power_state": system.get("PowerState"), "collections": counts}
+# --- bmc discovery ---------------------------------------------------------
+# The BMC probes are pure and live beside the checks they describe
+# (checks_bmc.DISCOVERY_PROBES), so CI drives them without Nautobot.
 
 
 # --- vmware discovery --------------------------------------------------------
@@ -362,12 +291,6 @@ DISCOVERY_PROBES = {
         ("q_filesystem", _q_filesystem),
     ),
     "panos": (),
-    "xcc": (
-        ("service_root", _xcc_service_root),
-        ("manager", _xcc_manager_links),
-        ("log_services", _xcc_log_services),
-        ("collections", _xcc_collection_counts),
-    ),
     "vmware": (
         ("lockdown", _esxi_lockdown),
         ("network", _esxi_network_shape),
@@ -410,87 +333,112 @@ class CollectorShakedown(Job):
         field_order = ["device", "secrets_group"]
 
     def run(self, *, device=None, secrets_group=None):
-        """Shake down one device. Every kwarg defaults (ScheduledJob rule)."""
+        """Shake down one device and its modelled BMC. Every kwarg defaults (ScheduledJob rule)."""
         self.logger.info("Test Suite Shakedown — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
         if device is None:
             raise RuntimeError("Pick a device.")
         log_extra = {"object": device}
 
         platform, driver = _map_platform(device)
-        if platform is None:
+        try:
+            bmc, bmc_interface = _find_bmc(device)
+        except bmc_target.AmbiguousBmc as exc:
+            raise RuntimeError("%s: %s" % (device.name, exc)) from exc
+        bmc_addressed = bmc is not None and bmc.address is not None
+        if platform is None and not bmc_addressed:
             raise RuntimeError(
-                "%s: cannot map platform (%r) to %s — %s."
-                % (device.name, driver, PLATFORM_NAMES, PLATFORM_HINT)
+                "%s: cannot map platform (%r) to %s, and no BMC interface with an address is "
+                "modelled on it — %s." % (device.name, driver, PLATFORM_NAMES, PLATFORM_HINT)
             )
         host = _device_host(device)
-        username, password = creds.resolve_credentials(
-            device, C.TRANSPORT_FOR[platform], override_group=secrets_group
-        )
 
-        restconf = None
-        ssh = None
-        api = None
+        restconf = ssh = api = None
         probe_record = None
-        if platform == "iosxe":
-            restconf = RestconfClient(host, username, password, logger=self.logger)
-            if not restconf.ping():
-                record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
-                restconf.close()
-                raise RuntimeError(
-                    "%s: RESTCONF unreachable at %s — %s (probe: %s)"
-                    % (device.name, host, probe_hint(record), record)
+        host_error = None
+        bmc_client, bmc_error = None, None
+        try:
+            # The BMC first (Basic auth: no session to leave behind), so the
+            # host's own login is the last step before the contexts own both.
+            if bmc_addressed:
+                bmc_client, bmc_error = _open_bmc(bmc, bmc_interface, device, self.logger)
+                if bmc_error is not None:
+                    self.logger.error("%s: %s", device.name, bmc_error, extra=log_extra)
+            elif bmc is not None:
+                self.logger.warning(
+                    "%s: BMC interface %s has no IP address assigned — not shaken down.",
+                    device.name,
+                    bmc.interface_name,
+                    extra=log_extra,
                 )
-            ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
-        elif platform == "panos":
-            ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
-            ssh.open()
-        elif platform == "xcc":
-            if not C.XCC_ENABLED:
-                raise RuntimeError(
-                    "%s: the xcc platform is disabled (constants.XCC_ENABLED is False — "
-                    "the XCCs are unreachable at the current sites)." % (device.name,)
+            if platform is None:
+                self.logger.warning(
+                    "%s: the host platform (%r) is not supported yet — shaking down its BMC "
+                    "(interface %s) alone.",
+                    device.name,
+                    driver,
+                    bmc.interface_name,
+                    extra=log_extra,
                 )
-            restconf = RedfishClient(host, username, password, logger=self.logger)
-            if not restconf.ping():
-                record = restconf.probe_get(C.REDFISH_PROBE_SYSTEM, timeout=30)
-                restconf.close()
-                raise RuntimeError(
-                    "%s: Redfish unreachable at %s — %s (probe: %s)"
-                    % (device.name, host, redfish_probe_hint(record), record)
+            else:
+                restconf, ssh, api, probe_record, host_error = self._open_host(
+                    device, platform, host, secrets_group
                 )
-        elif platform == "vmware":
-            api = VsphereClient(host, username, password, logger=self.logger)
-            try:
-                probe_record = api.probe()
-                api.login()
-            except VsphereError as exc:
-                api.close()
-                raise RuntimeError(
-                    "%s: vSphere SOAP at %s unusable — %s (%s)"
-                    % (device.name, host, vsphere_probe_hint(exc), exc)
-                ) from exc
-        else:  # unreachable: _map_platform only returns the four names above
-            raise RuntimeError("%s: no transport for platform %r" % (device.name, platform))
+                if host_error is not None:
+                    self.logger.error("%s: %s", device.name, host_error, extra=log_extra)
+        except BaseException:
+            for transport in (bmc_client, restconf, ssh, api):
+                if transport is not None:
+                    try:
+                        transport.close()
+                    except Exception:
+                        pass
+            raise
+        bmc_live = bmc_client is not None and bmc_error is None
+        if not bmc_live and (platform is None or host_error is not None):
+            # Nothing left to shake down: say why, as the job's failure.
+            raise RuntimeError(
+                "%s: %s" % (device.name, "; ".join(e for e in (host_error, bmc_error) if e))
+            )
 
-        checks = registry.checks_for(platform)
-        checks = sorted(checks, key=lambda check: (check.tier, check.id))
+        order = lambda check: (check.tier, check.id)  # noqa: E731
+        families = []
+        host_ctx = bmc_ctx = None
+        if platform is not None and host_error is None:
+            host_ctx = CollectorContext(
+                device.name,
+                platform,
+                restconf=restconf,
+                ssh=ssh,
+                api=api,
+                logger=self.logger,
+                debug=True,
+            )
+            families.append(("host", host_ctx, sorted(registry.checks_for(platform), key=order)))
+        if bmc_live:
+            bmc_ctx = CollectorContext(
+                device.name, "bmc", restconf=bmc_client, logger=self.logger, debug=True
+            )
+            families.append(("bmc", bmc_ctx, sorted(registry.checks_for("bmc"), key=order)))
         report = {
             "schema": 1,
             "generated_at": envelope.utcnow_iso(),
             "framework": {"name": C.FRAMEWORK_NAME, "version": C.JOB_VERSION},
-            "device": {"name": device.name, "platform": driver, "host": host},
+            "device": {
+                "name": device.name,
+                "platform": driver,
+                "platform_supported": platform is not None,
+                "host": host,
+                "bmc": bmc_target.bmc_block(
+                    bmc,
+                    captured=bmc_ctx is not None,
+                    note=bmc_error
+                    or (None if bmc is None or bmc_addressed else "no address assigned"),
+                ),
+            },
             "checks": {},
             "discovery": {},
         }
-        ctx = CollectorContext(
-            device.name,
-            platform,
-            restconf=restconf,
-            ssh=ssh,
-            api=api,
-            logger=self.logger,
-            debug=True,
-        )
+        total = sum(len(checks) for _target, _ctx, checks in families)
         needs_attention = []
         try:
             if platform == "vmware":
@@ -498,13 +446,8 @@ class CollectorShakedown(Job):
                 # versions hostd advertised (or that the fallback SOAPAction
                 # was used), apiType, build/version, TLS mode.
                 report["discovery"]["probe"] = probe_record
-            for label, probe in DISCOVERY_PROBES[platform]:
-                try:
-                    report["discovery"][label] = probe(ctx)
-                except SoftTimeLimitExceeded:
-                    raise
-                except Exception as exc:  # discovery is best-effort: record, never abort
-                    report["discovery"][label] = {"error": str(exc)}
+            if host_ctx is not None:
+                self._discover(report["discovery"], DISCOVERY_PROBES[platform], host_ctx)
             if platform == "iosxe":
                 modules = report["discovery"].get("modules")
                 if isinstance(modules, dict) and modules:
@@ -514,71 +457,180 @@ class CollectorShakedown(Job):
                     report["discovery"]["key_models"] = {
                         model: modules.get(model) for model in _catalog_key_models(platform)
                     }
-
-            for index, check in enumerate(checks, 1):
-                self.logger.info("[%d/%d] %s ...", index, len(checks), check.id, extra=log_extra)
-                trace_start = len(ctx.trace)
-                started = time.monotonic()
-                status, error, normalized = "ok", None, {}
-                try:
-                    outcome = check.collector(ctx)
-                    normalized = (outcome or {}).get("normalized") or {}
-                except SkipCheck as exc:
-                    status, error = "not-present", str(exc)
-                except SoftTimeLimitExceeded:
-                    raise
-                except Exception as exc:
-                    status, error = "failed", "%s: %s" % (type(exc).__name__, exc)
-                fetched = any(
-                    entry.get("outcome") in ("ok", "cache-hit") for entry in ctx.trace[trace_start:]
+            if bmc_ctx is not None:
+                # The log's sequence numbers before any other GET of this run,
+                # and again (past the cache) after everything: what did the
+                # run itself add to the log?
+                report["discovery"]["bmc"] = {}
+                self._discover(
+                    report["discovery"]["bmc"],
+                    (("log_sequence_before", checks_bmc._discover_log_sequence),),
+                    bmc_ctx,
                 )
-                advice = registry.shakedown_advice(status, error, len(normalized), fetched)
-                report["checks"][check.id] = {
-                    "status": status,
-                    "error": error,
-                    "duration_s": round(time.monotonic() - started, 2),
-                    "normalized_count": len(normalized),
-                    "sample_keys": sorted(normalized)[:5],
-                    "advice": advice,
-                }
-                if advice == "ok":
-                    self.logger.info(
-                        "%s: %d normalized entries in %.1fs — ok",
-                        check.id,
-                        len(normalized),
-                        time.monotonic() - started,
-                        extra=log_extra,
-                    )
-                else:
-                    needs_attention.append(check.id)
-                    self.logger.warning("%s: %s", check.id, advice, extra=log_extra)
+
+            index = 0
+            for target, ctx, checks in families:
+                for check in checks:
+                    index += 1
+                    self.logger.info("[%d/%d] %s ...", index, total, check.id, extra=log_extra)
+                    self._shake(report, needs_attention, ctx, check, target, log_extra)
+            if bmc_ctx is not None:
+                # After the checks, so each check met its own budget as in a
+                # capture (only the id resolution and the log-service reads
+                # were warmed by log_sequence_before); the probes reuse the cache.
+                self._discover(report["discovery"]["bmc"], checks_bmc.DISCOVERY_PROBES, bmc_ctx)
+                self._discover(
+                    report["discovery"]["bmc"],
+                    (
+                        (
+                            "log_sequence_after",
+                            lambda ctx: checks_bmc._discover_log_sequence(ctx, fresh=True),
+                        ),
+                    ),
+                    bmc_ctx,
+                )
         except SoftTimeLimitExceeded:
             self.logger.error(
                 "Soft time limit reached — attaching what was gathered so far.",
                 extra=log_extra,
             )
         finally:
-            ctx.close()
+            for ctx in (host_ctx, bmc_ctx):
+                if ctx is not None:
+                    ctx.close()
+            if bmc_client is not None and bmc_ctx is None:
+                bmc_client.close()
 
-        for transport in (restconf, api):
+        for transport in (restconf, api, bmc_client):
             if getattr(transport, "footprint", None) is not None:
                 report.setdefault("transport", {})[transport.transport_label] = (
                     transport.footprint()
                 )
+        if bmc_error is not None:
+            report["bmc_error"] = bmc_error
+        if host_error is not None:
+            report["host_error"] = host_error
 
+        trace = (host_ctx.trace if host_ctx else []) + (bmc_ctx.trace if bmc_ctx else [])
         safe_device = envelope.safe_name(device.name)
         _attach_artifact(self, C.SHAKEDOWN_FILENAME.format(device=safe_device), report)
         _attach_artifact(
             self,
             C.SHAKEDOWN_TRACE_FILENAME.format(device=safe_device),
-            {"schema": 1, "device": device.name, "trace": ctx.trace},
+            {"schema": 1, "device": device.name, "trace": trace},
         )
-        ok_count = sum(1 for body in report["checks"].values() if body["advice"] == "ok")
-        summary = "%s: %d/%d collectors ok; needs attention: %s" % (
+        ok_count = sum(1 for body in report["checks"].values() if body["advice"].startswith("ok"))
+        summary = "%s: %d/%d collectors ok; needs attention: %s%s" % (
             device.name,
             ok_count,
             len(report["checks"]),
             ", ".join(needs_attention) or "none",
+            "; BMC unusable: %s" % (bmc_error,) if bmc_error else "",
         )
         self.logger.info("%s", summary, extra=log_extra)
         return summary
+
+    def _open_host(self, device, platform, host, secrets_group):
+        """(restconf, ssh, api, probe record, error): the host platform's transports, probed.
+
+        ``error`` is an operator-facing sentence (every transport closed again,
+        a refused vSphere client returned closed for its footprint).
+        """
+        try:
+            username, password = creds.resolve_credentials(
+                device, C.TRANSPORT_FOR[platform], override_group=secrets_group
+            )
+        except creds.CredentialsError as exc:
+            return None, None, None, None, str(exc)
+        if platform == "iosxe":
+            restconf = RestconfClient(host, username, password, logger=self.logger)
+            if not restconf.ping():
+                record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
+                restconf.close()
+                error = "RESTCONF unreachable at %s — %s (probe: %s)" % (
+                    host,
+                    probe_hint(record),
+                    record,
+                )
+                return None, None, None, None, error
+            ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
+            return restconf, ssh, None, None, None
+        if platform == "panos":
+            ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
+            try:
+                ssh.open()
+            except Exception as exc:
+                error = "SSH connect to %s failed: %s: %s" % (host, type(exc).__name__, exc)
+                return None, None, None, None, error
+            return None, ssh, None, None, None
+        if platform == "vmware":
+            api = VsphereClient(host, username, password, logger=self.logger)
+            try:
+                probe_record = api.probe()
+                api.login()
+            except VsphereError as exc:
+                api.close()
+                error = "vSphere SOAP at %s unusable — %s (%s)" % (
+                    host,
+                    vsphere_probe_hint(exc),
+                    exc,
+                )
+                return None, None, api, None, error
+            return None, None, api, probe_record, None
+        # unreachable: _map_platform returns three names
+        return None, None, None, None, "no transport for platform %r" % (platform,)
+
+    def _discover(self, into, probes, ctx):
+        """Run discovery probes best-effort: each answer, or an error record, lands in ``into``."""
+        for label, probe in probes:
+            try:
+                into[label] = probe(ctx)
+            except SoftTimeLimitExceeded:
+                raise
+            except Exception as exc:  # discovery is best-effort: record, never abort
+                into[label] = {"error": "%s: %s" % (type(exc).__name__, exc)}
+
+    def _shake(self, report, needs_attention, ctx, check, target, log_extra):
+        """Run one check through its family's debug context and record its verdict."""
+        trace_start = len(ctx.trace)
+        started = time.monotonic()
+        status, error, normalized = "ok", None, {}
+        try:
+            outcome = check.collector(ctx)
+            normalized = (outcome or {}).get("normalized") or {}
+        except SkipCheck as exc:
+            status, error = "not-present", str(exc)
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:
+            status, error = "failed", "%s: %s" % (type(exc).__name__, exc)
+        fetched = any(
+            entry.get("outcome") in ("ok", "cache-hit") for entry in ctx.trace[trace_start:]
+        )
+        advice = registry.shakedown_advice(
+            status,
+            error,
+            len(normalized),
+            fetched,
+            empty_ok=registry.EMPTY_OK_TAG in (check.tags or ()),
+        )
+        report["checks"][check.id] = {
+            "target": target,
+            "status": status,
+            "error": error,
+            "duration_s": round(time.monotonic() - started, 2),
+            "normalized_count": len(normalized),
+            "sample_keys": sorted(normalized)[:5],
+            "advice": advice,
+        }
+        if advice.startswith("ok"):
+            self.logger.info(
+                "%s: %d normalized entries in %.1fs — ok",
+                check.id,
+                len(normalized),
+                time.monotonic() - started,
+                extra=log_extra,
+            )
+        else:
+            needs_attention.append(check.id)
+            self.logger.warning("%s: %s", check.id, advice, extra=log_extra)

@@ -1,0 +1,89 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "Id": "1",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/1",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "M.2 Socket 2 (Mechanical Key B)",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 1",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "2x or x2"
+  },
+  {
+   "Id": "2",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/2",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "M.2 Socket 3 (Mechanical Key M)",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 5",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "4x or x4"
+  },
+  {
+   "Id": "3",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/3",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "M.2 Socket 3 (Mechanical Key M)",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 4",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "4x or x4"
+  },
+  {
+   "Id": "4",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/4",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "M.2 Socket 3 (Mechanical Key M)",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 3",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "4x or x4"
+  },
+  {
+   "Id": "5",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/5",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "M.2 Socket 3 (Mechanical Key M)",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 2",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "4x or x4"
+  },
+  {
+   "Id": "6",
+   "Name": "LenovoSlot",
+   "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/6",
+   "@odata.etag": "\"<hex:19>\"",
+   "SupportsHotPlug": false,
+   "ConnectorLayout": "PCI Express Gen 3 x16",
+   "Description": "This resource is used to represent slot information for a Redfish implementation.",
+   "Number": "Slot 6",
+   "@odata.context": "/redfish/v1/$metadata#LenovoSlot.LenovoSlot",
+   "MaxDataWidth": "16x or x16"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LenovoSlotCollection.LenovoSlotCollection",
+ "Name": "Lenovo Slot Collection",
+ "@odata.type": "#LenovoSlotCollection.LenovoSlotCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots",
+ "Members@odata.count": 6,
+ "Description": "A collection of Lenovo Slot resource instances."
+}

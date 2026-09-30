@@ -1,0 +1,43 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "DeviceId": "0x0522",
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "@odata.etag": "\"<hex:19>\"",
+   "SubsystemId": "0x0101",
+   "FunctionType": "Physical",
+   "FunctionId": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "ob_1.00",
+   "Name": "ServerEngines Pilot IV G200 03:00:00",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1/PCIeFunctions/ob_1.00",
+   "SubsystemVendorId": "0x19a2",
+   "DeviceClass": "DisplayController",
+   "RevisionId": "0x42",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System.",
+   "VendorId": "0x102b",
+   "Links": {
+    "EthernetInterfaces": [],
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+    },
+    "NetworkDeviceFunctions": [],
+    "Drives": [],
+    "StorageControllers": []
+   },
+   "ClassCode": "0x030000"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PCIeFunctionCollection.PCIeFunctionCollection",
+ "Name": "PCIeFunctionCollection",
+ "@odata.type": "#PCIeFunctionCollection.PCIeFunctionCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1/PCIeFunctions",
+ "Members@odata.count": 1,
+ "Description": "A collection of PCIeFunction resource instances."
+}

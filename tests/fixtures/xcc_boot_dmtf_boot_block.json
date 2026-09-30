@@ -1,0 +1,41 @@
+{
+ "BootSourceOverrideEnabled": "Once",
+ "BootSourceOverrideTarget": "UefiBootNext",
+ "BootSourceOverrideTarget@Redfish.AllowableValues": [
+  "None",
+  "Pxe",
+  "Cd",
+  "Usb",
+  "Hdd",
+  "BiosSetup",
+  "UefiTarget",
+  "UefiHttp",
+  "UefiBootNext"
+ ],
+ "BootSourceOverrideMode": "UEFI",
+ "UefiTargetBootSourceOverride": null,
+ "BootNext": "Boot0004",
+ "BootOrder": [
+  "Boot0002",
+  "Boot0000",
+  "Boot0001",
+  "Boot0004",
+  "Boot0003"
+ ],
+ "AliasBootOrder": [
+  "Hdd",
+  "Pxe",
+  "UefiHttp",
+  "UefiShell"
+ ],
+ "BootOrderPropertySelection": "BootOrder",
+ "AutomaticRetryConfig": "RetryAttempts",
+ "AutomaticRetryAttempts": 3,
+ "RemainingAutomaticRetryAttempts": 2,
+ "StopBootOnFault": "Never",
+ "TrustedModuleRequiredToBoot": "Disabled",
+ "HttpBootUri": "https://user-a:pw-a@203.0.113.20/boot/efi/bootx64.efi",
+ "BootOptions": {
+  "@odata.id": "/redfish/v1/Systems/1/BootOptions"
+ }
+}

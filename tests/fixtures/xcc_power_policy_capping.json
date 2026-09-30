@@ -1,0 +1,103 @@
+{
+  "@odata.type": "#Power.v1_7_1.Power",
+  "@odata.id": "/redfish/v1/Chassis/1/Power",
+  "@odata.etag": "\"policy-power\"",
+  "Id": "Power",
+  "Name": "Power",
+  "Description": "Hand-built: a legacy Power resource with a cap set, Lenovo's PowerUtilization, capability and redundancy-settings blocks, spelled as the DMTF Power schema and the plan's Appendix B name them. The lab SE350 serves none of these leaves; each <placeholder:...> string stands for a Lenovo enum member this repository has not seen served.",
+  "PowerControl@odata.count": 2,
+  "PowerControl": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/0",
+      "MemberId": "0",
+      "Name": "Server Power Control",
+      "PhysicalContext": "Chassis",
+      "PowerConsumedWatts": 212,
+      "PowerCapacityWatts": 750,
+      "PowerLimit": {
+        "LimitInWatts": 450,
+        "LimitException": "LogEventOnly",
+        "CorrectionInMs": 1000
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoPower.v1_0_0.PowerControl",
+          "PowerUtilization": {
+            "EnablePowerCapping": true,
+            "LimitMode": "<placeholder:LimitMode>",
+            "GuaranteedInWatts": 310,
+            "MinLimitInWatts": 310,
+            "MaxLimitInWatts": 750
+          },
+          "HistoryPowerMetric": {
+            "@odata.id": "/redfish/v1/Chassis/1/Power/PowerControl/0/Oem/Lenovo/HistoryPowerMetric"
+          }
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/1",
+      "MemberId": "1",
+      "Name": "CPU Sub-system Power",
+      "PhysicalContext": "CPUSubsystem",
+      "PowerConsumedWatts": 120,
+      "PowerLimit": {
+        "LimitInWatts": 200,
+        "LimitException": "HardPowerOff",
+        "CorrectionInMs": 50
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ],
+  "Redundancy@odata.count": 1,
+  "Redundancy": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0",
+      "MemberId": "0",
+      "Name": "PSU Redundancy",
+      "Mode": "N+m",
+      "MaxNumSupported": 2,
+      "MinNumNeeded": 1,
+      "RedundancySet": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1"
+        }
+      ],
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "NonRedundantAvailablePower": 1500,
+          "PowerRedundancySettings": {
+            "PowerRedundancyPolicy": "<placeholder:PowerRedundancyPolicy>",
+            "MaxPowerLimitWatts": 750,
+            "PowerFailureLimit": 2,
+            "EstimatedUsage": "<placeholder:EstimatedUsage>"
+          }
+        }
+      }
+    }
+  ],
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoPower.v1_0_0.Capabilities",
+      "PowerRestorePolicy": "<placeholder:PowerRestorePolicy>",
+      "RandomDelay": "<placeholder:RandomDelay>",
+      "WakeOnLANEnabled": false,
+      "PowerOnPermissionEnabled": true,
+      "LocalPowerControlEnabled": false
+    }
+  }
+}

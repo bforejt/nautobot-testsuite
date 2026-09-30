@@ -172,23 +172,65 @@ class TestContextTrace(unittest.TestCase):
         self.assertEqual(ctx.trace[0]["transport"], "restconf")
 
     def test_duck_typed_get_client_labels_its_trace(self):
-        ctx = context.CollectorContext("xcc1", "xcc", restconf=_FakeRedfish())
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish())
         ctx.get("/a")
         ctx.get("/a")
         self.assertEqual([e["transport"] for e in ctx.trace], ["redfish", "redfish"])
         self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
 
     def test_budget_delegates_to_a_transport_that_offers_one(self):
-        ctx = context.CollectorContext("xcc1", "xcc", restconf=_FakeRedfish())
-        with ctx.budget("xcc_inventory", 16) as budget:
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish())
+        with ctx.budget("bmc_inventory", 16) as budget:
             self.assertTrue(budget.entered)
-        self.assertEqual(ctx.restconf.budgets, [("xcc_inventory", 16)])
+        self.assertEqual(ctx.restconf.budgets, [("bmc_inventory", 16)])
         # ...and is a harmless null context everywhere else, so collectors
         # can declare a budget unconditionally.
         with self._ctx().budget("iosxe_arp", 3):
             pass
         with context.CollectorContext("dev1", "panos").budget("panos_arp", 3):
             pass
+
+
+class TestGetRedaction(unittest.TestCase):
+    """ctx.get(redact=...): the BMC family's scrubber runs before trace, cache and caller."""
+
+    @staticmethod
+    def _mask(payload):
+        return {key: ("***" if key == "data" else value) for key, value in payload.items()}
+
+    def test_redactor_runs_before_the_trace_copy_and_the_return(self):
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish(), debug=True)
+        answer = ctx.get("/a", redact=self._mask)
+        self.assertEqual(answer, {"data": "***"})
+        self.assertEqual(ctx.trace[0]["payload"], {"data": "***"})
+        # the redactor never reaches the transport, and is not part of the key
+        self.assertEqual(ctx.restconf.calls, ["/a"])
+        self.assertNotIn("kwargs", ctx.trace[0])
+
+    def test_cache_hit_passes_through_the_callers_redactor(self):
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish(), debug=True)
+        ctx.get("/a")  # read once verbatim
+        self.assertEqual(ctx.get("/a", redact=self._mask), {"data": "***"})
+        self.assertEqual(ctx.restconf.calls, ["/a"])
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
+
+    def test_a_404_is_not_redacted(self):
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish())
+        self.assertIsNone(ctx.get("/missing", ok_404=True, redact=self._mask))
+
+    def test_a_failing_redactor_withholds_the_answer(self):
+        def boom(_payload):
+            raise ValueError("no")
+
+        ctx = context.CollectorContext("bmc1", "bmc", restconf=_FakeRedfish(), debug=True)
+        with self.assertRaises(RuntimeError) as caught:
+            ctx.get("/a", redact=boom)
+        self.assertIn("ValueError", str(caught.exception))
+        self.assertNotIn("payload", ctx.trace[0])
+        self.assertEqual(ctx.trace[0]["outcome"], "error")
+        # nothing was cached: the next read goes to the wire again
+        ctx.get("/a")
+        self.assertEqual(ctx.restconf.calls, ["/a", "/a"])
 
 
 class TestContextCall(unittest.TestCase):
@@ -300,6 +342,19 @@ class TestShakedownAdvice(unittest.TestCase):
     def test_parsed_but_empty_points_at_leaf_names(self):
         advice = registry.shakedown_advice("ok", None, 0, True)
         self.assertIn("leaf/element names", advice)
+
+    def test_empty_is_ok_for_a_check_whose_healthy_state_is_empty(self):
+        advice = registry.shakedown_advice("ok", None, 0, True, empty_ok=True)
+        self.assertTrue(advice.startswith("ok"), advice)
+        self.assertIn("healthy state", advice)
+        # nothing fetched at all is never ok, and a check without the tag still flags it
+        self.assertIn("leaf/element names", registry.shakedown_advice("ok", None, 0, False, True))
+        self.assertIn("leaf/element names", registry.shakedown_advice("ok", None, 0, True))
+        # only an ok advice starts with "ok"
+        for status, count in (("not-present", 0), ("failed", 0)):
+            for fetched in (True, False):
+                advice = registry.shakedown_advice(status, "x", count, fetched, empty_ok=True)
+                self.assertFalse(advice.startswith("ok"), advice)
 
     def test_not_present(self):
         advice = registry.shakedown_advice("not-present", "BGP not running", 0, False)

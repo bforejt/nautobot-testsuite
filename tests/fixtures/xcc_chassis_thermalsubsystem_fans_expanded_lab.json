@@ -1,0 +1,92 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "PhysicalContext": "Fan",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Fan 1 Tach",
+   "@odata.type": "#Fan.v1_1_1.Fan",
+   "SpeedPercent": {
+    "Reading": 6014,
+    "SpeedRPM": 6014,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/53L0"
+   },
+   "@odata.etag": "\"<hex:19>\"",
+   "HotPluggable": true,
+   "@odata.context": "/redfish/v1/$metadata#Fan.Fan",
+   "Description": "It represents the properties for Temperature and Cooling.",
+   "Id": "Fan_1_Tach",
+   "Location": {
+    "PartLocation": {
+     "ServiceLabel": "Fan 1 Tach",
+     "LocationType": "Slot",
+     "LocationOrdinalValue": 1
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_1_Tach"
+  },
+  {
+   "PhysicalContext": "Fan",
+   "Id": "Fan_2_Tach",
+   "Name": "Fan 2 Tach",
+   "@odata.type": "#Fan.v1_1_1.Fan",
+   "SpeedPercent": {
+    "Reading": 6014,
+    "SpeedRPM": 6014,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/54L0"
+   },
+   "@odata.etag": "\"<hex:19>\"",
+   "HotPluggable": true,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Description": "It represents the properties for Temperature and Cooling.",
+   "@odata.context": "/redfish/v1/$metadata#Fan.Fan",
+   "Location": {
+    "PartLocation": {
+     "ServiceLabel": "Fan 2 Tach",
+     "LocationType": "Slot",
+     "LocationOrdinalValue": 2
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_2_Tach"
+  },
+  {
+   "PhysicalContext": "Fan",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Fan 3 Tach",
+   "@odata.type": "#Fan.v1_1_1.Fan",
+   "SpeedPercent": {
+    "Reading": 6208,
+    "SpeedRPM": 6208,
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/55L0"
+   },
+   "@odata.etag": "\"<hex:19>\"",
+   "HotPluggable": true,
+   "@odata.context": "/redfish/v1/$metadata#Fan.Fan",
+   "Description": "It represents the properties for Temperature and Cooling.",
+   "Id": "Fan_3_Tach",
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_3_Tach",
+   "Location": {
+    "PartLocation": {
+     "ServiceLabel": "Fan 3 Tach",
+     "LocationType": "Slot",
+     "LocationOrdinalValue": 3
+    }
+   }
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#FanCollection.FanCollection",
+ "Name": "FanCollection",
+ "@odata.type": "#FanCollection.FanCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans",
+ "Members@odata.count": 3,
+ "Description": "A collection of fan resource instances."
+}

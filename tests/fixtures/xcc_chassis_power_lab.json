@@ -1,0 +1,181 @@
+{
+ "PowerControl": [
+  {
+   "MemberId": "0",
+   "Status": {
+    "Health": "OK",
+    "State": "Enabled",
+    "HealthRollup": "OK"
+   },
+   "Name": "Server Power Control",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoPower.v1_0_0.PowerControl",
+     "HistoryPowerMetric": {
+      "@odata.id": "/redfish/v1/Chassis/1/Power/PowerControl/0/Oem/Lenovo/HistoryPowerMetric"
+     }
+    }
+   },
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "RelatedItem@odata.count": 1,
+   "PhysicalContext": "Chassis",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/0",
+   "PowerConsumedWatts": 43
+  },
+  {
+   "MemberId": "1",
+   "PowerConsumedWatts": 24,
+   "Status": {
+    "Health": "OK",
+    "State": "Enabled",
+    "HealthRollup": null
+   },
+   "RelatedItem@odata.count": 1,
+   "PhysicalContext": "CPUSubsystem",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/1",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors"
+    }
+   ],
+   "Name": "CPU Sub-system Power"
+  },
+  {
+   "MemberId": "2",
+   "PowerConsumedWatts": 1,
+   "Status": {
+    "Health": "OK",
+    "State": "Enabled",
+    "HealthRollup": null
+   },
+   "Name": "Memory Sub-system Power",
+   "PhysicalContext": "MemorySubsystem",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerControl/2",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Memory"
+    }
+   ],
+   "RelatedItem@odata.count": 1
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#Power.Power",
+ "Name": "Power",
+ "@odata.type": "#Power.v1_7_1.Power",
+ "@odata.id": "/redfish/v1/Chassis/1/Power",
+ "Voltages@odata.count": 4,
+ "Voltages": [
+  {
+   "MemberId": "0",
+   "Status": {
+    "State": "Enabled"
+   },
+   "Name": "CMOS Battery",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/0",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "MaxReadingRange": 3.32,
+   "PhysicalContext": "VoltageRegulator",
+   "ReadingVolts": 2.96,
+   "MinReadingRange": null,
+   "SensorNumber": 3,
+   "LowerThresholdNonCritical": 2.39,
+   "RelatedItem@odata.count": 2,
+   "LowerThresholdCritical": 2.25
+  },
+  {
+   "MemberId": "1",
+   "Status": {
+    "State": "Enabled"
+   },
+   "Name": "SysBrd 3.3V",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/1",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "MaxReadingRange": 3.98,
+   "PhysicalContext": "VoltageRegulator",
+   "ReadingVolts": 3.35,
+   "RelatedItem@odata.count": 2,
+   "SensorNumber": 160,
+   "UpperThresholdCritical": 3.63,
+   "MinReadingRange": null,
+   "LowerThresholdCritical": 2.96
+  },
+  {
+   "MemberId": "2",
+   "Status": {
+    "State": "Enabled"
+   },
+   "Name": "SysBrd 5V",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/2",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "MaxReadingRange": 5.87,
+   "PhysicalContext": "VoltageRegulator",
+   "ReadingVolts": 4.95,
+   "MinReadingRange": null,
+   "SensorNumber": 161,
+   "UpperThresholdCritical": 5.5,
+   "RelatedItem@odata.count": 2,
+   "LowerThresholdCritical": 4.51
+  },
+  {
+   "MemberId": "3",
+   "Status": {
+    "State": "Enabled"
+   },
+   "Name": "SysBrd 12V",
+   "@odata.id": "/redfish/v1/Chassis/1/Power#/Voltages/3",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "MaxReadingRange": 14.03,
+   "PhysicalContext": "VoltageRegulator",
+   "ReadingVolts": 11.77,
+   "RelatedItem@odata.count": 2,
+   "SensorNumber": 162,
+   "UpperThresholdCritical": 13.2,
+   "MinReadingRange": null,
+   "LowerThresholdCritical": 10.62
+  }
+ ],
+ "@odata.etag": "\"<hex:22>\"",
+ "Description": "Power Consumption and Power Limiting",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoPower.v1_0_0.Capabilities",
+   "WakeOnLANEnabled": true,
+   "PowerOnPermissionEnabled": true,
+   "LocalPowerControlEnabled": true
+  }
+ },
+ "Id": "Power",
+ "PowerControl@odata.count": 3
+}

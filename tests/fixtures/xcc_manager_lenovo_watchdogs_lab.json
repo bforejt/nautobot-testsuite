@@ -1,0 +1,23 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/3"
+  },
+  {
+   "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/4"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LenovoWatchdogCollection.LenovoWatchdogCollection",
+ "Name": "LenovoWatchdogCollection",
+ "@odata.type": "#LenovoWatchdogCollection.LenovoWatchdogCollection",
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs",
+ "Members@odata.count": 4,
+ "Description": "A collection of Watchdog resource instances."
+}

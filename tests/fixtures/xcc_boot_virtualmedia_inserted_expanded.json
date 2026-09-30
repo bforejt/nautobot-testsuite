@@ -1,0 +1,58 @@
+{
+ "@odata.id": "/redfish/v1/Systems/1/VirtualMedia",
+ "@odata.type": "#VirtualMediaCollection.VirtualMediaCollection",
+ "Name": "VirtualMediaCollection",
+ "Members@odata.count": 2,
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/VirtualMedia/RDOC1",
+   "@odata.type": "#VirtualMedia.v1_5_1.VirtualMedia",
+   "Id": "RDOC1",
+   "Name": "VirtualMedia",
+   "Inserted": true,
+   "Image": "https://user-a:pw-a@203.0.113.30/iso/installer.iso",
+   "ImageName": "installer.iso",
+   "MediaTypes": [
+    "USBStick",
+    "CD",
+    "DVD",
+    "Floppy"
+   ],
+   "ConnectedVia": "URI",
+   "WriteProtected": true,
+   "TransferProtocolType": "HTTPS",
+   "TransferMethod": "Stream",
+   "VerifyCertificate": false,
+   "UserName": "user-a",
+   "Password": "pw-a",
+   "Certificates": {
+    "@odata.id": "/redfish/v1/Systems/1/VirtualMedia/RDOC1/Certificates"
+   }
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/VirtualMedia/RDOC2",
+   "@odata.type": "#VirtualMedia.v1_5_1.VirtualMedia",
+   "Id": "RDOC2",
+   "Name": "VirtualMedia",
+   "Inserted": false,
+   "Image": null,
+   "ImageName": null,
+   "MediaTypes": [
+    "CD",
+    "DVD",
+    "Floppy",
+    "USBStick"
+   ],
+   "ConnectedVia": "NotConnected",
+   "WriteProtected": true,
+   "TransferProtocolType": null,
+   "TransferMethod": null,
+   "VerifyCertificate": false,
+   "UserName": null,
+   "Password": null,
+   "Certificates": {
+    "@odata.id": "/redfish/v1/Systems/1/VirtualMedia/RDOC2/Certificates"
+   }
+  }
+ ]
+}

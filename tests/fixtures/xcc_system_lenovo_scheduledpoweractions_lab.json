@@ -1,0 +1,20 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions/1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions/2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions/3"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LenovoScheduledPowerActionCollection.LenovoScheduledPowerActionCollection",
+ "Name": "LenovoScheduledPowerActionCollection",
+ "@odata.type": "#LenovoScheduledPowerActionCollection.LenovoScheduledPowerActionCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions",
+ "Members@odata.count": 3,
+ "Description": "A collection of ScheduledPowerAction resource instances."
+}

@@ -1,0 +1,23 @@
+{
+  "@odata.type": "#JobService.v1_0_4.JobService",
+  "@odata.id": "/redfish/v1/JobService",
+  "@odata.etag": "\"e5f6a7b8\"",
+  "Id": "JobService",
+  "Name": "Job Service",
+  "Description": "Hand-built from the DMTF JobService schema, for a job list larger than the lab unit's.",
+  "DateTime": "2026-09-30T04:40:01-04:00",
+  "ServiceEnabled": true,
+  "ServiceCapabilities": {
+    "MaxJobs": 32,
+    "MaxSteps": 4,
+    "Scheduling": true
+  },
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "Jobs": {
+    "@odata.id": "/redfish/v1/JobService/Jobs"
+  }
+}

@@ -1,0 +1,74 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#EventService.EventService",
+ "SMTP": {
+  "ConnectionProtocol": "AutoDetect",
+  "Authentication": "None",
+  "Username": "",
+  "Port": 25,
+  "ServiceEnabled": true,
+  "ConnectionProtocol@Redfish.AllowableValues": [
+   "AutoDetect"
+  ],
+  "Authentication@Redfish.AllowableValues": [
+   "None",
+   "Login",
+   "CRAM_MD5"
+  ],
+  "FromAddress": null,
+  "Password": null,
+  "ServerAddress": "0.0.0.0"
+ },
+ "Actions": {
+  "#EventService.SubmitTestEvent": {
+   "target": "/redfish/v1/EventService/Actions/EventService.SubmitTestEvent",
+   "title": "SubmitTestEvent"
+  }
+ },
+ "Status": {
+  "Health": "OK",
+  "State": "Enabled"
+ },
+ "@odata.etag": "\"<hex:21>\"",
+ "SubordinateResourcesSupported": true,
+ "SSEFilterPropertiesSupported": {
+  "EventFormatType": true,
+  "MetricReportDefinition": true,
+  "MessageId": true,
+  "SubordinateResources": true,
+  "RegistryPrefix": true,
+  "OriginResource": true,
+  "ResourceType": true
+ },
+ "ServerSentEventUri": "/redfish/v1/EventService/ServerSentEvent",
+ "EventFormatTypes": [
+  "Event",
+  "MetricReport"
+ ],
+ "Id": "EventService",
+ "Name": "Event Service",
+ "@odata.type": "#EventService.v1_7_2.EventService",
+ "@odata.id": "/redfish/v1/EventService",
+ "DeliveryRetryIntervalSeconds": 60,
+ "DeliveryRetryAttempts": 3,
+ "IncludeOriginOfConditionSupported": true,
+ "Subscriptions": {
+  "@odata.id": "/redfish/v1/EventService/Subscriptions"
+ },
+ "Description": "This resource represents an event service for a Redfish implementation.",
+ "ServiceEnabled": true,
+ "RegistryPrefixes": [
+  "Base",
+  "EventRegistry",
+  "ExtendedError",
+  "LenovoExtendedWarning",
+  "LenovoFirmwareUpdateRegistry",
+  "License",
+  "LogService",
+  "ResourceEvent",
+  "TaskEvent",
+  "Update"
+ ],
+ "ResourceTypes": [
+  "LogService"
+ ]
+}

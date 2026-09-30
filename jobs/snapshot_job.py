@@ -6,6 +6,14 @@ device gets a CollectorContext wired to the right transport, and everything a
 check learns lands in a versioned envelope attached to the JobResult as JSON
 artifacts (one snapshot envelope plus one raw evidence bundle per device).
 
+A server's BMC is modelled as an Interface on the host Device (the first word
+of its name a BMC token, an IP address assigned — jobs/bmc_target.py) and is
+captured in the SAME envelope: a second CollectorContext runs the ``bmc``
+family against the interface's address with the Secrets Group the
+``bmc_secrets_group`` Relationship associates with it, and every entry records
+``target: "host"`` or ``"bmc"``. There is no switch: a modelled BMC is always
+captured, an unmodelled one never is (docs/plans/bmc-capture-handoff.md §1c).
+
 Fail-closed doctrine: a device with any failed check fails the run — a bad
 baseline must be loud — but its envelope is still attached so partial
 evidence is never lost. One device's failure never stops the batch.
@@ -34,8 +42,8 @@ from nautobot.apps.jobs import (
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
+from . import bmc_target, creds, envelope, registry
 from . import constants as C
-from . import creds, envelope, registry
 from .context import CollectorContext
 from .panos_xml import PanosParseError
 from .registry import CollectError, SkipCheck
@@ -52,24 +60,26 @@ name = C.UI_GROUP
 KINDS = (("pre", "pre"), ("post", "post"), ("rollback", "rollback"), ("adhoc", "adhoc"))
 
 
-PLATFORM_NAMES = "iosxe, panos, vmware or xcc"
+PLATFORM_NAMES = "iosxe, panos or vmware"
 PLATFORM_HINT = (
-    "set the device platform's network_driver to a cisco, panos/paloalto, "
-    "vmware/esxi or xcc/redfish/lenovo value"
+    "set the device platform's network_driver to a cisco, panos/paloalto or vmware/esxi "
+    "value; a server's BMC is captured through an interface on the host device whose name "
+    "starts with %s and carries the BMC's address, never through a Device of its own"
+    % ("/".join(C.BMC_INTERFACE_NAMES),)
 )
 
 
 def _map_platform(device):
-    """Map a Device to ("iosxe"|"panos"|"vmware"|"xcc"|None, driver_string).
+    """Map a Device to ("iosxe"|"panos"|"vmware"|None, driver_string).
 
     Uses platform.network_driver, falling back to slug/name (older records),
-    lowercased. None platform means the device cannot be snapshotted. Order
-    matters — panos > vmware/esxi > xcc/redfish/lenovo > cisco: the firewall
-    and the hypervisor are tested before the BMC vendor token, so a platform
-    named "Lenovo ThinkSystem SE350 ESXi" maps to vmware (not to the BMC) and
-    "PAN-OS VM-Series on VMware" stays panos; the two NFV platforms are
-    tested before the bare "cisco" substring, so "Cisco UCS ESXi" maps to
-    vmware. The BMC record ("Lenovo XCC") still matches on its own tokens.
+    lowercased. None means the host's own platform is not supported — the
+    device can still be captured when a BMC is modelled on it (decision 2 of
+    the BMC handoff). Order matters — panos > vmware/esxi > cisco: "PAN-OS
+    VM-Series on VMware" stays panos, and the hypervisor is tested before the
+    bare "cisco" substring, so "Cisco UCS ESXi" maps to vmware. BMC vendor
+    tokens (xcc, redfish, lenovo) map nothing: a BMC is an interface on the
+    host Device, never a platform.
     """
     platform = getattr(device, "platform", None)
     driver = ""
@@ -85,11 +95,84 @@ def _map_platform(device):
         return "panos", driver
     if "vmware" in driver or "esxi" in driver:
         return "vmware", driver
-    if "xcc" in driver or "redfish" in driver or "lenovo" in driver:
-        return "xcc", driver
     if "cisco" in driver:
         return "iosxe", driver
     return None, driver
+
+
+def _find_bmc(device):
+    """(BmcTarget, the Interface) for the device's modelled BMC, or (None, None).
+
+    Walks the device's interfaces and applies the naming rule of
+    ``bmc_target``; only a matching interface's addresses are read. Raises
+    ``bmc_target.AmbiguousBmc`` when two interfaces match (the device must
+    fail before any transport opens).
+    """
+    rows, by_id = [], {}
+    # all_interfaces (Nautobot 2.3+) includes the interfaces of installed
+    # modules; plain interfaces is the fallback for older records.
+    interfaces = getattr(device, "all_interfaces", None) or device.interfaces
+    for interface in interfaces.all():
+        if bmc_target.match_bmc_interface(interface.name) is None:
+            continue
+        addresses = [str(ip.host) for ip in interface.ip_addresses.all()]
+        rows.append((interface.name, addresses, interface.pk))
+        by_id[interface.pk] = interface
+    target = bmc_target.find_bmc(rows)
+    if target is None:
+        return None, None
+    return target, by_id[target.interface_id]
+
+
+def _open_bmc(target, interface, device, logger):
+    """(RedfishClient or None, error or None) for a modelled, addressed BMC.
+
+    Resolves the interface's credentials through the bmc_secrets_group
+    Relationship and probes the service root anonymously, then the Systems
+    collection with the credentials. On a failed probe the client is closed
+    but returned, so its GET footprint is still recorded; the error names
+    what the operator must fix (a pending first-login password change has its
+    own hint, from the probe that actually failed). Any other exception (a
+    credential the HTTP library cannot encode, an ORM error) becomes the error
+    too, so the BMC stays fail-closed without failing the batch; the Celery
+    soft time limit still propagates.
+    """
+    client = None
+    try:
+        username, password = creds.resolve_bmc_credentials(interface, device)
+        client = RedfishClient(target.address, username, password, logger=logger)
+        if client.ping():
+            return client, None
+        record = client.last_probe or client.probe_get(C.REDFISH_PROBE_SYSTEMS, timeout=30)
+        client.close()
+        return client, "BMC Redfish unreachable at %s:%s (interface %s) — %s (probe: %s)" % (
+            target.address,
+            C.REDFISH_PORT,
+            target.interface_name,
+            redfish_probe_hint(record),
+            record,
+        )
+    except creds.CredentialsError as exc:
+        return None, "BMC credentials: %s" % (exc,)
+    except SoftTimeLimitExceeded:
+        if client is not None:
+            client.close()
+        raise
+    except Exception as exc:
+        if client is not None:
+            client.close()
+        return client, "BMC probe failed unexpectedly: %s: %s" % (type(exc).__name__, exc)
+
+
+def _bmc_vendor(env):
+    """(vendor, product) the BMC's service root named, from any bmc check's context."""
+    for body in env["checks"].values():
+        if body.get("target") != "bmc":
+            continue
+        resolution = (body.get("context") or {}).get("resolution") or {}
+        if resolution.get("vendor"):
+            return resolution.get("vendor"), resolution.get("product")
+    return None, None
 
 
 def _device_host(device):
@@ -137,6 +220,8 @@ def _attach_artifact(job, filename, payload):
         return
     try:
         job.create_file(filename, json.dumps(payload, indent=1, sort_keys=True))
+    except SoftTimeLimitExceeded:
+        raise
     except Exception as exc:
         job.logger.warning(
             "Failed to attach artifact %s: %s: %s", filename, type(exc).__name__, exc
@@ -178,8 +263,10 @@ class CaptureSnapshot(Job):
         model=SecretsGroup,
         required=False,
         description=(
-            "Per-run credential override — the per-job secret. Falls back to each "
-            "device's own Secrets Group when left empty."
+            "Per-run credential override for the host platforms — the per-job secret. "
+            "Falls back to each device's own Secrets Group when left empty. A modelled "
+            "BMC always uses the Secrets Group its interface's bmc_secrets_group "
+            "Relationship names, never this override."
         ),
     )
     dryrun = DryRunVar(
@@ -207,11 +294,13 @@ class CaptureSnapshot(Job):
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
             "`raw_*.json` evidence bundle per device. The device platform picks the "
             "transport (RESTCONF plus allowlisted read-only SSH commands for IOS-XE, SSH "
-            "for PAN-OS, Redfish for Lenovo XCC — all structurally read-only — and a "
-            "six-operation read-only SOAP allowlist for VMware ESXi), every check the "
-            "platform supports runs by doctrine — features not in use record loudly as "
-            "not-present — and each records a normalized view alongside its raw "
-            "evidence. Run once as `pre` before the change and "
+            "for PAN-OS — all structurally read-only — and a six-operation read-only SOAP "
+            "allowlist for VMware ESXi); a server's BMC, modelled as an interface on the "
+            "device named xcc/idrac/ilo/bmc/... with its address assigned, is captured in "
+            "the same envelope over GET-only Redfish. Every check the platform supports "
+            "runs by doctrine — features not in use record loudly as not-present — and "
+            "each records a normalized view alongside its raw evidence. Run once as `pre` "
+            "before the change and "
             "once as `post` after it, with the same change id, then download the "
             "snapshot files and analyze them with your test-plan prompt "
             "(docs/llm-test-plans.md; tools/diff_snapshots.py builds an optional "
@@ -328,6 +417,220 @@ class CaptureSnapshot(Job):
             ", ".join(succeeded),
         )
 
+    def _open_host(self, device, platform, host, secrets_group):
+        """(restconf, ssh, api, error): the host platform's transports, opened and probed.
+
+        ``error`` is an operator-facing sentence when the credentials or the
+        transport are unusable; every transport is closed again then (a
+        refused vSphere client is returned closed, for its footprint).
+        """
+        try:
+            username, password = creds.resolve_credentials(
+                device, C.TRANSPORT_FOR[platform], override_group=secrets_group
+            )
+        except creds.CredentialsError as exc:
+            return None, None, None, str(exc)
+        restconf = ssh = api = None
+        if platform == "iosxe":
+            restconf = RestconfClient(host, username, password, logger=self.logger)
+            if not restconf.ping():
+                # Re-probe for the evidence record: HTTP 401/403 vs pure
+                # connectivity failures live in it, so the operator hint is concrete.
+                record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
+                restconf.close()
+                return (
+                    None,
+                    None,
+                    None,
+                    "RESTCONF unreachable at %s:%s — %s (probe: %s)"
+                    % (
+                        host,
+                        C.RESTCONF_PORT,
+                        probe_hint(record),
+                        record,
+                    ),
+                )
+            # Unopened on purpose: only the SSH-based rollup check pays the
+            # connect cost, with the same credentials.
+            ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
+        elif platform == "panos":
+            ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
+            try:
+                ssh.open()
+            except Exception as exc:
+                return (
+                    None,
+                    None,
+                    None,
+                    "SSH connect to %s failed: %s: %s"
+                    % (
+                        host,
+                        type(exc).__name__,
+                        exc,
+                    ),
+                )
+        elif platform == "vmware":
+            # probe() refuses a vCenter answering; login() is the one Login of
+            # this capture and fails the device early exactly like ssh.open().
+            api = VsphereClient(host, username, password, logger=self.logger)
+            try:
+                api.probe()
+                api.login()
+            except VsphereError as exc:
+                api.close()
+                # Returned closed: its footprint (the refused Login) is evidence
+                # the envelope records when a BMC keeps the device's capture going.
+                return (
+                    None,
+                    None,
+                    api,
+                    "vSphere SOAP at %s%s unusable — %s (%s)"
+                    % (
+                        host,
+                        C.VSPHERE_SDK_PATH,
+                        vsphere_probe_hint(exc),
+                        exc,
+                    ),
+                )
+        else:  # unreachable: _map_platform only returns the three names above
+            return None, None, None, "no transport for platform %r" % (platform,)
+        return restconf, ssh, api, None
+
+    def _record_all_failed(self, env, checks, error, target):
+        """Every check of a family whose transport never opened, recorded failed with why."""
+        for check in checks:
+            envelope.record_check(
+                env, check, "failed", error=error, describe=_describe_check(check), target=target
+            )
+
+    def _run_checks(self, device, ctx, checks, env, raw_bundle, *, target, first, total):
+        """Run one family's checks through its context; returns (failed count, soft timeout)."""
+        log_extra = {"object": device}
+        failed_checks = 0
+        for index, check in enumerate(checks, first):
+            # Liveness: a healthy long check (the session-matrix sweep runs
+            # minutes) must never leave the job log silent — the JobResult
+            # page shows these lines as they are written.
+            self.logger.info(
+                "%s: [%d/%d] %s ...",
+                device.name,
+                index,
+                total,
+                check.id,
+                extra=log_extra,
+            )
+            started = time.monotonic()
+            try:
+                outcome = check.collector(ctx)
+                if not isinstance(outcome, dict):
+                    raise CollectError(
+                        "collector returned %s, expected dict" % (type(outcome).__name__,)
+                    )
+                envelope.record_check(
+                    env,
+                    check,
+                    "success",
+                    normalized=outcome.get("normalized"),
+                    duration_s=time.monotonic() - started,
+                    describe=_describe_check(check),
+                    context=outcome.get("context"),
+                    target=target,
+                )
+                raw_bundle[check.id] = outcome.get("raw")
+                self.logger.info(
+                    "%s: [%d/%d] %s ok — %d normalized entr%s in %.1fs",
+                    device.name,
+                    index,
+                    total,
+                    check.id,
+                    len(outcome.get("normalized") or {}),
+                    "y" if len(outcome.get("normalized") or {}) == 1 else "ies",
+                    time.monotonic() - started,
+                    extra=log_extra,
+                )
+            except SkipCheck as exc:
+                envelope.record_check(
+                    env,
+                    check,
+                    "not-present",
+                    error=str(exc),
+                    duration_s=time.monotonic() - started,
+                    describe=_describe_check(check),
+                    target=target,
+                )
+                self.logger.info(
+                    "%s: %s not present: %s",
+                    device.name,
+                    check.id,
+                    exc,
+                    extra=log_extra,
+                )
+            except SoftTimeLimitExceeded:
+                # Must outrank the blanket handler: the soft/hard gap is the
+                # only budget left to attach what was collected so far.
+                envelope.record_check(
+                    env,
+                    check,
+                    "failed",
+                    error="aborted: Celery soft time limit reached",
+                    duration_s=time.monotonic() - started,
+                    describe=_describe_check(check),
+                    target=target,
+                )
+                self.logger.error(
+                    "%s: soft time limit reached during %s — attaching the "
+                    "partial snapshot and stopping.",
+                    device.name,
+                    check.id,
+                    extra=log_extra,
+                )
+                return failed_checks + 1, True
+            except (
+                CollectError,
+                RestconfError,
+                RedfishError,
+                VsphereError,
+                SshCommandRefused,
+                PanosParseError,
+            ) as exc:
+                envelope.record_check(
+                    env,
+                    check,
+                    "failed",
+                    error=str(exc),
+                    duration_s=time.monotonic() - started,
+                    describe=_describe_check(check),
+                    target=target,
+                )
+                self.logger.warning(
+                    "%s: check %s failed: %s",
+                    device.name,
+                    check.id,
+                    exc,
+                    extra=log_extra,
+                )
+                failed_checks += 1
+            except Exception as exc:
+                envelope.record_check(
+                    env,
+                    check,
+                    "failed",
+                    error="%s: %s" % (type(exc).__name__, exc),
+                    duration_s=time.monotonic() - started,
+                    describe=_describe_check(check),
+                    target=target,
+                )
+                self.logger.warning(
+                    "%s: check %s failed unexpectedly (%s): %s",
+                    device.name,
+                    check.id,
+                    type(exc).__name__,
+                    exc,
+                    extra=log_extra,
+                )
+                failed_checks += 1
+        return failed_checks, False
+
     def _capture_device(
         self,
         device,
@@ -341,14 +644,31 @@ class CaptureSnapshot(Job):
         debug=False,
         change_description="",
     ):
-        """Snapshot one device end to end; returns True when it counts as succeeded."""
+        """Snapshot one device — its host platform and its modelled BMC — into one envelope.
+
+        Returns True when the device counts as succeeded. The BMC cases
+        (docs/plans/bmc-capture-handoff.md §1c): no interface matches -> host
+        only, ``device.bmc`` null; a match without an address -> host only
+        with a warning; two matches -> the device fails before any transport
+        opens; credentials or reachability failing -> every bmc check failed
+        with the reason (device FAILED); the host platform unsupported -> the
+        BMC captured alone with a warning, ``host_captured`` false, and the
+        device succeeds when its BMC checks do.
+        """
         log_extra = {"object": device}
         started_device = time.monotonic()
 
         platform, driver = _map_platform(device)
-        if platform is None:
+        try:
+            bmc, bmc_interface = _find_bmc(device)
+        except bmc_target.AmbiguousBmc as exc:
+            self.logger.error("%s: %s", device.name, exc, extra=log_extra)
+            return False
+        bmc_addressed = bmc is not None and bmc.address is not None
+        if platform is None and not bmc_addressed:
             self.logger.error(
-                "%s: cannot map platform (network_driver/slug/name gave %r) to %s — %s.",
+                "%s: cannot map platform (network_driver/slug/name gave %r) to %s, and no BMC "
+                "interface with an address is modelled on it — %s.",
                 device.name,
                 driver,
                 PLATFORM_NAMES,
@@ -356,129 +676,94 @@ class CaptureSnapshot(Job):
                 extra=log_extra,
             )
             return False
-        host = _device_host(device)
-
-        try:
-            username, password = creds.resolve_credentials(
-                device, C.TRANSPORT_FOR[platform], override_group=secrets_group
-            )
-        except creds.CredentialsError as exc:
-            self.logger.error("%s: %s", device.name, exc, extra=log_extra)
-            return False
-
-        restconf = None
-        ssh = None
-        api = None
-        if platform == "iosxe":
-            restconf = RestconfClient(host, username, password, logger=self.logger)
-            if not restconf.ping():
-                # Re-probe for the evidence record: HTTP 401/403 vs pure
-                # connectivity failures live in it, so the operator hint is concrete.
-                record = restconf.probe_get(C.DATA_DEVICE_SYSTEM, timeout=30)
-                restconf.close()
-                self.logger.error(
-                    "%s: RESTCONF unreachable at %s:%s — %s (probe: %s)",
-                    device.name,
-                    host,
-                    C.RESTCONF_PORT,
-                    probe_hint(record),
-                    record,
-                    extra=log_extra,
-                )
-                return False
-            # Unopened on purpose: only the SSH-based rollup check pays the
-            # connect cost, with the same credentials.
-            ssh = SshRunner("cisco_xe", host, username, password, logger=self.logger)
-        elif platform == "panos":
-            ssh = SshRunner("paloalto_panos", host, username, password, logger=self.logger)
-            try:
-                ssh.open()
-            except Exception as exc:
-                self.logger.error(
-                    "%s: SSH connect to %s failed: %s: %s",
-                    device.name,
-                    host,
-                    type(exc).__name__,
-                    exc,
-                    extra=log_extra,
-                )
-                return False
-        elif platform == "xcc":
-            if not C.XCC_ENABLED:
-                self.logger.error(
-                    "%s: the xcc platform is disabled (constants.XCC_ENABLED is False — "
-                    "the XCCs are unreachable at the current sites); nothing captured.",
-                    device.name,
-                    extra=log_extra,
-                )
-                return False
-            # Redfish duck-types the restconf slot: same get() contract, same
-            # per-run cache, so Managers/1 is fetched once for every xcc_* check.
-            restconf = RedfishClient(host, username, password, logger=self.logger)
-            if not restconf.ping():
-                record = restconf.probe_get(C.REDFISH_PROBE_SYSTEM, timeout=30)
-                restconf.close()
-                self.logger.error(
-                    "%s: Redfish unreachable at %s:%s — %s (probe: %s)",
-                    device.name,
-                    host,
-                    C.REDFISH_PORT,
-                    redfish_probe_hint(record),
-                    record,
-                    extra=log_extra,
-                )
-                return False
-        elif platform == "vmware":
-            # probe() refuses a vCenter answering; login() is the one Login of
-            # this capture and fails the device early exactly like ssh.open().
-            api = VsphereClient(host, username, password, logger=self.logger)
-            try:
-                api.probe()
-                api.login()
-            except VsphereError as exc:
-                api.close()
-                self.logger.error(
-                    "%s: vSphere SOAP at %s%s unusable — %s (%s)",
-                    device.name,
-                    host,
-                    C.VSPHERE_SDK_PATH,
-                    vsphere_probe_hint(exc),
-                    exc,
-                    extra=log_extra,
-                )
-                return False
-        else:  # unreachable: _map_platform only returns the four names above
-            self.logger.error("%s: no transport for platform %r", device.name, platform)
-            return False
-
-        if override_ids is not None:
-            checks = registry.checks_for(platform, override_ids)
-        else:
-            checks = registry.checks_for(platform)
-        checks = sorted(checks, key=lambda check: (check.tier, check.id))
-        check_ids = [check.id for check in checks]
-        if not checks:
-            # An empty selection is operator error (wrong package for the platform),
-            # and an empty "baseline" would pass every later compare — fail loudly.
-            self.logger.error(
-                "%s: no checks in the selection apply to platform %s — fix override_checks.",
+        if platform is None:
+            self.logger.warning(
+                "%s: the host platform (%r) is not supported yet — capturing its BMC "
+                "(interface %s) alone; device.host_captured is false in the snapshot.",
                 device.name,
-                platform,
+                driver,
+                bmc.interface_name,
                 extra=log_extra,
             )
-            for transport in (restconf, ssh, api):
-                if transport is not None:
-                    transport.close()
+        bmc_note = None
+        if bmc is not None and not bmc_addressed:
+            bmc_note = "no address assigned"
+            self.logger.warning(
+                "%s: BMC interface %s has no IP address assigned — host capture only; "
+                "assign the BMC's address to the interface to capture it.",
+                device.name,
+                bmc.interface_name,
+                extra=log_extra,
+            )
+
+        order = lambda check: (check.tier, check.id)  # noqa: E731
+        host_checks = sorted(registry.checks_for(platform, override_ids), key=order)
+        if platform is None:
+            host_checks = []
+        bmc_checks = []
+        if bmc_addressed:
+            bmc_checks = sorted(registry.checks_for("bmc", override_ids), key=order)
+            if not bmc_checks:
+                bmc_note = "no bmc check selected by override_checks"
+        check_ids = [check.id for check in host_checks + bmc_checks]
+        if not check_ids:
+            # An empty selection is operator error (override_checks naming
+            # another platform's ids), and an empty "baseline" would pass
+            # every later compare — fail loudly.
+            self.logger.error(
+                "%s: no checks in the selection apply to platform %s%s — fix override_checks.",
+                device.name,
+                platform,
+                " or to its BMC" if bmc_addressed else "",
+                extra=log_extra,
+            )
             return False
+
+        host = _device_host(device)
+        restconf = ssh = api = None
+        host_error = None
+        bmc_client, bmc_error = None, None
+        try:
+            # The BMC first: Basic auth leaves no session on it, so the host's
+            # own login (a vSphere Login is a session) is the last step before
+            # the contexts own every transport.
+            if bmc_checks:
+                bmc_client, bmc_error = _open_bmc(bmc, bmc_interface, device, self.logger)
+                if bmc_error is not None:
+                    self.logger.error("%s: %s", device.name, bmc_error, extra=log_extra)
+            if host_checks:
+                restconf, ssh, api, host_error = self._open_host(
+                    device, platform, host, secrets_group
+                )
+                if host_error is not None:
+                    self.logger.error("%s: %s", device.name, host_error, extra=log_extra)
+        except BaseException:
+            for transport in (bmc_client, restconf, ssh, api):
+                if transport is not None:
+                    try:
+                        transport.close()
+                    except Exception:
+                        pass
+            raise
+        if host_error is not None and not bmc_checks:
+            return False
+        # A failed host with a modelled BMC continues: the BMC's view is valid
+        # whatever state the host is in, and the host checks record why they
+        # have no data.
+        bmc_live = bool(bmc_checks) and bmc_error is None
 
         env = envelope.new_envelope(
             device_info={
                 "name": device.name,
                 "id": str(device.pk),
                 "platform": driver,
+                "platform_supported": platform is not None,
+                "host_captured": bool(host_checks) and host_error is None,
                 "primary_ip": host,
                 "role": str(getattr(device, "role", "") or ""),
                 "location": str(getattr(device, "location", "") or ""),
+                # captured and note are final only after the run (below)
+                "bmc": bmc_target.bmc_block(bmc, captured=False, note=bmc_note),
             },
             change_id=change_id,
             change_description=change_description,
@@ -493,151 +778,94 @@ class CaptureSnapshot(Job):
         raw_bundle = {}
         failed_checks = 0
         soft_timeout = False
-        ctx = CollectorContext(
-            device.name,
-            platform,
-            restconf=restconf,
-            ssh=ssh,
-            api=api,
-            logger=self.logger,
-            debug=debug,
-        )
+        host_ctx = None
+        if host_checks and host_error is None:
+            host_ctx = CollectorContext(
+                device.name,
+                platform,
+                restconf=restconf,
+                ssh=ssh,
+                api=api,
+                logger=self.logger,
+                debug=debug,
+            )
+        bmc_ctx = None
+        if bmc_live:
+            # A second context: its own cache, budgets and trace, so nothing
+            # is shared with the host's transports.
+            bmc_ctx = CollectorContext(
+                device.name, "bmc", restconf=bmc_client, logger=self.logger, debug=debug
+            )
+        total = len(host_checks) + len(bmc_checks)
+        bmc_ran = False
         try:
             if dryrun:
+                ok = host_error is None and bmc_error is None
                 self.logger.info(
-                    "%s: DRY-RUN ok: would run %d checks (%s)",
+                    "%s: DRY-RUN %s: host %s, would run %d check(s) (%s); BMC %s, would run "
+                    "%d check(s) (%s)",
                     device.name,
-                    len(check_ids),
-                    ", ".join(check_ids),
+                    "ok" if ok else "FAILED",
+                    "unreachable" if host_error else ("ready" if host_checks else "not captured"),
+                    len(host_checks),
+                    ", ".join(check.id for check in host_checks) or "none",
+                    "unusable"
+                    if bmc_error
+                    else ("ready" if bmc_checks else (bmc_note or "not modelled")),
+                    len(bmc_checks),
+                    ", ".join(check.id for check in bmc_checks) or "none",
                     extra=log_extra,
                 )
-                return True
-            for index, check in enumerate(checks, 1):
-                # Liveness: a healthy long check (the session-matrix sweep runs
-                # minutes) must never leave the job log silent — the JobResult
-                # page shows these lines as they are written.
-                self.logger.info(
-                    "%s: [%d/%d] %s ...",
-                    device.name,
-                    index,
-                    len(checks),
-                    check.id,
-                    extra=log_extra,
+                return ok
+            if host_error is not None:
+                self._record_all_failed(env, host_checks, host_error, "host")
+                failed_checks += len(host_checks)
+            elif host_checks:
+                failed, soft_timeout = self._run_checks(
+                    device,
+                    host_ctx,
+                    host_checks,
+                    env,
+                    raw_bundle,
+                    target="host",
+                    first=1,
+                    total=total,
                 )
-                started = time.monotonic()
-                try:
-                    outcome = check.collector(ctx)
-                    if not isinstance(outcome, dict):
-                        raise CollectError(
-                            "collector returned %s, expected dict" % (type(outcome).__name__,)
-                        )
-                    envelope.record_check(
+                failed_checks += failed
+            if bmc_checks and not soft_timeout:
+                if bmc_error is not None:
+                    self._record_all_failed(env, bmc_checks, bmc_error, "bmc")
+                    failed_checks += len(bmc_checks)
+                else:
+                    bmc_ran = True
+                    failed, soft_timeout = self._run_checks(
+                        device,
+                        bmc_ctx,
+                        bmc_checks,
                         env,
-                        check,
-                        "success",
-                        normalized=outcome.get("normalized"),
-                        duration_s=time.monotonic() - started,
-                        describe=_describe_check(check),
-                        context=outcome.get("context"),
+                        raw_bundle,
+                        target="bmc",
+                        first=len(host_checks) + 1,
+                        total=total,
                     )
-                    raw_bundle[check.id] = outcome.get("raw")
-                    self.logger.info(
-                        "%s: [%d/%d] %s ok — %d normalized entr%s in %.1fs",
-                        device.name,
-                        index,
-                        len(checks),
-                        check.id,
-                        len(outcome.get("normalized") or {}),
-                        "y" if len(outcome.get("normalized") or {}) == 1 else "ies",
-                        time.monotonic() - started,
-                        extra=log_extra,
-                    )
-                except SkipCheck as exc:
-                    envelope.record_check(
-                        env,
-                        check,
-                        "not-present",
-                        error=str(exc),
-                        duration_s=time.monotonic() - started,
-                        describe=_describe_check(check),
-                    )
-                    self.logger.info(
-                        "%s: %s not present: %s",
-                        device.name,
-                        check.id,
-                        exc,
-                        extra=log_extra,
-                    )
-                except SoftTimeLimitExceeded:
-                    # Must outrank the blanket handler: the soft/hard gap is the
-                    # only budget left to attach what was collected so far.
-                    envelope.record_check(
-                        env,
-                        check,
-                        "failed",
-                        error="aborted: Celery soft time limit reached",
-                        duration_s=time.monotonic() - started,
-                        describe=_describe_check(check),
-                    )
-                    self.logger.error(
-                        "%s: soft time limit reached during %s — attaching the "
-                        "partial snapshot and stopping.",
-                        device.name,
-                        check.id,
-                        extra=log_extra,
-                    )
-                    failed_checks += 1
-                    soft_timeout = True
-                    break
-                except (
-                    CollectError,
-                    RestconfError,
-                    RedfishError,
-                    VsphereError,
-                    SshCommandRefused,
-                    PanosParseError,
-                ) as exc:
-                    envelope.record_check(
-                        env,
-                        check,
-                        "failed",
-                        error=str(exc),
-                        duration_s=time.monotonic() - started,
-                        describe=_describe_check(check),
-                    )
-                    self.logger.warning(
-                        "%s: check %s failed: %s",
-                        device.name,
-                        check.id,
-                        exc,
-                        extra=log_extra,
-                    )
-                    failed_checks += 1
-                except Exception as exc:
-                    envelope.record_check(
-                        env,
-                        check,
-                        "failed",
-                        error="%s: %s" % (type(exc).__name__, exc),
-                        duration_s=time.monotonic() - started,
-                        describe=_describe_check(check),
-                    )
-                    self.logger.warning(
-                        "%s: check %s failed unexpectedly (%s): %s",
-                        device.name,
-                        check.id,
-                        type(exc).__name__,
-                        exc,
-                        extra=log_extra,
-                    )
-                    failed_checks += 1
+                    failed_checks += failed
         finally:
-            ctx.close()
+            for ctx in (host_ctx, bmc_ctx):
+                if ctx is not None:
+                    ctx.close()
 
+        block = env["device"]["bmc"]
+        if block is not None:
+            vendor, product = _bmc_vendor(env)
+            block.update(vendor=vendor, product=product, captured=bmc_ran)
+            if bmc_error is not None:
+                block["note"] = "credentials or reachability failed (see the bmc checks' error)"
+            elif bmc_checks and not bmc_ran:
+                block["note"] = "not run: the soft time limit was reached during the host checks"
         # After close(), so the vSphere logout outcome is final: the suite's own
         # footprint (account, login/logout, call and GET counts) rides in the
-        # envelope for whoever audits the host's session log.
-        for transport in (restconf, api):
+        # envelope for whoever audits the host's or the BMC's session log.
+        for transport in (restconf, api, bmc_client):
             if getattr(transport, "footprint", None) is not None:
                 envelope.record_transport(env, transport.transport_label, transport.footprint())
 
@@ -654,13 +882,15 @@ class CaptureSnapshot(Job):
                 C.RAW_FILENAME.format(device=safe_device, change_id=safe_change),
                 raw_bundle,
             )
-        if debug and ctx.trace:
+        trace = (host_ctx.trace if host_ctx else []) + (bmc_ctx.trace if bmc_ctx else [])
+        if debug and trace:
             # The trace keeps evidence even for FAILED checks (collectors raise
-            # before returning raw), which is exactly what debugging needs.
+            # before returning raw), which is exactly what debugging needs;
+            # every entry names its transport (restconf/ssh/vsphere/redfish).
             _attach_artifact(
                 self,
                 C.DEBUG_FILENAME.format(device=safe_device, change_id=safe_change),
-                {"schema": 1, "device": device.name, "trace": ctx.trace},
+                {"schema": 1, "device": device.name, "trace": trace},
             )
 
         counts = envelope.envelope_summary(env)
@@ -669,9 +899,11 @@ class CaptureSnapshot(Job):
             or "no checks"
         )
         self.logger.info(
-            "%s: snapshot complete — %d check(s): %s in %.1fs",
+            "%s: snapshot complete — %d check(s) (%d host, %d bmc): %s in %.1fs",
             device.name,
-            len(checks),
+            total,
+            len(host_checks),
+            len(bmc_checks),
             counts_text,
             time.monotonic() - started_device,
             extra=log_extra,

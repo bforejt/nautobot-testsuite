@@ -1,0 +1,29 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/2"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/3"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/4"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/5"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots/6"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LenovoSlotCollection.LenovoSlotCollection",
+ "Name": "Lenovo Slot Collection",
+ "@odata.type": "#LenovoSlotCollection.LenovoSlotCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots",
+ "Members@odata.count": 6,
+ "Description": "A collection of Lenovo Slot resource instances."
+}
