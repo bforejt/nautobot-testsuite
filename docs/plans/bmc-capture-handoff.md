@@ -692,12 +692,16 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
 3. **PR B — widen the existing checks** (§5a) on the lab fixtures.
    **State (2026-09-30):** built by four builders in parallel (one per check
    group, each in its own worktree at the fixtures commit), merged, reviewed
-   adversarially and proven through the dev stack against the lab unit:
-   all twelve checks `success` (`bmc_security` now ok with nine
-   `security|` leaves and the key manager's two certificate counts), 48 GETs
-   in 50 s for the capture, the shakedown 11/12 ok (the event log's
-   "parsed but empty" is the healthy state), and the log's sequence numbers
-   unchanged across the run. `bmc_manager_network` is not split (§10a item
+   adversarially (§10a item 11), committed and proven through the dev stack
+   against the lab unit with the committed code: all twelve checks
+   `success` (`bmc_security` now ok with its `security|` leaves and the key
+   manager's two certificate counts), 48 GETs in 49 s for the capture; the
+   shakedown 12/12 ok (the empty event log reads "ok — empty is this check's
+   healthy state"), 80 GETs in 86 s, and the log's platform/audit sequence
+   numbers 140/176 before and after the run. No account or person name in
+   the snapshot, raw, debug trace or shakedown report; the shakedown trace
+   did carry every local account name, from its account-discovery probe —
+   fixed (§10a item 12). `bmc_manager_network` is not split (§10a item
    2); the boot-override trio stays in `bmc_system` until `bmc_boot` exists;
    the capping and policy leaves stay in `bmc_power`'s context until
    `bmc_power_policy` exists.
@@ -842,6 +846,14 @@ Recorded as they were found, each with how it was resolved.
     reads an empty `bmc_event_log` as ok, saying why (the `empty-ok` tag),
     instead of flagging the healthy state. Two findings were refuted by their
     verifiers and left as built.
+12. **The shakedown's account probe put every local account name into the
+    shakedown trace.** It listed the accounts through the accounts redactor
+    (names kept, as `bmc_accounts` will) to find the capture account. It now
+    reads the list past the per-run cache — so it never shares a copy with a
+    check that keeps the names, in either order — through a redactor that
+    scrubs every name but the capture's own (which the envelope's transport
+    footprint already names). Found by the hygiene count of the dev-stack
+    proof, not by a review.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

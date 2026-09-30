@@ -225,10 +225,11 @@ numbers, the DNS placeholders, SNMP enablement from the Lenovo agent, the
 account names in log messages) are pinned by tests on hand-built payloads.
 The `bmc` family then ran through the capture job on a Nautobot 3.2.5 dev
 stack against the same unit: eleven ok and `bmc_security` not-present again,
-32 GETs in 33 s, no account or person name in raw or the debug trace.
-*Captured today* is what the twelve checks carry now, widened per
-`docs/plans/bmc-capture-handoff.md` §5a (PR B); the new checks of §5b are
-holes until they land.
+32 GETs in 33 s, no account or person name in raw or the debug trace. Widened
+per `docs/plans/bmc-capture-handoff.md` §5a (PR B), all twelve are ok there
+(48 GETs in 49 s; the shakedown 12/12 ok in 80 GETs, the log's sequence
+numbers unchanged across it). *Captured today* is what the checks carry now;
+the new checks of §5b are holes until they land.
 
 | Layer | Captured today | Holes remaining | General value of closing each hole |
 | --- | --- | --- | --- |
