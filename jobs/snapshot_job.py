@@ -219,22 +219,14 @@ class CaptureSnapshot(Job):
 
     devices = MultiObjectVar(
         model=Device,
-        description="Devices to snapshot; processed serially, one at a time.",
+        description="The devices to snapshot, captured one at a time.",
     )
     change_id = StringVar(
-        description=(
-            "Change/ticket identifier. Tags the attached artifacts and pairs a pre "
-            "snapshot with its post snapshot in Compare Snapshots."
-        ),
+        description="The change or ticket ID that names the artifacts and pairs pre with post.",
     )
     change_description = StringVar(
         required=False,
-        description=(
-            "One or two sentences describing WHAT the change is (e.g. 'Replace "
-            "PA-5250 with VM-500; default route and ~24 prefixes move from VL909 "
-            "to VL925'). Embedded in every snapshot so any later reader — human "
-            "or LLM — knows the intent behind the capture."
-        ),
+        description="What the change is, in a sentence, embedded in every snapshot.",
     )
     kind = ChoiceVar(
         choices=KINDS,
@@ -244,29 +236,15 @@ class CaptureSnapshot(Job):
     secrets_group = ObjectVar(
         model=SecretsGroup,
         required=False,
-        description=(
-            "Per-run credential override for the host platforms — the per-job secret. "
-            "Falls back to each device's own Secrets Group when left empty. A modelled "
-            "BMC always uses the Secrets Group its interface's bmc_secrets_group "
-            "Relationship names, never this override."
-        ),
+        description="A Secrets Group to use for the hosts instead of each device's own.",
     )
     dryrun = DryRunVar(
-        description=(
-            "Validate platform mapping, credentials and reachability only; "
-            "collect nothing and attach nothing."
-        ),
+        description="Check platform mapping, credentials and reachability; collect nothing.",
     )
     debug = BooleanVar(
         required=False,
         default=False,
-        description=(
-            "Attach a `debug_*.json` transport trace per device: every RESTCONF/"
-            "Redfish path, SSH command and SOAP operation with timing, outcome, and "
-            "the FULL payload (configuration text redacted) — "
-            "so a failed check keeps its evidence. Payload-heavy; use on one or "
-            "two devices at a time, not a fleet."
-        ),
+        description="Attach a full-payload transport trace per device to diagnose a failed check.",
     )
 
     class Meta:
@@ -274,20 +252,7 @@ class CaptureSnapshot(Job):
         description = (
             "Collects a read-only operational snapshot from each selected device and "
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
-            "`raw_*.json` evidence bundle per device. The device platform picks the "
-            "transport (RESTCONF plus allowlisted read-only SSH commands for IOS-XE, SSH "
-            "for PAN-OS — all structurally read-only — and a six-operation read-only SOAP "
-            "allowlist for VMware ESXi); a server's BMC, modelled as an interface on the "
-            "device named xcc/idrac/ilo/bmc/... with its address assigned, is captured in "
-            "the same envelope over GET-only Redfish. Every check the platform supports "
-            "runs by doctrine — features not in use record loudly as not-present — and "
-            "each records a normalized view alongside its raw evidence. Run once as `pre` "
-            "before the change and "
-            "once as `post` after it, with the same change id, then download the "
-            "snapshot files and analyze them with your test-plan prompt "
-            "(docs/llm-test-plans.md; tools/diff_snapshots.py builds an optional "
-            "deterministic diff index). A device with any failed check marks the run "
-            "FAILED (a bad baseline must be loud) but its envelope is still attached."
+            "`raw_*.json` evidence bundle per device."
         )
         has_sensitive_variables = False
         read_only = True
