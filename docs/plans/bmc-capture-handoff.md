@@ -42,8 +42,10 @@ still open (each with the default the plan assumes).
   wrote no entry to any BMC log**, so the risk raised in the first draft is
   closed. The 204 schema files give the exact property vocabulary (Appendix
   B). The account's first-login password change, which blocked the first
-  attempt, is done; it holds an OEM *Supervisor* privilege, so what a
-  ReadOnly-privilege account may read is the one thing still unverified.
+  attempt, is done, and the walk and the live run were then **repeated with
+  the account moved to a ReadOnly-privilege role: identical tree, identical
+  leaves, identical collector results** — the ReadOnly privilege reads
+  everything the catalog needs on this firmware.
 - **Catalog**: the twelve existing checks are renamed and widened, and ten
   new ones close the layers a BMC uniquely sees (boot order, power policy and
   watchdogs, the Sensors collection — which on this unit is the only view of
@@ -164,8 +166,10 @@ dropped.
    then every authenticated GET is refused with
    `Base.1.12.PasswordChangeRequired` (seen on the lab unit 2026-09-30 before
    the user cleared it) and the capture's probe hint says exactly this. The
-   lab account walked the tree with the OEM *Supervisor* privilege; §7 item
-   1 repeats the walk with a ReadOnly-privilege account before production.
+   lab account walked the tree first with the OEM *Supervisor* privilege and
+   then, after the user moved it to a ReadOnly-privilege role, again with
+   that: no resource, leaf or collector result differed (§4a), so ReadOnly is
+   the privilege to give a production capture account.
 6. Nothing changes for the ESXi record: platform `vmware`, `primary_ip` =
    vmk0, its own Secrets Group. `vmware_host_identity` already records
    `bmc_ip`/`bmc_mac` from `config.ipmi`, so the analyst can confirm the
@@ -231,7 +235,11 @@ firmware `TEI3G4D 6.10 2025-08-08` (release `purley_gp_23-2`). The host was
 powered on and booted; its UEFI boot order names Proxmox and TrueNAS entries,
 so the lab box is exactly the future host platform this plan must not
 preclude. Everything below was read with the account in
-`/opt/stacks/.xcc.env` (OEM privilege *Supervisor*).
+`/opt/stacks/.xcc.env`, first while its role carried the OEM *Supervisor*
+privilege and then again after the user set the role's OEM privilege to
+*ReadOnly*; the two walks and the two collector runs are indistinguishable
+(same 425 resources, all HTTP 200, no leaf missing on any singleton, the
+same statuses, keys and request lists from every collector).
 
 ### 4a. Service, account, footprint
 
@@ -252,13 +260,16 @@ preclude. Everything below was read with the account in
 - 425 resources, every one HTTP 200 for this account; typical answer 100–250
   ms. The one first-attempt failure was the account's pending first-login
   password change (`Base.1.12.PasswordChangeRequired`), cleared by the user.
-- **Footprint: 779 Basic-auth GETs (the walk) plus the 30 of the live
+- **Footprint: 779 Basic-auth GETs (the first walk) plus the 30 of the live
   collector run added no entry to the StandardLog** — its platform sequence
   number stayed at 140 and its audit sequence number moved by one, which
-  was the user's own web-UI logoff. Redfish Basic auth creates no session
-  either (`AccountService.Oem.Lenovo.CurrentLoggedUsers` listed only the
-  web session). The first draft's worry about log churn (old §6) is closed
-  for this firmware; the pacing stays as prudence.
+  was the user's own web-UI logoff. The read-only walk (another ~430 GETs
+  plus 30) confirmed it: the four audit entries added meanwhile were the
+  user's web login, the role change, an SNMPv3 setting and the logoff.
+  Redfish Basic auth creates no session either
+  (`AccountService.Oem.Lenovo.CurrentLoggedUsers` listed only the web
+  session). The first draft's worry about log churn (old §6) is closed for
+  this firmware; the pacing stays as prudence.
 - Registries served: Base 1.12.1, ResourceEvent, ExtendedError, TaskEvent,
   EventRegistry, LenovoPrivilegeRegistry, LenovoFirmwareUpdateRegistry,
   LenovoExtendedWarning, BiosAttributeRegistry 1.0.0, License, LogService.
@@ -278,7 +289,7 @@ preclude. Everything below was read with the account in
 | Firmware | `FirmwareInventory` 15 members: `BMC-Primary`, `BMC-Primary-Pending` (version null, state Disabled), `BMC-Backup` (StandbySpare), `UEFI`, `UEFI-Pending`, `LXPM`, `LXPMWindowsDriver`, `LXPMLinuxDriver`, `Ob_2.1`/`Ob_2.2` (X722 option ROM and Etrack id), `Ob_4.1` (I350, "N/A"), `Disk1`–`Disk4`; `UpdateService.Oem.Lenovo.XCCBackupAutoPromote`, `FirmwareServices` (1) | `SoftwareInventory` |
 | Logs | `Systems/1/LogServices`: **StandardLog** (2048, WrapsWhenFull, `LogEntryType` Multiple — platform *and* audit entries in one log, told apart by `Oem.Lenovo.LogType` `StardandLogEntry-Platform` / `-Audit` (sic); the service's `Oem.Lenovo` carries `PlatformFirstSeqNum`/`PlatformLastSeqNum`, `AuditFirstSeqNum`/`AuditLastSeqNum`, hidden-entry counters, `EnableSELWrapping`; entry `Id` is the combined `TotalSequenceNumber`, `EventSequenceNumber` counts per type; 311 entries on this unit, every one Severity OK; codes such as FQXSPSD0000I drive added, FQXSPPW0001I supply added, FQXSPPW0008I/2008I host power off/on, FQXSPPP4034I "powered off for an unknown reason", FQXSPEM4009I UEFI definitions changed, FQXSPSE4001I/4032I/4059I login, logoff and password change **with user names and client addresses in the Message**); **ActiveLog** (1024; unresolved conditions; empty here); **MaintenanceLog** (750; firmware-update and configuration history such as "LXPM firmware is updated to … by XCC Web"; no severity or OEM block); **DiagnosticLog** (3 download pointers: FFDC, FailureScreen, MPFA); **SaLog** (5, empty); **SEL** (511, NeverOverWrites, no Entries link) | `PlatformLog` (the name the current collector prefers — its StandardLog fallback is what ran) |
 | Services | `NetworkProtocol` (§4c), `Oem.Lenovo.Security` (`CryptographyManagement` TLS mode NIST / min TLS 1.2, `SSLSettings` HTTPS on / LDAPS off / CIM off, `Configurator.FWRollback` Enabled, `EncapSettings`, capabilities — **no ThinkEdge lockdown/motion properties**), `SecureKeyLifecycleService` (certificate collections only), `Watchdogs` (4: OS boot, OS, BIOS boot, IPMI with timer values and expired flags), `ScheduledPowerActions` (3, not activated) mirrored as `JobService/Jobs` `PowerOff`/`PowerOn`/`Restart` (Suspended, weekday schedule), `Configuration` (backup/restore status), `ServerProfile` (disabled), `ServiceData`, `RemoteControl` (enabled; sessions and mount images empty), `FoD` (Tier1, no keys), `DateTimeService` (NTP sync, servers, UTC offset, DST) | `Recipients` empty, `SsoCertificates` empty, `TaskService/Tasks` empty, `LicenseService/Licenses` empty, `TelemetryService.ServiceEnabled` false (12 report definitions and 6 reports exist, values empty) |
-| Accounts | `AccountService`: lockout 10 / 60 / 60, password length 6–32, `LocalAccountAuth`, `LDAP` (username-and-password auth type, search settings, 16 `RemoteRoleMapping` rows), `OAuth2` link, `Oem.Lenovo` password policy (expiration, reuse cycle, change interval, first-access and next-login flags, complexity, web inactivity timeout) and `CurrentLoggedUsers`; `Accounts` 12 (3 enabled, all three with OEM privilege *Supervisor*, 9 disabled); `Roles` 31 (`Administrator`, `Operator`, `ReadOnly` predefined; `CustomRole1`–`12`, `GroupRole1`–`16`) with `AssignedPrivileges` and `OemPrivileges` (`Supervisor` or `ReadOnly`) | `ActiveDirectory`, `TACACSplus`, `AdditionalExternalAccountProviders` |
+| Accounts | `AccountService`: lockout 10 / 60 / 60, password length 6–32, `LocalAccountAuth`, `LDAP` (username-and-password auth type, search settings, 16 `RemoteRoleMapping` rows), `OAuth2` link, `Oem.Lenovo` password policy (expiration, reuse cycle, change interval, first-access and next-login flags, complexity, web inactivity timeout) and `CurrentLoggedUsers`; `Accounts` 12 (3 enabled — two on Supervisor-privilege roles and the capture account, since the user's change, on a ReadOnly-privilege one — 9 disabled); `Roles` 31 (`Administrator`, `Operator`, `ReadOnly` predefined; `CustomRole1`–`12`, `GroupRole1`–`16`) with `AssignedPrivileges` and `OemPrivileges` (`Supervisor` or `ReadOnly`) | `ActiveDirectory`, `TACACSplus`, `AdditionalExternalAccountProviders` |
 | Alerting, PKI, licences | `EventService` (enabled, retry 3 / 60 s, `SMTP` block with server, from address, port, auth method), `CertificateService/CertificateLocations` → one HTTPS server certificate (PEM, self-signed, validity 2020–2030, key usage; **no fingerprint or signature algorithm on this firmware**), `LicenseService` (enabled, warning days 0) | `Subscriptions` empty, `Recipients` empty, SNMP traps off with empty targets, every other certificate collection empty |
 
 ### 4c. `NetworkProtocol` as served
@@ -486,8 +497,9 @@ Lab notes for §5b:
   off `RemoteControl`); `CredentialBootstrapping` on the host interface is a
   key (an enabled bootstrap with an Administrator role is exactly the kind
   of posture fact this check exists for).
-- `bmc_accounts`: the lab unit's three enabled accounts all hold the OEM
-  `Supervisor` privilege; `PasswordChangeRequired` reads null once cleared;
+- `bmc_accounts`: two of the lab unit's three enabled accounts hold the OEM
+  `Supervisor` privilege and the capture account holds `ReadOnly`;
+  `PasswordChangeRequired` reads null once cleared;
   `AccountTypes` lists eight types. The scrub rule must be **exact-name**
   (`Password`, `Passphrase`, `Secret`, `PrivateKey`, `AuthenticationKey`,
   `EncryptionKey`, `CommunityNames`, `TrapCommunity`, `LicenseString`,
@@ -552,12 +564,12 @@ Done on 2026-09-30 from this box (not through Nautobot): the full walk
 (`tools/redfish_walk.py`, Appendix A) and the live run of every existing
 collector through a real `CollectorContext` (Appendix C). What remains:
 
-1. **Walk again with a ReadOnly-privilege account.** The lab account holds
-   the OEM `Supervisor` privilege, so "what may ReadOnly GET" is unverified.
-   Create (or enable) an account on a role whose `OemPrivileges` is
-   `ReadOnly`, run the walk, and record every 403 by path; those paths
-   become `not-present` with the reason "role" in the collectors, never
-   failures.
+1. ~~Walk again with a ReadOnly-privilege account~~ — **done 2026-09-30**:
+   with the account's role set to OEM privilege `ReadOnly`, the walk and
+   the live collector run matched the Supervisor ones resource for
+   resource, leaf for leaf and key for key (Appendix C). Collectors still
+   treat a 403 as a failed read with the role hint, because another
+   firmware or vendor may restrict a ReadOnly role where this one does not.
 2. **Shakedown through Nautobot** once PR A exists (the host Device with the
    BMC interface, the Relationship and the Secrets Group modelled on the dev
    stack): both families in one run, `discovery.bmc` filled (service root
@@ -627,9 +639,9 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
 ## 10. Build sequence
 
 0. **Done 2026-09-30**: the lab account's first-login password change is
-   cleared and the crawl (Appendix A) printed 200 for all 425 resources.
-   Still to do by a human: an account on a ReadOnly-privilege role for the
-   §7 item 1 walk (the walked account is a Supervisor).
+   cleared, the crawl (Appendix A) printed 200 for all 425 resources, and
+   the same held after the user moved the account to a ReadOnly-privilege
+   role. Nothing is owed from a human before PR A.
 1. **PR A — framework** (no new checks): `bmc_target.py`, detection and the
    second context in both jobs, `resolve_bmc_credentials`, envelope 1.2,
    probe hints, `checks_xcc.py → checks_bmc.py` with the `bmc_*` rename and
@@ -637,9 +649,9 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    the `bmc` harvest spec, README/docs skeleton. Battery green with the
    existing fixtures renamed. Dry-run against the dev stack with a fake
    device carrying an `xcc` interface proves the ORM glue.
-2. **Shakedown 1** on the lab unit (host on): §7 items 1–3. The live run of
-   the existing collectors is already green (Appendix C), so this is the
-   ReadOnly walk, the Nautobot-side run and the fixture harvest; fix the
+2. **Shakedown 1** on the lab unit (host on): §7 items 2–3. The live run of
+   the existing collectors is already green under both privileges (Appendix
+   C), so this is the Nautobot-side run and the fixture harvest; fix the
    normalizer items listed under §5a (sequence-number names, DNS
    placeholders, SNMP enablement, log-message redaction); commit the `_lab`
    fixtures.
@@ -698,7 +710,10 @@ PlatformLog, audit entries inside StandardLog); the pending-BIOS link
 attributes); that the boot order lives only in the Lenovo boot manager;
 that the DMTF and Lenovo power-restore policy leaves are both absent.
 
-Still open: what a ReadOnly-privilege account may GET (§7 item 1); whether
+Also answered: a ReadOnly-privilege account reads the entire tree on this
+firmware (walk and collectors identical to the Supervisor run).
+
+Still open: whether
 port link state follows a cable with the host off, and whether an asserted
 discrete sensor reads `1` or changes `Health` (§7 item 4); where, if
 anywhere, this firmware exposes the AC power-restore policy (the XCC web UI
@@ -906,7 +921,11 @@ From the anonymously served `/redfish/v1/metadata/Lenovo*_v1.xml` files
 
 Existing collectors, run from this box through `RedfishClient` and
 `CollectorContext` with `debug=True` (the harness is the `bmc` platform spec
-`tools/harvest_live.py` gains in PR A). 30 GETs, ~30 s, TLS default.
+`tools/harvest_live.py` gains in PR A). 30 GETs, ~30 s, TLS default. Run
+twice: with the account on a Supervisor-privilege role and, after the user
+changed it, on a ReadOnly-privilege role — statuses, key sets and request
+lists were identical, and the read-only walk of the tree matched the first
+one on every path and every leaf.
 
 | Check | Status | Keys | GETs (beyond the cached root/system/manager reads) |
 | --- | --- | --- | --- |
