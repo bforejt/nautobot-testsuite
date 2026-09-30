@@ -1057,6 +1057,11 @@ Recorded as they were found, each with how it was resolved.
 8. ~~A Redfish session per capture if Basic-auth GETs churned the platform
    log~~ — closed by the §6 measurement: no entry is written; GET-only with
    Basic auth stays.
+9. Fields beyond this plan that a check reads at no extra GET (the builders'
+   additions recorded in §10a items 10 and 13): **kept** — decided by the
+   user 2026-09-30, "if we have data, keep data". The hygiene rules still
+   win over it (no person's name, secret or key material is kept for being
+   served).
 
 ## 12. Open questions the shakedown settles
 
