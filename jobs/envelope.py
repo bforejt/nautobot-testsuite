@@ -154,39 +154,23 @@ def new_report(pre_env, post_env, device_label):
         "generated_at": utcnow_iso(),
         "summary": {},
         "checks": {},
-        "expectations": {"matched": [], "unmatched": []},
     }
 
 
-def summarize_report(report, expectations, matched_ids):
-    """Fill the report's summary and unmatched-expectations blocks, in place."""
+def summarize_report(report):
+    """Fill the report's summary block, in place: check counts by result and the
+    total number of diff entries (bucket rows plus failed evaluations)."""
     checks = report["checks"]
-    diffs_total = expected = unexpected = 0
+    diffs_total = 0
     by_result = {}
     for body in checks.values():
         result = body.get("result", "unknown")
         by_result[result] = by_result.get(result, 0) + 1
         for bucket in ("added", "removed", "changed"):
-            for entry in body.get(bucket) or []:
-                diffs_total += 1
-                if entry.get("classification") == "expected":
-                    expected += 1
-                else:
-                    unexpected += 1
+            diffs_total += len(body.get(bucket) or [])
         for entry in body.get("evaluations") or []:
             if entry.get("within") is False or entry.get("ok") is False:
                 diffs_total += 1
-                if entry.get("classification") == "expected":
-                    expected += 1
-                else:
-                    unexpected += 1
-    unmatched = [
-        {"id": exp["id"], "note": exp.get("note"), "status": "not_observed"}
-        for exp in expectations
-        if exp["id"] not in matched_ids
-    ]
-    report["expectations"]["matched"] = sorted(matched_ids)
-    report["expectations"]["unmatched"] = unmatched
     report["summary"] = {
         "checks_total": len(checks),
         "checks_passed": by_result.get("pass", 0),
@@ -194,8 +178,5 @@ def summarize_report(report, expectations, matched_ids):
         "checks_failed": by_result.get("failed", 0),
         "checks_skipped": by_result.get("skipped", 0) + by_result.get("info", 0),
         "diffs_total": diffs_total,
-        "expected": expected,
-        "unexpected": unexpected,
-        "expectations_unmatched": len(unmatched),
     }
     return report
