@@ -4376,6 +4376,455 @@ def _collect_boot(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_power_policy --------------------------------------------------------
+# GETs, the lab SE350 (Lenovo: one chassis Control, three scheduled power
+# actions mirrored by three JobService jobs, four watchdogs): the System, the
+# Chassis, its Power resource and the Manager are the reads bmc_system,
+# bmc_chassis and bmc_power make (cached per run); beyond them one $expand GET
+# each for the Controls, the ScheduledPowerActions, the Watchdogs and the Jobs
+# — 7 beyond the id resolution on a cold cache. The per-member fallback,
+# $expand advertised but refused or ignored (the attempt is paid once, on the
+# first collection read, and never again): the Chassis, Power and the Manager
+# 3, then Controls 1 + 1 + 1, ScheduledPowerActions 1 + 3, Watchdogs 1 + 4 and
+# Jobs 1 + 3 — 19 beyond the id resolution. _BUDGET_POWER_POLICY = 24 +
+# _TARGET_GETS leaves room for the PowerSubsystem read a firmware without the
+# legacy Power resource needs and for a few more members; a walk the rest of
+# the budget cannot cover is refused loudly, with the counts, before its first
+# member is read.
+_BUDGET_POWER_POLICY = 24 + _TARGET_GETS
+# A DMTF Job's Payload is the request the job will send: its HTTP headers (an
+# Authorization header among them, possibly) and its JSON body are free text
+# the exact-name scrub cannot see into, so both are scrubbed whole (emptiness
+# and element counts kept); the operation and the target URI stay.
+_POWER_POLICY_JOB_PAYLOAD_TEXT = ("HttpHeaders", "JsonBody")
+
+
+def _power_policy_scalar(value):
+    """A served scalar leaf verbatim (strings stripped, '' None); None for a block or a list."""
+    if isinstance(value, str):
+        return _text(value)
+    if isinstance(value, (dict, list)):
+        return None
+    return value
+
+
+def _power_policy_redact_job(job):
+    """One Job resource with its Payload's headers and body scrubbed whole and, in each of its
+    Messages, the account names the text reveals scrubbed (the log redactor's rule)."""
+    if not isinstance(job, dict):
+        return job
+    payload = job.get("Payload")
+    if isinstance(payload, dict):
+        scrubbed = dict(payload)
+        for name in _POWER_POLICY_JOB_PAYLOAD_TEXT:
+            if name in scrubbed:
+                scrubbed[name] = _scrub_value(scrubbed[name])
+        job = dict(job, Payload=scrubbed)
+    if isinstance(job.get("Messages"), list):
+        job = dict(job, Messages=[_redact_log_entry(message) for message in job["Messages"]])
+    return job
+
+
+def _power_policy_redact_jobs(node):
+    """The redactor for the JobService's Jobs: _scrub_payload, then each job's payload, messages.
+
+    Applied alike to the collection page (expanded or not) and to a member
+    read on its own; idempotent, as ``ctx.get`` requires.
+    """
+    node = _scrub_payload(node)
+    if isinstance(node, dict) and isinstance(node.get("Members"), list):
+        node = dict(node, Members=[_power_policy_redact_job(member) for member in node["Members"]])
+    return _power_policy_redact_job(node)
+
+
+def _power_policy_first(items):
+    """(MemberId, member) of the first entry of a legacy Power array; (None, {}) when empty.
+
+    The server-level PowerControl is the first member on every firmware seen
+    (the lab SE350 serves 'Server Power Control', then the CPU and memory
+    sub-systems); context.power_control_member names the one read.
+    """
+    for member in _dicts(items):
+        return _text(member.get("MemberId")) or _text(member.get("Id")), member
+    return None, {}
+
+
+def _power_policy_redundancy(power):
+    """(MemberId, Lenovo block) of the first Power Redundancy group carrying one; (None, None).
+
+    Lenovo's LenovoRedundancy block (NonRedundantAvailablePower,
+    PowerRedundancySettings) is the Oem block of a legacy Power.Redundancy[]
+    group; an SE350 publishes no redundancy group at all.
+    """
+    for group in _dicts(_dig(power, "Redundancy")):
+        block = _dig(group, "Oem", "Lenovo")
+        if isinstance(block, dict):
+            return _text(group.get("MemberId")) or _text(group.get("Id")), block
+    return None, None
+
+
+def _power_policy_capabilities(power, power_subsystem):
+    """(block, source) of Lenovo's power capability leaves; (None, None) when neither serves one.
+
+    The Power resource's Oem.Lenovo block (typed LenovoPower Capabilities),
+    else the PowerSubsystem's, which XCC 6.10 also serves with the same three
+    flags and which is read only where no legacy Power resource is served.
+    """
+    for label, resource in (("Power", power), ("PowerSubsystem", power_subsystem)):
+        block = _dig(resource, "Oem", "Lenovo")
+        if isinstance(block, dict):
+            return block, "%s Oem.Lenovo" % (label,)
+    return None, None
+
+
+def _power_policy_control_row(control):
+    """One 'control|<Id>' row (DMTF Control): what it governs, its mode, set point and limits."""
+    health, state = _status(control)
+    return {
+        "control_type": _text(control.get("ControlType")),
+        "control_mode": _text(control.get("ControlMode")),
+        "set_point": _to_float(control.get("SetPoint")),
+        "set_point_units": _text(control.get("SetPointUnits")),
+        "set_point_type": _text(control.get("SetPointType")),
+        # the bounds a Range control holds its reading between (SetPoint is a Single's)
+        "setting_min": _to_float(control.get("SettingMin")),
+        "setting_max": _to_float(control.get("SettingMax")),
+        "allowable_min": _to_float(control.get("AllowableMin")),
+        "allowable_max": _to_float(control.get("AllowableMax")),
+        "implementation": _text(control.get("Implementation")),
+        "physical_context": _text(control.get("PhysicalContext")),
+        "health": health,
+        "state": state,
+    }
+
+
+def _power_policy_control_reading(control):
+    """What moves on a control (context only): its sensor's reading and source, set-point time."""
+    return {
+        "reading": _to_float(_dig(control, "Sensor", "Reading")),
+        "data_source": _text(_dig(control, "Sensor", "DataSourceUri")),
+        "set_point_update_time": _text(control.get("SetPointUpdateTime")),
+    }
+
+
+def _power_policy_sched_row(action):
+    """One 'sched|<Id>' row (Lenovo ScheduledPowerAction): type, activated, interval, time."""
+    return {
+        "type": _text(action.get("Type")),
+        "activated": _to_bool(action.get("Activated")),
+        "interval": _text(action.get("Interval")),
+        # the time of day the action fires, as configured — never a clock reading
+        "time": _text(action.get("Time")),
+    }
+
+
+def _power_policy_watchdog_row(watchdog):
+    """One 'watchdog|<Id>' row (Lenovo Watchdog): type, state and its two timer settings."""
+    return {
+        "type": _text(watchdog.get("Type")),
+        "state": _text(watchdog.get("State")),
+        "timer_s": _to_int(watchdog.get("TimerValueInSec")),
+        "timeout_interval_s": _to_int(watchdog.get("TimeoutIntervalInSec")),
+    }
+
+
+def _power_policy_list(value):
+    """A served list of scalars in served order (strings stripped); None when not a list."""
+    if not isinstance(value, list):
+        return None
+    return [_power_policy_scalar(item) for item in value]
+
+
+def _power_policy_job(job):
+    """A JobService job for context: name, JobState, JobStatus and its DMTF Schedule."""
+    schedule = job.get("Schedule")
+    if isinstance(schedule, dict):
+        schedule = {
+            "name": _text(schedule.get("Name")),
+            "initial_start_time": _text(schedule.get("InitialStartTime")),
+            "recurrence_interval": _text(schedule.get("RecurrenceInterval")),
+            "enabled_days_of_week": _power_policy_list(schedule.get("EnabledDaysOfWeek")),
+            "enabled_days_of_month": _power_policy_list(schedule.get("EnabledDaysOfMonth")),
+            "enabled_months_of_year": _power_policy_list(schedule.get("EnabledMonthsOfYear")),
+            "enabled_intervals": _power_policy_list(schedule.get("EnabledIntervals")),
+            "lifetime": _text(schedule.get("Lifetime")),
+            "max_occurrences": _to_int(schedule.get("MaxOccurrences")),
+        }
+    else:
+        schedule = None
+    return {
+        "name": _text(job.get("Name")),
+        "state": _text(job.get("JobState")),
+        "status": _text(job.get("JobStatus")),
+        "schedule": schedule,
+    }
+
+
+def _normalize_power_policy(
+    system,
+    power=None,
+    *,
+    controls=None,
+    scheduled=None,
+    watchdogs=None,
+    lenovo=False,
+    power_subsystem=None,
+):
+    """(normalized, context): the host's power policy scalars and its control/sched/watchdog rows.
+
+    ``system`` is the ComputerSystem, ``power`` the legacy Chassis Power
+    resource (None where not served) and ``power_subsystem`` the
+    PowerSubsystem, read in its place for Lenovo's flags only; ``controls``,
+    ``scheduled`` and ``watchdogs`` are the members of the Chassis Controls,
+    Lenovo ScheduledPowerActions and Lenovo Watchdogs collections (None when
+    not read). Every scalar is always present — None when unserved, never ''
+    — and the Lenovo ones are read only when ``lenovo`` says the service is
+    Lenovo's; every row carries every field. The cap comes from the first
+    PowerControl member. Readings, set-point times, expired flags and the
+    redundancy group's estimated usage go to context, never into a key.
+    """
+    system = system if isinstance(system, dict) else {}
+    watchdog = _dig(system, "HostWatchdogTimer")
+    control_member, control = _power_policy_first(_dig(power, "PowerControl"))
+    limit = _dig(control, "PowerLimit")
+    capabilities = source = utilization = redundancy = redundancy_member = None
+    if lenovo:
+        capabilities, source = _power_policy_capabilities(power, power_subsystem)
+        utilization = _dig(control, "Oem", "Lenovo", "PowerUtilization")
+        redundancy_member, redundancy = _power_policy_redundancy(power)
+    settings = _dig(redundancy, "PowerRedundancySettings")
+    normalized = {
+        # what the host does when AC returns: DMTF, then Lenovo's own leaf
+        "power_restore_policy": _text(system.get("PowerRestorePolicy")),
+        "lenovo_power_restore_policy": _text(_dig(capabilities, "PowerRestorePolicy")),
+        "wake_on_lan": _to_bool(_dig(capabilities, "WakeOnLANEnabled")),
+        "power_on_permission": _to_bool(_dig(capabilities, "PowerOnPermissionEnabled")),
+        "local_power_control": _to_bool(_dig(capabilities, "LocalPowerControlEnabled")),
+        "random_delay": _power_policy_scalar(_dig(capabilities, "RandomDelay")),
+        # the DMTF host watchdog (the leaves bmc_system reads too)
+        "host_watchdog_enabled": _to_bool(_dig(watchdog, "FunctionEnabled")),
+        "host_watchdog_timeout_action": _text(_dig(watchdog, "TimeoutAction")),
+        "host_watchdog_warning_action": _text(_dig(watchdog, "WarningAction")),
+        # the power cap: DMTF PowerLimit, then Lenovo's PowerUtilization
+        "power_limit_w": _to_float(_dig(limit, "LimitInWatts")),
+        "power_limit_exception": _text(_dig(limit, "LimitException")),
+        "power_limit_correction_ms": _to_int(_dig(limit, "CorrectionInMs")),
+        "power_capping_enabled": _to_bool(_dig(utilization, "EnablePowerCapping")),
+        "limit_mode": _text(_dig(utilization, "LimitMode")),
+        "guaranteed_w": _to_float(_dig(utilization, "GuaranteedInWatts")),
+        "capping_min_w": _to_float(_dig(utilization, "MinLimitInWatts")),
+        "capping_max_w": _to_float(_dig(utilization, "MaxLimitInWatts")),
+        # Lenovo's power-supply redundancy settings
+        "power_redundancy_policy": _text(_dig(settings, "PowerRedundancyPolicy")),
+        "max_power_limit_w": _to_float(_dig(settings, "MaxPowerLimitWatts")),
+        "power_failure_limit": _power_policy_scalar(_dig(settings, "PowerFailureLimit")),
+    }
+    context = {
+        "power_control_member": control_member,
+        "lenovo_capabilities_source": source,
+        "redundancy_member": redundancy_member,
+        "non_redundant_available_power_w": _to_float(
+            _dig(redundancy, "NonRedundantAvailablePower")
+        ),
+        "redundancy_estimated_usage": _power_policy_scalar(_dig(settings, "EstimatedUsage")),
+        "control_readings": {},
+        "watchdog_expired": {},
+    }
+    rows = {}
+    for member in _dicts(controls):
+        key = "control|%s" % (_member_id(member) or "?",)
+        rows[key] = _power_policy_control_row(member)
+        context["control_readings"][key] = _power_policy_control_reading(member)
+    for action in _dicts(scheduled):
+        rows["sched|%s" % (_member_id(action) or "?",)] = _power_policy_sched_row(action)
+    for member in _dicts(watchdogs):
+        key = "watchdog|%s" % (_member_id(member) or "?",)
+        rows[key] = _power_policy_watchdog_row(member)
+        # sticky once the watchdog fired, cleared by whoever re-arms it: context
+        context["watchdog_expired"][key] = _to_bool(member.get("TimerExpired"))
+    for key in sorted(rows):
+        normalized[key] = rows[key]
+    return normalized, context
+
+
+def _power_policy_collection(
+    ctx, link, family, budget, try_expand, redact=_scrub_payload, required=True
+):
+    """(members, report, raw, try_expand) of one collection this check reads.
+
+    ``link`` None (nothing links it, or the vendor has no mapping) reads
+    nothing: members None. A collection its parent links that answers 404
+    fails the check (``required``: a broken tree, never "none configured");
+    one that answers empty is an empty family — all four are the BMC's own
+    services and settings, not host inventory (whether the chassis Controls
+    enumerate with the host off is unverified; context.host_power_state rides
+    beside them). ``try_expand`` turns off at the first $expand refusal and
+    stays off for the rest of the check.
+    """
+    report = {"resource": link, "strategy": None, "members": None, "expand_refused": None}
+    if link is None:
+        return None, report, {}, try_expand
+    members, meta, raw = _fetch_collection(
+        ctx,
+        link,
+        "bmc_power_policy %s" % (family,),
+        ok_404=True,
+        budget=budget,
+        redact=redact,
+        try_expand=try_expand,
+    )
+    if meta.get("expand_refused"):
+        try_expand = False
+    if members is None and required:
+        raise CollectError("bmc_power_policy: %s is linked but answered 404" % (link,))
+    report.update(
+        strategy=meta["strategy"],
+        members=len(members) if members is not None else None,
+        expand_refused=meta.get("expand_refused"),
+    )
+    return members, report, raw, try_expand
+
+
+def _collect_power_policy(ctx):
+    raw = {}
+    members = {}
+    reports = {}
+    power_subsystem = subsystem_link = None
+    try_expand = True
+    with ctx.budget("bmc_power_policy", _BUDGET_POWER_POLICY) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        system = _get(ctx, targets["system"])
+        chassis = _get(ctx, targets["chassis"])
+        if not isinstance(chassis, dict) or not chassis:
+            raise CollectError("%s answered without a resource body" % (targets["chassis"],))
+        # The legacy Power resource: the read bmc_power makes (same path, same redactor).
+        power_link = _fenced_link(_dig(chassis, "Power"), "bmc_power_policy Power")
+        power_path = power_link or _sub(targets["chassis"], "Power")
+        power = _get_optional(ctx, power_path)
+        if power is None and power_link is not None:
+            raise CollectError("the Chassis links %s but it answered 404" % (power_path,))
+        if power is not None and (not isinstance(power, dict) or not power):
+            raise CollectError("%s answered without a resource body" % (power_path,))
+        if lenovo and power is None:
+            # No legacy resource: Lenovo's power flags from the PowerSubsystem's block.
+            subsystem_link = _fenced_link(
+                _dig(chassis, "PowerSubsystem"), "bmc_power_policy PowerSubsystem"
+            )
+            if subsystem_link is not None:
+                power_subsystem = _get_optional(ctx, subsystem_link)
+                if power_subsystem is None:
+                    raise CollectError(
+                        "%s is not served and the Chassis links %s, which answered 404"
+                        % (power_path, subsystem_link)
+                    )
+        plan = [
+            (
+                "controls",
+                _fenced_link(_dig(chassis, "Controls"), "bmc_power_policy Controls"),
+                _scrub_payload,
+                True,
+            )
+        ]
+        if lenovo:
+            # Lenovo's collections, each through the link its parent serves.
+            manager = _get(ctx, targets["manager"])
+            plan.append(
+                (
+                    "scheduled_power_actions",
+                    _fenced_link(
+                        _dig(system, "Oem", "Lenovo", "ScheduledPowerActions"),
+                        "bmc_power_policy ScheduledPowerActions",
+                    ),
+                    _scrub_payload,
+                    True,
+                )
+            )
+            plan.append(
+                (
+                    "watchdogs",
+                    _fenced_link(
+                        _dig(manager, "Oem", "Lenovo", "Watchdogs"), "bmc_power_policy Watchdogs"
+                    ),
+                    _scrub_payload,
+                    True,
+                )
+            )
+        # The JobService (DMTF, every vendor) as the service root links it; its Jobs
+        # collection is the service's mandated child path, so a 404 there is "not
+        # served", never a failed read.
+        job_service = _fenced_link(
+            _dig(_get(ctx, _ROOT), "JobService"), "bmc_power_policy JobService"
+        )
+        plan.append(
+            (
+                "jobs",
+                _sub(job_service, "Jobs") if job_service is not None else None,
+                _power_policy_redact_jobs,
+                False,
+            )
+        )
+        for family, link, redact, required in plan:
+            members[family], reports[family], family_raw, try_expand = _power_policy_collection(
+                ctx, link, family, budget, try_expand, redact=redact, required=required
+            )
+            raw.update(family_raw)
+    for family in ("controls", "scheduled_power_actions", "watchdogs", "jobs"):
+        members.setdefault(family, None)
+        reports.setdefault(
+            family, {"resource": None, "strategy": None, "members": None, "expand_refused": None}
+        )
+    served = (
+        power is not None
+        or power_subsystem is not None
+        or any(leaf in system for leaf in ("PowerRestorePolicy", "HostWatchdogTimer"))
+        or any(found is not None for found in members.values())
+    )
+    if not served:
+        raise SkipCheck(
+            "nothing to key: the System serves no PowerRestorePolicy or HostWatchdogTimer, %s "
+            "is not served, and no Controls, scheduled power actions, watchdogs or JobService "
+            "jobs are read" % (power_path,)
+        )
+    if power is not None:
+        raw[power_path] = _curate(power)
+    if power_subsystem is not None:
+        raw[subsystem_link] = _curate(power_subsystem)
+    normalized, context = _normalize_power_policy(
+        system,
+        power,
+        controls=members["controls"],
+        scheduled=members["scheduled_power_actions"],
+        watchdogs=members["watchdogs"],
+        lenovo=lenovo,
+        power_subsystem=power_subsystem,
+    )
+    jobs = members["jobs"]
+    context.update(
+        {
+            "host_power_state": _text(_dig(system, "PowerState")),
+            "power_resource": power_path if power is not None else None,
+            "power_subsystem_resource": subsystem_link if power_subsystem is not None else None,
+            "collections": reports,
+            # Every JobService job (on XCC 6.10 the scheduled power actions' twins):
+            # its state moves as it runs, so it rides here, never in a key.
+            "jobs": (
+                None
+                if jobs is None
+                else {_member_id(job) or "?": _power_policy_job(job) for job in _dicts(jobs)}
+            ),
+            "unmapped": (
+                None
+                if lenovo
+                else "no %s mapping for the Lenovo power flags, capping and redundancy settings, "
+                "scheduled power actions and watchdogs yet (the DMTF reads of this check are "
+                "unaffected)" % (targets["vendor"] or "unknown-vendor",)
+            ),
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -4973,5 +5422,27 @@ register(
         ),
         collector=_collect_boot,
         tags=("platform", "boot"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_power_policy",
+        platform="bmc",
+        description=(
+            "Power policy: AC-restore and Lenovo power flags, host watchdog, power cap and chassis "
+            "controls, scheduled power actions, watchdogs."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "How the host is powered changed — the AC-restore policy or a Lenovo power flag "
+            "(Wake-on-LAN, power-on permission, local power control), a power cap or a chassis "
+            "control set, lifted or moved, a scheduled power action activated (the BMC then "
+            "powers the host on or off or restarts it on that schedule) or a watchdog armed or "
+            "disarmed (an armed one acts on a host that stops servicing it)."
+        ),
+        collector=_collect_power_policy,
+        tags=("platform", "power"),
     )
 )

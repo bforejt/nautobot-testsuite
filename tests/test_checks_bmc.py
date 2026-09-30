@@ -219,6 +219,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_chassis",
         "bmc_sensors",
         "bmc_boot",
+        "bmc_power_policy",
     }
 
     def test_all_registered_once(self):
@@ -5294,6 +5295,449 @@ class TestBoot(unittest.TestCase):
         self.assertEqual(
             [(row["key"], row["field"]) for row in diff["changed"]],
             [("boot_order", None), ("order|BootOrder.BootOrder", "next")],
+        )
+
+
+class TestPowerPolicy(unittest.TestCase):
+    """bmc_power_policy. HAND-BUILT for what the lab unit lacks: a cap set, Lenovo's capping,
+    capability and redundancy-settings blocks (xcc_power_policy_capping.json) and a Range control
+    (xcc_power_policy_controls_expanded.json), spelled as the DMTF Power and Control schemas and
+    the plan's Appendix B name them — every Lenovo enum string there is a '<placeholder:...>',
+    never a claimed enum member, since the lab unit serves none of those leaves. The scheduled
+    power actions, the watchdogs and the JobService jobs are the lab unit's own payloads."""
+
+    CONTROLS = CH + "/Controls"
+    SPA = SYS + "/Oem/Lenovo/ScheduledPowerActions"
+    DOGS = MGR + "/Oem/Lenovo/Watchdogs"
+    JOBS = "/redfish/v1/JobService/Jobs"
+    # read in this order by the collector
+    COLLECTIONS = (
+        (CONTROLS, "xcc_power_policy_controls_expanded.json"),
+        (SPA, "xcc_system_lenovo_scheduledpoweractions_expanded_lab.json"),
+        (DOGS, "xcc_manager_lenovo_watchdogs_expanded_lab.json"),
+        (JOBS, "xcc_jobservice_jobs_expanded_lab.json"),
+    )
+    LENOVO_SCALARS = (
+        "lenovo_power_restore_policy",
+        "wake_on_lan",
+        "power_on_permission",
+        "local_power_control",
+        "random_delay",
+        "power_capping_enabled",
+        "limit_mode",
+        "guaranteed_w",
+        "capping_min_w",
+        "capping_max_w",
+        "power_redundancy_policy",
+        "max_power_limit_w",
+        "power_failure_limit",
+    )
+
+    def _payloads(self, expand=True):
+        """The hand-built set with every source of this check linked from its parent."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"]["JobService"] = {"@odata.id": "/redfish/v1/JobService"}
+        system = _fx("xcc_system_dmtf_policy.json")
+        system["Oem"]["Lenovo"]["ScheduledPowerActions"] = {"@odata.id": self.SPA}
+        payloads[SYS] = system
+        payloads[CH]["Controls"] = {"@odata.id": self.CONTROLS}
+        payloads[MGR]["Oem"]["Lenovo"]["Watchdogs"] = {"@odata.id": self.DOGS}
+        payloads[CH + "/Power"] = _fx("xcc_power_policy_capping.json")
+        for path, name in self.COLLECTIONS:
+            expanded = _fx(name)
+            plain, members = _split_collection(expanded)
+            payloads[path] = plain
+            payloads.update(members)
+            if expand:
+                payloads[path + EXPAND] = expanded
+        return payloads
+
+    def _collect(self, payloads, **kwargs):
+        ctx = _FakeCtx(payloads, **kwargs)
+        return ctx, checks._collect_power_policy(ctx)
+
+    def test_every_scalar_is_read_from_its_own_leaf(self):
+        _ctx, result = self._collect(self._payloads())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            {key: value for key, value in view.items() if "|" not in key},
+            {
+                "power_restore_policy": "LastState",
+                "lenovo_power_restore_policy": "<placeholder:PowerRestorePolicy>",
+                "wake_on_lan": False,
+                "power_on_permission": True,
+                "local_power_control": False,
+                "random_delay": "<placeholder:RandomDelay>",
+                "host_watchdog_enabled": True,
+                "host_watchdog_timeout_action": "ResetSystem",
+                "host_watchdog_warning_action": "DiagnosticInterrupt",
+                "power_limit_w": 450,
+                "power_limit_exception": "LogEventOnly",
+                "power_limit_correction_ms": 1000,
+                "power_capping_enabled": True,
+                "limit_mode": "<placeholder:LimitMode>",
+                "guaranteed_w": 310,
+                "capping_min_w": 310,
+                "capping_max_w": 750,
+                "power_redundancy_policy": "<placeholder:PowerRedundancyPolicy>",
+                "max_power_limit_w": 750,
+                "power_failure_limit": 2,
+            },
+        )
+        # the cap is the first (server-level) PowerControl member's, never the CPU sub-system's
+        self.assertEqual(context["power_control_member"], "0")
+        self.assertEqual(context["lenovo_capabilities_source"], "Power Oem.Lenovo")
+        self.assertEqual(context["redundancy_member"], "0")
+        self.assertEqual(context["non_redundant_available_power_w"], 1500)
+        self.assertEqual(context["redundancy_estimated_usage"], "<placeholder:EstimatedUsage>")
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["power_resource"], CH + "/Power")
+        self.assertIsNone(context["unmapped"])
+        self.assertEqual(context["resolution"]["system"], SYS)
+
+    def test_rows_carry_every_field_and_what_moves_rides_in_context(self):
+        _ctx, result = self._collect(self._payloads())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            [key for key in view if "|" in key],
+            ["control|IntakeTemperature", "control|PowerLimit"]
+            + ["sched|1", "sched|2", "sched|3"]
+            + ["watchdog|1", "watchdog|2", "watchdog|3", "watchdog|4"],
+        )
+        self.assertEqual(
+            view["control|PowerLimit"],
+            {
+                "control_type": "Power",
+                "control_mode": "Automatic",
+                "set_point": 450,
+                "set_point_units": "Watt",
+                "set_point_type": "Single",
+                "setting_min": None,
+                "setting_max": None,
+                "allowable_min": 310,
+                "allowable_max": 750,
+                "implementation": "Programmable",
+                "physical_context": "Chassis",
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        # a Range control holds its bounds, never a set point
+        intake = view["control|IntakeTemperature"]
+        self.assertEqual((intake["set_point_type"], intake["set_point"]), ("Range", None))
+        self.assertEqual((intake["setting_min"], intake["setting_max"]), (18, 27))
+        self.assertEqual((intake["control_mode"], intake["set_point_units"]), ("Override", "Cel"))
+        # a control's reading and its set-point time are context, never row fields
+        self.assertEqual(
+            context["control_readings"]["control|PowerLimit"],
+            {
+                "reading": 212,
+                "data_source": CH + "/Sensors/204L0",
+                "set_point_update_time": "2026-09-28T06:14:02+00:00",
+            },
+        )
+        self.assertEqual(context["control_readings"]["control|IntakeTemperature"]["reading"], 22.5)
+        self.assertEqual(
+            view["sched|2"],
+            {"type": "GracefulShutdown", "activated": False, "interval": "Daily", "time": "00:00"},
+        )
+        self.assertEqual(
+            view["watchdog|4"],
+            {"type": "IPMI", "state": "Enabled", "timer_s": 15, "timeout_interval_s": 15},
+        )
+        self.assertEqual(
+            view["watchdog|1"],
+            {
+                "type": "OSBootProcess",
+                "state": "Disabled",
+                "timer_s": None,
+                "timeout_interval_s": None,
+            },
+        )
+        self.assertEqual(
+            context["watchdog_expired"], {"watchdog|%d" % (n,): False for n in (1, 2, 3, 4)}
+        )
+        self.assertEqual(context["jobs"]["PowerOn"]["state"], "Suspended")
+        self.assertEqual(context["jobs"]["PowerOn"]["schedule"]["name"], "Lenovo:Power On")
+        self.assertEqual(context["jobs"]["PowerOn"]["schedule"]["enabled_days_of_week"], [])
+        # every row of a family carries the same fields, whatever its member serves
+        for prefix in ("control|", "sched|", "watchdog|"):
+            shapes = {tuple(sorted(row)) for key, row in view.items() if key.startswith(prefix)}
+            self.assertEqual(len(shapes), 1, prefix)
+
+    def test_one_expand_get_per_collection_and_the_shared_reads_come_from_the_cache(self):
+        ctx, result = self._collect(self._payloads())
+        collections = [path + EXPAND for path, _name in self.COLLECTIONS]
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Power", MGR] + collections)
+        self.assertEqual(ctx.budgets, [("bmc_power_policy", checks._BUDGET_POWER_POLICY)])
+        self.assertEqual(
+            {
+                family: report["strategy"]
+                for family, report in result["context"]["collections"].items()
+            },
+            dict.fromkeys(("controls", "scheduled_power_actions", "watchdogs", "jobs"), "expand"),
+        )
+        self.assertEqual(set(result["raw"]), {CH + "/Power"} | set(collections))
+        self.assertNotIn("@odata.etag", json.dumps(result["raw"]))
+        # after bmc_power (the same Power read) and bmc_system (the Manager): the collections only
+        ctx = _FakeCtx(self._payloads())
+        checks._collect_power(ctx)
+        checks._collect_system(ctx)
+        before = len(ctx.gets)
+        checks._collect_power_policy(ctx)
+        self.assertEqual(ctx.gets[before:], collections)
+
+    def test_the_expand_refusal_is_remembered_and_the_worst_walk_fits_the_budget(self):
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        ctx, result = self._collect(payloads, errors={self.CONTROLS + EXPAND: 501})
+        # $expand is tried once, on the first collection read, and never again
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.CONTROLS + EXPAND])
+        collections = result["context"]["collections"]
+        self.assertEqual(collections["controls"]["expand_refused"], "HTTP 501")
+        self.assertEqual({report["strategy"] for report in collections.values()}, {"members"})
+        # resolution 5, the Chassis, Power and the Manager, the Controls 1 + 1 + 2, the scheduled
+        # actions 1 + 3, the watchdogs 1 + 4, the jobs 1 + 3
+        self.assertEqual(len(ctx.gets), 5 + 3 + 4 + 4 + 5 + 4)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_POWER_POLICY)
+        expanded = self._collect(self._payloads())[1]
+        self.assertEqual(result["normalized"], expanded["normalized"])
+        self.assertEqual(result["context"]["jobs"], expanded["context"]["jobs"])
+
+    def test_a_walk_the_budget_cannot_cover_is_refused_before_its_first_member(self):
+        payloads = self._payloads(expand=False)
+        payloads[self.DOGS]["Members"] = [
+            {"@odata.id": "%s/%d" % (self.DOGS, n)} for n in range(1, 31)
+        ]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(ctx)
+        self.assertIn("30 members to fetch", str(caught.exception))
+        self.assertEqual(ctx.gets[-1], self.DOGS)  # the collection, and no member of it
+
+    def test_linked_collections_that_answer_404_fail_and_unlinked_ones_cost_nothing(self):
+        for path in (self.CONTROLS, self.SPA, self.DOGS):
+            payloads = self._payloads(expand=False)
+            del payloads[path]
+            with self.assertRaises(checks.CollectError) as caught:
+                checks._collect_power_policy(_FakeCtx(payloads))
+            self.assertIn("%s is linked but answered 404" % (path,), str(caught.exception))
+        payloads = self._payloads()
+        del payloads[CH]["Controls"]
+        del payloads[SYS]["Oem"]["Lenovo"]["ScheduledPowerActions"]
+        del payloads[MGR]["Oem"]["Lenovo"]["Watchdogs"]
+        del payloads["/redfish/v1/"]["JobService"]
+        ctx, result = self._collect(payloads)
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Power", MGR])
+        self.assertFalse([key for key in result["normalized"] if "|" in key])
+        reports = result["context"]["collections"].values()
+        self.assertEqual({report["resource"] for report in reports}, {None})
+        self.assertIsNone(result["context"]["jobs"])
+        # the Jobs path is the linked JobService's mandated child: a 404 there is "not served"
+        payloads = self._payloads(expand=False)
+        del payloads[self.JOBS]
+        _ctx, result = self._collect(payloads)
+        self.assertIsNone(result["context"]["jobs"])
+        self.assertEqual(result["context"]["collections"]["jobs"]["strategy"], "absent")
+
+    def test_empty_collections_are_an_empty_family_never_absence(self):
+        payloads = self._payloads()
+        for path, _name in self.COLLECTIONS:
+            payloads[path + EXPAND] = {"@odata.id": path, "Members": [], "Members@odata.count": 0}
+        _ctx, result = self._collect(payloads)
+        view, context = result["normalized"], result["context"]
+        self.assertFalse([key for key in view if "|" in key])
+        self.assertEqual({report["members"] for report in context["collections"].values()}, {0})
+        self.assertEqual(
+            (context["jobs"], context["watchdog_expired"], context["control_readings"]),
+            ({}, {}, {}),
+        )
+        self.assertEqual(view["power_limit_w"], 450)  # the scalars stand
+
+    def test_other_vendors_get_the_dmtf_reads_and_no_lenovo_scalar_or_row(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"]["Vendor"] = "Contoso"
+        ctx, result = self._collect(payloads)
+        view, context = result["normalized"], result["context"]
+        # no Manager read and no Lenovo path: the Controls and the JobService's jobs only
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE + [CH, CH + "/Power", self.CONTROLS + EXPAND, self.JOBS + EXPAND],
+        )
+        for field in self.LENOVO_SCALARS:
+            self.assertIsNone(view[field], field)  # although the payloads carry Oem.Lenovo
+        self.assertEqual((view["power_restore_policy"], view["power_limit_w"]), ("LastState", 450))
+        self.assertEqual(
+            [key for key in view if "|" in key], ["control|IntakeTemperature", "control|PowerLimit"]
+        )
+        self.assertEqual(sorted(context["jobs"]), ["PowerOff", "PowerOn", "Restart"])
+        self.assertIn("no Contoso mapping", context["unmapped"])
+        self.assertIsNone(context["redundancy_member"])
+        self.assertIsNone(context["collections"]["watchdogs"]["resource"])
+
+    def test_dell_shaped_paths_are_resolved_never_assumed(self):
+        dell = "System.Embedded.1"
+
+        def dellify(text):
+            text = text.replace(SYS, "/redfish/v1/Systems/" + dell)
+            text = text.replace(MGR, "/redfish/v1/Managers/iDRAC.Embedded.1")
+            return text.replace(CH, "/redfish/v1/Chassis/" + dell)
+
+        payloads = {
+            dellify(path): json.loads(dellify(json.dumps(body)))
+            for path, body in self._payloads().items()
+        }
+        payloads["/redfish/v1/"]["Vendor"] = "Dell"
+        ctx, result = self._collect(payloads)
+        for path in ctx.gets:
+            for lenovo_member in (SYS, MGR, CH):
+                resource = path.partition("?")[0]
+                self.assertFalse(
+                    resource == lenovo_member or resource.startswith(lenovo_member + "/"), path
+                )
+        self.assertEqual(result["context"]["resolution"]["chassis"], "/redfish/v1/Chassis/" + dell)
+        self.assertEqual(result["normalized"]["control|PowerLimit"]["set_point"], 450)
+        self.assertEqual(result["normalized"]["power_limit_w"], 450)
+
+    def test_the_lenovo_flags_come_from_the_power_subsystem_where_no_power_is_served(self):
+        payloads = self._payloads()
+        del payloads[CH]["Power"]
+        del payloads[CH + "/Power"]
+        payloads[CH]["PowerSubsystem"] = {"@odata.id": CH + "/PowerSubsystem"}
+        payloads[CH + "/PowerSubsystem"] = _fx("xcc_chassis_powersubsystem_lab.json")
+        _ctx, result = self._collect(payloads)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            (view["wake_on_lan"], view["power_on_permission"], view["local_power_control"]),
+            (True, True, True),
+        )
+        self.assertEqual(context["lenovo_capabilities_source"], "PowerSubsystem Oem.Lenovo")
+        self.assertEqual(context["power_subsystem_resource"], CH + "/PowerSubsystem")
+        self.assertIsNone(context["power_resource"])
+        self.assertIsNone(view["power_limit_w"])  # the cap is the PowerLimit control's there
+        self.assertIn(CH + "/PowerSubsystem", result["raw"])
+        # only Lenovo's flags come from there: another vendor never reads it
+        payloads["/redfish/v1/"]["Vendor"] = "Contoso"
+        ctx, _result = self._collect(payloads)
+        self.assertNotIn(CH + "/PowerSubsystem", ctx.gets)
+        # a linked subsystem that answers 404 fails, and so does a linked Power that does
+        del payloads["/redfish/v1/"]["Vendor"]
+        del payloads[CH + "/PowerSubsystem"]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_power_policy(_FakeCtx(payloads))
+        payloads = self._payloads()
+        del payloads[CH + "/Power"]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("links %s but it answered 404" % (CH + "/Power",), str(caught.exception))
+
+    def test_job_payload_text_never_reaches_the_trace_or_raw(self):
+        payloads = self._payloads()
+        job = payloads[self.JOBS + EXPAND]["Members"][0]
+        job.update(
+            HidePayload=False,
+            CreatedBy="jane",
+            Payload={
+                "HttpHeaders": ["Authorization: Basic c2VjcmV0LXRva2Vu", "X-Request: power"],
+                "HttpOperation": "POST",
+                "JsonBody": '{"ResetType": "ForceOff", "Password": "hunter2"}',
+                "TargetUri": SYS + "/Actions/ComputerSystem.Reset",
+            },
+            Messages=[{"Message": "Power Off schedule set by user erin.", "MessageArgs": ["erin"]}],
+        )
+        ctx, result = self._collect(payloads)
+        self.assertIn((self.JOBS + EXPAND, "_power_policy_redact_jobs"), ctx.redacted)
+        text = json.dumps(result)
+        for secret in ("c2VjcmV0LXRva2Vu", "X-Request", "hunter2", "ForceOff", "jane", "erin"):
+            self.assertNotIn(secret, text, secret)
+        raw_job = result["raw"][self.JOBS + EXPAND]["Members"][0]
+        payload = raw_job["Payload"]
+        self.assertEqual(payload["HttpHeaders"], [checks._SCRUBBED, checks._SCRUBBED])
+        self.assertEqual(payload["JsonBody"], checks._SCRUBBED)
+        self.assertEqual(
+            (payload["HttpOperation"], payload["TargetUri"]),
+            ("POST", SYS + "/Actions/ComputerSystem.Reset"),
+        )
+        self.assertEqual(
+            raw_job["Messages"][0]["Message"], "Power Off schedule set by user ***scrubbed***."
+        )
+        # the collection page and a member read on its own alike, and idempotent
+        page = checks._power_policy_redact_jobs(payloads[self.JOBS + EXPAND])
+        self.assertEqual(checks._power_policy_redact_jobs(page), page)
+        self.assertEqual(
+            checks._power_policy_redact_jobs(job)["Payload"]["JsonBody"], checks._SCRUBBED
+        )
+        # every other read of the check passes the family's scrubber
+        self.assertEqual(
+            {name for path, name in ctx.redacted if path != self.JOBS + EXPAND},
+            {"_scrub_payload"},
+        )
+
+    def test_nothing_served_is_not_present_and_a_served_empty_family_is_measured(self):
+        payloads = _base_payloads()  # the hand-built System carries neither policy leaf
+        del payloads[CH]["Power"]
+        del payloads[CH + "/Power"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertIn("nothing to key", str(caught.exception))
+        payloads[CH]["Controls"] = {"@odata.id": self.CONTROLS}
+        payloads[self.CONTROLS + EXPAND] = {"@odata.id": self.CONTROLS, "Members": []}
+        result = checks._collect_power_policy(_FakeCtx(payloads))
+        self.assertTrue(result["normalized"])  # every scalar is present ...
+        self.assertTrue(all(value is None for value in result["normalized"].values()))  # ... null
+        self.assertEqual(result["context"]["collections"]["controls"]["members"], 0)
+
+    def test_links_into_actions_are_refused(self):
+        for mutate in (
+            lambda p: p[CH].update(Controls={"@odata.id": CH + "/Actions/Oem/Controls"}),
+            lambda p: p[MGR]["Oem"]["Lenovo"].update(
+                Watchdogs={"@odata.id": MGR + "/Actions/Oem/Watchdogs"}
+            ),
+            lambda p: p["/redfish/v1/"].update(
+                JobService={"@odata.id": "/redfish/v1/JobService/Actions/Oem"}
+            ),
+        ):
+            payloads = self._payloads()
+            mutate(payloads)
+            with self.assertRaises(checks.CollectError):
+                checks._collect_power_policy(_FakeCtx(payloads))
+
+    def test_the_same_capture_twice_diffs_to_nothing_and_an_activated_slot_is_one_change(self):
+        compare = registry.CHECKS["bmc_power_policy"].compare
+        self.assertEqual(compare, {"mode": "equality_set"})
+        diff_check = _loader.diffcore.diff_check
+        pre = self._collect(self._payloads())[1]["normalized"]
+        payloads = self._payloads()
+        # what moves on its own moves: readings, set-point times, expired flags, job states
+        power_limit = payloads[self.CONTROLS + EXPAND]["Members"][0]
+        power_limit["Sensor"]["Reading"] = 480
+        power_limit["SetPointUpdateTime"] = "2026-09-29T01:02:03+00:00"
+        payloads[self.DOGS + EXPAND]["Members"][3]["TimerExpired"] = True
+        payloads[self.JOBS + EXPAND]["Members"][1]["JobState"] = "Running"
+        settings = payloads[CH + "/Power"]["Redundancy"][0]["Oem"]["Lenovo"]
+        settings["PowerRedundancySettings"]["EstimatedUsage"] = "<placeholder:EstimatedUsage-2>"
+        post = self._collect(payloads)[1]
+        self.assertEqual(diff_check(pre, post["normalized"], compare)["result"], "pass")
+        self.assertIs(post["context"]["watchdog_expired"]["watchdog|4"], True)
+        self.assertEqual(post["context"]["jobs"]["PowerOn"]["state"], "Running")
+        # a scheduled power action activated for 03:30: one row, two changed fields
+        payloads[self.SPA + EXPAND]["Members"][1].update(Activated=True, Time="03:30")
+        diff = diff_check(pre, self._collect(payloads)[1]["normalized"], compare)
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [("sched|2", "activated", False, True), ("sched|2", "time", "00:00", "03:30")],
+        )
+
+    def test_registration(self):
+        check = registry.CHECKS["bmc_power_policy"]
+        self.assertEqual((check.platform, check.tier), ("bmc", 1))
+        self.assertIs(check.collector, checks._collect_power_policy)
+        self.assertNotIn(registry.EMPTY_OK_TAG, check.tags)  # its scalars are always present
+        self.assertTrue(registry.SEMANTICS["bmc_power_policy"].endswith(registry._BMC_RESOLUTION))
+        self.assertLessEqual(
+            checks._BUDGET_POWER_POLICY, _loader.constants.REDFISH_MAX_CHECK_BUDGET
         )
 
 

@@ -1744,7 +1744,8 @@ class TestBmcLabFamily(unittest.TestCase):
         # it makes first is the one bmc_thermal then finds in the cache)
         # (+ bmc_boot's 5: BootSettings, VirtualMedia, RemoteControl and MountImages
         # twice — the harvest kept that collection's plain form only)
-        self.assertLessEqual(len(ctx.gets), 53)
+        # (+ bmc_power_policy's 4: Controls, ScheduledPowerActions, Watchdogs and Jobs)
+        self.assertLessEqual(len(ctx.gets), 57)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -2172,6 +2173,185 @@ class TestBmcLabBoot(unittest.TestCase):
             bmc._collect_boot(_FakeCtx(payloads))
         self.assertIn("host PowerState On", str(caught.exception))
         self.assertIn("unmeasured", str(caught.exception))
+
+
+class TestBmcLabPowerPolicy(unittest.TestCase):
+    """bmc_power_policy on the lab payloads: what XCC 6.10 serves, and what it does not."""
+
+    SYS = "/redfish/v1/Systems/1"
+    CH = "/redfish/v1/Chassis/1"
+    MGR = "/redfish/v1/Managers/1"
+    JOBS = "/redfish/v1/JobService/Jobs"
+
+    def test_every_key_the_lab_unit_serves(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_power_policy(ctx)
+        view, context = result["normalized"], result["context"]
+        slot = {"activated": False, "interval": "Daily", "time": "00:00"}
+        unset = {"timer_s": None, "timeout_interval_s": None}
+        self.assertEqual(
+            view,
+            {
+                # neither AC-restore leaf is served on XCC 6.10: null, never assumed
+                "power_restore_policy": None,
+                "lenovo_power_restore_policy": None,
+                "wake_on_lan": True,
+                "power_on_permission": True,
+                "local_power_control": True,
+                "random_delay": None,
+                "host_watchdog_enabled": False,
+                "host_watchdog_timeout_action": "PowerCycle",
+                "host_watchdog_warning_action": "None",  # the enum, verbatim
+                # no PowerLimit, no Lenovo capping block, no redundancy group on an SE350
+                "power_limit_w": None,
+                "power_limit_exception": None,
+                "power_limit_correction_ms": None,
+                "power_capping_enabled": None,
+                "limit_mode": None,
+                "guaranteed_w": None,
+                "capping_min_w": None,
+                "capping_max_w": None,
+                "power_redundancy_policy": None,
+                "max_power_limit_w": None,
+                "power_failure_limit": None,
+                # a programmable power control with no set point and no mode: no cap set
+                "control|PowerLimit": {
+                    "control_type": "Power",
+                    "control_mode": None,
+                    "set_point": None,
+                    "set_point_units": "Watt",
+                    "set_point_type": "Single",
+                    "setting_min": None,
+                    "setting_max": None,
+                    "allowable_min": None,
+                    "allowable_max": None,
+                    "implementation": "Programmable",
+                    "physical_context": "Chassis",
+                    "health": "OK",
+                    "state": "Enabled",
+                },
+                "sched|1": dict(slot, type="On"),
+                "sched|2": dict(slot, type="GracefulShutdown"),
+                "sched|3": dict(slot, type="GracefulRestart"),
+                "watchdog|1": dict(unset, type="OSBootProcess", state="Disabled"),
+                "watchdog|2": dict(unset, type="OS", state="Disabled"),
+                "watchdog|3": dict(unset, type="BIOSBootProcess", state="EnabledButOffline"),
+                "watchdog|4": {
+                    "type": "IPMI",
+                    "state": "Enabled",
+                    "timer_s": 15,
+                    "timeout_interval_s": 15,
+                },
+            },
+        )
+        self.assertEqual(
+            context["watchdog_expired"], {"watchdog|%d" % (n,): False for n in (1, 2, 3, 4)}
+        )
+        # the control's sensor reads the chassis power: a reading, context only
+        self.assertEqual(
+            context["control_readings"],
+            {
+                "control|PowerLimit": {
+                    "reading": 50,
+                    "data_source": self.CH + "/Sensors/204L0",
+                    "set_point_update_time": None,
+                }
+            },
+        )
+        # the JobService twins of the three scheduled power actions, suspended
+        self.assertEqual(sorted(context["jobs"]), ["PowerOff", "PowerOn", "Restart"])
+        self.assertEqual({job["state"] for job in context["jobs"].values()}, {"Suspended"})
+        schedule = context["jobs"]["PowerOff"]["schedule"]
+        self.assertEqual(
+            (schedule["name"], schedule["enabled_days_of_week"]), ("Lenovo:Power Off", [])
+        )
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["lenovo_capabilities_source"], "Power Oem.Lenovo")
+        self.assertEqual(context["power_control_member"], "0")
+        self.assertIsNone(context["redundancy_member"])
+        self.assertIsNone(context["non_redundant_available_power_w"])
+        self.assertIsNone(context["unmapped"])
+        self.assertEqual(
+            {
+                family: (row["strategy"], row["members"])
+                for family, row in context["collections"].items()
+            },
+            {
+                "controls": ("expand", 1),
+                "scheduled_power_actions": ("expand", 3),
+                "watchdogs": ("expand", 4),
+                "jobs": ("expand", 3),
+            },
+        )
+        collections = (
+            self.CH + "/Controls",
+            self.SYS + "/Oem/Lenovo/ScheduledPowerActions",
+            self.MGR + "/Oem/Lenovo/Watchdogs",
+            self.JOBS,
+        )
+        self.assertEqual(
+            ctx.gets,
+            ["/redfish/v1/", "/redfish/v1/Systems", self.SYS, self.CH, self.CH + "/Power", self.MGR]
+            + [path + _XCC_EXPAND for path in collections],
+        )
+        self.assertIn((self.JOBS + _XCC_EXPAND, "_power_policy_redact_jobs"), ctx.redacted)
+
+    def test_what_xcc_6_10_does_not_serve(self):
+        # the AC-restore policy: in neither the System nor Lenovo's capabilities block
+        self.assertNotIn("PowerRestorePolicy", J("xcc_system_lab.json"))
+        power = J("xcc_chassis_power_lab.json")
+        capabilities = power["Oem"]["Lenovo"]
+        self.assertEqual(capabilities["@odata.type"], "#LenovoPower.v1_0_0.Capabilities")
+        for leaf in ("PowerRestorePolicy", "RandomDelay"):
+            self.assertNotIn(leaf, capabilities)
+        # no cap, no Lenovo capping block and no redundancy group on the SE350
+        self.assertNotIn("Redundancy", power)
+        for member in power["PowerControl"]:
+            self.assertNotIn("PowerLimit", member)
+            self.assertNotIn("PowerUtilization", member.get("Oem", {}).get("Lenovo", {}))
+        # the PowerLimit control carries neither a set point nor a mode nor limits
+        control = J("xcc_chassis_controls_expanded_lab.json")["Members"][0]
+        for leaf in ("SetPoint", "ControlMode", "AllowableMin", "AllowableMax"):
+            self.assertNotIn(leaf, control)
+        # the JobService twins hide their payloads
+        jobs = J("xcc_jobservice_jobs_expanded_lab.json")["Members"]
+        self.assertEqual({(job["HidePayload"], "Payload" in job) for job in jobs}, {(True, False)})
+
+    def test_the_lab_layout_without_expand_fits_the_budget(self):
+        # resolution 5, then the Chassis, Power and the Manager, the Controls 1 + 1 + 1 (the
+        # $expand refusal is paid there, once), the scheduled actions 1 + 3, the watchdogs
+        # 1 + 4, the jobs 1 + 3
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        walked = bmc._collect_power_policy(ctx)
+        self.assertEqual(len(ctx.gets), 5 + 3 + 3 + 4 + 5 + 4)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_POWER_POLICY)
+        self.assertEqual(
+            [path for path in ctx.gets if "?" in path], [self.CH + "/Controls" + _XCC_EXPAND]
+        )
+        expanded = bmc._collect_power_policy(_xcc_lab_ctx())
+        self.assertEqual(walked["normalized"], expanded["normalized"])
+        self.assertEqual(walked["context"]["jobs"], expanded["context"]["jobs"])
+
+    def test_a_firmware_without_the_power_resource_reads_the_flags_from_the_subsystem(self):
+        payloads = _xcc_lab_payloads()
+        del payloads[self.CH]["Power"]
+        del payloads[self.CH + "/Power"]
+        ctx = _FakeCtx(payloads)
+        result = bmc._collect_power_policy(ctx)
+        self.assertEqual(
+            result["context"]["lenovo_capabilities_source"], "PowerSubsystem Oem.Lenovo"
+        )
+        self.assertIn(self.CH + "/PowerSubsystem", ctx.gets)
+        # the same three flags, so the same view: nothing else came from Power on this unit
+        self.assertEqual(
+            result["normalized"], bmc._collect_power_policy(_xcc_lab_ctx())["normalized"]
+        )
+        # a Power resource the Chassis links that answers 404 is a failed read, never "none"
+        payloads = _xcc_lab_payloads()
+        del payloads[self.CH + "/Power"]
+        with self.assertRaises(_loader.registry.CollectError):
+            bmc._collect_power_policy(_FakeCtx(payloads))
 
 
 if __name__ == "__main__":

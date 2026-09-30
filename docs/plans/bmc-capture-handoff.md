@@ -710,8 +710,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    **State (2026-09-30):** ten builders, one per check, each in its own
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
-   `bmc_sensors` and `bmc_boot` landed. What the builders found wrong in
-   §5b is §10a item 13.
+   `bmc_sensors`, `bmc_boot` and `bmc_power_policy` landed. What the
+   builders found wrong in §5b is §10a item 13.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
    discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
@@ -888,6 +888,20 @@ Recorded as they were found, each with how it was resolved.
       are coded from the DMTF schema on hand-built fixtures. Beyond the plan:
       a boot manager none of whose members lists an entry is unmeasured
       (refused), like an empty collection.
+    - `bmc_power_policy`: there is no nested `Power.Oem.Lenovo.Capabilities`
+      object on XCC 6.10 — the Power resource's `Oem.Lenovo` block itself is
+      the Capabilities type, holding the three power flags (read from the
+      PowerSubsystem's Lenovo block where no legacy Power resource is
+      served). It costs four `$expand` GETs beyond the cached reads, not 3.
+      `PowerLimit`, Lenovo `PowerUtilization` and the Lenovo redundancy
+      settings are unserved on the lab unit: coded from the schemas, and the
+      hand-built fixture marks the Lenovo enum values it cannot know as
+      placeholders rather than guessing them. Whether a Lenovo watchdog's
+      `TimerValueInSec` is the configured timer or a countdown is for the
+      stability pair to show. A DMTF Job's `Payload` (`HttpHeaders`,
+      `JsonBody`) can carry credentials the family scrubber did not see; the
+      check reads the Jobs through its own composed redactor (see
+      `bmc_tasks`).
 
 ## 11. Decisions still open (default assumed in parentheses)
 
