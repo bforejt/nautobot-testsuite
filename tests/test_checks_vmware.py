@@ -2,6 +2,7 @@
 collector tests through a REAL CollectorContext wrapped around a fake api-slot
 client (so the cache-sharing assertions exercise the real per-run cache)."""
 
+import json
 import unittest
 
 if __package__:
@@ -129,8 +130,67 @@ class _FakeVsphere:
         self.closed = True
 
 
-def _ctx(api=None):
-    return context.CollectorContext("esx-test", "vmware", api=api or _FakeVsphere())
+def _ctx(api=None, debug=False):
+    return context.CollectorContext("esx-test", "vmware", api=api or _FakeVsphere(), debug=debug)
+
+
+# --- debug trace hygiene ---------------------------------------------------------
+
+
+class TestDebugTraceHygiene(unittest.TestCase):
+    """The debug trace holds what raw holds: _scrub_answer runs inside ctx.call, so
+    a secret masked in the raw bundle is never verbatim in the trace either."""
+
+    def test_option_secrets_are_masked_before_the_trace(self):
+        ctx = _ctx(debug=True)
+        result = checks._collect_time_syslog(ctx)
+        trace = json.dumps(ctx.trace)
+        self.assertNotIn("not-a-real-token", trace)
+        self.assertIn("UserVars.ExampleVendorAgent.apiToken", trace)
+        self.assertIn(checks._SCRUBBED, trace)
+        self.assertNotIn("not-a-real-token", json.dumps(result))
+        # The scrubber reaches the client as nothing: kwargs are the request only.
+        self.assertTrue(all("redact" not in kwargs for _, kwargs in ctx.api.calls))
+
+    def test_license_key_keeps_only_its_tail_in_the_trace(self):
+        ctx = _ctx(debug=True)
+        result = checks._collect_host_license(ctx)
+        trace = json.dumps(ctx.trace)
+        self.assertNotIn("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", trace)
+        self.assertIn("...EEEEE", trace)
+        self.assertEqual(result["normalized"]["license_key_tail"], "...EEEEE")
+
+    def test_scrub_answer_masks_secrets_and_is_idempotent(self):
+        answer = {
+            "objects": [
+                {
+                    "props": {
+                        "config.option": [
+                            {"key": "Some.Password", "value": "hunter2"},
+                            {"key": "Security.PasswordQualityControl", "value": "retry=3"},
+                            {"key": "Net.TcpipHeapMax", "value": 512},
+                        ],
+                        "licenses": [{"licenseKey": "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE"}],
+                        "features": [{"key": "vsmp", "value": {"key": "nested"}}],
+                    }
+                }
+            ]
+        }
+        once = checks._scrub_answer(answer)
+        props = once["objects"][0]["props"]
+        self.assertEqual(
+            props["config.option"],
+            [
+                {"key": "Some.Password", "value": checks._SCRUBBED},
+                {"key": "Security.PasswordQualityControl", "value": "retry=3"},
+                {"key": "Net.TcpipHeapMax", "value": 512},
+            ],
+        )
+        self.assertEqual(props["licenses"], [{"licenseKey": "...EEEEE"}])
+        self.assertEqual(props["features"], [{"key": "vsmp", "value": {"key": "nested"}}])
+        self.assertEqual(checks._scrub_answer(once), once)
+        # the original answer is untouched (a deep copy, never in place)
+        self.assertEqual(answer["objects"][0]["props"]["config.option"][0]["value"], "hunter2")
 
 
 def _host_calls(api, path):

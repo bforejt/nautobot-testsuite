@@ -1,7 +1,8 @@
 """VMware ESXi (standalone hostd, vim25 SOAP) check catalog — ESXi as NFV compute.
 
-Every collector reaches the host only through ``ctx.call`` on the api slot
-(the VsphereClient: six read-only operations, Read-only role server-side);
+Every collector reaches the host only through ``_call`` -> ``ctx.call`` on the
+api slot (the VsphereClient: six read-only operations, Read-only role
+server-side);
 this module imports nothing but stdlib and the jobs package's pure modules,
 so the CI battery can import it and drive every ``_normalize_*`` function
 directly with parsed fixture bodies.
@@ -36,7 +37,11 @@ Wire-shape rules the normalizers follow (verified against hostd):
 Raw is keyed by the exact request (operation, type, moids, paths) and holds
 each returned property set CURATED first (bulk-only fields dropped, secrets
 scrubbed) and capped second, with an honest truncation marker; normalized is
-always computed from the full response, never from capped raw.
+always computed from the full response, never from capped raw. ``_call`` hands
+the context ``_scrub_answer`` as its redact hook, so the same secrets
+(OptionValue values whose key names one, license keys) are masked before the
+debug trace, the per-run cache and the collector see an answer: the trace
+never holds what raw scrubs.
 """
 
 import json
@@ -219,6 +224,36 @@ def _secret_key(key):
     return "password" in lowered or any(token in lowered for token in _SECRET_KEY_TOKENS)
 
 
+_SCRUBBED = "***scrubbed***"
+
+
+def _scrub_answer(node):
+    """Deep copy of a SOAP answer with every secret masked — ``_call``'s redact hook.
+
+    Runs inside ``CollectorContext.call`` before the debug trace, the per-run
+    cache and the collector see the answer, so the trace carries exactly what
+    raw carries: an OptionValue (``config.option``, ``config.extraConfig``,
+    wherever hostd puts one) whose key ``_secret_key`` matches has its value
+    scrubbed, and a ``licenseKey`` keeps only its tail. Idempotent, because a
+    cache hit passes the cached answer through it again. No normalizer reads
+    a masked key (the password-policy knobs are exempt by name).
+    """
+    if isinstance(node, dict):
+        name = node.get("key")
+        out = {}
+        for key, value in node.items():
+            if key == "licenseKey":
+                out[key] = _redact_key(value)
+            elif key == "value" and isinstance(name, str) and _secret_key(name):
+                out[key] = _SCRUBBED
+            else:
+                out[key] = _scrub_answer(value)
+        return out
+    if isinstance(node, list):
+        return [_scrub_answer(item) for item in node]
+    return node
+
+
 class _Precapped(dict):
     """A curated raw value its curator already capped block by block; _capped passes it through."""
 
@@ -309,7 +344,7 @@ def _curated_options(options, curated_keys):
             continue
         value = option.get("value")
         if _secret_key(key):
-            value = "***scrubbed***"
+            value = _SCRUBBED
         if key in curated_keys:
             curated[key] = value
         else:
@@ -327,6 +362,11 @@ def _curated_options(options, curated_keys):
 # --- transport helpers ---------------------------------------------------------
 
 
+def _call(ctx, operation, **kwargs):
+    """The one way to the api slot: every answer passes ``_scrub_answer`` first."""
+    return ctx.call(operation, redact=_scrub_answer, **kwargs)
+
+
 def _retrieve(ctx, mo_type, moids, paths, **options):
     """RetrievePropertiesEx through the per-run cache; the drained result dict.
 
@@ -335,8 +375,8 @@ def _retrieve(ctx, mo_type, moids, paths, **options):
     A leftover continuation token means the transport did not drain — a
     partial answer is refused, never normalized.
     """
-    result = ctx.call(
-        "RetrievePropertiesEx", type=mo_type, moids=list(moids), paths=list(paths), **options
+    result = _call(
+        ctx, "RetrievePropertiesEx", type=mo_type, moids=list(moids), paths=list(paths), **options
     )
     if not isinstance(result, dict) or "objects" not in result:
         raise CollectError("RetrievePropertiesEx %s: unexpected result shape" % (mo_type,))
@@ -400,7 +440,7 @@ def _fetch_network_group(ctx):
 
 
 def _service_content(ctx):
-    content = ctx.call("RetrieveServiceContent")
+    content = _call(ctx, "RetrieveServiceContent")
     if not isinstance(content, dict):
         raise CollectError("RetrieveServiceContent returned no service content")
     return content
@@ -795,7 +835,7 @@ def _fetch_hints(ctx, props):
     if not network_system:
         raise CollectError("configManager.networkSystem absent — cannot QueryNetworkHint")
     # <device> omitted on purpose: every pnic in one call.
-    hints = ctx.call("QueryNetworkHint", network_system=network_system)
+    hints = _call(ctx, "QueryNetworkHint", network_system=network_system)
     if not isinstance(hints, list):
         raise CollectError("QueryNetworkHint returned no hint list")
     return network_system, hints
@@ -2283,9 +2323,13 @@ def _license_properties(license_info):
 
 
 def _redact_key(license_key):
+    """The key's last five characters behind an ellipsis; a tail already in that
+    form is kept as is (``_scrub_answer`` sees a cached answer twice)."""
     text = _strip(license_key)
     if text is None:
         return None
+    if text.startswith("..."):
+        return text
     return "...%s" % (text[-5:],)
 
 

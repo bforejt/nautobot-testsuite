@@ -26,9 +26,10 @@ output holds secrets or usernames (the configuration text, the logging
 buffer) passes ``run_ssh`` a ``redact`` callable: it is applied to the output
 BEFORE the copy the debug trace keeps and before the output is returned, the
 callable never reaches the transport, and the SSH library's own DEBUG echo of
-the channel is held back while the read runs. ``get`` takes the same kind of
-callable for a JSON payload (the BMC family scrubs key material, user names
-and the account names its log messages carry this way). A caller that needs the
+the channel is held back while the read runs. ``get`` and ``call`` take the
+same kind of callable for a JSON payload (the BMC family scrubs key material,
+user names and the account names its log messages carry this way; the vmware
+family masks option values and license keys). A caller that needs the
 verbatim text for a comparison it never stores (the config check's
 verbatim_in_sync) passes ``return_verbatim=True`` and owns redacting whatever
 it stores; the trace is redacted either way.
@@ -223,14 +224,20 @@ class CollectorContext:
         self._cache[key] = payload
         return payload
 
-    def call(self, operation, **kwargs):
+    def call(self, operation, *, redact=None, **kwargs):
         """API operation through the api-slot client, cached per run by (operation, kwargs).
 
         Mirrors ``get()``: same outcomes (ok / not-found for a None answer /
-        cache-hit / error), same debug payload capture. kwargs are recorded
-        in the trace as given, so a client must never accept secrets through
-        here (the vSphere client refuses Login/Logout via call() for exactly
-        that reason).
+        cache-hit / error), same debug payload capture, and the same
+        ``redact`` hook (answer -> answer) with the same rules — applied
+        before the trace copy, the cache and the return, never passed to the
+        transport, not part of the cache key (so it must be idempotent: a
+        cache hit passes through it again), fail-closed. The vmware family
+        masks option values and license keys this way, so the debug trace
+        carries exactly what raw carries. kwargs are recorded in the trace as
+        given, so a client must never accept secrets through here (the
+        vSphere client refuses Login/Logout via call() for exactly that
+        reason).
         """
         if self.api is None:
             raise RuntimeError("no API transport for %s" % (self.device_name,))
@@ -238,7 +245,15 @@ class CollectorContext:
         key = (label, operation, canonical_kwargs(kwargs))
         if key in self._cache:
             self.trace.append({"transport": label, "target": operation, "outcome": "cache-hit"})
-            return self._cache[key]
+            cached = self._cache[key]
+            if redact is None or cached is None:
+                return cached
+            payload, failure = _redact_payload(redact, cached)
+            if failure is not None:
+                raise RuntimeError(
+                    "%s: answer withheld, its redactor failed with %s" % (operation, failure)
+                )
+            return payload
         entry = {"transport": label, "target": operation}
         if kwargs:
             entry["kwargs"] = dict(kwargs)
@@ -252,6 +267,15 @@ class CollectorContext:
             self.trace.append(entry)
             raise
         entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
+        if redact is not None and payload is not None:
+            payload, failure = _redact_payload(redact, payload)
+            if failure is not None:
+                entry["outcome"] = "error"
+                entry["error"] = "answer withheld: its redactor failed with %s" % (failure,)
+                self.trace.append(entry)
+                raise RuntimeError(
+                    "%s: answer withheld, its redactor failed with %s" % (operation, failure)
+                )
         entry["outcome"] = "ok" if payload is not None else "not-found"
         if self.debug:
             entry["payload"] = payload

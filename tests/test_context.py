@@ -233,6 +233,52 @@ class TestGetRedaction(unittest.TestCase):
         self.assertEqual(ctx.restconf.calls, ["/a", "/a"])
 
 
+class TestCallRedaction(unittest.TestCase):
+    """ctx.call(redact=...): the vmware family's scrubber runs before trace, cache and caller."""
+
+    @staticmethod
+    def _mask(payload):
+        return {key: ("***" if key == "operation" else value) for key, value in payload.items()}
+
+    def test_redactor_runs_before_the_trace_copy_and_the_return(self):
+        ctx = context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=True)
+        answer = ctx.call("RetrievePropertiesEx", redact=self._mask, type="HostSystem")
+        self.assertEqual(answer, {"operation": "***", "kwargs": {"type": "HostSystem"}})
+        self.assertEqual(ctx.trace[0]["payload"], answer)
+        # the redactor never reaches the client and is not a traced kwarg
+        self.assertEqual(ctx.api.calls, [("RetrievePropertiesEx", {"type": "HostSystem"})])
+        self.assertEqual(ctx.trace[0]["kwargs"], {"type": "HostSystem"})
+
+    def test_cache_hit_passes_through_the_callers_redactor(self):
+        ctx = context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=True)
+        ctx.call("RetrieveServiceContent")  # read once verbatim
+        self.assertEqual(
+            ctx.call("RetrieveServiceContent", redact=self._mask),
+            {"operation": "***", "kwargs": {}},
+        )
+        self.assertEqual(len(ctx.api.calls), 1)
+        self.assertEqual([e["outcome"] for e in ctx.trace], ["ok", "cache-hit"])
+
+    def test_a_none_answer_is_not_redacted(self):
+        ctx = context.CollectorContext("esx1", "vmware", api=_FakeApi())
+        self.assertIsNone(ctx.call("Nothing", redact=self._mask))
+        self.assertEqual(ctx.trace[0]["outcome"], "not-found")
+
+    def test_a_failing_redactor_withholds_the_answer(self):
+        def boom(_payload):
+            raise ValueError("no")
+
+        ctx = context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=True)
+        with self.assertRaises(RuntimeError) as caught:
+            ctx.call("RetrieveServiceContent", redact=boom)
+        self.assertIn("ValueError", str(caught.exception))
+        self.assertNotIn("payload", ctx.trace[0])
+        self.assertEqual(ctx.trace[0]["outcome"], "error")
+        # nothing was cached: the next call goes to the wire again
+        ctx.call("RetrieveServiceContent")
+        self.assertEqual(len(ctx.api.calls), 2)
+
+
 class TestContextCall(unittest.TestCase):
     def _ctx(self, debug=False):
         return context.CollectorContext("esx1", "vmware", api=_FakeApi(), debug=debug)

@@ -17,8 +17,8 @@ Two jobs, both under the **Test Suite** grouping:
   full transport trace of both planes (every RESTCONF/Redfish path, SSH
   command and SOAP operation with timing, outcome, and payload, each entry
   labelled with its transport — configuration text only in its redacted form,
-  BMC payloads only after their redactor), so even a FAILED check keeps its
-  evidence.
+  BMC and ESXi payloads only after their redactor, so the trace never holds a
+  secret that `raw_*` scrubs), so even a FAILED check keeps its evidence.
 - *(analysis happens outside Nautobot: download the snapshot files and feed
   them, with your test-plan prompt, to the LLM your organization approves —
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
