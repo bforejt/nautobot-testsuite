@@ -11,7 +11,8 @@ Two jobs, both under the **Test Suite** grouping:
   to the JobResult: `snapshot_<device>_<change_id>.json` / `raw_<device>_<change_id>.json`.
   A server whose BMC is modelled as an interface on its Device gets the BMC's
   checks in the same snapshot, beside the host's own: every check entry names
-  its `target` (`host` or `bmc`).
+  its `target` (`host` or `bmc`). BMC capture needs a one-time setup in
+  Nautobot first — see [BMC capture: one-time setup](#bmc-capture-one-time-setup).
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
   full transport trace of both planes (every RESTCONF/Redfish path, SSH
   command and SOAP operation with timing, outcome, and payload, each entry
@@ -70,7 +71,50 @@ stdlib or Nautobot core, and `pyproject.toml` carries dev tooling only. Device
 credentials come from the device's assigned Secrets Group (or a per-run override
 group), never from job inputs; a server's BMC takes its credentials from the
 Secrets Group associated with its interface through the `bmc_secrets_group`
-Relationship (see *NFV compute* below).
+Relationship (see the setup below).
+
+### BMC capture: one-time setup
+
+**Required before any server BMC can be captured.** Skip it only if no BMC will
+ever be captured. The suite never creates Nautobot objects, so these steps are
+the operator's:
+
+1. **Create the Relationship, once per Nautobot**, under Extensibility →
+   Relationships → Add:
+
+   | Field | Value |
+   | --- | --- |
+   | Label | BMC credentials |
+   | Key | `bmc_secrets_group` (exactly this) |
+   | Type | One to Many |
+   | Source type | `extras \| secrets group` |
+   | Destination type | `dcim \| interface` |
+
+   The capture also accepts the reverse orientation (interface as the
+   source). On Nautobot 2.4, check that both types appear in the dropdowns
+   before relying on it; so far this is verified on 3.2.5 only.
+2. **Create a Secrets Group for the BMCs**, e.g. `bmc-readonly`: a Username and
+   a Password secret with access type HTTP(S) (Generic works too). One group
+   serves every BMC that shares the account.
+3. **For each server**, on its host Device: add an Interface named `xcc` (or
+   any name whose first word is a BMC token — see
+   [NFV compute](#nfv-compute-esxi--xcc)), assign it the BMC's IP address, and
+   associate the Secrets Group in the interface's Relationships panel ("BMC
+   credentials").
+4. **On the BMC itself**: a local account with the ReadOnly privilege and
+   Redfish enabled, whose first-login password change a human has completed
+   in the BMC's web UI.
+
+Check the setup with a dry run of **Test Suite Capture** on one such device:
+the log reads `BMC ready` when it is complete, and otherwise names what is
+missing (for example "no Relationship with key 'bmc_secrets_group' exists —
+create it once …").
+
+**Without this setup, every Device that carries a BMC-named interface with an
+IP address fails its capture**: the BMC checks are recorded as failed with the
+reason, while the host's own checks still run. Before deploying onto a
+Nautobot that already documents BMC addresses, list those devices with the
+query under [NFV compute](#nfv-compute-esxi--xcc).
 
 ## Usage: a firewall cutover
 
@@ -126,16 +170,10 @@ an unmodelled one never is.
   recommended, **exactly one per Device**. Assign the BMC's address to it as
   an IP Address; with several, the lowest IPv4 (else the lowest IPv6) is
   dialled and all of them are named in `device.bmc.addresses_seen`.
-- **A Secrets Group for the BMC**, e.g. `bmc-readonly`: a username and a
-  password Secret associated with access type HTTP(S) (Generic works too —
-  the lookup cascades RESTCONF → HTTP → REST → Generic).
-- **The Relationship, created once** (Extensibility → Relationships): key
-  `bmc_secrets_group`, label "BMC credentials", type *one-to-many*, source
-  `extras | secrets group`, destination `dcim | interface`; then associate
-  the group on each BMC interface. The job accepts the reverse orientation
-  too (interface as source). On Nautobot 2.4.40, open the Relationship form
-  and check that both models appear in its type dropdowns before relying on
-  it (so far verified on a 3.2.5 dev stack only).
+- **A Secrets Group for the BMC**, associated with the BMC interface
+  through the `bmc_secrets_group` Relationship — both set up once as in
+  [BMC capture: one-time setup](#bmc-capture-one-time-setup) (the secret
+  lookup cascades RESTCONF → HTTP → REST → Generic).
 - **The BMC account**: a local BMC user with a **ReadOnly** privilege and
   Redfish access enabled — on an XCC the built-in ReadOnly role, or a custom
   role whose OEM privilege is ReadOnly; on XCC 6.10 ReadOnly reads everything
