@@ -160,6 +160,25 @@ What the capture does with each modelled state:
 | The host's credentials or transport failing, an addressed BMC modelled | The BMC is still captured; every host check recorded `failed` with the reason; device FAILED. |
 | The host's platform unsupported (it maps to none of iosxe, panos, vmware), an addressed BMC modelled | The BMC is captured alone: `device.host_captured` and `device.platform_supported` false, a job-log warning, and the device succeeds when its BMC checks do. Without an addressed BMC such a Device fails ("cannot map platform"). |
 
+Before deploying this version onto a Nautobot that already documents BMC
+addresses, list the devices it will start capturing a BMC for — every
+device with an interface whose first word is a BMC token and an IP address.
+Each of them FAILS (fail-closed) until its interface has the Relationship
+and a Secrets Group, or while its BMC is unreachable from the worker. From
+`nautobot-server nbshell`:
+
+```python
+import re
+
+from nautobot.dcim.models import Interface
+
+TOKENS = ("xcc", "xclarity", "imm", "idrac", "ilo", "cimc", "bmc", "ipmi")
+for iface in Interface.objects.filter(ip_addresses__isnull=False).distinct():
+    words = [word for word in re.split(r"[^A-Za-z0-9]+", iface.name) if word]
+    if words and words[0].lower().rstrip("0123456789") in TOKENS:
+        print(iface.device.name, iface.name)
+```
+
 The per-run `secrets_group` override applies to the host platforms only: a
 BMC always uses the group its interface's Relationship names. A dry run
 probes both planes, and `override_checks` filters both families. A Device
@@ -272,18 +291,18 @@ which vendor the BMC reports.
 | `vmware_vms` | vmware | 1 | Registered VMs: identity, hardware, reservations, power state, snapshots |
 | `vmware_vm_nics` | vmware | 1 | VM network adapters and PCI passthrough devices: MAC, backing, slot, state |
 | `vmware_vm_tuning` | vmware | 1 | Per-VM NFV tuning: curated .vmx keys plus the modeled reservation fallbacks |
-| `bmc_system` | bmc | 1 | System identity, health, boot settings, SecureBoot and the BMC's own address |
-| `bmc_security` | bmc | 1 | ThinkEdge Security Pack state: lockdown, motion/intrusion detection, SED (not-present where the vendor security resource carries none of them — a gen-1 SE350 included — or the vendor has no mapping yet) |
-| `bmc_thermal` | bmc | 1 | Chassis temperature sensors and fans: health/state, ambient-class readings (within 8 °C) |
-| `bmc_power` | bmc | 1 | Power supplies/adapters, redundancy and voltage rails from Chassis Power (an SE350's external adapters are not modelled as supplies: rails only there) |
-| `bmc_inventory` | bmc | 2 | DIMM, processor and PCIe device inventory with per-part identity and health (POST-populated: an empty collection is a failed read, never zero parts) |
-| `bmc_host_nics` | bmc | 1 | Host network ports as the BMC sees them: link status and burned-in MAC (ToManager excluded) |
-| `bmc_firmware` | bmc | 2 | Firmware inventory: every component's version and SoftwareId (a version on a `-Pending` member is a staged update) |
-| `bmc_event_log` | bmc | 2 | BMC platform event log: Warning/Critical entries keyed `sel\|<CommonEventID>\|<Id>`, whole log, no query window; account names in messages scrubbed |
-| `bmc_bios` | bmc | 2 | Curated UEFI settings: VT-d, SR-IOV, HT, power/turbo, boot mode, TPM (not-present when Bios is unserved) |
-| `bmc_storage` | bmc | 1 | Storage controllers, physical drives (health, SED status) and RAID volumes (not-present when none enumerate) |
-| `bmc_manager_network` | bmc | 2 | BMC network services: NTP, DNS, enabled protocols/ports, addressing origin |
-| `bmc_chassis` | bmc | 3 | Operator-maintained chassis Location record and the intrusion sensor state |
+| `bmc_system` | bmc | 1 | System identity, health, boot override, SecureBoot, power-restore/delay/power-mode, host watchdog and host-console policy, TPM, Lenovo front-panel USB and TPM presence, and the BMC's own consoles, health/state and address (leaves a firmware does not serve read null, never "off") |
+| `bmc_security` | bmc | 1 | The vendor security resource leaf by leaf (`security\|<path>`: TLS mode and minimum, HTTPS/LDAPS/CIM, firmware rollback, encapsulation) and the external key manager (`sklm\|<path>`, certificate collections counted, never read); ThinkEdge tamper state as nullable scalars (not-present only without a security resource or a vendor mapping) |
+| `bmc_thermal` | bmc | 1 | Chassis temperature sensors and fans (Thermal, else ThermalSubsystem fans): health/state, ambient-class readings within 8 °C; DTS margins and the temperature summary in context |
+| `bmc_power` | bmc | 1 | Power supplies (legacy Power, else PowerSubsystem supplies with LineInputStatus), redundancy and voltage rails (an SE350's external adapters are not modelled as supplies: rails only there) |
+| `bmc_inventory` | bmc | 2 | DIMMs (ranks, widths, allowed speeds, Lenovo FRU/date/MPFA; empty slots keyed Absent), CPUs (CPUID signature, microcode, max speed, TDP, turbo) and PCIe devices with a `pciefn\|<device>\|<function>` row per function (POST-populated: an empty collection is a failed read) |
+| `bmc_host_nics` | bmc | 1 | Host network ports as the BMC sees them: link status and burned-in MAC (ToManager excluded; context names the collection that carried them) |
+| `bmc_firmware` | bmc | 2 | Firmware (and SoftwareInventory where linked): every component's version and SoftwareId, the image the BMC runs from, Lenovo backup auto-promotion (a version on a `-Pending` member is a staged update) |
+| `bmc_event_log` | bmc | 2 | BMC logs read whole: platform Warning/Critical entries keyed `sel\|<code>\|<Id>` (serviceable and by whom, failing FRU, log type) and every unresolved ActiveLog condition `active\|<code>\|<Id>`; maintenance history, audit sequence numbers and the SEL probe in context; account names in messages scrubbed |
+| `bmc_bios` | bmc | 2 | Every UEFI attribute (`bios\|<Attribute>`), settings armed for the next reset (`pending\|<Attribute>`, only where they differ), reset-to-defaults pending and the UEFI password-set flags (not-present when Bios is unserved) |
+| `bmc_storage` | bmc | 1 | Controllers (cache, RAID levels, Lenovo mode and battery), drives (health, SED status, link speed, block size, write cache, Lenovo status) and volumes (RAID, cache/strip/boot policies), plus drives only the Chassis lists (not-present when none enumerate) |
+| `bmc_manager_network` | bmc | 2 | BMC network, time and services: addressing, DNS (DMTF and Lenovo, DDNS), NTP and the Lenovo date/time service, DMTF and Lenovo protocols and open ports, KCS, and the host interface: its credential bootstrapping and the BMC's own USB-LAN address |
+| `bmc_chassis` | bmc | 1 | Chassis and system-board identity, LEDs as `led\|<Name>` rows (color, state), the indicator LED, the operator-maintained Location record and the intrusion sensor |
 
 What this catalog captures per network layer, and the holes still open ranked
 by general value, is tracked in `docs/coverage.md` (the living coverage map).
@@ -446,7 +465,9 @@ the read-only grep guard and the SOAP operation guard.
 ### Bringing a collector up against a real device
 
 1. Run **Test Suite Shakedown (dev)** against one device of the platform.
-2. Read the advisories: `ok` needs nothing; "parsed but empty" means the trace
+2. Read the advisories: `ok` needs nothing (a check whose healthy state is an
+   empty view, such as `bmc_event_log` on a unit with nothing to report, reads
+   "ok — empty is this check's healthy state"); "parsed but empty" means the trace
    payload holds the real leaf/element names — adjust the normalizer to match;
    "nothing fetched" is a path/transport problem (check the module inventory in
    `discovery`).

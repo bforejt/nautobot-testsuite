@@ -519,7 +519,7 @@ class CollectorShakedown(Job):
             C.SHAKEDOWN_TRACE_FILENAME.format(device=safe_device),
             {"schema": 1, "device": device.name, "trace": trace},
         )
-        ok_count = sum(1 for body in report["checks"].values() if body["advice"] == "ok")
+        ok_count = sum(1 for body in report["checks"].values() if body["advice"].startswith("ok"))
         summary = "%s: %d/%d collectors ok; needs attention: %s%s" % (
             device.name,
             ok_count,
@@ -607,7 +607,13 @@ class CollectorShakedown(Job):
         fetched = any(
             entry.get("outcome") in ("ok", "cache-hit") for entry in ctx.trace[trace_start:]
         )
-        advice = registry.shakedown_advice(status, error, len(normalized), fetched)
+        advice = registry.shakedown_advice(
+            status,
+            error,
+            len(normalized),
+            fetched,
+            empty_ok=registry.EMPTY_OK_TAG in (check.tags or ()),
+        )
         report["checks"][check.id] = {
             "target": target,
             "status": status,
@@ -617,7 +623,7 @@ class CollectorShakedown(Job):
             "sample_keys": sorted(normalized)[:5],
             "advice": advice,
         }
-        if advice == "ok":
+        if advice.startswith("ok"):
             self.logger.info(
                 "%s: %d normalized entries in %.1fs — ok",
                 check.id,

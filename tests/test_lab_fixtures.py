@@ -1039,94 +1039,689 @@ class TestBmcLabIdentity(unittest.TestCase):
         self.assertEqual(context["resolution"]["vendor_source"], "ServiceRoot.Vendor")
         self.assertIsNone(context["resolution"]["product"])  # XCC 6.10 serves none
 
+    def test_system_policy_leaves_absent_on_6_10_read_none(self):
+        # The DMTF power-restore, delay, power-mode and host-console leaves are not
+        # served by XCC 6.10: None, never assumed. The watchdog and the TPM list are.
+        result = bmc._collect_system(_xcc_lab_ctx())
+        view, context = result["normalized"], result["context"]
+        for field in (
+            "power_restore_policy",
+            "power_on_delay_s",
+            "power_off_delay_s",
+            "power_cycle_delay_s",
+            "power_mode",
+            "serial_console_enabled",
+            "graphical_console_enabled",
+            "virtual_media_service_enabled",
+            "front_panel_usb_mode",  # FrontPanelUSB serves PortEnabled only
+        ):
+            self.assertIn(field, view)
+            self.assertIsNone(view[field], field)
+        self.assertIs(view["host_watchdog_enabled"], False)
+        self.assertEqual(view["host_watchdog_timeout_action"], "PowerCycle")
+        self.assertEqual(view["host_watchdog_warning_action"], "None")  # the enum, verbatim
+        self.assertEqual(
+            (view["tpm_count"], view["tpm_interface_types"], view["tpm_firmware"]),
+            (1, ["TPM2_0"], []),  # the module serves its firmware version as null
+        )
+        self.assertIs(view["front_panel_usb_port_enabled"], True)
+        self.assertIs(view["tpm_rpp_enabled"], True)
+        # the Manager's console blocks are the BMC's own services, not the host console
+        self.assertEqual(
+            (
+                view["bmc_serial_console_enabled"],
+                view["bmc_graphical_console_enabled"],
+                view["bmc_command_shell_enabled"],
+            ),
+            (True, False, True),
+        )
+        self.assertEqual(context["release_name"], "purley_gp_23-2")
+        self.assertEqual((context["reboot_count"], context["power_on_hours"]), (46, 40199))
+        for field in ("last_reset_time", "manager_last_reset_time", "location_indicator_active"):
+            self.assertIsNone(context[field], field)
+        self.assertEqual(context["boot_progress"], {"last_state": None, "last_state_time": None})
+        self.assertEqual(context["serial_console_protocols"], {})
+
     def test_chassis(self):
         view = bmc._collect_chassis_location(_xcc_lab_ctx())["normalized"]
         self.assertEqual(view["chassis_type"], "StandAlone")
         self.assertIsNone(view["intrusion_sensor"])  # no PhysicalSecurity on this unit
         self.assertEqual(view["placement_rack_offset"], 1)
 
-    def test_security_resource_without_thinkedge_leaves(self):
-        with self.assertRaises(_loader.registry.SkipCheck):
-            bmc._collect_security_state(_xcc_lab_ctx())
+    def test_chassis_leds_identity_and_empty_location_fields(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_chassis_location(ctx)
+        view, context = result["normalized"], result["context"]
+        # four LEDs with unique Names (their Location repeats): keyed by Name alone
+        self.assertEqual(
+            {key: view[key] for key in view if key.startswith("led|")},
+            {
+                "led|BMC Heartbeat": {"color": "Green", "state": "Blink", "location": "Planar"},
+                "led|Identify": {
+                    "color": "Blue",
+                    "state": "Off",
+                    "location": "Front Panel, Rear Panel",
+                },
+                "led|Power": {
+                    "color": "Green",
+                    "state": "On",
+                    "location": "Front Panel, Rear Panel",
+                },
+                "led|Fault": {
+                    "color": "Yellow",
+                    "state": "Off",
+                    "location": "Front Panel, Rear Panel",
+                },
+            },
+        )
+        self.assertEqual(ctx.gets[-1], "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs" + _XCC_EXPAND)
+        self.assertEqual(context["leds"]["strategy"], "expand")
+        self.assertEqual(view["indicator_led"], "Off")
+        self.assertIsNone(view["location_indicator_active"])  # not served on 6.10
+        self.assertEqual(view["system_board_serial"], "S2AQ3W89896")
+        self.assertEqual(view["product_name"], "ThinkSystem SE350")
+        self.assertEqual(view["fru_part_number"], "02JJ056")
+        self.assertIs(view["has_switch_board"], False)
+        # the operator left these empty: None, never ''
+        for field in ("postal_building", "postal_location", "postal_room", "placement_rack"):
+            self.assertIsNone(view[field], field)
+        self.assertNotIn("", view.values())
+        self.assertEqual((context["height_mm"], context["environmental_class"]), (44.45, "A4"))
+
+    def test_security_is_keyed_leaf_by_leaf_without_thinkedge(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_security_state(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            {key: value for key, value in view.items() if "|" in key},
+            {
+                "security|Configurator.FWRollback": "Enabled",
+                "security|CryptographyManagement.MinTLSLevel": "TLSLevel1_2",
+                "security|CryptographyManagement.TLSSecurityMode": "NistCompliant",
+                "security|EncapSettings.EncapMode": "NormalMode",
+                "security|EncapSettings.WhiteList": [],
+                "security|SSLSettings.EnableCIMOverHttps": False,
+                "security|SSLSettings.EnableHttps": True,
+                "security|SSLSettings.EnableLDAPS": False,
+                "security|SecurityCapabilities.SupportedActions": ["CreateKeyPair"],
+                # the key manager serves nothing but its two certificate collections
+                "sklm|ClientCertificate.Members@odata.count": 0,
+                "sklm|ServerCertificate.Members@odata.count": 0,
+            },
+        )
+        thinkedge = [key for key in view if "|" not in key]
+        self.assertEqual(len(thinkedge), 8)
+        self.assertTrue(all(view[key] is None for key in thinkedge))  # no Security Pack
+        self.assertEqual(context["property_sources"], {})
+        self.assertEqual(context["readings"], {})
+        self.assertEqual(
+            ctx.gets[-3:],
+            [
+                "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService",
+                "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ClientCertificate",
+                "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ServerCertificate",
+            ],
+        )
 
 
 class TestBmcLabInventory(unittest.TestCase):
     """bmc_inventory, bmc_storage and bmc_firmware on the lab payloads."""
 
+    # device|function: the BMC's VGA, the X722 and I350 LOMs, the slot-6 add-in NIC
+    FUNCTIONS = ("ob_1|ob_1.00", "ob_2|ob_2.00", "ob_2|ob_2.01", "ob_4|ob_4.00")
+    FUNCTIONS += ("ob_4|ob_4.01", "slot_6|slot_6.00")
+
+    @staticmethod
+    def _walked():
+        """(payloads, errors): the lab set as a firmware refusing every $expand would serve it.
+
+        Every collection link-only, every member at its own @odata.id, every $expand
+        answered HTTP 501, and the System stripped of its Links, so the id resolution
+        costs its full five GETs: the worst case each budget is sized for.
+        """
+        lab = _xcc_lab_payloads()
+        payloads = {path: body for path, body in lab.items() if not path.endswith(_XCC_EXPAND)}
+        errors = {}
+        for path, body in lab.items():
+            if not path.endswith(_XCC_EXPAND) or not isinstance(body.get("Members"), list):
+                continue  # (CertificateLocations is a resource, not a collection)
+            errors[path] = 501
+            links = [{"@odata.id": member["@odata.id"]} for member in body["Members"]]
+            payloads.setdefault(path[: -len(_XCC_EXPAND)], dict(body, Members=links))
+            for member in body["Members"]:
+                payloads.setdefault(member["@odata.id"], member)
+        del payloads["/redfish/v1/Systems/1"]["Links"]
+        return payloads, errors
+
     def test_inventory(self):
-        view = bmc._collect_inventory(_xcc_lab_ctx())["normalized"]
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_inventory(ctx)
+        view, context = result["normalized"], result["context"]
         self.assertEqual(
             sorted(view),
             sorted(
                 ["dimm|1", "dimm|2", "dimm|3", "dimm|4", "cpu|1"]
                 + ["pcie|ob_1", "pcie|ob_2", "pcie|ob_4", "pcie|slot_6"]
+                + ["pciefn|" + row for row in self.FUNCTIONS]
             ),
         )
+        # the two empty DIMM slots are listed: keyed, Absent, identity null, nothing assumed
         absent = [key for key, row in view.items() if row.get("state") == "Absent"]
-        self.assertEqual(len(absent), 2)  # two empty DIMM slots are listed, identity null
-        self.assertTrue(all(view[key]["serial"] is None for key in absent))
+        self.assertEqual(sorted(absent), ["dimm|2", "dimm|3"])
+        for key in absent:
+            for field in ("serial", "capacity_mib", "rank_count", "fru_part_number"):
+                self.assertIsNone(view[key][field], (key, field))
+            self.assertEqual(view[key]["allowed_speeds_mhz"], [])  # served as an empty list
+        dimm = view["dimm|1"]
+        self.assertEqual(
+            {field: dimm[field] for field in sorted(dimm) if field != "serial"},
+            {
+                "allowed_speeds_mhz": [2933],
+                "base_module_type": "RDIMM",
+                "bus_width_bits": 72,
+                "capacity_mib": 32768,
+                "data_width_bits": 64,
+                "error_correction": None,  # not served on XCC 6.10
+                "fru_part_number": "01DE974",
+                "health": "OK",
+                "manufacture_date": "year 2020 week 07",
+                "manufacturer": "Samsung",
+                "mpfa_health_major": None,  # no MPFA block on XCC 6.10
+                "mpfa_health_minor": None,
+                "part_number": "M393A4K40CB2-CVF",
+                "rank_count": 1,
+                "service_label": "DIMM 1",
+                "slot": "DIMM 1",
+                "socket": 1,
+                "speed_mhz": 2400,
+                "state": "Enabled",
+                "type": "DDR4",
+            },
+        )
+        self.assertEqual(
+            view["cpu|1"],
+            {
+                "model": "Intel(R) Xeon(R) D-2123IT CPU @ 2.20GHz",
+                "socket": "CPU 1",
+                "cores": 4,
+                "enabled_cores": 4,
+                "threads": 8,
+                "health": "OK",
+                "state": "Enabled",
+                "effective_family": "0x06",
+                "effective_model": "0x55",
+                "step": "0x04",
+                "microcode": None,  # MicrocodeInfo is served null
+                "max_speed_mhz": 3000,
+                "tdp_w": 60,
+                "turbo_state": None,  # not served on XCC 6.10
+                "serial": None,  # served ''
+            },
+        )
+        # the clock the DMTF leaves do not carry here comes from Lenovo's OEM leaf
+        self.assertEqual(context["clock_speed_mhz"], {"1": 2200})
+        self.assertEqual(context["clock_speed_source"], {"1": "Oem.Lenovo.CurrentClockSpeedMHz"})
+        caches = context["cpu_caches"]["1"]
+        self.assertEqual(caches["source"], "Oem.Lenovo.CacheInfo")
+        self.assertEqual(
+            [(c["level"], c["installed_kib"]) for c in caches["caches"]],
+            [("L1", 256), ("L2", 4096), ("L3", 8448)],
+        )
+        # the devices the BMC names by nothing are named by their functions' PCI ids
+        for device in ("pcie|ob_1", "pcie|slot_6"):
+            self.assertEqual((view[device]["manufacturer"], view[device]["model"]), (None, None))
+        self.assertEqual(
+            view["pciefn|slot_6|slot_6.00"],
+            {
+                "function_type": "Physical",
+                "device_class": "NetworkController",
+                "class_code": "0x020000",
+                "vendor_id": "0x10ec",
+                "device_id": "0x8125",
+                "subsystem_id": "0x0123",
+                "subsystem_vendor_id": "0x10ec",
+                "enabled": None,  # no Enabled leaf on XCC 6.10: null, never inferred
+                "state": "Enabled",
+            },
+        )
+        self.assertEqual(view["pciefn|ob_1|ob_1.00"]["device_class"], "DisplayController")
+        self.assertEqual(
+            {view["pciefn|" + row]["vendor_id"] for row in self.FUNCTIONS[1:5]}, {"0x8086"}
+        )
+        # one $expand GET per device's PCIeFunctions collection, after the three collections
+        self.assertEqual(
+            {device: report["members"] for device, report in context["pcie_functions"].items()},
+            {"ob_1": 1, "ob_2": 2, "ob_4": 2, "slot_6": 1},
+        )
+        self.assertEqual(
+            {report["strategy"] for report in context["pcie_functions"].values()}, {"expand"}
+        )
+        self.assertEqual(len(ctx.gets), 3 + 3 + 4)
 
     def test_storage_one_ahci_controller_per_m2_slot(self):
-        view = bmc._collect_storage(_xcc_lab_ctx())["normalized"]
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_storage(ctx)
+        view, context = result["normalized"], result["context"]
         controllers = [key for key in view if key.startswith("controller|")]
         drives = [key for key in view if key.startswith("drive|")]
         self.assertEqual(len(controllers), 4)
-        self.assertEqual(len(drives), 4)
+        self.assertEqual(sorted(drives), ["drive|Drive.Slot_%d" % (slot,) for slot in (2, 3, 4, 5)])
         self.assertFalse([key for key in view if key.startswith("volume|")])
+        # AHCI controllers: none of the RAID leaves is served — present, and None
+        for key in controllers:
+            for field in ("cache_size_mib", "battery_operational_status", "mode"):
+                self.assertIsNone(view[key][field], (key, field))
+            self.assertIsNone(view[key]["supported_raid_levels"], key)
+        self.assertEqual(set(context["controller_source"].values()), {"StorageControllers"})
+        self.assertEqual(context["controllers_collection"], {})  # no Controllers link here
+        self.assertEqual(context["battery"], {})
+        drive = view["drive|Drive.Slot_2"]
+        self.assertEqual(
+            {
+                field: drive[field]
+                for field in (
+                    "negotiated_speed_gbs",
+                    "rotation_rpm",
+                    "block_size_bytes",
+                    "hotspare_type",
+                    "write_cache_enabled",
+                    "drive_status",
+                )
+            },
+            {
+                "negotiated_speed_gbs": None,
+                "rotation_rpm": 0,
+                "block_size_bytes": None,
+                "hotspare_type": "None",
+                "write_cache_enabled": None,
+                "drive_status": None,  # the Lenovo drive block carries only its type
+            },
+        )
+        self.assertEqual(set(context["drive_temperature_c"].values()), {None})
+        # the Chassis links no Drives collection and an empty Links.Drives on XCC 6.10
+        self.assertEqual(
+            context["chassis_drives"],
+            {"source": None, "strategy": None, "members": 0, "unlisted": 0},
+        )
+        self.assertEqual(ctx.gets[-1], "/redfish/v1/Chassis/1")
+        self.assertEqual(len(ctx.gets), 3 + 1 + 4 + 4 + 1)
 
     def test_firmware_keeps_the_pending_members(self):
-        view = bmc._collect_firmware(_xcc_lab_ctx())["normalized"]
-        self.assertEqual(len(view), 15)
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_firmware(ctx)
+        view = result["normalized"]
+        self.assertEqual(len([key for key in view if key.startswith("fw|")]), 15)
         self.assertIn("fw|BMC-Primary-Pending", view)
         self.assertIsNone(view["fw|BMC-Primary-Pending"]["version"])
+        self.assertIsNone(view["fw|UEFI-Pending"]["version"])
+        self.assertEqual(view["manager_active_image"], "BMC-Primary")
+        self.assertIs(view["backup_auto_promote"], False)
+        self.assertEqual(len(view), 17)  # no SoftwareInventory: no sw| rows
+        self.assertEqual(result["context"]["software_inventory"], {"linked": False})
+        self.assertEqual(result["context"]["update_service"], "/redfish/v1/UpdateService")
+        self.assertFalse([path for path in ctx.gets if "SoftwareInventory" in path])
+        # the M.2 drives' firmware is their Revision: the Disk<N> rows carry the same strings
+        storage = bmc._collect_storage(ctx)["normalized"]
+        self.assertEqual(
+            sorted(row["revision"] for key, row in storage.items() if key.startswith("drive|")),
+            sorted(view["fw|Disk%d" % (index,)]["version"] for index in (1, 2, 3, 4)),
+        )
+
+    def test_every_budget_covers_the_lab_layout_without_expand(self):
+        # resolution 5, then: Memory 1+1+4 (the $expand refusal is paid there, once),
+        # Processors 1+1, PCIeDevices 1+4, functions 4+6
+        payloads, errors = self._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_inventory(ctx)
+        self.assertEqual(len([key for key in result["normalized"] if key.startswith("pciefn|")]), 6)
+        self.assertEqual(
+            {report["strategy"] for report in result["context"]["pcie_functions"].values()},
+            {"members"},
+        )
+        self.assertEqual(len(ctx.gets), 5 + 6 + 2 + 5 + 10)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_INVENTORY)
+        # resolution 5, then: Storage 1+1+4, drives 4, Volumes 4 (never re-tried), the Chassis
+        ctx = _FakeCtx(payloads, errors=errors)
+        self.assertEqual(
+            len([key for key in bmc._collect_storage(ctx)["normalized"] if "drive|" in key]), 4
+        )
+        self.assertEqual(len(ctx.gets), 5 + 6 + 4 + 4 + 1)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_STORAGE)
+        # resolution 5, then: FirmwareInventory 1+1+15, the Manager, the UpdateService
+        ctx = _FakeCtx(payloads, errors=errors)
+        self.assertEqual(len(bmc._collect_firmware(ctx)["normalized"]), 17)
+        self.assertEqual(len(ctx.gets), 5 + 17 + 1 + 1)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_FIRMWARE)
 
 
 class TestBmcLabLogsBios(unittest.TestCase):
     """bmc_event_log and bmc_bios on the lab payloads."""
 
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    LS = "/redfish/v1/Systems/1/LogServices"
+    BIOS = "/redfish/v1/Systems/1/Bios"
+
     def test_event_log(self):
-        result = bmc._collect_event_log(_xcc_lab_ctx())
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_event_log(ctx)
         context = result["context"]
-        self.assertEqual(result["normalized"], {})  # nothing Warning or Critical
+        # healthy: nothing Warning or Critical in the platform log, no active condition
+        self.assertEqual(result["normalized"], {})
+        # one $expand GET inlines all six services; then the three logs that link Entries
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + [self.LS + _XCC_EXPAND]
+            + [self.LS + "/%s/Entries" % (name,) for name in ("StandardLog", "ActiveLog")]
+            + [self.LS + "/MaintenanceLog/Entries"],
+        )
+        self.assertEqual(context["log_services_strategy"], "expand")
+        self.assertEqual(
+            context["log_services_served"],
+            ["ActiveLog", "DiagnosticLog", "MaintenanceLog", "SEL", "SaLog", "StandardLog"],
+        )
         self.assertEqual(context["entries_total"], 316)
         self.assertEqual(context["log_service_used"], "StandardLog")
         self.assertEqual((context["first_seq_num"], context["last_seq_num"]), (1, 140))
-        rows = next(iter(v for k, v in result["raw"].items() if k.endswith("/Entries")))
+        # the audit counters are the StandardLog SERVICE resource's; its audit rows are
+        # counted by log type (the firmware's own spelling, sic), never keyed
+        self.assertEqual(context["audit_log_seq"], {"first": 1, "last": 176})
         self.assertEqual(
-            sum("***scrubbed***" in (row["Message"] or "") for row in rows["Members"]), 107
+            context["audit_log_seq_source"],
+            "StandardLog Oem.Lenovo.AuditFirstSeqNum/AuditLastSeqNum",
+        )
+        self.assertEqual(
+            context["entries_by_log_type"],
+            {"StardandLogEntry-Audit": 176, "StardandLogEntry-Platform": 140},
+        )
+        # the SEL is a probe (no Entries link here); its wrapping flag is on the SEL service
+        self.assertEqual(
+            context["sel"],
+            {
+                "served": True,
+                "service_enabled": True,
+                "max_records": 511,
+                "overwrite_policy": "NeverOverWrites",
+                "entries_link": False,
+            },
+        )
+        self.assertIs(context["sel_wrapping_enabled"], False)
+        self.assertEqual(context["sel_wrapping_source"], "SEL Oem.Lenovo.EnableSELWrapping")
+        self.assertEqual(
+            (context["active_log"]["served"], context["active_log"]["entries_total"]), (True, 0)
+        )
+        history = context["maintenance_log"]
+        self.assertEqual(
+            (history["entries_total"], history["first_id"], history["newest_id"]), (73, 1, 73)
+        )
+        self.assertEqual(history["newest_created"], "2026-09-05T17:56:53Z")
+        self.assertEqual(history["by_event_group_id"], {"0": 19, "1": 54})  # firmware / parts
+        self.assertEqual((history["max_records"], history["at_capacity"]), (750, False))
+        rows = result["raw"][self.LS + "/MaintenanceLog/Entries"]["Members"]
+        self.assertEqual((len(rows), rows[0]["Id"]), (73, "73"))
+        platform = result["raw"][self.LS + "/StandardLog/Entries"]["Members"]
+        self.assertEqual(sum("***scrubbed***" in (row["Message"] or "") for row in platform), 107)
+        # no account name in any log's raw rows, the maintenance history included
+        for path, record in result["raw"].items():
+            if not path.endswith("/Entries"):
+                continue
+            for row in record["Members"]:
+                for login in _XCC_LOG_NAME.findall(row["Message"] or ""):
+                    self.assertIn(login, _XCC_SERVICE_ACTORS | {"***scrubbed***"}, path)
+        self.assertEqual(
+            {row["LogType"] for row in platform},
+            {"StardandLogEntry-Audit", "StardandLogEntry-Platform"},
+        )
+
+    def test_event_log_without_expand_reads_only_the_services_it_uses(self):
+        payloads = _xcc_lab_payloads()
+        for member in payloads.pop(self.LS + _XCC_EXPAND)["Members"]:
+            payloads.setdefault(member["@odata.id"], member)  # the StandardLog keeps its own
+        ctx = _FakeCtx(payloads)
+        result = bmc._collect_event_log(ctx)
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + [self.LS + _XCC_EXPAND, self.LS]
+            + [self.LS + "/" + name for name in ("StandardLog", "ActiveLog", "MaintenanceLog")]
+            + [self.LS + "/SEL"]
+            + [self.LS + "/%s/Entries" % (name,) for name in ("StandardLog", "ActiveLog")]
+            + [self.LS + "/MaintenanceLog/Entries"],
+        )
+        self.assertEqual(result["context"]["log_services_strategy"], "members")
+        expanded = bmc._collect_event_log(_xcc_lab_ctx())
+        self.assertEqual(result["normalized"], expanded["normalized"])
+        for key in (
+            "audit_log_seq",
+            "sel",
+            "sel_wrapping_enabled",
+            "active_log",
+            "maintenance_log",
+        ):
+            self.assertEqual(result["context"][key], expanded["context"][key], key)
+
+    def test_keyed_rows_read_the_real_entry_shapes(self):
+        # Nothing on the lab unit is Warning or Critical, so two real rows are
+        # raised here: a platform row that names its FRU and an audit row.
+        rows = {
+            row["Id"]: row
+            for row in J("xcc_system_logservices_standardlog_entries_lab.json")["Members"]
+        }
+        rows["7"]["Severity"] = "Warning"
+        rows["15"]["Severity"] = "Critical"
+        view, _context = bmc._normalize_event_log([rows["7"], rows["15"]])
+        self.assertEqual(
+            view["sel|FQXSPPR0000I|7"],
+            {
+                "severity": "Warning",
+                "source": "System",
+                "serviceable": False,  # 'Not Serviceable', a string on XCC 6.10
+                "serviceable_by": None,
+                "event_id": "0x806f00251001ffff",
+                "hidden": False,
+                "failing_fru": [{"part": "01PF614", "serial": "C1ME31X334E"}],
+                "log_type": "StardandLogEntry-Platform",
+            },
+        )
+        audit = view["sel|FQXSPEM4009I|15"]
+        self.assertEqual(
+            (audit["serviceable"], audit["failing_fru"], audit["log_type"]),
+            (False, [], "StardandLogEntry-Audit"),  # the empty FRU placeholder is no part
         )
 
     def test_bios(self):
-        result = bmc._collect_bios(_xcc_lab_ctx())
-        self.assertEqual(result["context"]["attributes_total"], 126)
-        self.assertEqual(result["context"]["attribute_registry"], "BiosAttributeRegistry.1.0.0")
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_bios(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(ctx.gets, self.RESOLVE + [self.BIOS, self.BIOS + "/Pending"])
+        self.assertEqual(len([key for key in view if key.startswith("bios|")]), 126)
+        self.assertEqual(context["attributes_total"], 126)
+        self.assertEqual(context["password_attributes_dropped"], 0)
+        self.assertEqual(view["bios|Processors_HyperThreading"], "Enable")
+        self.assertEqual(view["bios|NetworkStackSettings_PXEbootwaittime"], 0)  # ints verbatim
+        # Bios/Pending holds all 126 attributes and none differs: nothing is armed
+        self.assertFalse([key for key in view if key.startswith("pending|")])
+        self.assertEqual(
+            (context["pending_total"], context["settings_object_attributes"]), (0, 126)
+        )
+        self.assertEqual(context["settings_object"], self.BIOS + "/Pending")
+        self.assertIsNone(view["reset_to_defaults_pending"])  # not served on XCC 6.10
+        self.assertIs(view["uefi_admin_password_set"], False)
+        self.assertIs(view["uefi_power_on_password_set"], False)
+        self.assertEqual(
+            context["attribute_registry"],
+            {
+                "id": "BiosAttributeRegistry.1.0.0",
+                "name": "BiosAttributeRegistry",
+                "version": "1.0.0",
+            },
+        )
+        self.assertEqual(context["settings_apply_time"], "2026-09-05T17:47:47-05:00")
+        self.assertEqual(context["supported_apply_times"], ["OnReset"])
+        self.assertEqual(context["settings_messages"], [])
+        for path in (self.BIOS, self.BIOS + "/Pending"):
+            self.assertEqual(len(result["raw"][path]["Attributes"]), 126, path)
+
+    def test_bios_pending_is_the_one_attribute_that_differs(self):
+        payloads = _xcc_lab_payloads()
+        payloads[self.BIOS + "/Pending"]["Attributes"]["Processors_HyperThreading"] = "Disable"
+        view = bmc._collect_bios(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(
+            {key: value for key, value in view.items() if key.startswith("pending|")},
+            {"pending|Processors_HyperThreading": "Disable"},
+        )
+        self.assertEqual(view["bios|Processors_HyperThreading"], "Enable")
 
 
 class TestBmcLabEnvironmentNetwork(unittest.TestCase):
     """bmc_thermal, bmc_power, bmc_host_nics and bmc_manager_network on the lab payloads."""
 
+    CH = "/redfish/v1/Chassis/1"
+    MGR = "/redfish/v1/Managers/1"
+
     def test_thermal(self):
-        view = bmc._collect_thermal(_xcc_lab_ctx())["normalized"]
-        self.assertIn("temp|CPU DTS", view)
-        self.assertEqual(len([key for key in view if key.startswith("fan|")]), 3)
+        result = bmc._collect_thermal(_xcc_lab_ctx())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            sorted(view),
+            ["fan|Fan 1 Tach", "fan|Fan 2 Tach", "fan|Fan 3 Tach"]
+            + ["temp|Ambient Temp", "temp|CPU DTS", "temp|CPU Temp"],
+        )
+        self.assertEqual(view["temp|Ambient Temp"]["reading_c"], 21)
+        self.assertIsNone(view["temp|CPU DTS"]["reading_c"])
+        self.assertEqual(view["fan|Fan 1 Tach"]["reading_units"], "RPM")
+        # the DTS reads -51: headroom below the throttle point, not a temperature
+        self.assertEqual(context["readings_c"]["temp|CPU DTS"], -51)
+        self.assertEqual(context["margins"], ["temp|CPU DTS"])
+        # ThermalMetrics serves the ambient and intake summary only
+        self.assertEqual(
+            context["temperature_summary_c"],
+            {"ambient": 21, "intake": 21, "exhaust": None, "internal": None},
+        )
+        self.assertEqual(
+            context["temperature_summary_source"], self.CH + "/ThermalSubsystem/ThermalMetrics"
+        )
+        self.assertEqual(context["temperatures_source"], self.CH + "/Thermal")
+        self.assertEqual(context["fans_source"], self.CH + "/Thermal")
+        self.assertEqual(context["fan_redundancy"], [])
+
+    def test_thermal_subsystem_fans_key_the_same_way(self):
+        payloads = _xcc_lab_payloads()
+        legacy = bmc._collect_thermal(_FakeCtx(payloads))["normalized"]
+        del payloads[self.CH + "/Thermal"]
+        ctx = _FakeCtx(payloads)
+        result = bmc._collect_thermal(ctx)
+        # the Fan resources give the legacy keys and rows (SpeedRPM, not the RPM figure
+        # this firmware also puts in the percent Reading); no temperature is keyed there
+        self.assertEqual(
+            result["normalized"],
+            {key: row for key, row in legacy.items() if key.startswith("fan|")},
+        )
+        context = result["context"]
+        self.assertEqual(context["fans_source"], self.CH + "/ThermalSubsystem/Fans")
+        self.assertIsNone(context["temperatures_source"])
+        self.assertEqual(context["fans_collection"]["strategy"], "expand")
+        self.assertEqual(context["temperature_summary_c"]["ambient"], 21)
+        self.assertIn(self.CH + "/ThermalSubsystem", ctx.gets)
 
     def test_power_rails_only(self):
-        view = bmc._collect_power(_xcc_lab_ctx())["normalized"]
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_power(ctx)
+        view = result["normalized"]
         self.assertEqual(len(view), 4)
         self.assertTrue(all(key.startswith("voltage|") for key in view))  # no supplies
+        self.assertEqual(result["context"]["psu_total"], 0)
+        self.assertEqual(result["context"]["psu_source"], self.CH + "/Power")
+        self.assertEqual(result["context"]["power_consumed_w"], 43)
+        # the rails populate: the PowerSubsystem (no PowerSupplies either) is not read
+        self.assertNotIn(self.CH + "/PowerSubsystem", ctx.gets)
+
+    def test_power_subsystem_alone_models_no_supply(self):
+        payloads = _xcc_lab_payloads()
+        del payloads[self.CH + "/Power"]
+        with self.assertRaises(_loader.registry.SkipCheck) as caught:
+            bmc._collect_power(_FakeCtx(payloads))
+        self.assertIn(self.CH + "/PowerSubsystem models no supply", str(caught.exception))
 
     def test_host_nics_all_nolink(self):
-        view = bmc._collect_host_nics(_xcc_lab_ctx())["normalized"]
+        result = bmc._collect_host_nics(_xcc_lab_ctx())
+        view = result["normalized"]
         self.assertEqual(sorted(view), ["nic|NIC1", "nic|NIC2", "nic|NIC3", "nic|NIC4"])
         self.assertEqual({row["link_status"] for row in view.values()}, {"NoLink"})
+        self.assertEqual(
+            result["context"]["port_source"], "/redfish/v1/Systems/1/EthernetInterfaces"
+        )
 
     def test_manager_network(self):
         result = bmc._collect_manager_network(_xcc_lab_ctx())
-        view = result["normalized"]
+        view, context = result["normalized"], result["context"]
         self.assertEqual(view["ipv4_address"], "192.0.2.39")
         self.assertEqual((view["dns_servers"], view["static_dns_servers"]), ([], []))
         self.assertIs(view["snmp_enabled"], False)
-        self.assertEqual(result["context"]["snmp_source"], "Oem.Lenovo.SNMP.SNMPv3Agent")
+        self.assertEqual(context["snmp_source"], "Oem.Lenovo.SNMP.SNMPv3Agent")
+        expected = {
+            "ipv6_gateway": None,  # served as '::'
+            "nic_mode": "Dedicated",
+            "failover_mode": None,  # not served on a dedicated port
+            "ipv4_assigned_by": "Static",
+            "domain_name": None,  # served as ''
+            "hostname_from_dhcp": False,
+            "dns_enabled": False,
+            "dns_preferred_family": "IPv4",
+            "dns_configured_servers": [],  # six placeholder slots
+            "ddns": [{"enabled": False, "domain_name_source": "DHCP", "domain_name": None}],
+            "lxca_discovery_enabled": False,
+            "time_setting_method": "SyncwithNTP",
+            "time_ntp_servers": ["192.0.2.1"],
+            "utc_offset": "-5:00-Eastern",
+            "auto_dst": True,
+            "ntp_sync_interval_min": 600,
+            "host_interface_enabled": True,
+            "host_interface_externally_accessible": False,
+            "credential_bootstrapping_enabled": True,
+            "credential_bootstrapping_role": "Administrator",
+            "credential_bootstrapping_enable_after_reset": True,
+            "cimoverhttps_enabled": False,
+            "cimoverhttps_port": 5989,
+            "slp_enabled": False,
+            "slp_port": 427,
+            "sftp_enabled": False,
+            "sftp_port": 115,
+            "webhttps_enabled": True,
+            "open_ports": [22, 80, 443, 3389, 3900, 5900],
+            "snmpv3_agent_enabled": False,
+            "snmp_traps_enabled": False,
+            "kcs_enabled": False,
+        }
+        self.assertEqual({key: view[key] for key in expected}, expected)
+        self.assertEqual(context["bmc_datetime"], "2026-09-29T22:30:15-05:00")
+        self.assertEqual(context["bmc_datetime_offset"], "-05:00")
+        self.assertIsNone(context["time_zone_name"])  # not served on XCC 6.10
+        self.assertEqual(context["dns_source"], self.MGR + "/NetworkProtocol/Oem/Lenovo/DNS")
+        self.assertEqual(context["host_interfaces"]["members"], ["1"])
+
+    def test_manager_network_os_address_from_the_usb_lan_interface(self):
+        # The harvest kept the USB-LAN interface only inside the expanded collection;
+        # serve that real member at its own @odata.id, as the XCC does.
+        payloads = _xcc_lab_payloads()
+        expanded = payloads[self.MGR + "/EthernetInterfaces" + _XCC_EXPAND]
+        for member in expanded["Members"]:
+            payloads.setdefault(member["@odata.id"], member)
+        ctx = _FakeCtx(payloads)
+        result = bmc._collect_manager_network(ctx)
+        context, view = result["context"], result["normalized"]
+        self.assertEqual(
+            (context["os_ipv4_address"], context["os_ipv4_address_member"]),
+            ("198.18.54.120", "ToHost"),
+        )
+        # found through the host interface's ManagerEthernetInterface link, read once
+        self.assertEqual(ctx.gets.count(self.MGR + "/EthernetInterfaces/ToHost"), 1)
+        self.assertEqual(context["host_interface_usb_lan_member"], "ToHost")
+        # the BMC's own side of the USB LAN, and Lenovo's mode for it, as served
+        self.assertEqual(
+            (view["host_interface_address"], view["host_interface_address_mode"]),
+            ("198.18.54.118", "IPv6LLA"),
+        )
 
 
 class TestBmcLabFamily(unittest.TestCase):
@@ -1141,10 +1736,11 @@ class TestBmcLabFamily(unittest.TestCase):
                 statuses[check.id] = "ok" if result["normalized"] else "empty"
             except _loader.registry.SkipCheck:
                 statuses[check.id] = "not-present"
-        self.assertEqual(statuses.pop("bmc_security"), "not-present")
+        self.assertEqual(statuses.pop("bmc_security"), "ok")  # keyed leaf by leaf
         self.assertEqual(statuses.pop("bmc_event_log"), "empty")  # healthy: nothing keyed
         self.assertEqual(set(statuses.values()), {"ok"}, statuses)
-        self.assertLessEqual(len(ctx.gets), 40)
+        # the widened family on the real payloads: measured, kept tight on purpose
+        self.assertLessEqual(len(ctx.gets), 46)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):

@@ -175,6 +175,9 @@ def _base_payloads():
         SYS + "/Memory" + EXPAND: _fx("xcc_memory_expanded.json"),
         SYS + "/Processors" + EXPAND: _fx("xcc_processors_expanded.json"),
         CH + "/PCIeDevices" + EXPAND: _fx("xcc_pcie_expanded.json"),
+        CH + "/PCIeDevices/ob_1/PCIeFunctions" + EXPAND: _fx(
+            "xcc_inventory_pciefunctions_expanded.json"
+        ),
         SYS + "/EthernetInterfaces" + EXPAND: _fx("xcc_host_nics_expanded.json"),
         "/redfish/v1/UpdateService/FirmwareInventory" + EXPAND: _fx("xcc_firmware_expanded.json"),
         SYS + "/LogServices": _fx("xcc_log_services.json"),
@@ -237,6 +240,13 @@ class TestRegistrations(unittest.TestCase):
             self.assertIn(check.tier, (1, 2, 3), check.id)
             self.assertTrue(check.description, check.id)
 
+    def test_only_the_checks_whose_healthy_state_is_empty_are_tagged_so(self):
+        # the shakedown reads their empty view as ok; every other empty view is flagged
+        tagged = {
+            check.id for check in registry.checks_for("bmc") if registry.EMPTY_OK_TAG in check.tags
+        }
+        self.assertEqual(tagged, {"bmc_event_log"})
+
     def test_budgets_within_transport_ceiling(self):
         ceiling = _loader.constants.REDFISH_MAX_CHECK_BUDGET
         for name in dir(checks):
@@ -290,6 +300,7 @@ class TestSystem(unittest.TestCase):
             _fx("xcc_manager.json"),
             _fx("xcc_manager_nic.json"),
             "NIC",
+            lenovo=True,
         )
         self.assertEqual(view["serial"], "J3001ABC")
         self.assertEqual(view["uuid"], "3C7F1E2A-5B6C-4D8E-9F01-23456789ABCD")
@@ -317,6 +328,26 @@ class TestSystem(unittest.TestCase):
         self.assertFalse([key for key in view if key.startswith("xcc_")])
         self.assertEqual(view["eth_member_used"], "NIC")
         self.assertIsNone(view["asset_tag"])  # '' is unset, never ''
+        # The widened fields exist on every view; this System serves only the TPM list.
+        self.assertEqual(
+            (view["tpm_count"], view["tpm_interface_types"], view["tpm_firmware"]),
+            (1, ["TPM2_0"], ["7.2.2.0"]),
+        )
+        for field in (
+            "power_restore_policy",  # the fixture's Oem SystemPowerRestorePolicy is not it
+            "power_on_delay_s",
+            "power_mode",
+            "host_watchdog_enabled",
+            "serial_console_enabled",
+            "graphical_console_enabled",
+            "virtual_media_service_enabled",
+            "front_panel_usb_mode",  # FrontPanelUSB.Mode is not the served FPMode
+            "tpm_rpp_enabled",
+            "bmc_serial_console_enabled",
+            "bmc_command_shell_enabled",
+        ):
+            self.assertIn(field, view)
+            self.assertIsNone(view[field], field)
 
     def test_secure_boot_404_gives_three_nones_and_bmc_health_never_borrows_the_state(self):
         # XCC 6.10 serves the Manager's Status with a State and no Health.
@@ -384,9 +415,147 @@ class TestSystem(unittest.TestCase):
             checks._collect_system(_FakeCtx(payloads))
 
 
+class TestSystemPolicy(unittest.TestCase):
+    """Power restore, delays, watchdog, host consoles, TPM and the Lenovo leaves (hand-built:
+    XCC 6.10 serves only the watchdog and the TPM list among the DMTF ones)."""
+
+    def _payloads(self, vendor=None):
+        payloads = _base_payloads()
+        payloads[SYS] = _fx("xcc_system_dmtf_policy.json")
+        manager = payloads[MGR]
+        manager["LastResetTime"] = "2026-09-27T23:10:00+00:00"
+        manager["Oem"]["Lenovo"]["release_name"] = "release-x"
+        manager["SerialConsole"] = {"ServiceEnabled": True, "ConnectTypesSupported": ["SSH"]}
+        manager["GraphicalConsole"] = {"ServiceEnabled": False}
+        manager["CommandShell"] = {"ServiceEnabled": True}
+        if vendor:
+            payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor=vendor)
+        return payloads
+
+    def test_every_dmtf_policy_leaf_is_read(self):
+        result = checks._collect_system(_FakeCtx(self._payloads()))
+        view = result["normalized"]
+        self.assertEqual(view["power_restore_policy"], "LastState")
+        self.assertEqual(
+            (view["power_on_delay_s"], view["power_off_delay_s"], view["power_cycle_delay_s"]),
+            (30.0, 0.0, 5.5),
+        )
+        self.assertEqual(view["power_mode"], "BalancedPerformance")
+        self.assertIs(view["host_watchdog_enabled"], True)
+        self.assertEqual(view["host_watchdog_timeout_action"], "ResetSystem")
+        self.assertEqual(view["host_watchdog_warning_action"], "DiagnosticInterrupt")
+        self.assertIs(view["serial_console_enabled"], True)  # SSH on, IPMI and Telnet off
+        self.assertIs(view["graphical_console_enabled"], True)
+        self.assertIs(view["virtual_media_service_enabled"], False)
+        # sorted, and a module serving no firmware version adds none
+        self.assertEqual(view["tpm_count"], 2)
+        self.assertEqual(view["tpm_interface_types"], ["TPM1_2", "TPM2_0"])
+        self.assertEqual(view["tpm_firmware"], ["7.2.2.0"])
+        self.assertEqual(view["system_status"], "OSBooted")
+        self.assertEqual(view["front_panel_usb_mode"], "Shared")
+        self.assertIs(view["front_panel_usb_port_enabled"], True)
+        self.assertIs(view["tpm_rpp_enabled"], False)
+        # the BMC's own console services are the Manager's blocks, never the host's
+        self.assertIs(view["bmc_serial_console_enabled"], True)
+        self.assertIs(view["bmc_graphical_console_enabled"], False)
+        self.assertIs(view["bmc_command_shell_enabled"], True)
+        self.assertEqual(view["boot_override"], "Once")  # the trio stays until bmc_boot
+
+    def test_volatile_facts_ride_in_context(self):
+        context = checks._collect_system(_FakeCtx(self._payloads()))["context"]
+        self.assertEqual(context["last_reset_time"], "2026-09-28T06:14:02+00:00")
+        self.assertEqual(
+            context["boot_progress"],
+            {"last_state": "OSRunning", "last_state_time": "2026-09-28T06:16:40+00:00"},
+        )
+        self.assertIs(context["location_indicator_active"], False)
+        self.assertEqual(context["manager_last_reset_time"], "2026-09-27T23:10:00+00:00")
+        self.assertEqual(context["release_name"], "release-x")
+        self.assertEqual(
+            context["serial_console_protocols"], {"IPMI": False, "SSH": True, "Telnet": False}
+        )
+        self.assertEqual((context["reboot_count"], context["power_on_hours"]), (3, 120))
+        self.assertEqual(len(context["trusted_modules"]), 2)  # the per-module list stays
+
+    def test_serial_console_any_on_all_off_or_none_served(self):
+        console = checks._system_serial_console
+        self.assertEqual(
+            console(
+                {
+                    "SerialConsole": {
+                        "IPMI": {"ServiceEnabled": False},
+                        "SSH": {"ServiceEnabled": True},
+                    }
+                }
+            ),
+            (True, {"IPMI": False, "SSH": True}),
+        )
+        self.assertEqual(
+            console({"SerialConsole": {"IPMI": {"ServiceEnabled": False}, "Telnet": {"Port": 23}}}),
+            (False, {"IPMI": False}),  # a block without ServiceEnabled is not served
+        )
+        for system in (
+            {},
+            {"SerialConsole": {"MaxConcurrentSessions": 2}},
+            {"SerialConsole": None},
+        ):
+            self.assertEqual(console(system), (None, {}), system)
+
+    def test_tpm_trio(self):
+        self.assertEqual(checks._system_tpm({}), (None, None, None))  # unserved
+        self.assertEqual(checks._system_tpm({"TrustedModules": []}), (0, [], []))
+        self.assertEqual(
+            checks._system_tpm(
+                {"TrustedModules": [{"InterfaceType": "TPM2_0", "FirmwareVersion": ""}]}
+            ),
+            (1, ["TPM2_0"], []),
+        )
+
+    def test_lenovo_leaves_only_for_lenovo(self):
+        system = _fx("xcc_system_dmtf_policy.json")
+        view = checks._normalize_system(system, None, None, None, None)  # lenovo defaults off
+        for field in (
+            "system_status",
+            "front_panel_usb_mode",
+            "front_panel_usb_port_enabled",
+            "tpm_rpp_enabled",
+        ):
+            self.assertIsNone(view[field], field)
+        self.assertEqual(view["power_restore_policy"], "LastState")  # DMTF: every vendor
+        result = checks._collect_system(_FakeCtx(self._payloads(vendor="Contoso")))
+        self.assertIsNone(result["normalized"]["system_status"])
+        self.assertIs(result["normalized"]["host_watchdog_enabled"], True)
+        context = result["context"]
+        self.assertEqual((context["reboot_count"], context["power_on_hours"]), (None, None))
+        self.assertIsNone(context["release_name"])
+
+    def test_the_same_system_twice_diffs_to_nothing(self):
+        compare = registry.CHECKS["bmc_system"].compare
+        pre = checks._collect_system(_FakeCtx(self._payloads()))["normalized"]
+        post = checks._collect_system(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        post["power_restore_policy"] = "AlwaysOff"
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["old"], row["new"]) for row in diff["changed"]],
+            [("power_restore_policy", "LastState", "AlwaysOff")],
+        )
+
+
 class TestSecurityState(unittest.TestCase):
+    THINKEDGE = (
+        "lockdown_mode",
+        "lockdown_control",
+        "motion_detection_enabled",
+        "motion_threshold",
+        "motion_orientation",
+        "chassis_intrusion_enabled",
+        "host_shutdown_on_tamper",
+        "sed_encryption_enabled",
+    )
+
     def test_normalize_finds_fields_under_nested_blocks(self):
-        view, sources = checks._normalize_security_state(_fx("xcc_security.json"))
+        view, sources, readings = checks._normalize_security_state(_fx("xcc_security.json"))
         self.assertEqual(view["lockdown_mode"], "Inactive")
         self.assertEqual(view["lockdown_control"], "ThinkShieldPortal")
         self.assertIs(view["motion_detection_enabled"], True)
@@ -398,19 +567,42 @@ class TestSecurityState(unittest.TestCase):
         self.assertEqual(sources["lockdown_mode"], "SystemLockdown.LockdownMode")
         self.assertEqual(sources["sed_encryption_enabled"], "SED.EncryptionEnabled")
         self.assertNotIn("SED.SED_AK", checks._flatten(_fx("xcc_security.json")))
+        # ...and every leaf keyed verbatim beside them (the first-class field is the boolean)
+        self.assertEqual(view["security|SystemLockdown.LockdownMode"], "Inactive")
+        self.assertEqual(view["security|MotionDetection"], "Enabled")
+        self.assertIs(view["security|SED.EncryptionEnabled"], True)
+        self.assertFalse([key for key in view if "SED_AK" in key or "Actions" in key])
+        self.assertEqual(readings, {})
 
     def test_normalize_plain_resource_has_no_sources(self):
-        view, sources = checks._normalize_security_state(_fx("xcc_security_plain.json"))
+        view, sources, _readings = checks._normalize_security_state(_fx("xcc_security_plain.json"))
         self.assertEqual(sources, {})
-        self.assertTrue(all(value is None for value in view.values()))
+        self.assertTrue(all(view[field] is None for field in self.THINKEDGE))
+        self.assertEqual(view["security|SSLSettings.HTTPSCertificateExpiry"], "2027-01-01")
+        # the key-manager link inside the resource is navigation, not a leaf
+        self.assertEqual(
+            sorted(key for key in view if key.startswith("security|")),
+            ["security|SSLSettings.HTTPSCertificateExpiry"],
+        )
 
     def test_collector_present(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_security_state(ctx)
-        self.assertEqual(result["normalized"]["lockdown_mode"], "Inactive")
+        view = result["normalized"]
+        self.assertEqual(view["lockdown_mode"], "Inactive")
         self.assertEqual(result["context"]["security_resource"], MGR + "/Oem/Lenovo/Security")
-        self.assertEqual(result["context"]["key_management"]["KeyManagementType"], "Local")
-        self.assertNotIn("ClientCertificatePassword", result["context"]["key_management"])
+        self.assertEqual(view["sklm|KeyManagementType"], "Local")
+        self.assertEqual(view["sklm|KeyRepoServers"], [])
+        self.assertEqual(view["sklm|Status.State"], "Enabled")
+        self.assertFalse([key for key in view if "Password" in key])  # never keyed
+        self.assertEqual(
+            result["context"]["key_management"],
+            {
+                "resource": MGR + "/Oem/Lenovo/SecureKeyLifecycleService",
+                "served": True,
+                "certificate_collections": [],
+            },
+        )
         self.assertEqual(
             result["raw"][MGR + "/Oem/Lenovo/SecureKeyLifecycleService"][
                 "ClientCertificatePassword"
@@ -421,11 +613,22 @@ class TestSecurityState(unittest.TestCase):
             result["raw"][MGR + "/Oem/Lenovo/Security"]["SED"]["SED_AK"], "***scrubbed***"
         )
         self.assertNotIn("Actions", result["raw"][MGR + "/Oem/Lenovo/Security"])
+        self.assertNotIn("not-a-real-password", json.dumps(result))
 
-    def test_collector_not_present_when_thinkedge_fields_absent(self):
+    def test_collector_ok_without_thinkedge_fields(self):
+        # A mainstream ThinkSystem serves the resource without any Security Pack leaf:
+        # its settings are the capture, the ThinkEdge fields read None.
         payloads = _base_payloads()
         payloads[MGR + "/Oem/Lenovo/Security"] = _fx("xcc_security_plain.json")
-        with self.assertRaises(checks.SkipCheck):
+        result = checks._collect_security_state(_FakeCtx(payloads))
+        self.assertTrue(all(result["normalized"][field] is None for field in self.THINKEDGE))
+        self.assertIn("security|SSLSettings.HTTPSCertificateExpiry", result["normalized"])
+        self.assertEqual(result["context"]["property_sources"], {})
+
+    def test_an_empty_security_body_is_a_failed_read(self):
+        payloads = _base_payloads()
+        payloads[MGR + "/Oem/Lenovo/Security"] = {}
+        with self.assertRaises(checks.CollectError):
             checks._collect_security_state(_FakeCtx(payloads))
 
     def test_collector_not_present_on_404_even_without_the_link(self):
@@ -455,6 +658,203 @@ class TestSecurityState(unittest.TestCase):
         self.assertEqual(ctx.gets, RESOLVE + [MGR])
 
 
+class TestSecurityLeaves(unittest.TestCase):
+    """Leaf-by-leaf keys of the security resource and the key manager (hand-built SKLM: the
+    lab unit serves only its two certificate collections; the EKMS names follow the lab's own
+    LenovoSecureKeyLifecycle_v1 schema, the values are illustrative)."""
+
+    SKLM = MGR + "/Oem/Lenovo/SecureKeyLifecycleService"
+
+    def _payloads(self, client_members=1, server_count=2):
+        payloads = _base_payloads()
+        payloads[self.SKLM] = _fx("xcc_security_sklm_configured.json")
+        client = self.SKLM + "/ClientCertificate"
+        payloads[client] = {
+            "@odata.id": client,
+            "Members": [{"@odata.id": client + "/%d" % (n,)} for n in range(1, client_members + 1)],
+        }
+        server = self.SKLM + "/ServerCertificate"
+        payloads[server] = {
+            "@odata.id": server,
+            "Members@odata.count": server_count,
+            "Members": [{"@odata.id": server + "/%d" % (n,)} for n in range(1, server_count + 1)],
+        }
+        return payloads
+
+    def test_lists_are_one_key_sorted_and_structure_is_skipped(self):
+        leaves = checks._security_leaves(
+            {
+                "@odata.id": "/redfish/v1/x",
+                "Id": "Security",
+                "Name": "Security",
+                "Description": "d",
+                "Links": {"Related": [{"@odata.id": "/redfish/v1/y"}]},
+                "Actions": {"#X.Y": {"target": "/redfish/v1/x/Actions/X.Y"}},
+                "WhiteList": ["192.0.2.9", "192.0.2.10", "192.0.2.1"],
+                "Ports": [443, 22, 80],
+                "Empty": [],
+                "Blank": "",
+                "Nested": {
+                    "Name": "kept below the top",
+                    "Mode": "Strict",
+                    "Link": {"@odata.id": "/redfish/v1/z"},
+                },
+                "Servers": [{"Port": 2, "Host": "b"}, {"Port": 1, "Host": "a", "Password": "pw"}],
+                "Mixed": ["b", None, "a"],
+                "Certificates": [{"@odata.id": "/redfish/v1/c/1"}],
+                "Password": "pw",
+                "CommunityNames": ["public"],
+                "ComplexPassword": True,
+            }
+        )
+        self.assertEqual(
+            leaves,
+            {
+                "WhiteList": ["192.0.2.1", "192.0.2.10", "192.0.2.9"],
+                "Ports": [22, 80, 443],
+                "Empty": [],
+                "Blank": None,
+                "Nested.Name": "kept below the top",
+                "Nested.Mode": "Strict",
+                "Servers": [{"Host": "a", "Port": 1}, {"Host": "b", "Port": 2}],
+                "Mixed": ["a", "b", None],
+                "ComplexPassword": True,  # a policy flag, not a credential
+            },
+        )
+
+    def test_a_reordered_list_is_no_change(self):
+        first = checks._security_leaves({"S": [{"Index": 2, "H": "b"}, {"Index": 1, "H": "a"}]})
+        second = checks._security_leaves({"S": [{"H": "a", "Index": 1}, {"H": "b", "Index": 2}]})
+        self.assertEqual(first, second)
+
+    def test_time_like_leaves_are_readings_never_keys(self):
+        # matched anywhere in the leaf name: the schema prefixes its own (EKMSLastPollingTime)
+        keyed, readings = checks._security_keyed(
+            {
+                "EKMS.EKMSLastPollingTime": "2026-09-30T02:00:00+00:00",
+                "EKMS.LastPollingTime": "2026-09-30T02:00:00+00:00",
+                "Clock.DateTime": "2026-09-30T02:00:01+00:00",
+                "Clock.LocalDateTime": "2026-09-30T02:00:01+00:00",
+                "Cert.LastRenewalDate": "2026-09-01",
+                "EKMS.EKMSPollingStatus": "Success",
+                "EKMS.EKMSPollingSettings.PollIntervalMinutes": 60,
+                "TestConnectionTimeoutInSec": 10,
+                "TimeoutLastResort": 3,  # 'Last' not followed by a time word at the end
+            },
+            "sklm",
+        )
+        self.assertEqual(
+            keyed,
+            {
+                "sklm|EKMS.EKMSPollingStatus": "Success",
+                "sklm|EKMS.EKMSPollingSettings.PollIntervalMinutes": 60,
+                "sklm|TestConnectionTimeoutInSec": 10,
+                "sklm|TimeoutLastResort": 3,
+            },
+        )
+        self.assertEqual(
+            sorted(readings),
+            [
+                "sklm|Cert.LastRenewalDate",
+                "sklm|Clock.DateTime",
+                "sklm|Clock.LocalDateTime",
+                "sklm|EKMS.EKMSLastPollingTime",
+                "sklm|EKMS.LastPollingTime",
+            ],
+        )
+
+    def test_a_configured_key_manager_is_keyed_and_its_certificates_counted_never_read(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_security_state(ctx)
+        view = result["normalized"]
+        sklm = {key: value for key, value in view.items() if key.startswith("sklm|")}
+        self.assertEqual(
+            sklm,
+            {
+                "sklm|DeviceGroup": "SED_GROUP_1",
+                "sklm|EKMS.EKMSLocalCachedKeySettings.LocalCachedKeyEnabled": True,
+                "sklm|EKMS.EKMSLocalCachedKeySettings.CacheExpirationIntervalHours": 24,
+                "sklm|EKMS.EKMSLocalCachedKeyStatus": "Valid",
+                "sklm|EKMS.EKMSPollingSettings.PollingEnabled": True,
+                "sklm|EKMS.EKMSPollingSettings.PollIntervalMinutes": 60,
+                "sklm|EKMS.EKMSPollingStatus": "Success",
+                "sklm|KeyRepoServers": [
+                    {"HostName": "kms-a.example.net", "Index": 1, "Port": 5696},
+                    {"HostName": "kms-b.example.net", "Index": 2, "Port": 5696},
+                    {"HostName": None, "Index": 3, "Port": 5696},
+                ],
+                "sklm|Protocol": "KMIP",
+                "sklm|TestConnectionTimeoutInSec": 10,
+                "sklm|ClientCertificate.Members@odata.count": 1,
+                "sklm|ServerCertificate.Members@odata.count": 2,
+            },
+        )
+        self.assertEqual(
+            result["context"]["readings"],
+            {"sklm|EKMS.EKMSLastPollingTime": "2026-09-30T02:00:00+00:00"},
+        )
+        self.assertEqual(
+            result["context"]["key_management"]["certificate_collections"],
+            ["ClientCertificate", "ServerCertificate"],
+        )
+        # the collections are read, their certificates never
+        self.assertEqual(
+            ctx.gets[-3:],
+            [self.SKLM, self.SKLM + "/ClientCertificate", self.SKLM + "/ServerCertificate"],
+        )
+        self.assertFalse([path for path in ctx.gets if "/ServerCertificate/" in path])
+        self.assertNotIn("not-a-real-password", json.dumps(result))
+        self.assertEqual(result["raw"][self.SKLM]["ClientCertificatePassword"], checks._SCRUBBED)
+        self.assertNotIn("Actions", result["raw"][self.SKLM])
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_SECURITY)
+
+    def test_a_certificate_collection_that_404s_counts_none(self):
+        payloads = self._payloads()
+        del payloads[self.SKLM + "/ServerCertificate"]
+        result = checks._collect_security_state(_FakeCtx(payloads))
+        self.assertIsNone(result["normalized"]["sklm|ServerCertificate.Members@odata.count"])
+        self.assertIsNone(result["raw"][self.SKLM + "/ServerCertificate"])
+
+    def test_a_certificate_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[self.SKLM]["ServerCertificate"] = {"@odata.id": self.SKLM + "/Actions/x"}
+        with self.assertRaises(checks.CollectError):
+            checks._collect_security_state(_FakeCtx(payloads))
+
+    def test_certificate_counts_are_refused_up_front_when_the_budget_cannot_cover_them(self):
+        payloads = self._payloads()
+        for n in range(checks._BUDGET_SECURITY):
+            payloads[self.SKLM]["ExtraCertificate%d" % (n,)] = {
+                "@odata.id": self.SKLM + "/ExtraCertificate%d" % (n,)
+            }
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_security_state(ctx)
+        self.assertIn("certificate collection", str(caught.exception))
+        self.assertEqual(ctx.gets[-1], self.SKLM)  # nothing counted before the refusal
+
+    def test_no_key_manager_leaves_the_check_ok_without_sklm_keys(self):
+        payloads = _base_payloads()
+        del payloads[self.SKLM]
+        result = checks._collect_security_state(_FakeCtx(payloads))
+        self.assertFalse([key for key in result["normalized"] if key.startswith("sklm|")])
+        self.assertIs(result["context"]["key_management"]["served"], False)
+        del payloads[MGR]["Oem"]["Lenovo"]["SecureKeyLifecycleService"]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_security_state(ctx)
+        self.assertIsNone(result["context"]["key_management"]["resource"])
+        self.assertNotIn(self.SKLM, ctx.gets)  # followed by link only, never guessed
+
+    def test_the_same_resource_twice_diffs_to_nothing_and_a_setting_is_one_change(self):
+        compare = registry.CHECKS["bmc_security"].compare
+        pre = checks._collect_security_state(_FakeCtx(self._payloads()))["normalized"]
+        post = checks._collect_security_state(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        post["sklm|Protocol"] = "SKLM"
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual([row["key"] for row in diff["changed"]], ["sklm|Protocol"])
+
+
 class TestThermal(unittest.TestCase):
     def test_normalize_keys_readings_and_absent(self):
         view, context = checks._normalize_thermal(_fx("xcc_thermal.json"))
@@ -479,12 +879,23 @@ class TestThermal(unittest.TestCase):
         self.assertEqual(context["temperatures_total"], 6)
         self.assertEqual(context["fans_total"], 3)
         self.assertEqual(context["fan_redundancy"][0]["member_count"], 3)
+        self.assertEqual(context["fan_redundancy"][0]["mode"], "N+m")
+        self.assertEqual(context["margins"], [])  # no DTS sensor, no negative reading
+        self.assertIsNone(context["temperature_summary_c"])  # ThermalMetrics not read
 
     def test_collector_and_empty_temperatures_is_a_failed_read(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_thermal(ctx)
-        self.assertEqual(ctx.gets, RESOLVE + [CH + "/Thermal"])
+        # the Chassis (shared with bmc_chassis) names the thermal resources it serves
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Thermal"])
         self.assertIn("temp|Ambient Temp", result["normalized"])
+        context = result["context"]
+        self.assertEqual(context["temperatures_source"], CH + "/Thermal")
+        self.assertEqual(context["fans_source"], CH + "/Thermal")
+        # the hand-built Chassis links no ThermalSubsystem: no summary read
+        self.assertIsNone(context["temperature_summary_c"])
+        self.assertIsNone(context["temperature_summary_source"])
+        self.assertEqual(set(result["raw"]), {CH + "/Thermal"})
         payloads = _base_payloads()
         payloads[CH + "/Thermal"]["Temperatures"] = []
         with self.assertRaises(checks.CollectError):
@@ -494,6 +905,217 @@ class TestThermal(unittest.TestCase):
         compare = registry.CHECKS["bmc_thermal"].compare
         self.assertEqual(compare["fields"]["reading_c"]["tolerance"], {"abs": 8})
         self.assertEqual(compare["fields"]["reading"]["tolerance"], {"pct": 25})
+
+
+class TestThermalSubsystem(unittest.TestCase):
+    """bmc_thermal beyond the legacy resource: margins, the ThermalMetrics summary, and the
+    ThermalSubsystem fans that stand in where a firmware serves no Thermal."""
+
+    SUB = CH + "/ThermalSubsystem"
+
+    def _fan(self, fan_id, name, rpm=None, percent=None, state="Enabled", health="OK"):
+        speed = {"DataSourceUri": CH + "/Sensors/" + fan_id}
+        if rpm is not None:
+            speed["SpeedRPM"] = rpm
+        if percent is not None:
+            speed["Reading"] = percent
+        return {
+            "@odata.id": self.SUB + "/Fans/" + fan_id,
+            "Id": fan_id,
+            "Name": name,
+            "PhysicalContext": "Fan",
+            "Status": {"State": state, "Health": health},
+            "SpeedPercent": speed,
+        }
+
+    def _fans(self, members, payloads, expand=True):
+        fans = {"@odata.id": self.SUB + "/Fans", "Members": members}
+        payloads.pop(self.SUB + "/Fans" + EXPAND, None)
+        if expand:
+            payloads[self.SUB + "/Fans" + EXPAND] = fans
+        plain, by_path = _split_collection(fans)
+        payloads[self.SUB + "/Fans"] = plain
+        payloads.update(by_path)
+        return payloads
+
+    def _payloads(self, with_thermal=False, expand=True):
+        """The hand-built set with a ThermalSubsystem linked (and Thermal served or not)."""
+        payloads = _base_payloads()
+        payloads[CH]["ThermalSubsystem"] = {"@odata.id": self.SUB}
+        if not with_thermal:
+            del payloads[CH + "/Thermal"]
+        payloads[self.SUB] = {
+            "@odata.id": self.SUB,
+            "Id": "ThermalSubsystem",
+            "Status": {"State": "Enabled", "Health": "OK"},
+            "Fans": {"@odata.id": self.SUB + "/Fans"},
+            "ThermalMetrics": {"@odata.id": self.SUB + "/ThermalMetrics"},
+            "FanRedundancy": [
+                {
+                    "RedundancyType": "NPlusM",
+                    "MaxSupportedInGroup": 3,
+                    "MinNeededInGroup": 2,
+                    "RedundancyGroup": [
+                        {"@odata.id": self.SUB + "/Fans/" + fan} for fan in ("F1", "F2", "F3")
+                    ],
+                    "Status": {"State": "Enabled", "Health": "OK"},
+                }
+            ],
+        }
+        payloads[self.SUB + "/ThermalMetrics"] = {
+            "@odata.id": self.SUB + "/ThermalMetrics",
+            "TemperatureSummaryCelsius": {
+                "Ambient": {"Reading": 23, "DataSourceUri": CH + "/Sensors/Ambient"},
+                "Intake": {"Reading": 23.5},
+                "Exhaust": {"Reading": 31},
+                "Internal": {"Reading": None},
+            },
+            "TemperatureReadingsCelsius": [{"PhysicalContext": "CPU", "Reading": 61}],
+        }
+        members = [
+            self._fan("F1", "Fan 1", rpm=4200),
+            self._fan("F2", "Fan 2", percent=41),
+            self._fan("F3", "Fan 3", rpm=6100, health="Warning"),
+            self._fan("F4", "Fan 4", state="Absent", health=None),
+        ]
+        return self._fans(members, payloads, expand=expand)
+
+    def test_margins_are_dts_names_and_negative_readings(self):
+        thermal = _fx("xcc_thermal.json")
+        status = {"State": "Enabled", "Health": "OK"}
+        thermal["Temperatures"] += [
+            # named DTS: a margin whatever its sign
+            {"MemberId": "6", "Name": "CPU1 DTS", "ReadingCelsius": 12, "Status": status},
+            # a negative reading is headroom, not cold
+            {"MemberId": "7", "Name": "PCH Margin", "ReadingCelsius": -8, "Status": status},
+        ]
+        view, context = checks._normalize_thermal(thermal)
+        self.assertEqual(context["margins"], ["temp|CPU1 DTS", "temp|PCH Margin"])
+        # keyed like any sensor, their readings in context only
+        self.assertIsNone(view["temp|CPU1 DTS"]["reading_c"])
+        self.assertEqual(context["readings_c"]["temp|PCH Margin"], -8)
+
+    def test_the_summary_is_one_get_whenever_the_chassis_links_a_subsystem(self):
+        payloads = self._payloads(with_thermal=True)
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_thermal(ctx)
+        # the subsystem resource itself is not needed beside the legacy one
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Thermal", self.SUB + "/ThermalMetrics"])
+        self.assertEqual(
+            result["context"]["temperature_summary_c"],
+            {"ambient": 23.0, "intake": 23.5, "exhaust": 31.0, "internal": None},
+        )
+        self.assertEqual(
+            result["context"]["temperature_summary_source"], self.SUB + "/ThermalMetrics"
+        )
+        self.assertIn(self.SUB + "/ThermalMetrics", result["raw"])
+        # the keys are the legacy ones, unchanged by the summary
+        plain = checks._collect_thermal(_FakeCtx(_base_payloads()))["normalized"]
+        self.assertEqual(result["normalized"], plain)
+        # a firmware that serves no ThermalMetrics leaves the summary null, never fails
+        del payloads[self.SUB + "/ThermalMetrics"]
+        result = checks._collect_thermal(_FakeCtx(payloads))
+        self.assertIsNone(result["context"]["temperature_summary_c"])
+        self.assertIsNone(result["context"]["temperature_summary_source"])
+        self.assertEqual(result["normalized"], plain)
+
+    def test_without_thermal_the_subsystem_fans_are_keyed_the_same_way(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_thermal(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(sorted(view), ["fan|Fan 1", "fan|Fan 2", "fan|Fan 3"])
+        # the same key and row the legacy Fans[] member gives for the same fan
+        legacy = checks._normalize_thermal(_fx("xcc_thermal.json"))[0]
+        self.assertEqual(view["fan|Fan 1"], legacy["fan|Fan 1"])
+        self.assertEqual(view["fan|Fan 2"]["reading"], 41)
+        self.assertEqual(view["fan|Fan 2"]["reading_units"], "Percent")  # no RPM served
+        self.assertEqual(view["fan|Fan 3"]["health"], "Warning")
+        self.assertEqual(context["absent"], ["fan|Fan 4"])
+        self.assertFalse([key for key in view if key.startswith("temp|")])
+        self.assertIsNone(context["temperatures_source"])
+        self.assertEqual(context["fans_source"], self.SUB + "/Fans")
+        self.assertEqual(context["fans_collection"]["strategy"], "expand")
+        self.assertEqual(
+            context["fan_redundancy"],
+            [
+                {
+                    "member_id": None,
+                    "mode": "NPlusM",
+                    "state": "Enabled",
+                    "health": "OK",
+                    "member_count": 3,
+                }
+            ],
+        )
+        self.assertEqual(context["temperature_summary_c"]["exhaust"], 31.0)
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [
+                CH,
+                CH + "/Thermal",
+                self.SUB,
+                self.SUB + "/ThermalMetrics",
+                self.SUB + "/Fans" + EXPAND,
+            ],
+        )
+        self.assertEqual(
+            set(result["raw"]),
+            {self.SUB, self.SUB + "/ThermalMetrics", self.SUB + "/Fans" + EXPAND},
+        )
+
+    def test_fans_are_walked_one_by_one_when_expand_is_not_usable(self):
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_thermal(ctx)
+        self.assertEqual(result["context"]["fans_collection"]["strategy"], "members")
+        self.assertIn(self.SUB + "/Fans/F4", ctx.gets)
+        self.assertEqual(sorted(result["normalized"]), ["fan|Fan 1", "fan|Fan 2", "fan|Fan 3"])
+
+    def _many_fans(self, count):
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        members = [self._fan("F%d" % n, "Fan %d" % n, rpm=5000) for n in range(1, count + 1)]
+        return self._fans(members, payloads, expand=False)
+
+    def test_sixteen_fans_walked_fit_the_budget_and_more_are_refused_whole(self):
+        ctx = _FakeCtx(self._many_fans(16))
+        result = checks._collect_thermal(ctx)
+        self.assertEqual(len(result["normalized"]), 16)
+        self.assertEqual(len(ctx.gets), checks._BUDGET_THERMAL)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_thermal(_FakeCtx(self._many_fans(17)))
+        self.assertIn("17 members to fetch", str(caught.exception))
+
+    def test_not_present_and_failed_shapes(self):
+        # neither view linked nor served: not present
+        payloads = _base_payloads()
+        del payloads[CH + "/Thermal"]
+        del payloads[CH]["Thermal"]
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_thermal(_FakeCtx(payloads))
+        # the Chassis links Thermal, it answers 404 and no subsystem stands in: failed
+        payloads = _base_payloads()
+        del payloads[CH + "/Thermal"]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_thermal(_FakeCtx(payloads))
+        # a linked subsystem that answers 404: failed
+        payloads = self._payloads()
+        del payloads[self.SUB]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_thermal(_FakeCtx(payloads))
+        # a linked Fans collection that answers 404: failed, never "no fans"
+        payloads = self._payloads(expand=False)
+        del payloads[self.SUB + "/Fans"]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_thermal(_FakeCtx(payloads))
+        # a subsystem that lists no present fan: nothing to key, not present
+        for members in ([], [self._fan("F4", "Fan 4", state="Absent", health=None)]):
+            payloads = self._fans(members, self._payloads())
+            with self.assertRaises(registry.SkipCheck) as caught:
+                checks._collect_thermal(_FakeCtx(payloads))
+            self.assertIn("lists no present fan", str(caught.exception))
 
 
 class TestPower(unittest.TestCase):
@@ -508,6 +1130,7 @@ class TestPower(unittest.TestCase):
         self.assertEqual(psu0["capacity_w"], 240)
         self.assertEqual(psu0["serial"], "ADP0000001")
         self.assertIsNone(psu0["firmware"])
+        self.assertIsNone(psu0["line_input_status"])  # a legacy Power supply carries none
         psu1 = view["psu|1"]
         self.assertEqual(psu1["health"], "Critical")
         self.assertIs(psu1["input_in_range"], False)  # 160 V sits between the two ranges
@@ -533,12 +1156,210 @@ class TestPower(unittest.TestCase):
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_power(ctx)
-        self.assertEqual(ctx.gets, RESOLVE + [CH + "/Power"])
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/Power"])
         self.assertNotIn("Actions", result["raw"][CH + "/Power"])
+        self.assertEqual(result["context"]["psu_source"], CH + "/Power")
+        self.assertEqual(result["context"]["psu_total"], 2)
+        self.assertNotIn("supplies_collection", result["context"])
         self.assertEqual(
             registry.CHECKS["bmc_power"].compare["fields"]["line_input_voltage"]["tolerance"],
             {"pct": 10},
         )
+
+
+class TestPowerSubsystem(unittest.TestCase):
+    """bmc_power where the legacy resource is absent or models nothing: PowerSubsystem supplies
+    (a case the lab unit lacks — it serves no supply anywhere — hand-built from the DMTF
+    PowerSupply schema in xcc_power_subsystem_supplies_expanded.json)."""
+
+    SUB = CH + "/PowerSubsystem"
+    SUPPLIES = SUB + "/PowerSupplies"
+
+    def _metrics(self, bay, volts, watts_in, watts_out):
+        return {
+            "@odata.id": self.SUPPLIES + "/" + bay + "/Metrics",
+            "Status": {"State": "Enabled", "Health": "OK"},
+            "InputVoltage": {"Reading": volts, "DataSourceUri": CH + "/Sensors/" + bay + "V"},
+            "InputPowerWatts": {"Reading": watts_in},
+            "OutputPowerWatts": {"Reading": watts_out},
+        }
+
+    def _supplies(self, payloads, supplies, expand=True):
+        payloads.pop(self.SUPPLIES + EXPAND, None)
+        if expand:
+            payloads[self.SUPPLIES + EXPAND] = supplies
+        plain, by_path = _split_collection(supplies)
+        payloads[self.SUPPLIES] = plain
+        payloads.update(by_path)
+        return payloads
+
+    def _payloads(self, legacy=None, expand=True):
+        """The hand-built set with a PowerSubsystem; ``legacy`` replaces Power (None: 404)."""
+        payloads = _base_payloads()
+        if legacy is None:
+            del payloads[CH + "/Power"]
+        else:
+            payloads[CH + "/Power"] = legacy
+        payloads[CH]["PowerSubsystem"] = {"@odata.id": self.SUB}
+        payloads[self.SUB] = {
+            "@odata.id": self.SUB,
+            "Id": "PowerSubsystem",
+            "CapacityWatts": 1500,
+            "Status": {"State": "Enabled", "Health": "Critical"},
+            "PowerSupplies": {"@odata.id": self.SUPPLIES},
+            "PowerSupplyRedundancy": [
+                {
+                    "RedundancyType": "Failover",
+                    "MaxSupportedInGroup": 2,
+                    "MinNeededInGroup": 1,
+                    "RedundancyGroup": [
+                        {"@odata.id": self.SUPPLIES + "/Bay1"},
+                        {"@odata.id": self.SUPPLIES + "/Bay2"},
+                    ],
+                    "Status": {"State": "Enabled", "Health": "Critical"},
+                }
+            ],
+        }
+        payloads[self.SUPPLIES + "/Bay1/Metrics"] = self._metrics("Bay1", 207.5, 212, 198)
+        payloads[self.SUPPLIES + "/Bay2/Metrics"] = self._metrics("Bay2", 0, 0, 0)
+        return self._supplies(
+            payloads, _fx("xcc_power_subsystem_supplies_expanded.json"), expand=expand
+        )
+
+    def test_supplies_and_their_metrics_stand_in_for_an_absent_power(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_power(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(sorted(view), ["psu|Bay1", "psu|Bay2", "redundancy|0"])
+        bay1 = view["psu|Bay1"]
+        self.assertEqual(bay1["name"], "Power Supply Bay 1")
+        self.assertEqual((bay1["state"], bay1["health"]), ("Enabled", "OK"))
+        self.assertEqual(bay1["line_input_voltage"], 207.5)  # from the supply's Metrics
+        self.assertEqual(bay1["line_input_status"], "Normal")
+        self.assertEqual(bay1["line_input_voltage_type"], "AC200To240V")
+        self.assertIsNone(bay1["input_in_range"])  # these ranges carry no voltage bounds
+        self.assertEqual(bay1["capacity_w"], 750)
+        self.assertEqual((bay1["serial"], bay1["firmware"]), ("PSU0000001", "1.2.3"))
+        bay2 = view["psu|Bay2"]
+        self.assertEqual((bay2["health"], bay2["line_input_status"]), ("Critical", "LossOfInput"))
+        self.assertEqual(bay2["line_input_voltage"], 0)  # a zero reading is a reading
+        self.assertIsNone(bay2["serial"])  # '' -> None, never ''
+        self.assertEqual(
+            view["redundancy|0"],
+            {"mode": "Failover", "state": "Enabled", "health": "Critical", "member_count": 2},
+        )
+        self.assertEqual(
+            context["psu_readings"]["Bay1"],
+            {"input_w": 212, "output_w": 198, "last_output_w": None},
+        )
+        self.assertEqual(context["power_capacity_w"], 1500)
+        self.assertIsNone(context["power_consumed_w"])
+        self.assertEqual(context["psu_source"], self.SUPPLIES)
+        self.assertEqual(context["supplies_collection"]["strategy"], "expand")
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [
+                CH,
+                CH + "/Power",
+                self.SUB,
+                self.SUPPLIES + EXPAND,
+                self.SUPPLIES + "/Bay1/Metrics",
+                self.SUPPLIES + "/Bay2/Metrics",
+            ],
+        )
+        self.assertEqual(
+            set(result["raw"]),
+            {
+                self.SUB,
+                self.SUPPLIES + EXPAND,
+                self.SUPPLIES + "/Bay1/Metrics",
+                self.SUPPLIES + "/Bay2/Metrics",
+            },
+        )
+        self.assertNotIn("Actions", json.dumps(result["raw"][self.SUPPLIES + EXPAND]))
+
+    def test_a_power_resource_that_models_nothing_reads_the_subsystem_too(self):
+        hollow = {
+            "@odata.id": CH + "/Power",
+            "Id": "Power",
+            "PowerControl": [{"MemberId": "0", "PowerConsumedWatts": 180}],
+        }
+        result = checks._collect_power(_FakeCtx(self._payloads(legacy=hollow)))
+        self.assertEqual(sorted(result["normalized"]), ["psu|Bay1", "psu|Bay2", "redundancy|0"])
+        self.assertEqual(result["context"]["power_consumed_w"], 180)
+        self.assertEqual(result["context"]["psu_source"], self.SUPPLIES)
+        self.assertIn(CH + "/Power", result["raw"])
+
+    def test_rails_without_supplies_never_read_the_subsystem(self):
+        # the SE350 shape: an empty psu family is legitimate while the rails are keyed
+        rails = _fx("xcc_power.json")
+        del rails["PowerSupplies"]
+        del rails["Redundancy"]
+        ctx = _FakeCtx(self._payloads(legacy=rails))
+        result = checks._collect_power(ctx)
+        self.assertEqual(sorted(result["normalized"]), ["voltage|0", "voltage|1", "voltage|2"])
+        self.assertEqual(result["context"]["psu_total"], 0)
+        self.assertEqual(result["context"]["psu_source"], CH + "/Power")
+        self.assertNotIn(self.SUB, ctx.gets)
+
+    def _many_supplies(self, count):
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        template = _fx("xcc_power_subsystem_supplies_expanded.json")["Members"][0]
+        members = []
+        for n in range(1, count + 1):
+            bay = "Bay%d" % (n,)
+            member = json.loads(json.dumps(template).replace("Bay1", bay))
+            members.append(member)
+            payloads[self.SUPPLIES + "/" + bay + "/Metrics"] = self._metrics(bay, 208, 100, 90)
+        return self._supplies(payloads, {"Members": members}, expand=False)
+
+    def test_four_supplies_walked_fit_the_budget_and_a_fifth_is_refused_whole(self):
+        ctx = _FakeCtx(self._many_supplies(4))
+        result = checks._collect_power(ctx)
+        self.assertEqual(len([key for key in result["normalized"] if key.startswith("psu|")]), 4)
+        self.assertEqual(result["context"]["supplies_collection"]["strategy"], "members")
+        self.assertEqual(len(ctx.gets), checks._BUDGET_POWER)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_power(_FakeCtx(self._many_supplies(5)))
+        self.assertIn("5 supply metrics to fetch", str(caught.exception))
+
+    def test_not_present_and_failed_shapes(self):
+        # no legacy resource and a PowerSubsystem that models no supply and no group (the
+        # SE350 shape): not present
+        payloads = self._payloads()
+        del payloads[self.SUB]["PowerSupplies"]
+        del payloads[self.SUB]["PowerSupplyRedundancy"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_power(_FakeCtx(payloads))
+        self.assertIn("models no supply", str(caught.exception))
+        # a linked supplies collection that answers 404: failed, never "no supplies"
+        payloads = self._payloads(expand=False)
+        del payloads[self.SUPPLIES]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_power(_FakeCtx(payloads))
+        # a linked subsystem that answers 404 where no Power is served: failed
+        payloads = self._payloads()
+        del payloads[self.SUB]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_power(_FakeCtx(payloads))
+        # a Power resource that models nothing, and nothing to stand in: failed, as before
+        payloads = _base_payloads()
+        payloads[CH + "/Power"] = {"@odata.id": CH + "/Power", "Id": "Power", "PowerControl": []}
+        with self.assertRaises(checks.CollectError):
+            checks._collect_power(_FakeCtx(payloads))
+        # the Chassis links Power, it answers 404 and no subsystem is linked: failed
+        payloads = _base_payloads()
+        del payloads[CH + "/Power"]
+        with self.assertRaises(checks.CollectError):
+            checks._collect_power(_FakeCtx(payloads))
+        # neither linked nor served: not present
+        del payloads[CH]["Power"]
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_power(_FakeCtx(payloads))
 
 
 class TestInventory(unittest.TestCase):
@@ -554,6 +1375,16 @@ class TestInventory(unittest.TestCase):
         self.assertEqual(view["dimm|DIMM_1"]["service_label"], "DIMM 1")
         self.assertEqual(view["dimm|DIMM_4"]["state"], "Absent")
         self.assertIsNone(view["dimm|DIMM_4"]["serial"])
+        dimm = view["dimm|DIMM_1"]
+        self.assertEqual(
+            (dimm["error_correction"], dimm["rank_count"], dimm["base_module_type"]),
+            ("MultiBitECC", 2, "RDIMM"),
+        )
+        self.assertEqual((dimm["data_width_bits"], dimm["bus_width_bits"]), (64, 72))
+        self.assertEqual(dimm["allowed_speeds_mhz"], [2666])
+        # no Lenovo FRU / MPFA leaves in this payload: present, and None
+        for field in ("fru_part_number", "manufacture_date", "mpfa_health_major"):
+            self.assertIsNone(dimm[field], field)
         self.assertEqual(
             view["cpu|1"],
             {
@@ -564,6 +1395,14 @@ class TestInventory(unittest.TestCase):
                 "threads": 32,
                 "health": "OK",
                 "state": "Enabled",
+                "effective_family": "0x6",
+                "effective_model": "0x55",
+                "step": "0x4",
+                "microcode": None,
+                "max_speed_mhz": 2200,
+                "tdp_w": None,
+                "turbo_state": None,
+                "serial": None,
             },
         )
         self.assertEqual(view["pcie|ob_1"]["location"], "Onboard 1")  # Oem.Lenovo path
@@ -581,12 +1420,26 @@ class TestInventory(unittest.TestCase):
                 SYS + "/Memory" + EXPAND,
                 SYS + "/Processors" + EXPAND,
                 CH + "/PCIeDevices" + EXPAND,
+                # ob_1 links its PCIeFunctions collection; slot_1/slot_2 link none
+                CH + "/PCIeDevices/ob_1/PCIeFunctions" + EXPAND,
             ],
         )
         self.assertEqual(result["context"]["collections"]["memory"]["strategy"], "expand")
         self.assertEqual(result["context"]["collections"]["memory"]["members"], 4)
         self.assertEqual(result["context"]["host_power_state"], "On")
         self.assertEqual(result["context"]["unmeasured"], [])
+        self.assertEqual(
+            result["context"]["pcie_functions"],
+            {
+                "ob_1": {"source": "PCIeFunctions", "strategy": "expand", "members": 2},
+                "slot_1": {"source": None, "strategy": None, "members": None},
+                "slot_2": {"source": None, "strategy": None, "members": None},
+            },
+        )
+        self.assertEqual(
+            sorted(key for key in result["normalized"] if key.startswith("pciefn|")),
+            ["pciefn|ob_1|ob_1.00", "pciefn|ob_1|ob_1.vf0"],
+        )
         self.assertIn("dimm|DIMM_1", result["normalized"])
         processors_raw = result["raw"][SYS + "/Processors" + EXPAND]
         # Clock speed is a reading: kept in raw and context, absent from the rows.
@@ -596,6 +1449,7 @@ class TestInventory(unittest.TestCase):
             result["context"]["clock_speed_mhz"],
             {"1": processors_raw["Members"][0]["CurrentClockSpeedMHz"]},
         )
+        self.assertEqual(result["context"]["clock_speed_source"], {"1": "CurrentClockSpeedMHz"})
         self.assertNotIn("clock", str(result["normalized"]).lower())
 
     def test_collector_member_walk_when_expand_unsupported(self):
@@ -612,13 +1466,29 @@ class TestInventory(unittest.TestCase):
         self.assertIn(SYS + "/Memory/DIMM_3", result["raw"])
 
     def test_collector_falls_back_when_expand_refused_or_ignored(self):
-        # Advertised but refused with an HTTP error -> walk.
+        # Advertised but refused with an HTTP error -> walk, and the refusal is paid once:
+        # Processors, PCIeDevices and the function collections are walked without asking.
         payloads = _base_payloads()
         ctx = _FakeCtx(payloads, errors={SYS + "/Memory" + EXPAND: 501})
         result = checks._collect_inventory(ctx)
         self.assertEqual(result["context"]["collections"]["memory"]["strategy"], "members")
         self.assertEqual(result["context"]["collections"]["memory"]["expand_refused"], "HTTP 501")
-        self.assertEqual(result["context"]["collections"]["processors"]["strategy"], "expand")
+        self.assertEqual(result["context"]["collections"]["processors"]["strategy"], "members")
+        self.assertEqual(result["context"]["collections"]["pcie"]["strategy"], "members")
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)], [SYS + "/Memory" + EXPAND]
+        )
+        self.assertEqual(result["context"]["pcie_functions"]["ob_1"]["strategy"], "members")
+        self.assertIn("pciefn|ob_1|ob_1.vf0", result["normalized"])
+        # An $expand form answering 404 beside a served collection is a refusal too.
+        payloads = _base_payloads()
+        del payloads[SYS + "/Memory" + EXPAND]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_inventory(ctx)
+        self.assertEqual(result["context"]["collections"]["memory"]["expand_refused"], "HTTP 404")
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)], [SYS + "/Memory" + EXPAND]
+        )
         # Honoured with 200 but members are bare links -> walk.
         payloads = _base_payloads()
         payloads[CH + "/PCIeDevices" + EXPAND] = payloads[CH + "/PCIeDevices"]
@@ -669,7 +1539,7 @@ class TestInventory(unittest.TestCase):
         payloads = _without_expand(_base_payloads())
         payloads["/redfish/v1/"]["ProtocolFeaturesSupported"]["ExpandQuery"]["ExpandAll"] = False
         payloads["/redfish/v1/"]["ProtocolFeaturesSupported"]["ExpandQuery"]["NoLinks"] = False
-        # 40 DIMM links > what the 16-GET budget has left after root + system + collection.
+        # 40 DIMM links > what the budget has left after the resolution and the collection.
         collection = payloads[SYS + "/Memory"]
         collection["Members"] = [{"@odata.id": SYS + "/Memory/DIMM_%d" % (i,)} for i in range(40)]
         ctx = _FakeCtx(payloads)
@@ -677,6 +1547,221 @@ class TestInventory(unittest.TestCase):
             checks._collect_inventory(ctx)
         self.assertIn("40 members", str(caught.exception))
         self.assertFalse([path for path in ctx.gets if path.startswith(SYS + "/Memory/DIMM_")])
+
+
+class TestInventoryWidened(unittest.TestCase):
+    """DIMM configuration, the CPUID signature, clock/cache context and the PCIe function rows."""
+
+    FUNCTIONS = CH + "/PCIeDevices/ob_1/PCIeFunctions"
+
+    def _payloads(self):
+        return _base_payloads()  # ob_1's PCIeFunctions, expanded and plain, are in the base set
+
+    def test_dimm_lenovo_leaves_and_the_mpfa_block(self):
+        dimm = dict(
+            _fx("xcc_memory_expanded.json")["Members"][0],
+            AllowedSpeedsMHz=[2933, "2400", 2666, None],
+            Oem={
+                "Lenovo": {
+                    "FruPartNumber": " 01DE974 ",
+                    "ManufactureDate": "year 2020 week 07",
+                    "MPFA": {"MPFA_HealthStatus": {"Major": 0, "Minor": 2}},
+                }
+            },
+        )
+        row = checks._normalize_inventory([dimm], None, None)["dimm|DIMM_1"]
+        self.assertEqual(row["allowed_speeds_mhz"], [2400, 2666, 2933])  # sorted ints
+        self.assertEqual(row["fru_part_number"], "01DE974")
+        self.assertEqual(row["manufacture_date"], "year 2020 week 07")
+        self.assertEqual((row["mpfa_health_major"], row["mpfa_health_minor"]), (0, 2))
+        # a served empty list stays a list; an unserved leaf is None
+        del dimm["AllowedSpeedsMHz"]
+        empty = dict(dimm, Id="DIMM_9", AllowedSpeedsMHz=[])
+        view = checks._normalize_inventory([dimm, empty], None, None)
+        self.assertIsNone(view["dimm|DIMM_1"]["allowed_speeds_mhz"])
+        self.assertEqual(view["dimm|DIMM_9"]["allowed_speeds_mhz"], [])
+
+    def test_cpu_rated_limits_and_signature(self):
+        cpu = dict(
+            _fx("xcc_processors_expanded.json")["Members"][0],
+            TDPWatts=100,
+            TurboState="Enabled",
+            SerialNumber="",
+        )
+        cpu["ProcessorId"] = dict(cpu["ProcessorId"], MicrocodeInfo="0x2007006")
+        row = checks._normalize_inventory(None, [cpu], None)["cpu|1"]
+        self.assertEqual(row["model"], "Intel(R) Xeon(R) D-2183IT CPU @ 2.20GHz")  # marketing
+        self.assertEqual((row["effective_model"], row["microcode"]), ("0x55", "0x2007006"))
+        self.assertEqual((row["tdp_w"], row["turbo_state"]), (100, "Enabled"))
+        self.assertIsNone(row["serial"])  # '' is unset, never ''
+
+    def test_clock_speed_and_caches_fall_back_through_the_served_leaves(self):
+        cpu = copy.deepcopy(_fx("xcc_processors_expanded.json")["Members"][0])
+        del cpu["CurrentClockSpeedMHz"]
+        cpu["Oem"]["Lenovo"]["CurrentClockSpeedMHz"] = 2200
+        cpu["ProcessorMemory"] = [
+            {"MemoryType": "L2Cache", "CapacityMiB": 16},
+            {"MemoryType": "HBM2", "CapacityMiB": 8192},
+        ]
+        context = checks._inventory_cpu_context([cpu])
+        self.assertEqual(context["clock_speed_mhz"], {"1": 2200})
+        self.assertEqual(context["clock_speed_source"], {"1": "Oem.Lenovo.CurrentClockSpeedMHz"})
+        self.assertEqual(
+            context["cpu_caches"]["1"],
+            {"source": "ProcessorMemory", "caches": [{"level": "L2Cache", "capacity_mib": 16}]},
+        )
+        cpu["CurrentClockSpeedMHz"] = 1900  # the top-level leaf wins over the OEM one ...
+        self.assertEqual(checks._inventory_cpu_context([cpu])["clock_speed_mhz"], {"1": 1900})
+        cpu["OperatingSpeedMHz"] = 1800  # ... and the DMTF leaf over both
+        cpu["Oem"]["Lenovo"]["CacheInfo"] = [
+            {"CacheLevel": "L1", "InstalledSizeKByte": 1024, "MaxCacheSizeKByte": 1024}
+        ]
+        context = checks._inventory_cpu_context([cpu])
+        self.assertEqual(context["clock_speed_mhz"], {"1": 1800})
+        self.assertEqual(context["clock_speed_source"], {"1": "OperatingSpeedMHz"})
+        self.assertEqual(context["cpu_caches"]["1"]["source"], "Oem.Lenovo.CacheInfo")
+        self.assertEqual(
+            checks._inventory_cpu_context([{"Id": "2"}]),
+            {
+                "clock_speed_mhz": {"2": None},
+                "clock_speed_source": {"2": None},
+                "cpu_caches": {"2": {"source": None, "caches": []}},
+            },
+        )
+
+    def test_function_rows_one_expand_get_per_device(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_inventory(ctx)
+        view = result["normalized"]
+        self.assertEqual(
+            view["pciefn|ob_1|ob_1.00"],
+            {
+                "function_type": "Physical",
+                "device_class": "NetworkController",
+                "class_code": "0x020000",
+                "vendor_id": "0x8086",
+                "device_id": "0x37d2",
+                "subsystem_id": "0x4020",
+                "subsystem_vendor_id": "0x17aa",
+                "enabled": True,
+                "state": "Enabled",
+            },
+        )
+        vf = view["pciefn|ob_1|ob_1.vf0"]  # an SR-IOV VF: Enabled and the State, each as served
+        self.assertEqual(
+            (vf["function_type"], vf["enabled"], vf["state"]), ("Virtual", False, "Enabled")
+        )
+        self.assertEqual(ctx.gets[-1], self.FUNCTIONS + EXPAND)
+        self.assertEqual(
+            result["context"]["pcie_functions"]["ob_1"],
+            {"source": "PCIeFunctions", "strategy": "expand", "members": 2},
+        )
+        self.assertIn(self.FUNCTIONS + EXPAND, result["raw"])
+        self.assertNotIn("Actions", json.dumps(result["raw"][self.FUNCTIONS + EXPAND]))
+
+    def test_enabled_is_the_served_leaf_never_inferred_from_the_state(self):
+        # XCC 6.10 serves no PCIeFunction.Enabled: null there, the state its own field.
+        row = checks._inventory_function({"Status": {"State": "Disabled"}})
+        self.assertEqual((row["enabled"], row["state"]), (None, "Disabled"))
+        row = checks._inventory_function({"Status": {"State": "Enabled"}})
+        self.assertEqual((row["enabled"], row["state"]), (None, "Enabled"))
+        row = checks._inventory_function({"Enabled": False, "Status": {"State": "Enabled"}})
+        self.assertEqual((row["enabled"], row["state"]), (False, "Enabled"))
+        row = checks._inventory_function({"VendorId": "0x8086"})
+        self.assertEqual((row["enabled"], row["state"]), (None, None))
+
+    def test_a_listed_device_without_functions_is_unmeasured(self):
+        # Every PCI device has function 0: an empty or 404 function collection on a
+        # listed device refuses the check rather than diffing as "functions gone".
+        for served in ({"Members": []}, None):
+            payloads = self._payloads()
+            for path in [path for path in payloads if path.startswith(self.FUNCTIONS)]:
+                del payloads[path]
+            if served is not None:
+                payloads[self.FUNCTIONS] = served
+            with self.assertRaises(checks.CollectError) as caught:
+                checks._collect_inventory(_FakeCtx(payloads))
+            self.assertIn("ob_1", str(caught.exception))
+            self.assertIn("unmeasured", str(caught.exception))
+        # An Absent or Disabled device may carry none: recorded, never refused.
+        for state in ("Absent", "Disabled"):
+            payloads = self._payloads()
+            for path in [path for path in payloads if path.startswith(self.FUNCTIONS)]:
+                del payloads[path]
+            payloads[self.FUNCTIONS] = {"Members": []}
+            payloads[CH + "/PCIeDevices" + EXPAND]["Members"][0]["Status"]["State"] = state
+            result = checks._collect_inventory(_FakeCtx(payloads))
+            self.assertEqual(result["context"]["pcie_functions"]["ob_1"]["members"], 0, state)
+            self.assertFalse([key for key in result["normalized"] if key.startswith("pciefn|")])
+
+    def test_the_deprecated_links_array_is_read_link_by_link(self):
+        payloads = self._payloads()
+        device = payloads[CH + "/PCIeDevices" + EXPAND]["Members"][0]
+        del device["PCIeFunctions"]
+        device["Links"] = {"PCIeFunctions": [{"@odata.id": self.FUNCTIONS + "/ob_1.00"}]}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_inventory(ctx)
+        self.assertIn("pciefn|ob_1|ob_1.00", result["normalized"])
+        self.assertNotIn("pciefn|ob_1|ob_1.vf0", result["normalized"])
+        self.assertEqual(ctx.gets[-1], self.FUNCTIONS + "/ob_1.00")
+        self.assertEqual(
+            result["context"]["pcie_functions"]["ob_1"],
+            {"source": "Links.PCIeFunctions", "strategy": "members", "members": 1},
+        )
+
+    def test_a_refused_expand_is_never_retried_for_the_functions(self):
+        # The device collection had to be walked: no function collection tries $expand.
+        payloads = self._payloads()
+        ctx = _FakeCtx(payloads, errors={CH + "/PCIeDevices" + EXPAND: 501})
+        result = checks._collect_inventory(ctx)
+        self.assertNotIn(self.FUNCTIONS + EXPAND, ctx.gets)
+        self.assertEqual(result["context"]["pcie_functions"]["ob_1"]["strategy"], "members")
+        self.assertIn("pciefn|ob_1|ob_1.vf0", result["normalized"])
+        # The first function collection refuses: the next device is not asked again.
+        payloads = self._payloads()
+        second = CH + "/PCIeDevices/slot_1/PCIeFunctions"
+        payloads[CH + "/PCIeDevices" + EXPAND]["Members"][1]["PCIeFunctions"] = {
+            "@odata.id": second
+        }
+        payloads[second] = {"Members": [{"@odata.id": second + "/slot_1.00"}]}
+        payloads[second + "/slot_1.00"] = {"Id": "slot_1.00", "VendorId": "0x15b3"}
+        ctx = _FakeCtx(payloads, errors={self.FUNCTIONS + EXPAND: 501})
+        result = checks._collect_inventory(ctx)
+        self.assertNotIn(second + EXPAND, ctx.gets)
+        self.assertEqual(ctx.gets[-2:], [second, second + "/slot_1.00"])
+        self.assertEqual(
+            result["context"]["pcie_functions"]["slot_1"],
+            {"source": "PCIeFunctions", "strategy": "members", "members": 1},
+        )
+
+    def test_function_reads_the_budget_cannot_cover_are_refused_before_any_is_sent(self):
+        payloads = self._payloads()
+        devices = payloads[CH + "/PCIeDevices" + EXPAND]["Members"]
+        for index in range(30):
+            devices.append(
+                {
+                    "@odata.id": CH + "/PCIeDevices/extra_%d" % (index,),
+                    "Id": "extra_%d" % (index,),
+                    "PCIeFunctions": {
+                        "@odata.id": CH + "/PCIeDevices/extra_%d/PCIeFunctions" % (index,)
+                    },
+                }
+            )
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_inventory(ctx)
+        self.assertIn("PCIe functions of 33 device(s)", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if "PCIeFunctions" in path])
+
+    def test_a_function_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[CH + "/PCIeDevices" + EXPAND]["Members"][0]["PCIeFunctions"] = {
+            "@odata.id": CH + "/PCIeDevices/ob_1/Actions/x"
+        }
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError):
+            checks._collect_inventory(ctx)
+        self.assertFalse([path for path in ctx.gets if "Actions" in path])
 
 
 class TestHostNics(unittest.TestCase):
@@ -711,6 +1796,7 @@ class TestHostNics(unittest.TestCase):
         self.assertEqual(result["context"]["strategy"], "expand")
         self.assertEqual(result["context"]["members_total"], 5)
         self.assertEqual(result["context"]["host_power_state"], "On")
+        self.assertEqual(result["context"]["port_source"], SYS + "/EthernetInterfaces")
 
     def test_collector_walk_never_fetches_tomanager(self):
         ctx = _FakeCtx(_without_expand(_base_payloads()))
@@ -722,6 +1808,7 @@ class TestHostNics(unittest.TestCase):
             set(result["normalized"]), {"nic|ob-1", "nic|ob-2", "nic|ob-3", "nic|ob-4"}
         )
         self.assertNotIn(SYS + "/EthernetInterfaces/ToManager", result["raw"])
+        self.assertEqual(result["context"]["port_source"], SYS + "/EthernetInterfaces")
 
     def test_collector_not_present_shapes(self):
         payloads = _base_payloads()
@@ -757,7 +1844,11 @@ class TestHostNics(unittest.TestCase):
 class TestFirmware(unittest.TestCase):
     def test_normalize_excludes_state_and_dates(self):
         view = checks._normalize_firmware(_fx("xcc_firmware_expanded.json")["Members"])
-        self.assertEqual(len(view), 15)
+        self.assertEqual(len([key for key in view if key.startswith("fw|")]), 15)
+        # the two scalars are always present, None when their resources were not read
+        self.assertEqual(len(view), 17)
+        self.assertIsNone(view["manager_active_image"])
+        self.assertIsNone(view["backup_auto_promote"])
         self.assertEqual(
             view["fw|BMC-Primary"],
             {
@@ -780,10 +1871,18 @@ class TestFirmware(unittest.TestCase):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_firmware(ctx)
         self.assertEqual(
-            ctx.gets, RESOLVE + ["/redfish/v1/UpdateService/FirmwareInventory" + EXPAND]
+            ctx.gets,
+            RESOLVE
+            + [
+                "/redfish/v1/UpdateService/FirmwareInventory" + EXPAND,
+                MGR,
+                "/redfish/v1/UpdateService",  # absent from this fixture set: 404, optional
+            ],
         )
         self.assertEqual(result["context"]["strategy"], "expand")
         self.assertEqual(result["context"]["members"], 15)
+        self.assertIsNone(result["context"]["update_service"])
+        self.assertEqual(result["context"]["software_inventory"], {"linked": False})
         raw = result["raw"]["/redfish/v1/UpdateService/FirmwareInventory" + EXPAND]
         self.assertNotIn("@odata.etag", raw["Members"][0])
 
@@ -791,9 +1890,10 @@ class TestFirmware(unittest.TestCase):
         ctx = _FakeCtx(_without_expand(_base_payloads()))
         result = checks._collect_firmware(ctx)
         self.assertEqual(result["context"]["strategy"], "members")
-        self.assertEqual(len(result["normalized"]), 15)
-        # resolution (root, Systems, System), expand attempt (404), collection, members
-        self.assertEqual(len(ctx.gets), 3 + 1 + 1 + 15)
+        self.assertEqual(len([key for key in result["normalized"] if key.startswith("fw|")]), 15)
+        # resolution (root, Systems, System), expand attempt (404), collection, members,
+        # then the Manager and the UpdateService
+        self.assertEqual(len(ctx.gets), 3 + 1 + 1 + 15 + 2)
 
     def test_collector_refuses_a_walk_the_budget_cannot_cover(self):
         payloads = _without_expand(_base_payloads())
@@ -826,6 +1926,105 @@ class TestFirmware(unittest.TestCase):
     def test_empty_inventory_is_a_failed_read(self):
         payloads = _base_payloads()
         payloads["/redfish/v1/UpdateService/FirmwareInventory" + EXPAND]["Members"] = []
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError):
+            checks._collect_firmware(ctx)
+        self.assertNotIn(MGR, ctx.gets)  # refused before anything else is spent
+
+
+class TestFirmwareWidened(unittest.TestCase):
+    """SoftwareInventory rows, the BMC's active image and Lenovo's backup-promotion policy."""
+
+    UPDATE = "/redfish/v1/UpdateService"
+    SOFTWARE = "/redfish/v1/UpdateService/SoftwareInventory"
+
+    def _payloads(self):
+        payloads = _base_payloads()
+        payloads[self.UPDATE] = _fx("xcc_firmware_updateservice.json")
+        payloads[self.SOFTWARE + EXPAND] = _fx("xcc_firmware_softwareinventory_expanded.json")
+        plain, members = _split_collection(payloads[self.SOFTWARE + EXPAND])
+        payloads[self.SOFTWARE] = plain
+        payloads.update(members)
+        payloads[MGR]["Links"]["ActiveSoftwareImage"] = {
+            "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+        }
+        return payloads
+
+    def test_software_rows_active_image_and_backup_policy(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_firmware(ctx)
+        view = result["normalized"]
+        self.assertEqual(
+            view["sw|Driver-i40e"],
+            {
+                "name": "Intel(R) Ethernet driver",
+                "version": "2.22.20",
+                "software_id": "DRV-i40e",
+                "updateable": False,
+                "health": "OK",
+            },
+        )
+        self.assertIsNone(view["sw|Agent-ISM"]["health"])  # no Status served
+        self.assertNotIn("release_date", view["sw|Agent-ISM"])
+        self.assertEqual(len([key for key in view if key.startswith("fw|")]), 15)
+        self.assertEqual(view["manager_active_image"], "BMC-Primary")
+        self.assertIs(view["backup_auto_promote"], True)
+        self.assertEqual(ctx.gets[-1], self.SOFTWARE + EXPAND)
+        self.assertEqual(
+            result["context"]["software_inventory"],
+            {"linked": True, "strategy": "expand", "members": 2},
+        )
+        self.assertEqual(result["context"]["update_service"], self.UPDATE)
+        self.assertNotIn("Actions", result["raw"][self.UPDATE])
+        # the rows diff like any other key: a bank switch is one changed scalar
+        post = dict(view, manager_active_image="BMC-Backup")
+        diff = _loader.diffcore.diff_check(view, post, registry.CHECKS["bmc_firmware"].compare)
+        self.assertEqual(
+            diff["changed"],
+            [
+                {
+                    "key": "manager_active_image",
+                    "field": None,
+                    "old": "BMC-Primary",
+                    "new": "BMC-Backup",
+                }
+            ],
+        )
+
+    def test_a_refused_expand_is_not_paid_twice(self):
+        ctx = _FakeCtx(
+            self._payloads(),
+            errors={"/redfish/v1/UpdateService/FirmwareInventory" + EXPAND: 501},
+        )
+        result = checks._collect_firmware(ctx)
+        self.assertNotIn(self.SOFTWARE + EXPAND, ctx.gets)
+        self.assertEqual(result["context"]["software_inventory"]["strategy"], "members")
+        self.assertIn("sw|Agent-ISM", result["normalized"])
+
+    def test_a_linked_software_inventory_that_answers_404_is_recorded_absent(self):
+        payloads = self._payloads()
+        for path in (self.SOFTWARE, self.SOFTWARE + EXPAND):
+            del payloads[path]
+        result = checks._collect_firmware(_FakeCtx(payloads))
+        self.assertFalse([key for key in result["normalized"] if key.startswith("sw|")])
+        self.assertEqual(
+            result["context"]["software_inventory"],
+            {"linked": True, "strategy": "absent", "members": None},
+        )
+
+    def test_unserved_leaves_read_none_and_other_vendors_keep_the_dmtf_reads(self):
+        payloads = self._payloads()
+        del payloads[MGR]["Links"]["ActiveSoftwareImage"]
+        del payloads[self.UPDATE]["Oem"]
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        result = checks._collect_firmware(_FakeCtx(payloads))
+        self.assertIsNone(result["normalized"]["manager_active_image"])
+        self.assertIsNone(result["normalized"]["backup_auto_promote"])
+        self.assertIn("sw|Driver-i40e", result["normalized"])
+
+    def test_an_active_image_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[MGR]["Links"]["ActiveSoftwareImage"] = {"@odata.id": MGR + "/Actions/x"}
         with self.assertRaises(checks.CollectError):
             checks._collect_firmware(_FakeCtx(payloads))
 
@@ -843,12 +2042,17 @@ class TestEventLog(unittest.TestCase):
                 "severity": "Critical",
                 "source": "Security",
                 "serviceable": False,
+                "serviceable_by": None,  # the sample's boolean names no party
                 "event_id": "0x810700C8",
                 "hidden": False,
+                # Lenovo's documentation sample serves neither leaf: null, never guessed
+                "failing_fru": None,
+                "log_type": None,
             },
         )
         self.assertIs(view["sel|FQXSPPW0003I|120"]["serviceable"], True)
         self.assertNotIn("message", view["sel|FQXSPPW0003I|120"])
+        self.assertEqual(context["entries_by_log_type"], {})
         self.assertEqual(context["entries_total"], 9)
         self.assertEqual(context["keyed_entries"], 3)
         self.assertEqual(context["hidden_entries"], 1)
@@ -891,17 +2095,27 @@ class TestEventLog(unittest.TestCase):
             ctx.gets,
             RESOLVE
             + [
+                # one $expand try for the services (this hand-built set does not serve it)
+                SYS + "/LogServices" + EXPAND,
                 SYS + "/LogServices",
                 SYS + "/LogServices/PlatformLog",
                 SYS + "/LogServices/PlatformLog/Entries",
             ],
         )
-        self.assertFalse([path for path in ctx.gets if "$top" in path or "?" in path])
+        # the log itself is read without any query string: no $top window, no paging choice
+        self.assertFalse([path for path in ctx.gets if "$top" in path])
+        self.assertFalse([path for path in ctx.gets if "/Entries" in path and "?" in path])
         # every Entries page passes the log redactor, every other read the scrubber
         self.assertIn((SYS + "/LogServices/PlatformLog/Entries", "_redact_log_page"), ctx.redacted)
         self.assertIn((SYS + "/LogServices", "_scrub_payload"), ctx.redacted)
         self.assertEqual(result["context"]["log_service_used"], "PlatformLog")
         self.assertEqual(result["context"]["pages"], 1)
+        self.assertEqual(result["context"]["log_services_strategy"], "members")
+        self.assertEqual(result["context"]["log_services_served"], ["PlatformLog"])
+        # nothing beside the platform log is listed: every auxiliary block says so
+        for block in ("active_log", "maintenance_log", "sel"):
+            self.assertIs(result["context"][block]["served"], False, block)
+        self.assertEqual(result["context"]["audit_log_seq"], {"first": None, "last": None})
         raw_entries = result["raw"][SYS + "/LogServices/PlatformLog/Entries"]["Members"]
         self.assertEqual(raw_entries[0]["Id"], "234")  # newest first
         self.assertEqual(
@@ -992,38 +2206,531 @@ class TestEventLog(unittest.TestCase):
         self.assertEqual(rows[0]["Id"], str(checks._RAW_LOG_ENTRIES + 50))
 
 
-class TestBios(unittest.TestCase):
-    def test_normalize_curated_tokens(self):
-        view = checks._normalize_bios(_fx("xcc_bios.json"))
-        self.assertEqual(view["bios|Processors_HyperThreading"], "Enable")
-        self.assertEqual(view["bios|Devices_and_IO_Ports_IntelVTforDirectedIOVTd"], "Enable")
-        self.assertEqual(view["bios|Devices_and_IO_Ports_SRIOV"], "Enable")
-        self.assertEqual(view["bios|OperatingModes_ChooseOperatingMode"], "MaximumPerformance")
-        self.assertEqual(view["bios|Processors_CStates"], "Disable")
-        self.assertEqual(view["bios|Processors_C1EnhancedMode"], "Disable")
-        self.assertEqual(view["bios|Processors_TurboMode"], "Enable")
-        self.assertEqual(view["bios|BootModes_SystemBootMode"], "UEFIMode")
-        self.assertEqual(view["bios|Devices_and_IO_Ports_Above4GBMMIO"], "Enable")
-        self.assertEqual(view["bios|SystemSecurity_TPMSetting"], "Enable")
-        self.assertNotIn("bios|SystemSecurity_AdminPassword", view)
-        self.assertNotIn("bios|Q00001_Password", view)
-        self.assertNotIn("bios|SystemInformation_SerialNumber", view)
-        self.assertNotIn("bios|Memory_MemoryMode", view)
+class TestEventLogServices(unittest.TestCase):
+    """The ActiveLog, the MaintenanceLog, the SEL probe and the audit counters (hand-built).
 
-    def test_collector_raw_curated_and_capped(self):
+    A gen-1-guide-shaped tree: PlatformLog (whose service spells its counters
+    FirstSeqNum/LastSeqNum) beside ActiveLog, MaintenanceLog, SEL, AuditLog
+    and DiagnosticLog. The lab unit's ActiveLog is empty, so the populated one
+    is hand-built in the lab's entry shape (xcc_event_log_active_entries.json).
+    """
+
+    LS = SYS + "/LogServices"
+
+    def _history(self, count):
+        return [
+            {
+                "@odata.id": self.LS + "/MaintenanceLog/Entries/%d" % (index,),
+                "Id": str(index),
+                "EntryType": "Oem",
+                "Severity": None,
+                "EventGroupId": 1 if index % 3 == 0 else 0,
+                "Created": "2026-09-%02dT10:00:00Z" % (1 + index % 28,),
+                "Message": "UEFI firmware is updated to HYE1%02dA by XCC Web." % (index % 100,),
+            }
+            for index in range(1, count + 1)
+        ]
+
+    def _services(self):
+        def service(service_id, entries=True, **extra):
+            body = {"@odata.id": self.LS + "/" + service_id, "Id": service_id}
+            body["ServiceEnabled"] = True
+            if entries:
+                body["Entries"] = {"@odata.id": self.LS + "/" + service_id + "/Entries"}
+            body.update(extra)
+            return body
+
+        return [
+            _fx("xcc_log_service_platform.json"),
+            service("ActiveLog", MaxNumberOfRecords=1024),
+            service("MaintenanceLog", MaxNumberOfRecords=750),
+            service(
+                "SEL",
+                entries=False,
+                MaxNumberOfRecords=511,
+                OverWritePolicy="NeverOverWrites",
+                Oem={"Lenovo": {"EnableSELWrapping": False}},
+            ),
+            service("AuditLog", Oem={"Lenovo": {"FirstSeqNum": 3, "LastSeqNum": 88}}),
+            service("DiagnosticLog", MaxNumberOfRecords=3),
+        ]
+
+    def _payloads(self, expand=False, history=5):
+        payloads = _base_payloads()
+        services = self._services()
+        payloads[self.LS] = {
+            "@odata.id": self.LS,
+            "Members": [{"@odata.id": body["@odata.id"]} for body in services],
+            "Members@odata.count": len(services),
+        }
+        for body in services:
+            payloads[body["@odata.id"]] = body
+        if expand:
+            payloads[self.LS + EXPAND] = {"@odata.id": self.LS, "Members": copy.deepcopy(services)}
+        payloads[self.LS + "/ActiveLog/Entries"] = _fx("xcc_event_log_active_entries.json")
+        payloads[self.LS + "/MaintenanceLog/Entries"] = {
+            "@odata.id": self.LS + "/MaintenanceLog/Entries",
+            "Members": self._history(history),
+            "Members@odata.count": history,
+        }
+        # Never to be read: the audit log's entries (the capture's own logins
+        # would land there) and the diagnostic dumps.
+        payloads[self.LS + "/AuditLog/Entries"] = {
+            "Members": [{"Id": "1", "Message": "Login ID: alice from webguis at IP address x."}]
+        }
+        payloads[self.LS + "/DiagnosticLog/Entries"] = {"Members": []}
+        return payloads
+
+    def test_members_strategy_reads_only_the_services_it_uses(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_event_log(ctx)
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [self.LS + EXPAND, self.LS]
+            + [self.LS + "/" + name for name in ("PlatformLog", "ActiveLog", "MaintenanceLog")]
+            + [self.LS + "/SEL", self.LS + "/AuditLog"]
+            + [self.LS + "/%s/Entries" % (name,) for name in ("PlatformLog", "ActiveLog")]
+            + [self.LS + "/MaintenanceLog/Entries"],
+        )
+        self.assertFalse([path for path in ctx.gets if "AuditLog/Entries" in path])
+        self.assertFalse([path for path in ctx.gets if "DiagnosticLog" in path])
+        context = result["context"]
+        self.assertEqual(context["log_services_strategy"], "members")
+        self.assertIsNone(context["log_services_expand_refused"])
+        self.assertEqual(
+            context["log_services_served"],
+            ["ActiveLog", "AuditLog", "DiagnosticLog", "MaintenanceLog", "PlatformLog", "SEL"],
+        )
+        self.assertEqual(context["log_service_used"], "PlatformLog")
+        # every read passes a redactor, every Entries page the log redactor
+        for path in (self.LS + "/ActiveLog/Entries", self.LS + "/MaintenanceLog/Entries"):
+            self.assertIn((path, "_redact_log_page"), ctx.redacted)
+        self.assertIn((self.LS + "/SEL", "_scrub_payload"), ctx.redacted)
+
+    def test_expand_strategy_is_one_get_for_every_service(self):
+        ctx = _FakeCtx(self._payloads(expand=True))
+        result = checks._collect_event_log(ctx)
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [self.LS + EXPAND]
+            + [self.LS + "/%s/Entries" % (name,) for name in ("PlatformLog", "ActiveLog")]
+            + [self.LS + "/MaintenanceLog/Entries"],
+        )
+        self.assertEqual(result["context"]["log_services_strategy"], "expand")
+        self.assertIn(self.LS + EXPAND, result["raw"])
+        # the same view and the same facts whichever way the services were found
+        walked = checks._collect_event_log(_FakeCtx(self._payloads()))
+        self.assertEqual(result["normalized"], walked["normalized"])
+        for key in ("audit_log_seq", "sel", "active_log", "maintenance_log", "log_services_served"):
+            self.assertEqual(result["context"][key], walked["context"][key], key)
+
+    def test_active_log_keys_every_condition_whatever_its_severity(self):
+        result = checks._collect_event_log(_FakeCtx(self._payloads()))
+        view = result["normalized"]
+        self.assertEqual(
+            {key: row for key, row in view.items() if key.startswith("active|")},
+            {
+                "active|FQXSPCA0002M|12": {
+                    "severity": "Critical",
+                    "message_id": None,
+                    "created": "2026-09-21T04:12:55.120-05:00",
+                    "serviceable": True,  # ServiceableByLenovo
+                    "serviceable_by": "Lenovo",
+                    "failing_fru": [
+                        {"part": "01PF614", "serial": "ZZRSR0000001"},
+                        {"part": "01PG900", "serial": "ZZFAN0000002"},
+                    ],
+                },
+                "active|FQXSPPW0008L|13": {
+                    "severity": "Warning",
+                    "message_id": None,
+                    "created": "2026-09-22T11:40:03.004-05:00",
+                    "serviceable": False,  # Not Serviceable
+                    "serviceable_by": None,
+                    "failing_fru": [],
+                },
+            },
+        )
+        # the platform log's keys are unchanged beside them
+        self.assertEqual(
+            {key for key in view if key.startswith("sel|")},
+            {"sel|FQXSPPW0003I|120", "sel|FQXSPSE0000F|200", "sel|FQXSPCA0016M|234"},
+        )
+        self.assertEqual(
+            result["context"]["active_log"],
+            {
+                "served": True,
+                "service_enabled": True,
+                "max_records": 1024,
+                "overwrite_policy": None,
+                "entries_link": True,
+                "entries_total": 2,
+                "pages": 1,
+            },
+        )
+        raw = result["raw"][self.LS + "/ActiveLog/Entries"]
+        self.assertEqual([row["Id"] for row in raw["Members"]], ["13", "12"])  # newest first
+        self.assertNotIn("@odata.etag", json.dumps(raw))
+        # an OK entry is keyed too, and a vendor without CommonEventID keys by MessageId
+        other = {
+            "Id": "7",
+            "Severity": "OK",
+            "MessageId": "Contoso.1.0.SensorReset",
+            "Created": "t",
+        }
+        self.assertEqual(
+            checks._event_log_normalize_active([other]),
+            {
+                "active|Contoso.1.0.SensorReset|7": {
+                    "severity": "OK",
+                    "message_id": "Contoso.1.0.SensorReset",
+                    "created": "t",
+                    "serviceable": None,
+                    "serviceable_by": None,
+                    "failing_fru": None,
+                }
+            },
+        )
+
+    def test_an_empty_active_log_is_the_healthy_state(self):
+        payloads = self._payloads()
+        payloads[self.LS + "/ActiveLog/Entries"] = {"Members": [], "Members@odata.count": 0}
+        result = checks._collect_event_log(_FakeCtx(payloads))
+        self.assertFalse([key for key in result["normalized"] if key.startswith("active|")])
+        self.assertEqual(result["context"]["active_log"]["entries_total"], 0)
+
+    def test_maintenance_log_is_context_and_its_newest_rows_raw(self):
+        result = checks._collect_event_log(_FakeCtx(self._payloads(history=130)))
+        self.assertEqual({key.split("|")[0] for key in result["normalized"]}, {"sel", "active"})
+        self.assertEqual(
+            result["context"]["maintenance_log"],
+            {
+                "served": True,
+                "service_enabled": True,
+                "max_records": 750,
+                "overwrite_policy": None,
+                "entries_link": True,
+                "pages": 1,
+                "entries_total": 130,
+                "by_event_group_id": {"0": 87, "1": 43},
+                "first_id": 1,
+                "newest_id": 130,
+                "newest_created": "2026-09-19T10:00:00Z",
+                "at_capacity": False,
+            },
+        )
+        raw = result["raw"][self.LS + "/MaintenanceLog/Entries"]
+        self.assertEqual(len(raw["Members"]), checks._EVENT_LOG_MAINTENANCE_ROWS)
+        self.assertEqual(raw["entries_omitted_from_raw"], 130 - checks._EVENT_LOG_MAINTENANCE_ROWS)
+        self.assertEqual(raw["Members"][0]["Id"], "130")
+        self.assertEqual(raw["Members"][0]["EventGroupId"], 0)
+        self.assertEqual(raw["Members@odata.count"], 130)
+
+    def test_sel_is_a_probe_and_its_wrapping_flag_is_read_where_served(self):
+        ctx = _FakeCtx(self._payloads())
+        context = checks._collect_event_log(ctx)["context"]
+        self.assertEqual(
+            context["sel"],
+            {
+                "served": True,
+                "service_enabled": True,
+                "max_records": 511,
+                "overwrite_policy": "NeverOverWrites",
+                "entries_link": False,
+            },
+        )
+        self.assertIs(context["sel_wrapping_enabled"], False)
+        self.assertEqual(context["sel_wrapping_source"], "SEL Oem.Lenovo.EnableSELWrapping")
+        # a SEL that links Entries is still only probed
+        payloads = self._payloads()
+        payloads[self.LS + "/SEL"]["Entries"] = {"@odata.id": self.LS + "/SEL/Entries"}
+        payloads[self.LS + "/SEL/Entries"] = {"Members": []}
+        ctx = _FakeCtx(payloads)
+        context = checks._collect_event_log(ctx)["context"]
+        self.assertIs(context["sel"]["entries_link"], True)
+        self.assertNotIn(self.LS + "/SEL/Entries", ctx.gets)
+        # without it on the SEL, the platform log's own service answers
+        payloads = self._payloads()
+        del payloads[self.LS + "/SEL"]["Oem"]
+        payloads[self.LS + "/PlatformLog"]["Oem"]["Lenovo"]["EnableSELWrapping"] = True
+        context = checks._collect_event_log(_FakeCtx(payloads))["context"]
+        self.assertIs(context["sel_wrapping_enabled"], True)
+        self.assertEqual(context["sel_wrapping_source"], "PlatformLog Oem.Lenovo.EnableSELWrapping")
+
+    def test_audit_counters_come_from_a_service_resource_never_its_entries(self):
+        # The platform service carries no Audit* counters here: the AuditLog's
+        # own resource answers, in its plain spelling.
+        ctx = _FakeCtx(self._payloads())
+        context = checks._collect_event_log(ctx)["context"]
+        self.assertEqual(context["audit_log_seq"], {"first": 3, "last": 88})
+        self.assertEqual(
+            context["audit_log_seq_source"], "AuditLog Oem.Lenovo.FirstSeqNum/LastSeqNum"
+        )
+        self.assertIn(self.LS + "/AuditLog", ctx.gets)
+        self.assertNotIn(self.LS + "/AuditLog/Entries", ctx.gets)
+        # The XCC 6.10 spelling on the platform service wins, and the AuditLog is not read.
+        payloads = self._payloads()
+        payloads[self.LS + "/PlatformLog"]["Oem"]["Lenovo"].update(
+            AuditFirstSeqNum=1, AuditLastSeqNum=176
+        )
+        ctx = _FakeCtx(payloads)
+        context = checks._collect_event_log(ctx)["context"]
+        self.assertEqual(context["audit_log_seq"], {"first": 1, "last": 176})
+        self.assertEqual(
+            context["audit_log_seq_source"],
+            "PlatformLog Oem.Lenovo.AuditFirstSeqNum/AuditLastSeqNum",
+        )
+        self.assertFalse([path for path in ctx.gets if "AuditLog" in path])
+        # an AuditLog's own Audit* spelling is preferred to its plain one
+        audit = {"Oem": {"Lenovo": {"AuditFirstSeqNum": 2, "AuditLastSeqNum": 9, "LastSeqNum": 1}}}
+        self.assertEqual(
+            checks._event_log_audit_seq({}, "PlatformLog", audit, "AuditLog"),
+            ({"first": 2, "last": 9}, "AuditLog Oem.Lenovo.AuditFirstSeqNum/AuditLastSeqNum"),
+        )
+        self.assertEqual(
+            checks._event_log_audit_seq({}, "PlatformLog"), ({"first": None, "last": None}, None)
+        )
+
+    def test_serviceable_reads_lenovo_strings_as_booleans(self):
+        for value, expected in (
+            ("ServiceableByLenovo", True),
+            ("Not Serviceable", False),
+            ("not serviceable", False),
+            ("NOT_SERVICEABLE", False),
+            ("NotServiceable", False),
+            (True, True),
+            (False, False),
+            (["ServiceableByCustomer"], True),
+            (["Not Serviceable", "Not Serviceable"], False),
+            (["ServiceableByLenovo", "Not Serviceable"], None),
+            ([], None),
+            ("Unknown", None),
+            (None, None),
+            (1, None),
+            # the LenovoLogEntry enum: who services it is its own field
+            ("ServiceableByCustomer", True),
+            ("Serviceable By Lenovo", True),
+        ):
+            self.assertIs(checks._event_log_serviceable(value), expected, value)
+        for value, expected in (
+            ("ServiceableByLenovo", "Lenovo"),
+            ("ServiceableByCustomer", "Customer"),
+            ("serviceable by customer", "Customer"),
+            ("Serviceable_By_Lenovo", "Lenovo"),
+            (["ServiceableByLenovo"], "Lenovo"),
+            (["ServiceableByLenovo", "ServiceableByCustomer"], None),
+            ("Serviceable", None),
+            ("Not Serviceable", None),
+            (True, None),
+            (None, None),
+        ):
+            self.assertEqual(checks._event_log_serviceable_by(value), expected, value)
+
+    def test_failing_fru_pairs_are_sorted_and_placeholders_dropped(self):
+        def entry(frus):
+            return {"Oem": {"Lenovo": {"FailingFRU": frus}}}
+
+        self.assertEqual(
+            checks._event_log_failing_fru(
+                entry(
+                    [
+                        {"FRUNumber": "02B", "FRUSerialNumber": ""},
+                        {"FRUNumber": "", "FRUSerialNumber": ""},
+                        {"FRUNumber": "01A", "FRUSerialNumber": "S2"},
+                    ]
+                )
+            ),
+            [{"part": "01A", "serial": "S2"}, {"part": "02B", "serial": None}],
+        )
+        self.assertEqual(checks._event_log_failing_fru(entry([{"FRUNumber": ""}])), [])
+        # a lone pair served without its list reads as a one-element list
+        self.assertEqual(
+            checks._event_log_failing_fru(entry({"FRUNumber": "01A"})),
+            [{"part": "01A", "serial": None}],
+        )
+        self.assertIsNone(checks._event_log_failing_fru({"Oem": {"Lenovo": {}}}))
+        self.assertIsNone(checks._event_log_failing_fru({}))
+
+    def test_a_listed_service_that_answers_404_is_not_served(self):
+        payloads = self._payloads()
+        del payloads[self.LS + "/ActiveLog"]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_event_log(ctx)
+        self.assertEqual(
+            result["context"]["active_log"],
+            {
+                "served": False,
+                "service_enabled": None,
+                "max_records": None,
+                "overwrite_policy": None,
+                "entries_link": None,
+                "entries_total": None,
+                "pages": 0,
+            },
+        )
+        self.assertNotIn(self.LS + "/ActiveLog/Entries", ctx.gets)
+        self.assertFalse([key for key in result["normalized"] if key.startswith("active|")])
+        self.assertIsNone(result["raw"][self.LS + "/ActiveLog"])  # asked, absent
+        # the platform log's own service answering 404 is a failed read, never emptiness
+        payloads = self._payloads()
+        del payloads[self.LS + "/PlatformLog"]
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_event_log(_FakeCtx(payloads))
+
+    def test_expand_refused_or_ignored_falls_back_and_other_failures_propagate(self):
+        ctx = _FakeCtx(self._payloads(), errors={self.LS + EXPAND: 501})
+        context = checks._collect_event_log(ctx)["context"]
+        self.assertEqual(context["log_services_strategy"], "members")
+        self.assertEqual(context["log_services_expand_refused"], "HTTP 501")
+        payloads = self._payloads()
+        payloads[self.LS + EXPAND] = payloads[self.LS]  # members come back as bare links
+        context = checks._collect_event_log(_FakeCtx(payloads))["context"]
+        self.assertEqual(context["log_services_expand_refused"], "members returned as links")
+        self.assertEqual(context["active_log"]["entries_total"], 2)
+
+        # a failure without an HTTP status (budget, fence, network) is never a fallback
+        class _Unreachable(_FakeCtx):
+            def get(self, path, redact=None, **kwargs):
+                if path.endswith("/LogServices" + EXPAND):
+                    self.gets.append(path)
+                    raise _FakeRedfishError("GET %s: connection reset" % (path,))
+                return super().get(path, redact=redact, **kwargs)
+
+        ctx = _Unreachable(self._payloads())
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_event_log(ctx)
+        self.assertEqual(ctx.gets[-1], self.LS + EXPAND)
+
+    def test_no_mapping_is_decided_before_any_member_read(self):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads[self.LS] = {
+            "Members": [{"@odata.id": self.LS + "/Sel"}, {"@odata.id": self.LS + "/Lclog"}]
+        }
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.SkipCheck):
+            checks._collect_event_log(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [self.LS + EXPAND, self.LS])
+
+    def test_a_lone_audit_log_is_never_taken_for_the_platform_log(self):
+        payloads = self._payloads()
+        payloads[self.LS] = {"Members": [{"@odata.id": self.LS + "/AuditLog"}]}
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_event_log(ctx)
+        self.assertIn("audit log, whose entries are never read", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if "AuditLog" in path])
+
+    def test_a_continuation_that_names_a_page_already_read_is_refused(self):
+        payloads = _base_payloads()
+        entries_path = self.LS + "/PlatformLog/Entries"
+        entries = payloads[entries_path]
+        second = dict(entries, Members=entries["Members"][5:])
+        entries["Members"] = entries["Members"][:5]
+        entries["Members@odata.nextLink"] = entries_path + "?$skip=5"
+        second["Members@odata.nextLink"] = entries_path  # back to the first page, forever
+        payloads[entries_path + "?$skip=5"] = second
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_event_log(_FakeCtx(payloads))
+        self.assertIn("names a page already read", str(caught.exception))
+
+    def test_every_log_page_is_redacted_before_raw(self):
+        payloads = self._payloads()
+        rows = payloads[self.LS + "/MaintenanceLog/Entries"]["Members"]
+        rows[-1]["Message"] = "UEFI firmware is updated to HYE140C by user alice."
+        rows[-1]["MessageArgs"] = ["HYE140C", "alice"]
+        result = checks._collect_event_log(_FakeCtx(payloads))
+        raw = json.dumps(result["raw"])
+        self.assertNotIn("alice", raw)
+        newest = result["raw"][self.LS + "/MaintenanceLog/Entries"]["Members"][0]
+        self.assertEqual(
+            newest["Message"], "UEFI firmware is updated to HYE140C by user ***scrubbed***."
+        )
+
+    def test_the_worst_case_walk_fits_the_budget_and_one_page_more_is_refused(self):
+        payloads = self._payloads()
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+
+        def paged(path, pages):
+            first = payloads[path]
+            for number in range(pages):
+                page = {"Members": first["Members"] if number == 0 else []}
+                if number + 1 < pages:
+                    page["Members@odata.nextLink"] = path + "?$skip=%d" % (number + 1,)
+                payloads[path if number == 0 else path + "?$skip=%d" % (number,)] = page
+
+        # every log pages: the platform log ten times, the two others three times each
+        paged(self.LS + "/PlatformLog/Entries", 10)
+        paged(self.LS + "/ActiveLog/Entries", 3)
+        paged(self.LS + "/MaintenanceLog/Entries", 3)
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_event_log(ctx)
+        self.assertEqual(len(ctx.gets), checks._BUDGET_EVENT_LOG)
+        self.assertEqual(result["context"]["pages"], 10)
+        self.assertEqual(result["context"]["maintenance_log"]["pages"], 3)
+        # one page more is refused before it is sent: complete or refused
+        paged(self.LS + "/MaintenanceLog/Entries", 4)
+        with self.assertRaises(_FakeRedfishError) as caught:
+            checks._collect_event_log(_FakeCtx(payloads))
+        self.assertIn("budget", str(caught.exception))
+
+
+class TestBios(unittest.TestCase):
+    def test_normalize_keys_every_attribute_verbatim(self):
+        bios = _fx("xcc_bios.json")
+        view = checks._normalize_bios(bios)
+        keyed = {key.split("|", 1)[1]: value for key, value in view.items() if "|" in key}
+        # every attribute but the two password-valued ones, each value verbatim
+        passwords = {"SystemSecurity_AdminPassword", "Q00001_Password"}
+        self.assertEqual(set(keyed), set(bios["Attributes"]) - passwords)
+        self.assertEqual(keyed, {name: bios["Attributes"][name] for name in keyed})
+        self.assertEqual(view["bios|Processors_HyperThreading"], "Enable")
+        # outside the retired token curation, now keyed like the rest
+        self.assertEqual(view["bios|Memory_MemoryMode"], "Independent")
+        self.assertEqual(view["bios|SystemInformation_SerialNumber"], "J3001ABC")
+        self.assertFalse([key for key in view if key.startswith("pending|")])
+        # an unset string attribute reads None, never ''
+        bios["Attributes"]["SystemInformation_AssetTag"] = ""
+        self.assertIsNone(checks._normalize_bios(bios)["bios|SystemInformation_AssetTag"])
+        # the scalar fields are always present, None where unserved
+        self.assertEqual(
+            {key: value for key, value in view.items() if "|" not in key},
+            {
+                "reset_to_defaults_pending": None,
+                "uefi_admin_password_set": None,
+                "uefi_power_on_password_set": None,
+            },
+        )
+
+    def test_collector_raw_keeps_the_curated_resource_whole(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_bios(ctx)
-        self.assertEqual(ctx.gets, RESOLVE + [SYS + "/Bios"])
+        self.assertEqual(ctx.gets, RESOLVE + [SYS + "/Bios"])  # no settings object linked
+        self.assertEqual(list(result["raw"]), [SYS + "/Bios"])
         raw = result["raw"][SYS + "/Bios"]
-        self.assertNotIn("Attributes", raw)
         self.assertNotIn("Actions", raw)
-        self.assertIn("Processors_HyperThreading", raw["attributes_selected"])
-        self.assertIn("Memory_MemoryMode=Independent", raw["attributes_other"])
-        self.assertNotIn("AdminPassword", raw["attributes_other"])
-        self.assertEqual(result["context"]["attributes_total"], 29)
-        self.assertEqual(result["context"]["attributes_selected"], len(result["normalized"]))
+        self.assertNotIn("@odata.etag", raw)
+        self.assertEqual(len(raw["Attributes"]), 29)
+        self.assertEqual(raw["Attributes"]["Memory_MemoryMode"], "Independent")
+        self.assertEqual(raw["Attributes"]["SystemSecurity_AdminPassword"], "")  # emptiness only
+        context = result["context"]
+        self.assertEqual(context["attributes_total"], 29)
+        self.assertEqual(context["password_attributes_dropped"], 2)
+        self.assertEqual(len(result["normalized"]), 27 + 3)
+        self.assertEqual(context["pending_total"], 0)
+        self.assertIsNone(context["settings_object"])
+        self.assertIsNone(context["settings_object_served"])
         self.assertEqual(
-            result["context"]["attribute_registry"], "BiosAttributeRegistryHYE134C-2.31"
+            context["attribute_registry"],
+            {
+                "id": "BiosAttributeRegistryHYE134C-2.31",
+                "name": "BiosAttributeRegistryHYE134C-2.31",
+                "version": None,
+            },
         )
 
     def test_collector_skip_on_404_and_fail_without_attributes(self):
@@ -1035,6 +2742,125 @@ class TestBios(unittest.TestCase):
         payloads[SYS + "/Bios"]["Attributes"] = {}
         with self.assertRaises(checks.CollectError):
             checks._collect_bios(_FakeCtx(payloads))
+
+
+class TestBiosPending(unittest.TestCase):
+    """The @Redfish.Settings object: settings armed for the next reset, fenced and optional."""
+
+    SETTINGS = SYS + "/Bios/Settings"
+
+    def _payloads(self, settings=None, link=None):
+        payloads = _base_payloads()
+        bios = payloads[SYS + "/Bios"]
+        bios["@Redfish.Settings"] = {
+            "@odata.type": "#Settings.v1_3_4.Settings",
+            "SettingsObject": {"@odata.id": link or self.SETTINGS},
+            "SupportedApplyTimes": ["OnReset", "AtMaintenanceWindowStart"],
+            "Time": "2026-09-05T17:47:47-05:00",
+            "Messages": [{"MessageId": "Base.1.12.Success"}],
+        }
+        bios["ResetBiosToDefaultsPending"] = True
+        bios["Oem"] = {
+            "Lenovo": {"IsUefiAdminPasswordSet": True, "IsUefiPowerOnPasswordSet": False}
+        }
+        if settings is not None:
+            payloads[self.SETTINGS] = settings
+        return payloads
+
+    def _changes_only(self):
+        """A settings object holding only the changes (the form other vendors serve)."""
+        return {
+            "@odata.id": self.SETTINGS,
+            "Attributes": {
+                "Processors_HyperThreading": "Disable",  # armed
+                "Processors_TurboMode": "Enable",  # equal to the current value: not pending
+                "Processors_NewKnob": 3,  # unknown to the current set: pending
+                "SystemSecurity_AdminPassword": "n3w-s3cret",  # never stored anywhere
+            },
+            "@Redfish.SettingsApplyTime": {"ApplyTime": "OnReset"},
+        }
+
+    def test_pending_is_only_what_differs_from_the_current_value(self):
+        ctx = _FakeCtx(self._payloads(self._changes_only()))
+        result = checks._collect_bios(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [SYS + "/Bios", self.SETTINGS])
+        self.assertIn((self.SETTINGS, "_scrub_payload"), ctx.redacted)
+        view = result["normalized"]
+        self.assertEqual(
+            {key: value for key, value in view.items() if key.startswith("pending|")},
+            {"pending|Processors_HyperThreading": "Disable", "pending|Processors_NewKnob": 3},
+        )
+        self.assertEqual(view["bios|Processors_HyperThreading"], "Enable")  # not applied yet
+        self.assertIs(view["reset_to_defaults_pending"], True)
+        context = result["context"]
+        self.assertEqual(context["pending_total"], 2)
+        self.assertEqual(context["settings_object"], self.SETTINGS)
+        self.assertIs(context["settings_object_served"], True)
+        self.assertEqual(context["settings_object_attributes"], 4)
+        self.assertEqual(context["settings_apply_time"], "2026-09-05T17:47:47-05:00")
+        self.assertEqual(context["supported_apply_times"], ["AtMaintenanceWindowStart", "OnReset"])
+        self.assertEqual(context["settings_messages"], ["Base.1.12.Success"])
+        self.assertEqual(context["pending_apply_time"], "OnReset")
+        # the armed password reaches neither normalized, context nor raw
+        self.assertNotIn("n3w-s3cret", json.dumps(result))
+        settings_raw = result["raw"][self.SETTINGS]
+        self.assertEqual(
+            settings_raw["Attributes"]["SystemSecurity_AdminPassword"], checks._SCRUBBED
+        )
+
+    def test_a_whole_set_equal_to_the_current_one_is_an_empty_pending_family(self):
+        whole = {"@odata.id": self.SETTINGS, "Attributes": dict(_fx("xcc_bios.json")["Attributes"])}
+        result = checks._collect_bios(_FakeCtx(self._payloads(whole)))
+        self.assertFalse([key for key in result["normalized"] if key.startswith("pending|")])
+        self.assertEqual(result["context"]["settings_object_attributes"], 29)
+        self.assertEqual(result["context"]["pending_total"], 0)
+
+    def test_uefi_password_flags_are_booleans_that_survive_the_scrub(self):
+        result = checks._collect_bios(_FakeCtx(self._payloads(self._changes_only())))
+        self.assertIs(result["normalized"]["uefi_admin_password_set"], True)
+        self.assertIs(result["normalized"]["uefi_power_on_password_set"], False)
+        self.assertEqual(
+            result["raw"][SYS + "/Bios"]["Oem"]["Lenovo"],
+            {"IsUefiAdminPasswordSet": True, "IsUefiPowerOnPasswordSet": False},
+        )
+
+    def test_a_settings_object_that_answers_404_is_no_pending_set(self):
+        ctx = _FakeCtx(self._payloads())  # linked, but never served
+        result = checks._collect_bios(ctx)
+        self.assertIn(self.SETTINGS, ctx.gets)
+        self.assertFalse([key for key in result["normalized"] if key.startswith("pending|")])
+        self.assertIs(result["context"]["settings_object_served"], False)
+        self.assertIsNone(result["context"]["settings_object_attributes"])
+        self.assertIsNone(result["raw"][self.SETTINGS])  # asked, absent
+
+    def test_a_settings_object_error_is_a_failed_read(self):
+        ctx = _FakeCtx(self._payloads(self._changes_only()), errors={self.SETTINGS: 500})
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_bios(ctx)
+
+    def test_the_settings_link_is_fenced_before_it_is_followed(self):
+        link = SYS + "/Bios/Actions/Bios.ChangePassword"
+        ctx = _FakeCtx(self._payloads(link=link))
+        with self.assertRaises(checks.CollectError):
+            checks._collect_bios(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [SYS + "/Bios"])
+
+    def test_registry_name_and_version(self):
+        self.assertEqual(
+            checks._bios_registry("BiosAttributeRegistry.1.0.0"),
+            {
+                "id": "BiosAttributeRegistry.1.0.0",
+                "name": "BiosAttributeRegistry",
+                "version": "1.0.0",
+            },
+        )
+        self.assertEqual(
+            checks._bios_registry("BiosAttributeRegistryHYE134C-2.31")["version"], None
+        )
+        for unserved in (None, "", "  "):
+            self.assertEqual(
+                checks._bios_registry(unserved), {"id": None, "name": None, "version": None}
+            )
 
 
 class TestStorage(unittest.TestCase):
@@ -1057,6 +2883,24 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(view["volume|0"]["raid_type"], "RAID1")
         self.assertIs(view["volume|0"]["encrypted"], False)
         self.assertEqual(view["volume|0"]["drives"], ["Disk.0", "Disk.1"])
+        # DMTF leaves served by this hand-built set; the Lenovo ones are not: present, None
+        controller = view["controller|RAID_Slot1"]
+        self.assertEqual(controller["supported_raid_levels"], ["RAID1"])
+        self.assertIsNone(controller["cache_size_mib"])
+        self.assertIsNone(controller["battery_operational_status"])
+        self.assertIsNone(controller["mode"])
+        self.assertEqual(context["controller_source"], {"RAID_Slot1": "StorageControllers"})
+        self.assertEqual(context["raid_levels_source"], {"RAID_Slot1": "SupportedRAIDTypes"})
+        self.assertEqual(context["battery"], {})
+        drive = view["drive|Disk.0"]
+        self.assertEqual((drive["block_size_bytes"], drive["negotiated_speed_gbs"]), (512, 6.0))
+        self.assertEqual(drive["hotspare_type"], "None")  # the served word, verbatim
+        self.assertIsNone(drive["write_cache_enabled"])
+        self.assertIsNone(drive["drive_status"])
+        self.assertIsNone(context["drive_temperature_c"]["drive|Disk.0"])
+        volume = view["volume|0"]
+        for field in ("read_cache_policy", "strip_size_bytes", "raid_level", "io_policy"):
+            self.assertIsNone(volume[field], field)
 
     def test_duplicate_drive_ids_across_controllers_are_prefixed(self):
         controllers = [{"Id": "A"}, {"Id": "B"}]
@@ -1076,12 +2920,19 @@ class TestStorage(unittest.TestCase):
                 SYS + "/Storage/RAID_Slot1/Drives/Disk.0",
                 SYS + "/Storage/RAID_Slot1/Drives/Disk.1",
                 SYS + "/Storage/RAID_Slot1/Volumes" + EXPAND,
+                CH,  # its Drives links (none here); the read bmc_chassis shares
             ],
         )
         self.assertEqual(result["context"]["strategy"], "expand")
         self.assertEqual(result["context"]["drives_total"], 2)
         self.assertEqual(result["context"]["volumes_total"], 1)
+        self.assertEqual(result["context"]["controllers_collection"], {})
+        self.assertEqual(
+            result["context"]["chassis_drives"],
+            {"source": None, "strategy": None, "members": 0, "unlisted": 0},
+        )
         self.assertNotIn("Actions", result["raw"][SYS + "/Storage/RAID_Slot1/Drives/Disk.0"])
+        self.assertNotIn(CH, result["raw"])  # bmc_chassis keeps the Chassis
 
     def test_collector_walk(self):
         ctx = _FakeCtx(_without_expand(_base_payloads()))
@@ -1114,6 +2965,206 @@ class TestStorage(unittest.TestCase):
         self.assertFalse([path for path in ctx.gets if "Actions" in path])
 
 
+class TestStorageWidened(unittest.TestCase):
+    """Controller cache/battery/RAID modes, drive and volume policies, the Controllers
+    collection, the Chassis's own drive list and the capped SMART text."""
+
+    RAID = SYS + "/Storage/RAID_Slot3"
+
+    def _payloads(self):
+        """A Lenovo RAID adapter (hand-built from Lenovo's schema) in place of the M.2 kit."""
+        payloads = _base_payloads()
+        payloads[SYS + "/Storage" + EXPAND] = _fx("xcc_storage_raid_lenovo_expanded.json")
+        plain, members = _split_collection(payloads[SYS + "/Storage" + EXPAND])
+        payloads[SYS + "/Storage"] = plain
+        payloads.update(members)
+        for index in (0, 1):
+            payloads[self.RAID + "/Drives/Disk.%d" % index] = _fx(
+                "xcc_storage_raid_lenovo_drive_%d.json" % index
+            )
+        volumes = _fx("xcc_storage_raid_lenovo_volumes_expanded.json")
+        payloads[self.RAID + "/Volumes" + EXPAND] = volumes
+        plain, members = _split_collection(volumes)
+        payloads[self.RAID + "/Volumes"] = plain
+        payloads.update(members)
+        return payloads
+
+    def test_lenovo_controller_drive_and_volume_leaves(self):
+        result = checks._collect_storage(_FakeCtx(self._payloads()))
+        view, context = result["normalized"], result["context"]
+        controller = view["controller|RAID_Slot3"]
+        self.assertEqual(controller["cache_size_mib"], 2048)
+        self.assertEqual(controller["battery_operational_status"], "Optimal")
+        # Lenovo's one-string SupportedRaidLevels: its comma-separated parts, sorted
+        self.assertEqual(
+            controller["supported_raid_levels"], ["RAID 0", "RAID 1", "RAID 10", "RAID 5"]
+        )
+        self.assertEqual(controller["mode"], "RAID")
+        self.assertEqual(
+            context["raid_levels_source"], {"RAID_Slot3": "Oem.Lenovo.SupportedRaidLevels"}
+        )
+        self.assertEqual(
+            context["battery"]["controller|RAID_Slot3"],
+            {
+                "design_capacity": "3500 J",
+                "full_charge_capacity": "3300 J",
+                "remaining_capacity": "3100 J",
+                "design_voltage_mv": 9500,
+                "voltage_mv": 9420,
+                "current_ma": 0,
+                "temperature_c": 31,
+            },
+        )
+        drive = view["drive|Disk.0"]
+        self.assertEqual(
+            {
+                field: drive[field]
+                for field in (
+                    "negotiated_speed_gbs",
+                    "rotation_rpm",
+                    "block_size_bytes",
+                    "hotspare_type",
+                    "write_cache_enabled",
+                    "drive_status",
+                )
+            },
+            {
+                "negotiated_speed_gbs": 6.0,
+                "rotation_rpm": 0,
+                "block_size_bytes": 512,
+                "hotspare_type": "None",
+                "write_cache_enabled": False,
+                "drive_status": "Online",
+            },
+        )
+        self.assertEqual(context["drive_temperature_c"], {"drive|Disk.0": 34, "drive|Disk.1": 35})
+        volume = view["volume|1"]
+        self.assertEqual(
+            {field: volume[field] for field in sorted(volume) if field not in ("name", "drives")},
+            {
+                "access_policy": "ReadWrite",
+                "bootable": True,
+                "capacity_bytes": 959656755200,
+                "drive_cache_policy": "Disable",
+                "encrypted": False,
+                "health": "OK",
+                "io_policy": "DirectIO",
+                "is_boot_capable": True,
+                "raid_level": "RAID 1",
+                "raid_type": "RAID1",
+                "read_cache_policy": "ReadAhead",
+                "state": "Enabled",
+                "strip_size_bytes": 262144,
+                "write_cache_policy": "ProtectedWriteBack",
+            },
+        )
+
+    def test_smart_data_is_raw_only_and_capped(self):
+        result = checks._collect_storage(_FakeCtx(self._payloads()))
+        self.assertNotIn("smart", json.dumps(result["normalized"]).lower())
+        self.assertNotIn("smart", json.dumps(result["context"]).lower())
+        lenovo = result["raw"][self.RAID + "/Drives/Disk.0"]["Oem"]["Lenovo"]
+        self.assertTrue(lenovo["SMARTData"].endswith("...[truncated 1024 chars]"))
+        self.assertEqual(len(lenovo["SMARTData"]), checks._STORAGE_SMART_CAP + 25)
+        short = result["raw"][self.RAID + "/Drives/Disk.1"]["Oem"]["Lenovo"]["SMARTData"]
+        self.assertEqual(short, "AAEC")  # under the cap: kept whole
+        self.assertNotIn("Actions", result["raw"][self.RAID + "/Drives/Disk.0"])
+
+    def test_the_controllers_collection_is_preferred_and_named(self):
+        payloads = self._payloads()
+        storage = payloads[SYS + "/Storage" + EXPAND]["Members"][0]
+        storage["Controllers"] = {"@odata.id": self.RAID + "/Controllers"}
+        modern = dict(
+            storage["StorageControllers"][0],
+            **{"@odata.id": self.RAID + "/Controllers/0", "Id": "0", "FirmwareVersion": "52.1"},
+        )
+        payloads[self.RAID + "/Controllers" + EXPAND] = {"Members": [modern]}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_storage(ctx)
+        self.assertEqual(result["normalized"]["controller|RAID_Slot3"]["firmware"], "52.1")
+        self.assertEqual(result["context"]["controller_source"], {"RAID_Slot3": "Controllers"})
+        self.assertEqual(
+            result["context"]["controllers_collection"],
+            {"RAID_Slot3": {"strategy": "expand", "members": 1}},
+        )
+        self.assertIn(self.RAID + "/Controllers" + EXPAND, ctx.gets)
+        # an empty Controllers collection leaves the deprecated array in charge
+        payloads[self.RAID + "/Controllers" + EXPAND] = {"Members": []}
+        result = checks._collect_storage(_FakeCtx(payloads))
+        self.assertEqual(result["normalized"]["controller|RAID_Slot3"]["firmware"], "50.9.1-3639")
+        self.assertEqual(
+            result["context"]["controller_source"], {"RAID_Slot3": "StorageControllers"}
+        )
+
+    def test_the_expand_refusal_is_remembered_for_every_sub_collection(self):
+        payloads = self._payloads()
+        storage = payloads[SYS + "/Storage" + EXPAND]["Members"][0]
+        storage["Controllers"] = {"@odata.id": self.RAID + "/Controllers"}
+        payloads[self.RAID + "/Controllers"] = {"Members": []}
+        payloads[CH]["Drives"] = {"@odata.id": CH + "/Drives"}
+        payloads[CH + "/Drives"] = {"Members": []}
+        # The Storage collection refuses: nothing below it tries $expand.
+        ctx = _FakeCtx(payloads, errors={SYS + "/Storage" + EXPAND: 501})
+        checks._collect_storage(ctx)
+        self.assertEqual([path for path in ctx.gets if "?" in path], [SYS + "/Storage" + EXPAND])
+        # The Controllers collection refuses after it: the Volumes and the Chassis drives
+        # are read plain.
+        ctx = _FakeCtx(payloads, errors={self.RAID + "/Controllers" + EXPAND: 501})
+        result = checks._collect_storage(ctx)
+        self.assertEqual(
+            [path for path in ctx.gets if "?" in path],
+            [SYS + "/Storage" + EXPAND, self.RAID + "/Controllers" + EXPAND],
+        )
+        self.assertIn(self.RAID + "/Volumes", ctx.gets)
+        self.assertEqual(result["context"]["chassis_drives"]["strategy"], "members")
+
+    def test_drives_only_the_chassis_lists_are_keyed_and_listed_ones_never_twice(self):
+        payloads = self._payloads()
+        payloads[CH]["Drives"] = {"@odata.id": CH + "/Drives"}
+        listed = copy.deepcopy(payloads[self.RAID + "/Drives/Disk.0"])
+        same_serial = dict(listed, **{"@odata.id": CH + "/Drives/Bay0", "Id": "Bay0"})
+        nvme = {
+            "@odata.id": CH + "/Drives/Disk.1",  # an id that clashes with a listed drive's
+            "Id": "Disk.1",
+            "SerialNumber": "NVME0000001",
+            "MediaType": "SSD",
+            "Protocol": "NVMe",
+            "Status": {"State": "Enabled", "Health": "OK"},
+        }
+        payloads[CH + "/Drives" + EXPAND] = {"Members": [listed, same_serial, nvme]}
+        result = checks._collect_storage(_FakeCtx(payloads))
+        drives = sorted(key for key in result["normalized"] if key.startswith("drive|"))
+        # the clashing id is prefixed on both sides; the listed drive and its serial twin
+        # are one drive, keyed once
+        self.assertEqual(
+            drives, ["drive|Disk.0", "drive|RAID_Slot3|Disk.1", "drive|chassis|Disk.1"]
+        )
+        self.assertEqual(result["normalized"]["drive|chassis|Disk.1"]["protocol"], "NVMe")
+        self.assertEqual(
+            result["context"]["chassis_drives"],
+            {"source": "Drives", "strategy": "expand", "members": 3, "unlisted": 1},
+        )
+        self.assertEqual(result["context"]["drives_total"], 3)
+
+    def test_the_chassis_links_array_reads_only_unlisted_drives(self):
+        payloads = self._payloads()
+        extra = CH + "/Drives/NVMe.0"
+        payloads[CH]["Links"]["Drives"] = [
+            {"@odata.id": self.RAID + "/Drives/Disk.0"},
+            {"@odata.id": extra},
+        ]
+        payloads[extra] = {"@odata.id": extra, "Id": "NVMe.0", "Protocol": "NVMe"}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_storage(ctx)
+        self.assertEqual(ctx.gets.count(self.RAID + "/Drives/Disk.0"), 1)  # never re-read
+        self.assertEqual(ctx.gets[-1], extra)
+        self.assertIn("drive|NVMe.0", result["normalized"])
+        self.assertEqual(
+            result["context"]["chassis_drives"],
+            {"source": "Links.Drives", "strategy": "members", "members": 2, "unlisted": 1},
+        )
+
+
 class TestManagerNetwork(unittest.TestCase):
     def test_normalize(self):
         view = checks._normalize_manager_network(
@@ -1137,6 +3188,43 @@ class TestManagerNetwork(unittest.TestCase):
         self.assertEqual(view["mtu"], 1500)
         self.assertIsNone(view["vlan_id"])
         self.assertNotIn("speed_mbps", view)
+        self.assertIsNone(view["ipv6_gateway"])  # '::' is the unset placeholder, no gateway
+        # every widened key is present, None where its resource was not given
+        for key in (
+            "nic_mode",
+            "failover_mode",
+            "ipv4_assigned_by",
+            "domain_name",
+            "hostname_from_dhcp",
+            "dns_enabled",
+            "dns_preferred_family",
+            "dns_configured_servers",
+            "ddns",
+            "lxca_discovery_enabled",
+            "time_setting_method",
+            "time_ntp_servers",
+            "utc_offset",
+            "auto_dst",
+            "ntp_sync_interval_min",
+            "host_interface_enabled",
+            "host_interface_externally_accessible",
+            "credential_bootstrapping_enabled",
+            "credential_bootstrapping_role",
+            "credential_bootstrapping_enable_after_reset",
+            "cimoverhttps_enabled",
+            "cimoverhttps_port",
+            "slp_enabled",
+            "slp_port",
+            "sftp_enabled",
+            "sftp_port",
+            "webhttps_enabled",
+            "open_ports",
+            "snmpv3_agent_enabled",
+            "snmp_traps_enabled",
+            "kcs_enabled",
+        ):
+            self.assertIn(key, view)
+            self.assertIsNone(view[key], key)
 
     def test_normalize_without_nic(self):
         view = checks._normalize_manager_network(_fx("xcc_network_protocol.json"), None)
@@ -1147,15 +3235,318 @@ class TestManagerNetwork(unittest.TestCase):
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_manager_network(ctx)
+        # the Manager (shared with bmc_system) carries the time and the Lenovo links; the
+        # hand-built one links no DateTimeService or HostInterfaces, and the hand-built
+        # protocol serves its DNS block inline, so nothing more is fetched
         self.assertEqual(
-            ctx.gets, RESOLVE + [MGR + "/NetworkProtocol", MGR + "/EthernetInterfaces/NIC"]
+            ctx.gets, RESOLVE + [MGR + "/NetworkProtocol", MGR, MGR + "/EthernetInterfaces/NIC"]
         )
         self.assertEqual(result["context"]["snmp_source"], "SNMP.ProtocolEnabled")
+        view = result["normalized"]
+        self.assertIs(view["dns_enabled"], True)
+        self.assertEqual(view["dns_preferred_family"], "IPv4")  # spelled PreferredAddressType
+        self.assertIsNone(view["dns_configured_servers"])  # no IPv4Address1-3 slot served
+        self.assertEqual(
+            result["context"]["dns_source"], MGR + "/NetworkProtocol Oem.Lenovo.DNS (inline)"
+        )
+        self.assertIsNone(result["context"]["host_interfaces"])
+        self.assertIsNone(result["context"]["os_ipv4_address"])
+        self.assertEqual(result["context"]["bmc_datetime"], "2026-09-24T14:02:11+00:00")
+        self.assertEqual(result["context"]["bmc_datetime_offset"], "+00:00")
+        self.assertIsNone(result["context"]["time_zone_name"])
+        self.assertIn(MGR, result["raw"])
+        self.assertNotIn("Actions", result["raw"][MGR])
         self.assertEqual(result["context"]["manager_nic"]["member"], "NIC")
         self.assertEqual(result["context"]["nic_speed_mbps"], 1000)
         self.assertEqual(result["context"]["nic_link_status"], "LinkUp")
         self.assertIn(MGR + "/EthernetInterfaces/NIC", result["raw"])
         self.assertNotIn("Actions", result["raw"][MGR + "/NetworkProtocol"])
+
+
+class TestManagerNetworkWidened(unittest.TestCase):
+    """bmc_manager_network's Lenovo port, DNS, time and service leaves and the host interface,
+    in the populated shapes the lab unit lacks (configured DNS servers and DDNS, bootstrapping
+    off, several host interfaces, a shared port)."""
+
+    NP = MGR + "/NetworkProtocol"
+    DNS = NP + "/Oem/Lenovo/DNS"
+    SNMP = NP + "/Oem/Lenovo/SNMP"
+    TIME = MGR + "/Oem/Lenovo/DateTimeService"
+    HOSTS = MGR + "/HostInterfaces"
+    NIC = MGR + "/EthernetInterfaces/NIC"
+    TOHOST = MGR + "/EthernetInterfaces/ToHost"
+
+    def _host_interface(self, member_id, enabled, bootstrapping):
+        return {
+            "@odata.id": self.HOSTS + "/" + member_id,
+            "Id": member_id,
+            "HostInterfaceType": "NetworkHostInterface",
+            "InterfaceEnabled": enabled,
+            "ExternallyAccessible": False,
+            "CredentialBootstrapping": bootstrapping,
+            "ManagerEthernetInterface": {"@odata.id": self.TOHOST},
+        }
+
+    def _payloads(self, expand=True):
+        payloads = _base_payloads()
+        payloads[self.NP]["Oem"]["Lenovo"] = {
+            "DNS": {"@odata.id": self.DNS},
+            "SNMP": {"@odata.id": self.SNMP},
+            "CimOverHTTPS": {"ProtocolEnabled": True, "Port": 5989, "BackendEnabled": False},
+            "SLP": {"ProtocolEnabled": False, "Port": 427, "AddressType": "Multicast"},
+            "SFTP": {"ProtocolEnabled": True, "Port": 115},
+            "WebOverHTTPS": {"ProtocolEnabled": True},
+            "OpenPorts": ["443", "22", "5989", "22", "n/a"],
+        }
+        payloads[self.DNS] = {
+            "@odata.id": self.DNS,
+            "DNSEnable": True,
+            "PreferredAddresstype": "IPv6",
+            "IPv4Address1": "198.51.100.53",
+            "IPv4Address2": "0.0.0.0",
+            "IPv4Address3": "198.51.100.54",
+            "IPv6Address1": "::",
+            "IPv6Address2": "2001:db8::53",
+            "IPv6Address3": "::",
+            "DDNS": [
+                {"DDNSEnable": True, "DomainNameSource": "Custom", "DomainName": "example.net"}
+            ],
+            "LXCADNSDiscovery": {"DiscoverLXCAEnabled": True, "XClarityManagerList": []},
+        }
+        payloads[self.SNMP] = {
+            "@odata.id": self.SNMP,
+            "CommunityNames": ["not-a-real-community"],
+            "SNMPv3Agent": {"ProtocolEnabled": True, "Port": 161, "ContactPerson": "Jane Roe"},
+            "SNMPTraps": {"ProtocolEnabled": True, "Port": 162},
+        }
+        manager = payloads[MGR]
+        manager["Oem"]["Lenovo"].update(
+            {"DateTimeService": {"@odata.id": self.TIME}, "KCSEnabled": True}
+        )
+        manager["HostInterfaces"] = {"@odata.id": self.HOSTS}
+        manager["TimeZoneName"] = "America/Chicago"
+        payloads[self.TIME] = {
+            "@odata.id": self.TIME,
+            "SettingMethod": "SyncwithNTP",
+            "NTPServerAddresses": ["203.0.113.123", "", "203.0.113.124", ""],
+            "UTCOffset": "+0:00",
+            "AutoDST": False,
+            "Frequency": 80,
+            "HostTimeFormat": "UTC",
+            "Actions": {"#LenovoDateTimeService.ImmediatelySync": {"target": self.TIME + "/x"}},
+        }
+        hosts = {
+            "@odata.id": self.HOSTS,
+            "Members": [
+                self._host_interface("2", False, {"Enabled": True, "RoleId": "Administrator"}),
+                self._host_interface(
+                    "1", True, {"Enabled": False, "EnableAfterReset": False, "RoleId": "ReadOnly"}
+                ),
+            ],
+        }
+        if expand:
+            payloads[self.HOSTS + EXPAND] = hosts
+        plain, members = _split_collection(hosts)
+        payloads[self.HOSTS] = plain
+        payloads.update(members)
+        payloads[self.TOHOST] = dict(
+            payloads[self.TOHOST],
+            Oem={"Lenovo": {"OSIPv4Address": "198.18.0.10", "AddressMode": "IPv6LLA"}},
+        )
+        nic = payloads[self.NIC]
+        nic["Oem"] = {
+            "Lenovo": {
+                "InterfaceNicMode": "Shared",
+                "InterfaceFailoverMode": "Failover",
+                "IPv4AddressAssignedby": "Static",
+                "DomainName": "example.net",
+                "HostNameFromDHCPEnabled": False,
+            }
+        }
+        nic["IPv6DefaultGateway"] = "2001:db8::1"
+        return payloads
+
+    def test_every_leaf_is_read_from_its_resource(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_manager_network(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [self.NP, MGR, self.SNMP, self.DNS, self.TIME, self.HOSTS + EXPAND]
+            + [self.NIC, self.TOHOST],
+        )
+        expected = {
+            "nic_mode": "Shared",
+            "failover_mode": "Failover",
+            "ipv4_assigned_by": "Static",
+            "domain_name": "example.net",
+            "hostname_from_dhcp": False,
+            "ipv6_gateway": "2001:db8::1",
+            "dns_enabled": True,
+            "dns_preferred_family": "IPv6",
+            "dns_configured_servers": ["198.51.100.53", "198.51.100.54", "2001:db8::53"],
+            "ddns": [
+                {"enabled": True, "domain_name_source": "Custom", "domain_name": "example.net"}
+            ],
+            "lxca_discovery_enabled": True,
+            "time_setting_method": "SyncwithNTP",
+            "time_ntp_servers": ["203.0.113.123", "203.0.113.124"],
+            "utc_offset": "+0:00",
+            "auto_dst": False,
+            "ntp_sync_interval_min": 80,
+            # the lowest host interface id is described, whatever the served order
+            "host_interface_enabled": True,
+            "host_interface_externally_accessible": False,
+            "credential_bootstrapping_enabled": False,
+            "credential_bootstrapping_role": "ReadOnly",
+            "credential_bootstrapping_enable_after_reset": False,
+            # the BMC side of the host interface: its USB LAN (ToHost), as served
+            "host_interface_address": "169.254.95.118",
+            "host_interface_address_mode": "IPv6LLA",
+            "cimoverhttps_enabled": True,
+            "cimoverhttps_port": 5989,
+            "slp_enabled": False,
+            "slp_port": 427,
+            "sftp_enabled": True,
+            "sftp_port": 115,
+            "webhttps_enabled": True,
+            "open_ports": [22, 443, 5989],  # served as strings, duplicates and junk dropped
+            "snmpv3_agent_enabled": True,
+            "snmp_traps_enabled": True,
+            "kcs_enabled": True,
+        }
+        self.assertEqual({key: view[key] for key in expected}, expected)
+        # every key the check had before is kept, the DMTF SNMP block still first
+        self.assertEqual(view["ipv4_address"], "192.0.2.21")
+        self.assertIs(view["snmp_enabled"], True)
+        self.assertEqual(context["snmp_source"], "SNMP.ProtocolEnabled")
+        self.assertEqual(context["host_interfaces"]["members"], ["1", "2"])
+        self.assertEqual(context["host_interfaces"]["used"], "1")
+        self.assertEqual(context["host_interfaces"]["strategy"], "expand")
+        self.assertEqual(
+            (context["os_ipv4_address"], context["os_ipv4_address_member"]),
+            ("198.18.0.10", "ToHost"),
+        )
+        self.assertEqual(context["host_interface_usb_lan_member"], "ToHost")
+        self.assertEqual(context["time_zone_name"], "America/Chicago")
+        self.assertEqual(context["dns_source"], self.DNS)
+        for path in (self.NP, MGR, self.SNMP, self.DNS, self.TIME, self.HOSTS + EXPAND):
+            self.assertIn(path, result["raw"])
+        self.assertIn(self.TOHOST, result["raw"])
+        self.assertNotIn("Actions", result["raw"][self.TIME])
+        # the community and the SNMP contact never reach raw
+        raw = json.dumps(result["raw"])
+        self.assertNotIn("not-a-real-community", raw)
+        self.assertNotIn("Jane", raw)
+
+    def test_an_address_on_the_management_port_wins(self):
+        payloads = self._payloads()
+        payloads[self.NIC]["Oem"]["Lenovo"]["OSIPv4Address"] = "198.18.0.11"
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_manager_network(ctx)
+        context = result["context"]
+        self.assertEqual(
+            (context["os_ipv4_address"], context["os_ipv4_address_member"]), ("198.18.0.11", "NIC")
+        )
+        # the USB LAN is still read once, for the host interface's own address
+        self.assertEqual(ctx.gets.count(self.TOHOST), 1)
+        self.assertEqual(result["normalized"]["host_interface_address"], "169.254.95.118")
+
+    def test_a_host_interface_naming_the_management_port_costs_no_get(self):
+        payloads = self._payloads()
+        for member in ("1", "2"):
+            payloads[self.HOSTS + "/" + member]["ManagerEthernetInterface"] = {
+                "@odata.id": self.NIC
+            }
+        payloads[self.HOSTS + EXPAND] = dict(
+            payloads[self.HOSTS + EXPAND],
+            Members=[payloads[self.HOSTS + "/2"], payloads[self.HOSTS + "/1"]],
+        )
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_manager_network(ctx)
+        self.assertNotIn(self.TOHOST, ctx.gets)
+        self.assertEqual(result["context"]["host_interface_usb_lan_member"], "NIC")
+        self.assertEqual(result["normalized"]["host_interface_address"], "192.0.2.21")
+        # an unset 0.0.0.0 USB LAN address is no address
+        payloads = self._payloads()
+        payloads[self.TOHOST]["IPv4Addresses"] = [{"Address": "0.0.0.0"}]
+        result = checks._collect_manager_network(_FakeCtx(payloads))
+        self.assertIsNone(result["normalized"]["host_interface_address"])
+
+    def test_other_vendors_read_the_host_interface_and_no_lenovo_resource(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        for path in (self.NIC, self.TOHOST):
+            payloads[path] = {key: value for key, value in payloads[path].items() if key != "Oem"}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_manager_network(ctx)
+        self.assertFalse([path for path in ctx.gets if "/Oem/Lenovo" in path])
+        self.assertIn(self.HOSTS + EXPAND, ctx.gets)  # the host interface is DMTF ...
+        self.assertIn(self.TOHOST, ctx.gets)  # ... and so is the USB LAN it names
+        view = result["normalized"]
+        self.assertEqual(view["credential_bootstrapping_role"], "ReadOnly")
+        self.assertEqual(view["host_interface_address"], "169.254.95.118")
+        self.assertIsNone(view["host_interface_address_mode"])  # a Lenovo leaf
+        for key in (
+            "dns_enabled",
+            "dns_configured_servers",
+            "ddns",
+            "time_setting_method",
+            "time_ntp_servers",
+            "ntp_sync_interval_min",
+            "snmpv3_agent_enabled",
+            "snmp_traps_enabled",
+        ):
+            self.assertIsNone(view[key], key)
+        self.assertIsNone(result["context"]["os_ipv4_address"])
+        self.assertIsNone(result["context"]["dns_source"])
+
+    def test_host_interfaces_walked_or_absent(self):
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_manager_network(ctx)
+        self.assertEqual(result["context"]["host_interfaces"]["strategy"], "members")
+        self.assertEqual(result["normalized"]["credential_bootstrapping_role"], "ReadOnly")
+        # a linked collection that answers 404 describes no interface, and says so
+        payloads = self._payloads(expand=False)
+        del payloads[self.HOSTS]
+        result = checks._collect_manager_network(_FakeCtx(payloads))
+        self.assertEqual(result["context"]["host_interfaces"]["strategy"], "absent")
+        self.assertIsNone(result["normalized"]["host_interface_enabled"])
+        self.assertIsNone(result["normalized"]["host_interface_address"])
+        self.assertIsNone(result["context"]["os_ipv4_address"])
+
+    def test_unserved_leaves_read_none_and_placeholders_are_no_addresses(self):
+        protocol, nic = _fx("xcc_network_protocol.json"), _fx("xcc_manager_nic.json")
+        # a DNS resource that serves only placeholder slots configures no server
+        dns = {"DNSEnable": False, "IPv4Address1": "0.0.0.0", "IPv6Address1": "::", "DDNS": []}
+        view = checks._normalize_manager_network(protocol, nic, dns=dns, datetime_service={})
+        self.assertEqual(view["dns_configured_servers"], [])
+        self.assertEqual(view["ddns"], [])
+        self.assertIsNone(view["dns_preferred_family"])
+        self.assertIsNone(view["time_ntp_servers"])  # the resource serves no server list
+        self.assertIsNone(view["ntp_sync_interval_min"])
+        self.assertIsNone(view["ipv6_gateway"])  # '::'
+        protocol["Oem"]["Lenovo"]["OpenPorts"] = []
+        self.assertEqual(checks._normalize_manager_network(protocol, nic)["open_ports"], [])
+
+    def test_the_worst_walk_fits_the_budget(self):
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        # no NIC member: the port is found through the collection
+        payloads[MGR + "/EthernetInterfaces/eth0"] = dict(payloads.pop(self.NIC), Id="eth0")
+        payloads[MGR + "/EthernetInterfaces"]["Members"] = [
+            {"@odata.id": self.TOHOST},
+            {"@odata.id": MGR + "/EthernetInterfaces/eth0"},
+        ]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_manager_network(ctx)
+        self.assertEqual(result["context"]["manager_nic"]["member"], "eth0")
+        self.assertEqual(result["normalized"]["nic_mode"], "Shared")
+        self.assertEqual(result["context"]["os_ipv4_address"], "198.18.0.10")
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_MANAGER_NETWORK)
 
 
 class TestChassisLocation(unittest.TestCase):
@@ -1173,6 +3564,9 @@ class TestChassisLocation(unittest.TestCase):
         self.assertEqual(view["intrusion_sensor"], "Normal")
         self.assertEqual(view["intrusion_sensor_rearm"], "Automatic")
         self.assertIsNone(view["asset_tag"])
+        self.assertEqual(view["indicator_led"], "Off")
+        self.assertIsNone(view["location_indicator_active"])
+        self.assertIsNone(view["system_board_serial"])  # Lenovo leaves only when asked for
 
     def test_normalize_without_location_or_security(self):
         chassis = _fx("xcc_chassis.json")
@@ -1183,14 +3577,132 @@ class TestChassisLocation(unittest.TestCase):
         self.assertIsNone(view["intrusion_sensor"])
         self.assertFalse([key for key in view if key.startswith("postal_")])
 
+    def test_empty_postal_and_placement_fields_read_none(self):
+        chassis = _fx("xcc_chassis.json")
+        chassis["Location"]["PostalAddress"].update(Room="", Building="  ")
+        chassis["Location"]["Placement"]["Rack"] = ""
+        view = checks._normalize_chassis_location(chassis)
+        self.assertIsNone(view["postal_room"])
+        self.assertIsNone(view["postal_building"])
+        self.assertIsNone(view["placement_rack"])
+        self.assertEqual(view["placement_rack_offset"], 3)  # numbers stay numbers
+
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_chassis_location(ctx)
-        self.assertEqual(ctx.gets, RESOLVE + [CH])
+        # the hand-built chassis links its LED collection where nothing answers: absent
+        self.assertEqual(ctx.gets, RESOLVE + [CH, CH + "/LEDs" + EXPAND, CH + "/LEDs"])
         self.assertIs(result["context"]["location_present"], True)
         self.assertIs(result["context"]["physical_security_present"], True)
-        self.assertEqual(result["context"]["indicator_led"], "Off")
+        self.assertEqual(result["context"]["leds"]["strategy"], "absent")
+        self.assertEqual(result["normalized"]["indicator_led"], "Off")
+        self.assertFalse([key for key in result["normalized"] if key.startswith("led|")])
         self.assertNotIn("Actions", result["raw"][CH])
+
+
+class TestChassisLeds(unittest.TestCase):
+    """Lenovo's chassis LED collection as 'led|' rows, and the Lenovo identity scalars."""
+
+    LEDS = CH + "/Oem/Lenovo/LEDs"
+
+    def _payloads(self, expand=True):
+        payloads = _base_payloads()
+        chassis = payloads[CH]
+        chassis["Oem"]["Lenovo"].update(
+            LEDs={"@odata.id": self.LEDS},
+            SystemBoardSerialNumber="S1BD9X00001",
+            ProductName="ThinkSystem SE350",
+            FruPartNumber="01XX001",
+            HasSwitchBoard=False,
+        )
+        chassis.update(HeightMm=44.45, EnvironmentalClass="A4", LocationIndicatorActive=False)
+        expanded = _fx("xcc_chassis_leds_repeated_names.json")
+        if expand:
+            payloads[self.LEDS + EXPAND] = expanded
+        else:
+            plain, members = _split_collection(expanded)
+            payloads[self.LEDS] = plain
+            payloads.update(members)
+        return payloads
+
+    def test_keyed_by_name_with_the_id_only_when_a_name_repeats(self):
+        rows = checks._normalize_chassis_leds(
+            _fx("xcc_chassis_leds_repeated_names.json")["Members"]
+        )
+        self.assertEqual(
+            sorted(rows),
+            ["led|9", "led|Fan Fault|5", "led|Fan Fault|6", "led|Fault", "led|Identify"],
+        )
+        self.assertEqual(
+            rows["led|Fault"], {"color": "Yellow", "state": "On", "location": "Front Panel"}
+        )
+        self.assertEqual(rows["led|Fan Fault|6"]["location"], "Fan 2")
+        self.assertIsNone(rows["led|9"]["location"])  # '' reads None
+
+    def test_collector_reads_the_linked_collection_in_one_expand_get(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_chassis_location(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.LEDS + EXPAND])
+        self.assertEqual(len([key for key in view if key.startswith("led|")]), 5)
+        self.assertEqual(view["system_board_serial"], "S1BD9X00001")
+        self.assertEqual(view["product_name"], "ThinkSystem SE350")
+        self.assertEqual(view["fru_part_number"], "01XX001")
+        self.assertIs(view["has_switch_board"], False)
+        self.assertIs(view["location_indicator_active"], False)
+        self.assertEqual((context["height_mm"], context["environmental_class"]), (44.45, "A4"))
+        self.assertIsNone(context["weight_kg"])
+        self.assertEqual(
+            (context["leds"]["resource"], context["leds"]["strategy"], context["leds"]["members"]),
+            (self.LEDS, "expand", 5),
+        )
+        self.assertIn(self.LEDS + EXPAND, result["raw"])
+
+    def test_collector_walks_the_members_when_expand_is_not_honoured(self):
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_chassis_location(ctx)
+        self.assertEqual(result["context"]["leds"]["strategy"], "members")
+        self.assertEqual(len([key for key in result["normalized"] if key.startswith("led|")]), 5)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_CHASSIS)
+
+    def test_a_walk_the_budget_cannot_cover_is_refused_before_it_starts(self):
+        payloads = self._payloads(expand=False)
+        payloads[self.LEDS]["Members"] = [
+            {"@odata.id": self.LEDS + "/%d" % (n,)} for n in range(checks._BUDGET_CHASSIS)
+        ]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError):
+            checks._collect_chassis_location(ctx)
+        self.assertEqual(ctx.gets[-1], self.LEDS)  # no member was fetched
+
+    def test_other_vendors_get_no_led_read_and_no_lenovo_scalars(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_chassis_location(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [CH])
+        self.assertIsNone(result["normalized"]["system_board_serial"])
+        self.assertEqual(result["normalized"]["indicator_led"], "Off")  # DMTF: every vendor
+        self.assertIn("no Contoso mapping", result["context"]["leds"]["note"])
+
+    def test_a_led_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[CH]["Oem"]["Lenovo"]["LEDs"] = {"@odata.id": CH + "/Actions/Oem/LEDs"}
+        with self.assertRaises(checks.CollectError):
+            checks._collect_chassis_location(_FakeCtx(payloads))
+
+    def test_a_lit_fault_led_is_one_changed_row(self):
+        compare = registry.CHECKS["bmc_chassis"].compare
+        self.assertEqual(compare["mode"], "equality_set")
+        pre = checks._collect_chassis_location(_FakeCtx(self._payloads()))["normalized"]
+        post = checks._collect_chassis_location(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        post["led|Fan Fault|5"] = dict(post["led|Fan Fault|5"], state="On")
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [("led|Fan Fault|5", "state", "Off", "On")],
+        )
 
 
 class TestWholeFamily(unittest.TestCase):
@@ -1220,7 +3732,8 @@ class TestWholeFamily(unittest.TestCase):
         for check in registry.checks_for("bmc"):
             result = check.collector(ctx)
             self.assertTrue(result["normalized"], check.id)
-        self.assertLessEqual(len(ctx.gets), 61)
+        # PR B's widened family, every $expand refused: measured, kept tight on purpose
+        self.assertLessEqual(len(ctx.gets), 65)
 
 
 class TestResolution(unittest.TestCase):
@@ -1616,6 +4129,8 @@ class TestStorageWalkBudget(unittest.TestCase):
         self.assertEqual(
             [path for path in ctx.gets if path.endswith(EXPAND)], [SYS + "/Storage" + EXPAND]
         )
+        # resolution 5, the attempt, the collection, 4 members, 4 drives, 4 Volumes, the Chassis
+        self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 4 + 4 + 4 + 1)
         self.assertLessEqual(len(ctx.gets), checks._BUDGET_STORAGE)
 
 

@@ -600,6 +600,11 @@ collector through a real `CollectorContext` (Appendix C). What remains:
    check's compare mode; anything else is a normalizer fix (readings to
    context, volatile ids out of keys). Expect `bmc_event_log` context counts
    to grow only by what the BMC itself logs.
+   **State (2026-09-30):** for the PR A catalog, two real captures through
+   the dev stack 25 minutes apart diffed to nothing under
+   `tools/diff_snapshots.py` on all eleven checks that ran (`bmc_security`
+   not-present on both sides); each widening and new check is re-measured
+   the same way on the lab unit before it is reported done.
 
 ## 8. Tests
 
@@ -685,6 +690,17 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    host name, account, address and log name an invention) and pins what the
    family reads from them, one class per widening group of PR B.
 3. **PR B — widen the existing checks** (§5a) on the lab fixtures.
+   **State (2026-09-30):** built by four builders in parallel (one per check
+   group, each in its own worktree at the fixtures commit), merged, reviewed
+   adversarially and proven through the dev stack against the lab unit:
+   all twelve checks `success` (`bmc_security` now ok with nine
+   `security|` leaves and the key manager's two certificate counts), 48 GETs
+   in 50 s for the capture, the shakedown 11/12 ok (the event log's
+   "parsed but empty" is the healthy state), and the log's sequence numbers
+   unchanged across the run. `bmc_manager_network` is not split (§10a item
+   2); the boot-override trio stays in `bmc_system` until `bmc_boot` exists;
+   the capping and policy leaves stay in `bmc_power`'s context until
+   `bmc_power_policy` exists.
 4. **PR C — new checks** (§5b, `bmc_telemetry` optional), coverage-map
    section, prompt updates.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
@@ -774,7 +790,58 @@ Recorded as they were found, each with how it was resolved.
    and FAILS (fail-closed) until the `bmc_secrets_group` Relationship and a
    Secrets Group exist for it, or while the BMC is unreachable from the
    worker. Query production for such interfaces before deploying (the dry run
-   also names them per device).
+   also names them per device; the README's NFV compute section has the
+   query).
+10. **What PR B's builders found wrong in §4/§5a** (resolved as stated):
+    the lab security resource keys nine leaves, not eight (the eight came
+    from a positional flatten that dropped the empty encapsulation allowlist
+    and split the actions list); `EnableSELWrapping` sits on the SEL service,
+    not on the StandardLog (read from the SEL service first, the source
+    named in context); the MaintenanceLog also records hardware add/remove
+    rows with part serials (`EventGroupId` 1; firmware rows are 0), not only
+    firmware and configuration history; the §5a inventory row's
+    `PCIeDevices?$expand=.($levels=2)` does not add the functions (one
+    `$expand` GET per device, as §4a says); a top-level
+    `Processor.CurrentClockSpeedMHz` is not DMTF (the DMTF leaf is
+    `OperatingSpeedMHz`; XCC 6.10 serves only `Oem.Lenovo.CurrentClockSpeedMHz`,
+    now read); the Lenovo date-time service's `Frequency` is in minutes by its
+    own schema (keyed `ntp_sync_interval_min`); the host's OS address
+    (`OSIPv4Address`) sits on the USB-LAN `ToHost` interface, not on the
+    management port. Additions beyond §5a, all stable configuration served
+    on the lab unit or free of GETs, were kept: the BMC's own console services
+    and `front_panel_usb_port_enabled` in `bmc_system`, `has_switch_board`
+    and an LED's location in `bmc_chassis`, DIMM `bus_width_bits` (the only
+    ECC evidence where `ErrorCorrection` is not served), the volume's drive
+    cache policy. Unverifiable on the lab unit and coded from the schemas
+    with hand-built fixtures: every DMTF power-restore/delay/console leaf,
+    RAID depth, the Subsystem fallbacks, a populated ActiveLog, SR-IOV
+    virtual functions, a configured key manager.
+11. **An adversarially verified review of PR B** (reviewers for the catalog
+    against the lab walk and the vendor schemas, stability and hygiene, and
+    the budgets; each finding re-checked by a verifier) confirmed four
+    defects, all fixed before the commit: the key manager's last-poll time is
+    spelled `EKMS.EKMSLastPollingTime` by the lab's own
+    `LenovoSecureKeyLifecycle_v1` schema, which the time-like rule (anchored
+    at the start of the name) would have keyed — a diff on every pair once
+    polling runs; the rule now matches anywhere in the name and the
+    hand-built fixture uses the schema's names; Lenovo's `Serviceable` enum is
+    `Not Serviceable` / `ServiceableByLenovo` / `ServiceableByCustomer` (the
+    fixture's bare `Serviceable` was an invention), so both positive values now
+    read true and a `serviceable_by` field keeps who acts; §5a's
+    host-interface "address" was not captured (now `host_interface_address`
+    and `host_interface_address_mode`, read from the USB-LAN interface the
+    host interface names, for every vendor); and a listed PCIe device whose
+    function collection answered empty or 404 was recorded as a device
+    without functions (now unmeasured: the check refuses, as for an empty
+    family). From the review notes, also fixed: `pciefn` `enabled` no longer
+    infers a value from the state (null where unserved; `state` is its own
+    field); `bmc_inventory` remembers an `$expand` refusal across its
+    families as `bmc_storage` does, and an `$expand` form answering 404 beside
+    a served collection counts as a refusal (budget 28 + resolution; the lab
+    layout's worst walk is 23); `bmc_bios` has a spare GET; and the shakedown
+    reads an empty `bmc_event_log` as ok, saying why (the `empty-ok` tag),
+    instead of flagging the healthy state. Two findings were refuted by their
+    verifiers and left as built.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

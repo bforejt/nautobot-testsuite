@@ -1,0 +1,146 @@
+{
+  "@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/1",
+  "@odata.etag": "\"policy1\"",
+  "Id": "1",
+  "Name": "ComputerSystem",
+  "SystemType": "Physical",
+  "AssetTag": "",
+  "Manufacturer": "Lenovo",
+  "Model": "ThinkSystem SE350",
+  "SKU": "7Z46CTO1WW",
+  "SerialNumber": "J3001ABC",
+  "PartNumber": "SB27A55555",
+  "UUID": "3C7F1E2A-5B6C-4D8E-9F01-23456789ABCD",
+  "HostName": "se350-esxi-a",
+  "IndicatorLED": "Off",
+  "LocationIndicatorActive": false,
+  "PowerState": "On",
+  "BiosVersion": "HYE140C",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "PowerRestorePolicy": "LastState",
+  "PowerOnDelaySeconds": 30,
+  "PowerOffDelaySeconds": 0,
+  "PowerCycleDelaySeconds": 5.5,
+  "PowerMode": "BalancedPerformance",
+  "LastResetTime": "2026-09-28T06:14:02+00:00",
+  "BootProgress": {
+    "LastState": "OSRunning",
+    "LastStateTime": "2026-09-28T06:16:40+00:00",
+    "OemLastState": null
+  },
+  "HostWatchdogTimer": {
+    "FunctionEnabled": true,
+    "TimeoutAction": "ResetSystem",
+    "WarningAction": "DiagnosticInterrupt",
+    "Status": {
+      "State": "Enabled"
+    }
+  },
+  "TrustedModules": [
+    {
+      "InterfaceType": "TPM2_0",
+      "FirmwareVersion": "7.2.2.0",
+      "Status": {
+        "State": "Enabled"
+      }
+    },
+    {
+      "InterfaceType": "TPM1_2",
+      "FirmwareVersion": null,
+      "Status": {
+        "State": "Disabled"
+      }
+    }
+  ],
+  "SerialConsole": {
+    "MaxConcurrentSessions": 2,
+    "IPMI": {
+      "ServiceEnabled": false,
+      "HotKeySequenceDisplay": "Press ~. to exit console"
+    },
+    "SSH": {
+      "ServiceEnabled": true,
+      "Port": 2200,
+      "SharedWithManagerCLI": true
+    },
+    "Telnet": {
+      "ServiceEnabled": false
+    }
+  },
+  "GraphicalConsole": {
+    "ServiceEnabled": true,
+    "MaxConcurrentSessions": 4,
+    "ConnectTypesSupported": [
+      "KVMIP"
+    ]
+  },
+  "VirtualMediaConfig": {
+    "ServiceEnabled": false,
+    "Port": 3900
+  },
+  "Boot": {
+    "BootSourceOverrideEnabled": "Once",
+    "BootSourceOverrideTarget": "Pxe",
+    "BootSourceOverrideMode": "UEFI"
+  },
+  "ProcessorSummary": {
+    "Count": 1,
+    "Model": "Intel(R) Xeon(R) D-2123IT CPU @ 2.20GHz",
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 64,
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "SecureBoot": {
+    "@odata.id": "/redfish/v1/Systems/1/SecureBoot"
+  },
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ]
+  },
+  "Actions": {
+    "#ComputerSystem.Reset": {
+      "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoComputerSystem.v1_0_0.LenovoSystemProperties",
+      "SystemStatus": "OSBooted",
+      "NumberOfReboots": 3,
+      "TotalPowerOnHours": 120,
+      "FrontPanelUSB": {
+        "FPMode": "Shared",
+        "InactivityTimeoutMins": 60,
+        "IDButton": "On",
+        "PortSwitchingTo": "Server",
+        "PortEnabled": true
+      },
+      "TPMSettings": {
+        "EnableRPP": false,
+        "AssertRPP": false,
+        "AssertDurationMins": 30
+      }
+    }
+  }
+}

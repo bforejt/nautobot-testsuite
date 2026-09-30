@@ -1,0 +1,88 @@
+{
+  "@odata.type": "#PowerSupplyCollection.PowerSupplyCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies",
+  "@odata.etag": "\"psu-collection\"",
+  "Name": "Power Supply Collection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#PowerSupply.v1_5_0.PowerSupply",
+      "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/Bay1",
+      "@odata.etag": "\"psu-bay1\"",
+      "Id": "Bay1",
+      "Name": "Power Supply Bay 1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "LineInputStatus": "Normal",
+      "PowerSupplyType": "AC",
+      "InputNominalVoltageType": "AC200To240V",
+      "PowerCapacityWatts": 750,
+      "Manufacturer": "Contoso",
+      "Model": "PSU-750-T",
+      "FirmwareVersion": "1.2.3",
+      "SerialNumber": "PSU0000001",
+      "PartNumber": "PN-750-01",
+      "HotPluggable": true,
+      "InputRanges": [
+        {
+          "NominalVoltageType": "AC200To240V",
+          "CapacityWatts": 750
+        }
+      ],
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "PSU 1",
+          "LocationType": "Bay",
+          "LocationOrdinalValue": 1
+        }
+      },
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/Bay1/Metrics"
+      },
+      "Actions": {
+        "#PowerSupply.Reset": {
+          "target": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/Bay1/Actions/PowerSupply.Reset"
+        }
+      }
+    },
+    {
+      "@odata.type": "#PowerSupply.v1_5_0.PowerSupply",
+      "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/Bay2",
+      "@odata.etag": "\"psu-bay2\"",
+      "Id": "Bay2",
+      "Name": "Power Supply Bay 2",
+      "Status": {
+        "State": "Enabled",
+        "Health": "Critical"
+      },
+      "LineInputStatus": "LossOfInput",
+      "PowerSupplyType": "AC",
+      "InputNominalVoltageType": "AC200To240V",
+      "PowerCapacityWatts": 750,
+      "Manufacturer": "Contoso",
+      "Model": "PSU-750-T",
+      "FirmwareVersion": "1.2.3",
+      "SerialNumber": "",
+      "PartNumber": "PN-750-01",
+      "HotPluggable": true,
+      "InputRanges": [
+        {
+          "NominalVoltageType": "AC200To240V",
+          "CapacityWatts": 750
+        }
+      ],
+      "Location": {
+        "PartLocation": {
+          "ServiceLabel": "PSU 2",
+          "LocationType": "Bay",
+          "LocationOrdinalValue": 2
+        }
+      },
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/Bay2/Metrics"
+      }
+    }
+  ]
+}

@@ -343,6 +343,19 @@ class TestShakedownAdvice(unittest.TestCase):
         advice = registry.shakedown_advice("ok", None, 0, True)
         self.assertIn("leaf/element names", advice)
 
+    def test_empty_is_ok_for_a_check_whose_healthy_state_is_empty(self):
+        advice = registry.shakedown_advice("ok", None, 0, True, empty_ok=True)
+        self.assertTrue(advice.startswith("ok"), advice)
+        self.assertIn("healthy state", advice)
+        # nothing fetched at all is never ok, and a check without the tag still flags it
+        self.assertIn("leaf/element names", registry.shakedown_advice("ok", None, 0, False, True))
+        self.assertIn("leaf/element names", registry.shakedown_advice("ok", None, 0, True))
+        # only an ok advice starts with "ok"
+        for status, count in (("not-present", 0), ("failed", 0)):
+            for fetched in (True, False):
+                advice = registry.shakedown_advice(status, "x", count, fetched, empty_ok=True)
+                self.assertFalse(advice.startswith("ok"), advice)
+
     def test_not_present(self):
         advice = registry.shakedown_advice("not-present", "BGP not running", 0, False)
         self.assertIn("BGP not running", advice)

@@ -1,0 +1,60 @@
+{
+  "@odata.type": "#LogEntryCollection.LogEntryCollection",
+  "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries",
+  "Name": "LogEntryActiveLogEntryCollection",
+  "Description": "A collection of LogEntryActiveLogEntry resource instances.",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#LogEntry.v1_11_0.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries/12",
+      "@odata.etag": "\"active12\"",
+      "Id": "12",
+      "Name": "LogEntry",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "Critical",
+      "Created": "2026-09-21T04:12:55.120-05:00",
+      "EventId": "0x0806f0108e04ffff",
+      "Message": "Numeric sensor Fan 2 Tach going low (lower critical) has asserted.",
+      "MessageArgs": ["Fan 2 Tach"],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.ActiveLogEntry",
+          "CommonEventID": "FQXSPCA0002M",
+          "Source": "Cooling",
+          "Serviceable": "ServiceableByLenovo",
+          "Hidden": false,
+          "FailingFRU": [
+            {"FRUNumber": "01PG900", "FRUSerialNumber": "ZZFAN0000002"},
+            {"FRUNumber": "01PF614", "FRUSerialNumber": "ZZRSR0000001"}
+          ]
+        }
+      }
+    },
+    {
+      "@odata.type": "#LogEntry.v1_11_0.LogEntry",
+      "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries/13",
+      "@odata.etag": "\"active13\"",
+      "Id": "13",
+      "Name": "LogEntry",
+      "EntryType": "Oem",
+      "OemRecordFormat": "Lenovo",
+      "Severity": "Warning",
+      "Created": "2026-09-22T11:40:03.004-05:00",
+      "EventId": "0x806f0008e10cffff",
+      "Message": "Power Adapter 2 has lost input.",
+      "MessageArgs": ["Power Adapter 2"],
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoLogEntry.v1_0_0.ActiveLogEntry",
+          "CommonEventID": "FQXSPPW0008L",
+          "Source": "Power",
+          "Serviceable": "Not Serviceable",
+          "Hidden": false,
+          "FailingFRU": [{"FRUNumber": "", "FRUSerialNumber": ""}]
+        }
+      }
+    }
+  ]
+}

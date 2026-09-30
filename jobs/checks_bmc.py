@@ -66,7 +66,7 @@ import re
 
 from . import constants as C
 from .redfish_paths import RedfishPathRefused, fence_path
-from .registry import CheckDef, CollectError, SkipCheck, register
+from .registry import EMPTY_OK_TAG, CheckDef, CollectError, SkipCheck, register
 
 # --- Redfish paths -----------------------------------------------------------
 # Only the collections are literal: every member path (the System, Manager
@@ -98,17 +98,17 @@ _EXPAND = "?$expand=.($levels=1)"
 # when the System does not link them), paid by whichever check runs first.
 _TARGET_GETS = 5
 _BUDGET_SYSTEM = 8 + _TARGET_GETS
-_BUDGET_SECURITY = 4 + _TARGET_GETS
-_BUDGET_THERMAL = 2 + _TARGET_GETS
-_BUDGET_POWER = 2 + _TARGET_GETS
-_BUDGET_INVENTORY = 16 + _TARGET_GETS
+_BUDGET_SECURITY = 8 + _TARGET_GETS  # Manager, Security, key manager, <= 5 cert collections
+_BUDGET_THERMAL = 22 + _TARGET_GETS  # chassis, Thermal, subsystem, metrics, 18 for 16 fans
+_BUDGET_POWER = 13 + _TARGET_GETS  # chassis, Power, subsystem, 10 for 4 supplies
+_BUDGET_INVENTORY = 28 + _TARGET_GETS
 _BUDGET_HOST_NICS = 12 + _TARGET_GETS
 _BUDGET_FIRMWARE = 24 + _TARGET_GETS
-_BUDGET_EVENT_LOG = 12 + _TARGET_GETS
-_BUDGET_BIOS = 2 + _TARGET_GETS
+_BUDGET_EVENT_LOG = 23 + _TARGET_GETS  # 7 log-service reads, 10 + 3 + 3 Entries pages
+_BUDGET_BIOS = 3 + _TARGET_GETS  # Bios, its settings object, one spare
 _BUDGET_STORAGE = 18 + _TARGET_GETS
-_BUDGET_MANAGER_NETWORK = 7 + _TARGET_GETS
-_BUDGET_CHASSIS = 2 + _TARGET_GETS
+_BUDGET_MANAGER_NETWORK = 16 + _TARGET_GETS  # 5 singletons, 4 host interfaces, 6 port, USB LAN
+_BUDGET_CHASSIS = 16 + _TARGET_GETS  # Chassis, LED collection (+ <= 13 members unexpanded)
 
 # --- hygiene: secrets, user names, raw curation --------------------------------
 # Dropped from every stored payload: Actions blocks are POST targets, not
@@ -555,6 +555,9 @@ def _fetch_collection(
                 meta.update(strategy="expand", members_total=len(members), excluded=excluded)
                 return kept, meta, raw
             meta["expand_refused"] = "members returned as links"
+    expand_answered_404 = (
+        meta["expand_advertised"] is not False and try_expand and "expand_refused" not in meta
+    )
     if ok_404:
         collection = _get_optional(ctx, path, redact=redact)
     else:
@@ -562,6 +565,9 @@ def _fetch_collection(
     if collection is None:
         meta["strategy"] = "absent"
         return None, meta, raw
+    if expand_answered_404:
+        # The collection exists but its $expand form answered 404: a refusal too.
+        meta["expand_refused"] = "HTTP 404"
     raw[path] = _curate(collection)
     links = _member_links(collection, label)
     kept, excluded = [], []
@@ -756,23 +762,70 @@ def _fetch_manager_nic(ctx, targets):
     return chosen, {"member": _member_id(chosen), "source": "collection"}, raw
 
 
-def _normalize_system(system, secure_boot, manager, nic, eth_member_used):
-    """Flat identity/health/boot scalars from the System, SecureBoot, the Manager and its NIC.
+def _system_serial_console(system):
+    """(enabled, {protocol: enabled}) for the host serial console the System serves.
+
+    ComputerSystem.SerialConsole (v1_13 and later) holds one block per
+    protocol (IPMI, SSH, Telnet), each with its own ServiceEnabled: enabled is
+    True when any served protocol is on, False when every served one is off,
+    and None when none is served. XCC 6.10 serves no SerialConsole on the
+    System at all; the Manager's console blocks are the BMC's own services
+    (``bmc_serial_console_enabled`` and friends), never the host's.
+    """
+    protocols = {}
+    block = _dig(system, "SerialConsole")
+    if isinstance(block, dict):
+        for name in sorted(block, key=str):
+            enabled = _to_bool(_dig(block, name, "ServiceEnabled"))
+            if enabled is not None:
+                protocols[str(name)] = enabled
+    if not protocols:
+        return None, protocols
+    return any(protocols.values()), protocols
+
+
+def _system_tpm(system):
+    """(count, interface types, firmware versions) from TrustedModules[]; a None trio if unserved.
+
+    Both lists are sorted and hold only what the modules serve: XCC 6.10
+    serves each module's FirmwareVersion as null, so its firmware list is [].
+    """
+    modules = _dig(system, "TrustedModules")
+    if not isinstance(modules, list):
+        return None, None, None
+    modules = _dicts(modules)
+    types = sorted(value for value in (_text(m.get("InterfaceType")) for m in modules) if value)
+    firmware = sorted(
+        value for value in (_text(m.get("FirmwareVersion")) for m in modules) if value
+    )
+    return len(modules), types, firmware
+
+
+def _normalize_system(system, secure_boot, manager, nic, eth_member_used, lenovo=False):
+    """Flat identity/health/policy scalars from the System, SecureBoot, the Manager and its NIC.
 
     Every field is always present (None when the resource or leaf is absent)
-    so pre and post compare field-for-field. SecureBoot's three fields are
-    None as a trio when the resource 404s. ``bmc_health`` is the Manager's
-    Status.Health only — XCC 6.10 serves Status.State alone, which is
-    ``bmc_state`` — so a missing health is None, never borrowed from the state.
+    so pre and post compare field-for-field: the DMTF power-restore, delay,
+    power-mode and host-console leaves are absent on XCC 6.10 and read None
+    there, never a default. SecureBoot's three fields are None as a trio when
+    the resource 404s. ``bmc_health`` is the Manager's Status.Health only —
+    XCC 6.10 serves Status.State alone, which is ``bmc_state`` — so a missing
+    health is None, never borrowed from the state. The Lenovo leaves
+    (system_status, the front-panel USB port, TPM physical presence) are read
+    only when ``lenovo`` says the service is Lenovo's; None otherwise.
     """
     system = system if isinstance(system, dict) else {}
     secure_boot = secure_boot if isinstance(secure_boot, dict) else {}
     manager = manager if isinstance(manager, dict) else {}
     nic = nic if isinstance(nic, dict) else {}
+    oem = _dig(system, "Oem", "Lenovo") if lenovo else None
     health, state = _status(system)
     bmc_health, bmc_state = _status(manager)
     ipv4 = _first_ipv4(nic)
     vlan_enabled = _to_bool(_dig(nic, "VLAN", "VLANEnable"))
+    watchdog = _dig(system, "HostWatchdogTimer")
+    serial_console, _protocols = _system_serial_console(system)
+    tpm_count, tpm_types, tpm_firmware = _system_tpm(system)
     return {
         "power_state": _text(system.get("PowerState")),
         "health": health,
@@ -799,12 +852,39 @@ def _normalize_system(system, secure_boot, manager, nic, eth_member_used):
         "secure_boot_enabled": _to_bool(secure_boot.get("SecureBootEnable")),
         "secure_boot_current": _text(secure_boot.get("SecureBootCurrentBoot")),
         "secure_boot_mode": _text(secure_boot.get("SecureBootMode")),
-        "system_status": _text(_dig(system, "Oem", "Lenovo", "SystemStatus")),
+        # What the host does after an AC loss or a hang, and what reaches its console.
+        "power_restore_policy": _text(system.get("PowerRestorePolicy")),
+        "power_on_delay_s": _to_float(system.get("PowerOnDelaySeconds")),
+        "power_off_delay_s": _to_float(system.get("PowerOffDelaySeconds")),
+        "power_cycle_delay_s": _to_float(system.get("PowerCycleDelaySeconds")),
+        "power_mode": _text(system.get("PowerMode")),
+        "host_watchdog_enabled": _to_bool(_dig(watchdog, "FunctionEnabled")),
+        "host_watchdog_timeout_action": _text(_dig(watchdog, "TimeoutAction")),
+        "host_watchdog_warning_action": _text(_dig(watchdog, "WarningAction")),
+        "serial_console_enabled": serial_console,
+        "graphical_console_enabled": _to_bool(_dig(system, "GraphicalConsole", "ServiceEnabled")),
+        "virtual_media_service_enabled": _to_bool(
+            _dig(system, "VirtualMediaConfig", "ServiceEnabled")
+        ),
+        "tpm_count": tpm_count,
+        "tpm_interface_types": tpm_types,
+        "tpm_firmware": tpm_firmware,
+        "system_status": _text(_dig(oem, "SystemStatus")),
+        "front_panel_usb_mode": _text(_dig(oem, "FrontPanelUSB", "FPMode")),
+        "front_panel_usb_port_enabled": _to_bool(_dig(oem, "FrontPanelUSB", "PortEnabled")),
+        "tpm_rpp_enabled": _to_bool(_dig(oem, "TPMSettings", "EnableRPP")),
         "bmc_firmware": _text(manager.get("FirmwareVersion")),
         "bmc_model": _text(manager.get("Model")),
         "bmc_uuid": _text(manager.get("UUID")),
         "bmc_health": bmc_health,
         "bmc_state": bmc_state,
+        # The console services the Manager reports for itself (DMTF: the manager's own
+        # consoles; the host's are the System's SerialConsole/GraphicalConsole above).
+        "bmc_serial_console_enabled": _to_bool(_dig(manager, "SerialConsole", "ServiceEnabled")),
+        "bmc_graphical_console_enabled": _to_bool(
+            _dig(manager, "GraphicalConsole", "ServiceEnabled")
+        ),
+        "bmc_command_shell_enabled": _to_bool(_dig(manager, "CommandShell", "ServiceEnabled")),
         "bmc_hostname": _text(nic.get("HostName")),
         "bmc_ip": _text(ipv4.get("Address")),
         "bmc_ip_origin": _text(ipv4.get("AddressOrigin")),
@@ -817,8 +897,13 @@ def _normalize_system(system, secure_boot, manager, nic, eth_member_used):
     }
 
 
-def _system_context(system, manager, nic_meta, secure_boot):
-    """Volatile or bulky facts an analyst wants next to the identity scalars."""
+def _system_context(system, manager, nic_meta, secure_boot, lenovo=False):
+    """Volatile or bulky facts an analyst wants next to the identity scalars.
+
+    Counters, clocks and last-reset/boot-progress times move on their own;
+    the Lenovo ones (reboot count, power-on hours, the BMC's firmware
+    release name) are read only when ``lenovo`` says the service is Lenovo's.
+    """
     modules = []
     for module in _dicts(_dig(system, "TrustedModules")):
         modules.append(
@@ -828,13 +913,25 @@ def _system_context(system, manager, nic_meta, secure_boot):
                 "state": _text(_dig(module, "Status", "State")),
             }
         )
+    system_oem = _dig(system, "Oem", "Lenovo") if lenovo else None
+    manager_oem = _dig(manager, "Oem", "Lenovo") if lenovo else None
+    _enabled, console_protocols = _system_serial_console(system)
     return {
-        "reboot_count": _to_int(_dig(system, "Oem", "Lenovo", "NumberOfReboots")),
-        "power_on_hours": _to_int(_dig(system, "Oem", "Lenovo", "TotalPowerOnHours")),
+        "reboot_count": _to_int(_dig(system_oem, "NumberOfReboots")),
+        "power_on_hours": _to_int(_dig(system_oem, "TotalPowerOnHours")),
         "indicator_led": _text(_dig(system, "IndicatorLED")),
+        "location_indicator_active": _to_bool(_dig(system, "LocationIndicatorActive")),
+        "last_reset_time": _text(_dig(system, "LastResetTime")),
+        "boot_progress": {
+            "last_state": _text(_dig(system, "BootProgress", "LastState")),
+            "last_state_time": _text(_dig(system, "BootProgress", "LastStateTime")),
+        },
+        "serial_console_protocols": console_protocols,
         "bmc_datetime": _text(_dig(manager, "DateTime")),
         "bmc_datetime_offset": _text(_dig(manager, "DateTimeLocalOffset")),
         "bmc_power_state": _text(_dig(manager, "PowerState")),
+        "manager_last_reset_time": _text(_dig(manager, "LastResetTime")),
+        "release_name": _text(_dig(manager_oem, "release_name")),
         "secure_boot_resource": secure_boot is not None,
         "trusted_modules": modules,
         "manager_nic": nic_meta,
@@ -849,27 +946,35 @@ def _collect_system(ctx):
         secure_boot = _get_optional(ctx, secure_boot_path)
         manager = _get(ctx, targets["manager"])
         nic, nic_meta, nic_raw = _fetch_manager_nic(ctx, targets)
+    lenovo = _is_lenovo(targets)
     raw = {targets["system"]: _curate(system), targets["manager"]: _curate(manager)}
     raw[secure_boot_path] = _curate(secure_boot) if secure_boot is not None else None
     raw.update(nic_raw)
-    normalized = _normalize_system(system, secure_boot, manager, nic, nic_meta["member"])
+    normalized = _normalize_system(
+        system, secure_boot, manager, nic, nic_meta["member"], lenovo=lenovo
+    )
     return {
         "raw": raw,
         "normalized": normalized,
         "context": _with_resolution(
-            _system_context(system, manager, nic_meta, secure_boot), targets
+            _system_context(system, manager, nic_meta, secure_boot, lenovo=lenovo), targets
         ),
     }
 
 
 # --- bmc_security ------------------------------------------------------------
 
-# ThinkEdge (Security Pack) properties on the Managers/1 Oem/Lenovo/Security
-# resource. The resource exists on mainstream ThinkSystem too, so presence of
-# the check is decided by these properties, never by the link. Property names
-# are candidates: each field takes the first leaf (by dotted path) whose
-# last segment is one of its names; every field is optional — gen-1 and V2
-# spell the motion model differently and the lockdown names are unverified.
+# The vendor security resource (Lenovo: Managers/<id> Oem/Lenovo/Security) is
+# keyed leaf by leaf, 'security|<dotted path>', and so is the external key
+# manager SED keys are escrowed with, 'sklm|<dotted path>' — the TLS mode,
+# HTTPS/LDAPS/CIM enablement, firmware rollback and encapsulation settings a
+# mainstream ThinkSystem serves there are all captured. ThinkEdge (Security
+# Pack) units add their tamper state to the same resource; those properties
+# also stay first-class scalars found by candidate name: each field takes the
+# first leaf (by dotted path) whose last segment is one of its names; every
+# field is optional — gen-1 and V2 spell the motion model differently and the
+# lockdown names are unverified. The check is not-present only when no
+# security resource is served at all, or the vendor has no mapping yet.
 _SECURITY_FIELDS = (
     ("lockdown_mode", ("LockdownMode", "SystemLockdownMode", "LockdownStatus", "Lockdown")),
     ("lockdown_control", ("LockdownControl", "LockdownControlMode", "LockdownManagedBy")),
@@ -916,12 +1021,142 @@ def _pick_leaf(leaves, names):
     return None, None
 
 
-def _normalize_security_state(security):
-    """(normalized, sources) — every _SECURITY_FIELDS entry, None when the leaf is absent.
+# Structure, not state: the resource's own identity at its top level, and
+# navigation and POST targets at any depth.
+_SECURITY_SKIP_TOP = frozenset({"Id", "Name", "Description"})
+_SECURITY_SKIP_ANY = frozenset({"Actions", "Links"})
+# Leaves that move on their own (a key manager's last-poll time, a clock) ride
+# in context.readings, never in a key.
+_SECURITY_VOLATILE = re.compile(r"(?:last\w*(?:time|timestamp|date)|datetime)$", re.IGNORECASE)
 
-    ``sources`` maps each populated field to the dotted path it came from so
-    the shakedown can pin the real property names. Booleans arrive as bools
-    or Enabled/Disabled strings; both become bools. Anything else is verbatim.
+
+def _security_is_link(node):
+    """True for a bare link: a dict carrying @odata.id and nothing but annotations."""
+    return (
+        isinstance(node, dict)
+        and "@odata.id" in node
+        and all(str(key).startswith("@") for key in node)
+    )
+
+
+def _security_sorted(values):
+    """A list's values in a stable order: the order a firmware serves them is not state."""
+    if all(isinstance(value, str) for value in values):
+        return sorted(values)
+    if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
+        return sorted(values)
+    return sorted(values, key=repr)  # mixed or structured: any stable order will do
+
+
+def _security_value(node):
+    """A leaf made comparable: '' reads None, lists sorted, annotations and secrets dropped."""
+    if isinstance(node, dict):
+        return {
+            str(key): _security_value(value)
+            for key, value in sorted(node.items(), key=lambda item: str(item[0]))
+            if not str(key).startswith("@")
+            and key not in _SECURITY_SKIP_ANY
+            and not _is_secret(key, value)
+        }
+    if isinstance(node, list):
+        return _security_sorted([_security_value(item) for item in node])
+    if isinstance(node, str) and not node.strip():
+        return None
+    return node
+
+
+def _security_leaves(node, prefix=""):
+    """{dotted path: value} for every leaf of a vendor resource, a list being ONE leaf.
+
+    The keying sibling of _flatten: a list is keyed once by its own path with
+    its values sorted (_security_value), so a reordered list is no change and
+    an empty one is still a leaf; '' reads None; the resource's own
+    Id/Name/Description, Links and Actions blocks, annotations and secret
+    leaves are skipped, and a bare link (or a list of nothing but links) is
+    navigation and yields nothing.
+    """
+    leaves = {}
+    if not isinstance(node, dict):
+        return leaves
+    for key, value in node.items():
+        name = str(key)
+        if name.startswith("@") or name in _SECURITY_SKIP_ANY or _is_secret(key, value):
+            continue
+        if not prefix and name in _SECURITY_SKIP_TOP:
+            continue
+        path = "%s.%s" % (prefix, name) if prefix else name
+        if isinstance(value, dict):
+            leaves.update(_security_leaves(value, path))
+        elif isinstance(value, list) and value and all(_security_is_link(v) for v in value):
+            continue
+        else:
+            leaves[path] = _security_value(value)
+    return leaves
+
+
+def _security_keyed(leaves, family):
+    """({'<family>|<path>': value}, {'<family>|<path>': value} of the time-like leaves)."""
+    keyed, readings = {}, {}
+    for path in sorted(leaves):
+        volatile = _SECURITY_VOLATILE.search(path.rsplit(".", 1)[-1])
+        (readings if volatile else keyed)["%s|%s" % (family, path)] = leaves[path]
+    return keyed, readings
+
+
+def _security_certificate_links(resource, label, prefix=""):
+    """[(dotted path, fenced link)] of every certificate collection a resource links, any depth."""
+    found = []
+    if not isinstance(resource, dict):
+        return found
+    for key in sorted(resource, key=str):
+        name, value = str(key), resource[key]
+        if name.startswith("@") or name in _SECURITY_SKIP_ANY:
+            continue
+        path = "%s.%s" % (prefix, name) if prefix else name
+        if _security_is_link(value):
+            if "certificate" in name.lower():
+                found.append((path, _fenced_link(value, label)))
+        elif isinstance(value, dict):
+            found.extend(_security_certificate_links(value, label, path))
+    return found
+
+
+def _security_member_count(collection):
+    """Members@odata.count of a collection (else len(Members)); None when it is not served."""
+    if not isinstance(collection, dict):
+        return None
+    count = collection.get("Members@odata.count")
+    if isinstance(count, int) and not isinstance(count, bool):
+        return count
+    members = collection.get("Members")
+    return len(members) if isinstance(members, list) else None
+
+
+def _security_require_budget(budget, needed):
+    """Refuse the certificate counts up front when what is left of the budget cannot cover them."""
+    left = _budget_left(budget)
+    if left is not None and needed > left:
+        raise CollectError(
+            "bmc_security: the key manager links %d certificate collection(s) but only %d "
+            "GET(s) are left in the budget of %d — the counts would be partial"
+            % (needed, left, budget.max_gets)
+        )
+
+
+def _normalize_security_state(security, sklm=None, certificate_counts=None):
+    """(normalized, sources, readings) for the vendor security resource and its key manager.
+
+    ``normalized`` holds every _SECURITY_FIELDS (ThinkEdge) entry — None when
+    the leaf is absent — then 'security|<dotted path>' for every leaf of the
+    security resource and 'sklm|<dotted path>' for every leaf of the key
+    manager (_security_leaves), plus 'sklm|<link path>.Members@odata.count'
+    for each certificate collection the key manager links
+    (``certificate_counts`` maps the link's dotted path to its member count:
+    counted, never read). ``sources`` maps each populated ThinkEdge field to
+    the dotted path it came from so the shakedown can pin the real property
+    names; booleans arrive as bools or Enabled/Disabled strings and both
+    become bools, '' reads None, anything else is verbatim. ``readings`` holds
+    the time-like leaves (_SECURITY_VOLATILE), which never become keys.
     """
     leaves = _flatten(security)
     normalized = {}
@@ -933,12 +1168,25 @@ def _normalize_security_state(security):
             continue
         sources[field] = path
         as_bool = _to_bool(value)
-        normalized[field] = as_bool if as_bool is not None else value
-    return normalized, sources
+        if as_bool is not None:
+            normalized[field] = as_bool
+        else:
+            normalized[field] = _text(value) if isinstance(value, str) else value
+    keyed, readings = _security_keyed(_security_leaves(security), "security")
+    normalized.update(keyed)
+    if isinstance(sklm, dict):
+        keyed, sklm_readings = _security_keyed(_security_leaves(sklm), "sklm")
+        normalized.update(keyed)
+        readings.update(sklm_readings)
+    for path, count in sorted((certificate_counts or {}).items()):
+        normalized["sklm|%s.Members@odata.count" % (path,)] = count
+    return normalized, sources, readings
 
 
 def _collect_security_state(ctx):
-    with ctx.budget("bmc_security", _BUDGET_SECURITY):
+    raw = {}
+    certificate_counts = {}
+    with ctx.budget("bmc_security", _BUDGET_SECURITY) as budget:
         targets = _targets(ctx)
         if not _is_lenovo(targets):
             raise _no_mapping(targets, "the BMC security resource")
@@ -950,24 +1198,24 @@ def _collect_security_state(ctx):
             raise SkipCheck(
                 "no Oem/Lenovo/Security resource on this BMC (%s answered 404)" % (security_path,)
             )
-        normalized, sources = _normalize_security_state(security)
-        if not sources:
-            raise SkipCheck(
-                "Security resource present but carries no ThinkEdge properties "
-                "(lockdown/motion/intrusion/SED) — not a Security Pack unit or this "
-                "firmware does not expose them"
-            )
-        # External key-manager (SKLM/KMIP) configuration is context only: it is
-        # where SED keys are escrowed, not the SED state itself.
-        sklm_link = _fenced_link(
+        if not isinstance(security, dict) or not security:
+            raise CollectError("%s answered without a resource body" % (security_path,))
+        # The external key manager (SKLM/KMIP) SED keys are escrowed with: its
+        # settings are keyed; its certificate collections are counted, never read.
+        sklm_path = _fenced_link(
             _dig(manager, "Oem", "Lenovo", "SecureKeyLifecycleService"), "bmc_security"
         )
-        sklm = _get_optional(ctx, sklm_link) if sklm_link else None
-    raw = {security_path: _curate(security)}
-    key_management = None
+        sklm = _get_optional(ctx, sklm_path) if sklm_path else None
+        collections = _security_certificate_links(sklm, "bmc_security key manager")
+        _security_require_budget(budget, len(collections))
+        for path, collection_link in collections:
+            collection = _get_optional(ctx, collection_link)
+            raw[collection_link] = _curate(collection) if collection is not None else None
+            certificate_counts[path] = _security_member_count(collection)
+    raw[security_path] = _curate(security)
     if sklm is not None:
-        raw[sklm_link] = _curate(sklm)
-        key_management = {path: value for path, value in sorted(_flatten(sklm).items())}
+        raw[sklm_path] = _curate(sklm)
+    normalized, sources, readings = _normalize_security_state(security, sklm, certificate_counts)
     return {
         "raw": raw,
         "normalized": normalized,
@@ -975,8 +1223,12 @@ def _collect_security_state(ctx):
             {
                 "security_resource": security_path,
                 "property_sources": sources,
-                "properties_seen": sorted(_flatten(security)),
-                "key_management": key_management,
+                "key_management": {
+                    "resource": sklm_path,
+                    "served": sklm is not None,
+                    "certificate_collections": [path for path, _link in collections],
+                },
+                "readings": readings,
             },
             targets,
         ),
@@ -986,10 +1238,12 @@ def _collect_security_state(ctx):
 # --- bmc_thermal -------------------------------------------------------------
 
 # Only environment-class sensors carry a comparable reading: CPU/DIMM/PCH
-# temperatures are load-driven (and a post capture may follow a VNF reboot),
-# so those readings ride in context. Matched on Name, not PhysicalContext —
-# gen-1 says Intake where later firmware says Board.
+# temperatures follow the host's load, so those readings ride in context.
+# Matched on Name, not PhysicalContext — gen-1 says Intake where later
+# firmware says Board.
 _AMBIENT_TOKENS = ("ambient", "inlet", "intake", "exhaust", "outlet")
+# ThermalMetrics.TemperatureSummaryCelsius members (DMTF ThermalMetrics v1).
+_THERMAL_SUMMARY = ("Ambient", "Intake", "Exhaust", "Internal")
 
 
 def _sensor_key(kind, name, member_id, name_counts):
@@ -1036,13 +1290,62 @@ def _is_ambient(name):
     return any(token in lowered for token in _AMBIENT_TOKENS)
 
 
-def _normalize_thermal(thermal):
-    """(normalized, context) from Chassis/1/Thermal.
+def _thermal_is_margin(name, reading):
+    """True for a sensor that reads a margin rather than a temperature.
 
+    A DTS (the CPU's digital thermal sensor: 'CPU DTS' reads -51 on XCC 6.10)
+    reports how far the die is below its throttle point, not how hot it is;
+    any negative reading is read the same way.
+    """
+    return "dts" in (name or "").lower() or (reading is not None and reading < 0)
+
+
+def _thermal_fan_reading(fan):
+    """(reading, units) of a fan: the legacy Reading/ReadingUnits pair, else SpeedPercent.
+
+    A ThermalSubsystem Fan carries its speed as a sensor excerpt. SpeedRPM is
+    preferred, so a fan reads the same RPM from either resource (XCC 6.10 also
+    puts the RPM figure into SpeedPercent.Reading, which DMTF defines as a
+    percent); the percent Reading answers only where no RPM is served.
+    """
+    speed = fan.get("SpeedPercent")
+    if not isinstance(speed, dict):
+        return _to_float(fan.get("Reading")), _text(fan.get("ReadingUnits"))
+    rpm = _to_float(speed.get("SpeedRPM"))
+    if rpm is not None:
+        return rpm, "RPM"
+    percent = _to_float(speed.get("Reading"))
+    return percent, ("Percent" if percent is not None else None)
+
+
+def _thermal_summary(metrics):
+    """ThermalMetrics.TemperatureSummaryCelsius as {ambient, intake, exhaust, internal}.
+
+    None when the ThermalMetrics resource was not read; a member it does not
+    serve (XCC 6.10: Exhaust and Internal) reads None.
+    """
+    if not isinstance(metrics, dict):
+        return None
+    return {
+        name.lower(): _to_float(_dig(metrics, "TemperatureSummaryCelsius", name, "Reading"))
+        for name in _THERMAL_SUMMARY
+    }
+
+
+def _normalize_thermal(thermal, fans=None, fan_redundancy=None, metrics=None):
+    """(normalized, context) from Chassis/<id>/Thermal, else the ThermalSubsystem fans.
+
+    ``thermal`` is the legacy resource. Where the firmware serves none it is
+    None, and ``fans`` (the ThermalSubsystem's Fan resources) and
+    ``fan_redundancy`` (its FanRedundancy groups) stand in for Fans[] and
+    Redundancy[]; there are no temperature sensors to key then.
     ``temp|<Name>`` -> health, state, physical_context, reading_c (ambient/
     intake/exhaust class only; None on the rest). ``fan|<Name>`` -> health,
-    state, reading, reading_units. State == Absent means no key. Every
-    reading and every non-null threshold is recorded in context.
+    state, reading, reading_units, keyed the same way from either resource.
+    State == Absent means no key. Every reading and every non-null threshold
+    is recorded in context; ``margins`` lists the temperature keys that read a
+    margin (_thermal_is_margin) and ``temperature_summary_c`` the ThermalMetrics
+    summary (None when ``metrics`` was not read).
     """
     normalized = {}
     context = {
@@ -1053,6 +1356,8 @@ def _normalize_thermal(thermal):
         "fan_readings": {},
         "thresholds": {},
         "fan_redundancy": [],
+        "margins": [],
+        "temperature_summary_c": _thermal_summary(metrics),
     }
     temperatures = _dicts(_dig(thermal, "Temperatures"))
     counts = _name_counts(temperatures)
@@ -1073,12 +1378,14 @@ def _normalize_thermal(thermal):
             "reading_c": reading if _is_ambient(name) else None,
         }
         context["readings_c"][key] = reading
+        if _thermal_is_margin(name, reading):
+            context["margins"].append(key)
         thresholds = _thresholds(sensor)
         if thresholds:
             context["thresholds"][key] = thresholds
-    fans = _dicts(_dig(thermal, "Fans"))
-    counts = _name_counts(fans)
-    for fan in fans:
+    fan_rows = _dicts(_dig(thermal, "Fans")) if thermal is not None else _dicts(fans)
+    counts = _name_counts(fan_rows)
+    for fan in fan_rows:
         context["fans_total"] += 1
         name = _text(fan.get("Name")) or _text(fan.get("FanName"))
         member_id = _text(fan.get("MemberId")) or _text(fan.get("Id")) or "?"
@@ -1087,45 +1394,104 @@ def _normalize_thermal(thermal):
         if state == "Absent":
             context["absent"].append(key)
             continue
-        reading = _to_float(fan.get("Reading"))
+        reading, units = _thermal_fan_reading(fan)
         normalized[key] = {
             "health": health,
             "state": state,
             "reading": reading,
-            "reading_units": _text(fan.get("ReadingUnits")),
+            "reading_units": units,
         }
         context["fan_readings"][key] = reading
         thresholds = _thresholds(fan)
         if thresholds:
             context["thresholds"][key] = thresholds
-    for group in _dicts(_dig(thermal, "Redundancy")):
+    groups = _dig(thermal, "Redundancy") if thermal is not None else fan_redundancy
+    for group in _dicts(groups):
+        # Legacy Redundancy: Mode + RedundancySet; ThermalSubsystem.FanRedundancy
+        # (a RedundantGroup): RedundancyType + RedundancyGroup.
+        members = group.get("RedundancySet", group.get("RedundancyGroup"))
         context["fan_redundancy"].append(
             {
                 "member_id": _text(group.get("MemberId")),
-                "mode": _text(group.get("Mode")),
+                "mode": _text(group.get("Mode")) or _text(group.get("RedundancyType")),
                 "state": _text(_dig(group, "Status", "State")),
                 "health": _text(_dig(group, "Status", "Health")),
-                "member_count": len(_dicts(group.get("RedundancySet"))),
+                "member_count": len(_dicts(members)),
             }
         )
     return normalized, context
 
 
 def _collect_thermal(ctx):
-    with ctx.budget("bmc_thermal", _BUDGET_THERMAL):
+    raw = {}
+    subsystem = metrics = fans = fans_meta = fans_path = metrics_path = None
+    with ctx.budget("bmc_thermal", _BUDGET_THERMAL) as budget:
         targets = _targets(ctx)
-        path = _sub(targets["chassis"], "Thermal")
-        thermal = _get(ctx, path)
-    if not _dicts(_dig(thermal, "Temperatures")):
-        # A 2xx JSON body with no sensors is a broken read, never a chassis
-        # with no thermal sensors.
-        raise CollectError("%s answered with an empty Temperatures[]" % (path,))
-    normalized, context = _normalize_thermal(thermal)
-    return {
-        "raw": {path: _curate(thermal)},
-        "normalized": normalized,
-        "context": _with_resolution(context, targets),
-    }
+        chassis = _get(ctx, targets["chassis"])
+        thermal_link = _fenced_link(_dig(chassis, "Thermal"), "bmc_thermal Thermal")
+        path = thermal_link or _sub(targets["chassis"], "Thermal")
+        thermal = _get_optional(ctx, path)
+        subsystem_link = _fenced_link(
+            _dig(chassis, "ThermalSubsystem"), "bmc_thermal ThermalSubsystem"
+        )
+        if subsystem_link is not None and thermal is not None:
+            # One GET for the temperature summary: the DMTF-mandated child path
+            # of the linked subsystem, whose own resource is not needed here.
+            metrics_path = _sub(subsystem_link, "ThermalMetrics")
+        elif subsystem_link is not None:
+            # No legacy resource: the subsystem's own links name its fans.
+            subsystem = _get_optional(ctx, subsystem_link)
+            if subsystem is None:
+                raise CollectError(
+                    "%s answered 404 and the Chassis links %s, which answered 404 too"
+                    % (path, subsystem_link)
+                )
+            fans_path = _fenced_link(subsystem.get("Fans"), "bmc_thermal Fans")
+            metrics_path = _fenced_link(subsystem.get("ThermalMetrics"), "bmc_thermal Metrics")
+        if metrics_path is not None:
+            metrics = _get_optional(ctx, metrics_path)
+        if fans_path is not None:
+            fans, fans_meta, fans_raw = _fetch_collection(
+                ctx, fans_path, "bmc_thermal fans", ok_404=True, budget=budget
+            )
+            raw.update(fans_raw)
+    if thermal is not None:
+        if not _dicts(_dig(thermal, "Temperatures")):
+            # A 2xx JSON body with no sensors is a broken read, never a chassis
+            # with no thermal sensors.
+            raise CollectError("%s answered with an empty Temperatures[]" % (path,))
+        raw[path] = _curate(thermal)
+    elif subsystem is None:
+        if thermal_link is not None:
+            raise CollectError(
+                "the Chassis links %s but it answered 404, and no ThermalSubsystem is linked"
+                % (path,)
+            )
+        raise SkipCheck("%s is not served and the Chassis links no ThermalSubsystem" % (path,))
+    else:
+        raw[subsystem_link] = _curate(subsystem)
+        if fans_path is not None and fans is None:
+            raise CollectError("%s is linked but answered 404" % (fans_path,))
+    if metrics is not None:
+        raw[metrics_path] = _curate(metrics)
+    normalized, context = _normalize_thermal(
+        thermal, fans, _dig(subsystem, "FanRedundancy"), metrics
+    )
+    if thermal is None and not normalized:
+        raise SkipCheck(
+            "%s is not served and %s lists no present fan: nothing to key (the temperature "
+            "summary is in ThermalMetrics, each temperature sensor in the Sensors collection)"
+            % (path, subsystem_link)
+        )
+    if thermal is not None:
+        context["temperatures_source"] = context["fans_source"] = path
+    else:
+        context["temperatures_source"] = None
+        context["fans_source"] = fans_path if fans is not None else None
+    context["temperature_summary_source"] = metrics_path if metrics is not None else None
+    if fans_meta is not None:
+        context["fans_collection"] = fans_meta
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
 # --- bmc_power ---------------------------------------------------------------
@@ -1159,15 +1525,78 @@ def _in_threshold(reading, sensor):
     return None
 
 
-def _normalize_power(power):
-    """(normalized, context) from Chassis/1/Power.
+def _power_first(*values):
+    """The first value that is not None (a 0 reading is a reading, never a fallback trigger)."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
-    ``psu|<MemberId>`` (Name may be null on Lenovo) -> state/health verbatim,
-    line_input_voltage, input_in_range, capacity_w, identity strings (None,
-    never ''). ``redundancy|<MemberId>`` only when Redundancy[] exists.
-    ``voltage|<MemberId>`` -> state, in_threshold, health (Lenovo's sample has
-    no Health on Voltages, so it is usually None). Consumption and readings
-    go to context.
+
+def _power_psu(psu, metrics=None):
+    """(row, readings) for one supply, from either power schema.
+
+    ``psu`` is a legacy Power.PowerSupplies[] member or a PowerSubsystem
+    PowerSupply, ``metrics`` the latter's PowerSupplyMetrics (None when not
+    read). The two schemas spell the same facts differently: the line voltage
+    is the legacy LineInputVoltage or the metrics' InputVoltage reading, the
+    voltage class LineInputVoltageType or InputNominalVoltageType, input and
+    output watts PowerInputWatts/PowerOutputWatts or the metrics'
+    InputPowerWatts/OutputPowerWatts. LineInputStatus (Normal / LossOfInput /
+    OutOfRange) is the PowerSupply schema's own verdict on the feed; None
+    where not served.
+    """
+    health, state = _status(psu)
+    line_v = _power_first(
+        _to_float(psu.get("LineInputVoltage")),
+        _to_float(_dig(metrics, "InputVoltage", "Reading")),
+    )
+    row = {
+        "name": _text(psu.get("Name")),
+        "state": state,
+        "health": health,
+        "power_supply_type": _text(psu.get("PowerSupplyType")),
+        "line_input_voltage_type": _text(psu.get("LineInputVoltageType"))
+        or _text(psu.get("InputNominalVoltageType")),
+        "line_input_voltage": line_v,
+        "line_input_status": _text(psu.get("LineInputStatus")),
+        "input_in_range": _input_in_range(line_v, psu.get("InputRanges")),
+        "capacity_w": _to_float(psu.get("PowerCapacityWatts")),
+        "serial": _text(psu.get("SerialNumber")),
+        "model": _text(psu.get("Model")),
+        "part_number": _text(psu.get("PartNumber")),
+        "manufacturer": _text(psu.get("Manufacturer")),
+        "firmware": _text(psu.get("FirmwareVersion")),
+    }
+    readings = {
+        "input_w": _power_first(
+            _to_float(psu.get("PowerInputWatts")),
+            _to_float(_dig(metrics, "InputPowerWatts", "Reading")),
+        ),
+        "output_w": _power_first(
+            _to_float(psu.get("PowerOutputWatts")),
+            _to_float(_dig(metrics, "OutputPowerWatts", "Reading")),
+        ),
+        "last_output_w": _to_float(psu.get("LastPowerOutputWatts")),
+    }
+    return row, readings
+
+
+def _normalize_power(power, supplies=None, supply_metrics=None, subsystem=None):
+    """(normalized, context) from Chassis/<id>/Power, else the PowerSubsystem supplies.
+
+    ``power`` is the legacy resource (None where the firmware serves none);
+    ``supplies`` are PowerSubsystem PowerSupply resources read in its place,
+    ``supply_metrics`` maps a supply id to its PowerSupplyMetrics and
+    ``subsystem`` is the PowerSubsystem (PowerSupplyRedundancy, CapacityWatts).
+    ``psu|<MemberId>`` (legacy; Name may be null on Lenovo) or ``psu|<Id>``
+    -> state/health verbatim, line_input_voltage, line_input_status,
+    input_in_range, capacity_w, identity strings (None, never '').
+    ``redundancy|<MemberId>`` (legacy Redundancy[]) or ``redundancy|<index>``
+    (PowerSupplyRedundancy) only when a redundancy group is published.
+    ``voltage|<MemberId>`` (legacy only) -> state, in_threshold, health
+    (Lenovo serves no Health on Voltages, so it is usually None). Consumption
+    and readings go to context.
     """
     normalized = {}
     context = {
@@ -1180,33 +1609,22 @@ def _normalize_power(power):
     }
     control = next(iter(_dicts(_dig(power, "PowerControl"))), {})
     context["power_consumed_w"] = _to_float(control.get("PowerConsumedWatts"))
-    context["power_capacity_w"] = _to_float(control.get("PowerCapacityWatts"))
+    context["power_capacity_w"] = _power_first(
+        _to_float(control.get("PowerCapacityWatts")), _to_float(_dig(subsystem, "CapacityWatts"))
+    )
     context["power_limit_w"] = _to_float(_dig(control, "PowerLimit", "LimitInWatts"))
-    for psu in _dicts(_dig(power, "PowerSupplies")):
+    rows = [
+        (_text(psu.get("MemberId")) or _text(psu.get("Id")) or "?", psu, None)
+        for psu in _dicts(_dig(power, "PowerSupplies"))
+    ]
+    for psu in _dicts(supplies):
+        member_id = _member_id(psu) or "?"
+        rows.append((member_id, psu, (supply_metrics or {}).get(member_id)))
+    for member_id, psu, metrics in rows:
         context["psu_total"] += 1
-        member_id = _text(psu.get("MemberId")) or _text(psu.get("Id")) or "?"
-        health, state = _status(psu)
-        line_v = _to_float(psu.get("LineInputVoltage"))
-        normalized["psu|%s" % (member_id,)] = {
-            "name": _text(psu.get("Name")),
-            "state": state,
-            "health": health,
-            "power_supply_type": _text(psu.get("PowerSupplyType")),
-            "line_input_voltage_type": _text(psu.get("LineInputVoltageType")),
-            "line_input_voltage": line_v,
-            "input_in_range": _input_in_range(line_v, psu.get("InputRanges")),
-            "capacity_w": _to_float(psu.get("PowerCapacityWatts")),
-            "serial": _text(psu.get("SerialNumber")),
-            "model": _text(psu.get("Model")),
-            "part_number": _text(psu.get("PartNumber")),
-            "manufacturer": _text(psu.get("Manufacturer")),
-            "firmware": _text(psu.get("FirmwareVersion")),
-        }
-        context["psu_readings"][member_id] = {
-            "input_w": _to_float(psu.get("PowerInputWatts")),
-            "output_w": _to_float(psu.get("PowerOutputWatts")),
-            "last_output_w": _to_float(psu.get("LastPowerOutputWatts")),
-        }
+        row, readings = _power_psu(psu, metrics)
+        normalized["psu|%s" % (member_id,)] = row
+        context["psu_readings"][member_id] = readings
     for group in _dicts(_dig(power, "Redundancy")):
         member_id = _text(group.get("MemberId")) or _text(group.get("Id")) or "?"
         health, state = _status(group)
@@ -1215,6 +1633,15 @@ def _normalize_power(power):
             "state": state,
             "health": health,
             "member_count": len(_dicts(group.get("RedundancySet"))),
+        }
+    for index, group in enumerate(_dicts(_dig(subsystem, "PowerSupplyRedundancy"))):
+        # A RedundantGroup carries no MemberId: its position is its identity.
+        health, state = _status(group)
+        normalized["redundancy|%d" % (index,)] = {
+            "mode": _text(group.get("RedundancyType")),
+            "state": state,
+            "health": health,
+            "member_count": len(_dicts(group.get("RedundancyGroup"))),
         }
     for sensor in _dicts(_dig(power, "Voltages")):
         member_id = _text(sensor.get("MemberId")) or _text(sensor.get("Id")) or "?"
@@ -1231,26 +1658,91 @@ def _normalize_power(power):
 
 
 def _collect_power(ctx):
-    with ctx.budget("bmc_power", _BUDGET_POWER):
+    raw = {}
+    subsystem = supplies = supplies_meta = supplies_path = None
+    supply_metrics = {}
+    with ctx.budget("bmc_power", _BUDGET_POWER) as budget:
         targets = _targets(ctx)
-        path = _sub(targets["chassis"], "Power")
-        power = _get(ctx, path)
-    if not isinstance(power, dict) or not power:
-        raise CollectError("%s answered without a resource body" % (path,))
-    normalized, context = _normalize_power(power)
+        chassis = _get(ctx, targets["chassis"])
+        power_link = _fenced_link(_dig(chassis, "Power"), "bmc_power Power")
+        path = power_link or _sub(targets["chassis"], "Power")
+        power = _get_optional(ctx, path)
+        if power is not None and (not isinstance(power, dict) or not power):
+            raise CollectError("%s answered without a resource body" % (path,))
+        subsystem_link = _fenced_link(_dig(chassis, "PowerSubsystem"), "bmc_power PowerSubsystem")
+        if subsystem_link is not None and not _normalize_power(power)[0]:
+            # No legacy resource, or one that models nothing (no supply, rail or
+            # redundancy group): the supplies are read from the PowerSubsystem.
+            subsystem = _get_optional(ctx, subsystem_link)
+            supplies_path = _fenced_link(
+                _dig(subsystem, "PowerSupplies"), "bmc_power PowerSupplies"
+            )
+        if supplies_path is not None:
+            supplies, supplies_meta, supplies_raw = _fetch_collection(
+                ctx, supplies_path, "bmc_power supplies", ok_404=True, budget=budget
+            )
+            raw.update(supplies_raw)
+            metric_links = []
+            for supply in _dicts(supplies):
+                link = _fenced_link(supply.get("Metrics"), "bmc_power supply Metrics")
+                if link is not None:
+                    metric_links.append((_member_id(supply) or "?", link))
+            _require_budget(budget, len(metric_links), "bmc_power", "supply metrics")
+            for member_id, link in metric_links:
+                metrics = _get_optional(ctx, link)
+                supply_metrics[member_id] = metrics
+                if metrics is not None:
+                    raw[link] = _curate(metrics)
+    if power is not None:
+        raw[path] = _curate(power)
+    if subsystem is not None:
+        raw[subsystem_link] = _curate(subsystem)
+    if supplies_path is not None and supplies is None:
+        raise CollectError("%s is linked but answered 404" % (supplies_path,))
+    normalized, context = _normalize_power(power, supplies, supply_metrics, subsystem)
     if not normalized:
-        raise CollectError(
-            "%s carries no PowerSupplies/Voltages/Redundancy members — this firmware may "
-            "serve PowerSubsystem instead, which is not read yet" % (path,)
-        )
-    return {
-        "raw": {path: _curate(power)},
-        "normalized": normalized,
-        "context": _with_resolution(context, targets),
-    }
+        if power is not None:
+            raise CollectError(
+                "%s carries no PowerSupplies/Voltages/Redundancy members%s"
+                % (path, "" if subsystem is None else " and %s lists no supply" % (subsystem_link,))
+            )
+        if subsystem is not None:
+            # An SE350 models its external adapters as sensors, never as supplies.
+            raise SkipCheck(
+                "%s is not served and %s models no supply: nothing to key" % (path, subsystem_link)
+            )
+        if subsystem_link is not None:
+            raise CollectError(
+                "%s answered 404 and the Chassis links %s, which answered 404 too"
+                % (path, subsystem_link)
+            )
+        if power_link is not None:
+            raise CollectError(
+                "the Chassis links %s but it answered 404, and no PowerSubsystem is linked"
+                % (path,)
+            )
+        raise SkipCheck("%s is not served and the Chassis links no PowerSubsystem" % (path,))
+    context["psu_source"] = (
+        supplies_path if supplies is not None else (path if power is not None else None)
+    )
+    if supplies_meta is not None:
+        context["supplies_collection"] = supplies_meta
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
 # --- bmc_inventory -----------------------------------------------------------
+# GETs, the lab SE350 (four DIMM slots, one CPU, four PCIe devices carrying
+# 1/2/2/1 functions): with $expand honoured one per collection (Memory,
+# Processors, PCIeDevices) and one per device for its PCIeFunctions collection
+# ($levels=2 does not inline those on XCC 6.10) — 7 beyond the id resolution.
+# The per-member fallback, $expand advertised but refused or ignored (the
+# attempt is paid once, on Memory, and never again for Processors, PCIeDevices
+# or the functions): Memory 1 + 1 + 4, Processors 1 + 1, PCIeDevices 1 + 4, then
+# the functions 4 collections + 6 members — 23 on the lab layout.
+# _BUDGET_INVENTORY = 28 + _TARGET_GETS leaves room for a dual-port card beyond
+# that. A bigger server without $expand is refused loudly with the counts (the
+# function reads are pre-checked before the first is sent), never recorded
+# partially.
 
 
 def _service_label(node):
@@ -1268,37 +1760,113 @@ def _service_label(node):
     return None
 
 
-def _normalize_inventory(memory, processors, pcie):
-    """'dimm|<Id>' / 'cpu|<Id>' / 'pcie|<Id>' identity rows; each list may be None (absent)."""
+def _inventory_scalar(value):
+    """A served scalar leaf verbatim (strings stripped); None when unset or not a scalar."""
+    if isinstance(value, str):
+        return _text(value)
+    if isinstance(value, (dict, list)):
+        return None
+    return value
+
+
+def _inventory_sorted(value, convert):
+    """The served list's items converted and sorted; None when the leaf is not served as a list."""
+    if not isinstance(value, list):
+        return None
+    return sorted(item for item in (convert(entry) for entry in value) if item is not None)
+
+
+def _inventory_dimm(dimm):
+    """One 'dimm|<Id>' row: identity, configuration and health (an empty slot has null identity)."""
+    health, state = _status(dimm)
+    lenovo = _dig(dimm, "Oem", "Lenovo")
+    mpfa = _dig(lenovo, "MPFA", "MPFA_HealthStatus")  # not served on XCC 6.10
+    return {
+        "slot": _text(dimm.get("DeviceLocator")),
+        "socket": _to_int(_dig(dimm, "MemoryLocation", "Socket")),
+        "service_label": _service_label(dimm),
+        "capacity_mib": _to_int(dimm.get("CapacityMiB")),
+        "type": _text(dimm.get("MemoryDeviceType")),
+        # Firmware-scaled (Lenovo's example shows 21333): stored as-is, never banded.
+        "speed_mhz": _to_int(dimm.get("OperatingSpeedMhz")),
+        "serial": _text(dimm.get("SerialNumber")),
+        "part_number": _text(dimm.get("PartNumber")),
+        "manufacturer": _text(dimm.get("Manufacturer")),
+        "health": health,
+        "state": state,
+        "error_correction": _text(dimm.get("ErrorCorrection")),  # not served on XCC 6.10
+        "rank_count": _to_int(dimm.get("RankCount")),
+        "data_width_bits": _to_int(dimm.get("DataWidthBits")),
+        # 72 over a 64-bit data path is the ECC evidence where ErrorCorrection is unserved.
+        "bus_width_bits": _to_int(dimm.get("BusWidthBits")),
+        "allowed_speeds_mhz": _inventory_sorted(dimm.get("AllowedSpeedsMHz"), _to_int),
+        "base_module_type": _text(dimm.get("BaseModuleType")),
+        "fru_part_number": _text(_dig(lenovo, "FruPartNumber")),
+        "manufacture_date": _text(_dig(lenovo, "ManufactureDate")),
+        "mpfa_health_major": _inventory_scalar(_dig(mpfa, "Major")),
+        "mpfa_health_minor": _inventory_scalar(_dig(mpfa, "Minor")),
+    }
+
+
+def _inventory_cpu(cpu):
+    """One 'cpu|<Id>' row: identity, the CPUID signature as served, rated limits and health.
+
+    ProcessorId's EffectiveFamily / EffectiveModel / Step are hex strings kept as served
+    (``model`` is the marketing string, so the CPUID model is ``effective_model``).
+    """
+    health, state = _status(cpu)
+    processor_id = _dig(cpu, "ProcessorId")
+    return {
+        "model": _text(cpu.get("Model")),
+        "socket": _text(cpu.get("Socket")),
+        "cores": _to_int(cpu.get("TotalCores")),
+        "enabled_cores": _to_int(cpu.get("TotalEnabledCores")),
+        "threads": _to_int(cpu.get("TotalThreads")),
+        "health": health,
+        "state": state,
+        "effective_family": _text(_dig(processor_id, "EffectiveFamily")),
+        "effective_model": _text(_dig(processor_id, "EffectiveModel")),
+        "step": _text(_dig(processor_id, "Step")),
+        "microcode": _text(_dig(processor_id, "MicrocodeInfo")),  # null on XCC 6.10
+        "max_speed_mhz": _to_int(cpu.get("MaxSpeedMHz")),
+        "tdp_w": _to_int(cpu.get("TDPWatts")),
+        "turbo_state": _text(cpu.get("TurboState")),  # not served on XCC 6.10
+        "serial": _text(cpu.get("SerialNumber")),
+    }
+
+
+def _inventory_function(function):
+    """One 'pciefn|<device>|<function>' row: the ids that name the silicon, as served (hex)."""
+    _health, state = _status(function)
+    return {
+        "function_type": _text(function.get("FunctionType")),
+        "device_class": _text(function.get("DeviceClass")),
+        "class_code": _text(function.get("ClassCode")),
+        "vendor_id": _text(function.get("VendorId")),
+        "device_id": _text(function.get("DeviceId")),
+        "subsystem_id": _text(function.get("SubsystemId")),
+        "subsystem_vendor_id": _text(function.get("SubsystemVendorId")),
+        # PCIeFunction.Enabled is recent and XCC 6.10 serves none: null there,
+        # never inferred from the state, which is its own field.
+        "enabled": _to_bool(function.get("Enabled")),
+        "state": state,
+    }
+
+
+def _normalize_inventory(memory, processors, pcie, functions=None):
+    """'dimm|<Id>' / 'cpu|<Id>' / 'pcie|<Id>' / 'pciefn|<device Id>|<function Id>' rows.
+
+    Each list may be None (absent). ``functions`` maps a PCIe device id to the members
+    of its PCIeFunctions collection; a device the BMC identifies by nothing but null
+    strings (the BMC's own VGA, an add-in NIC on the lab unit) is named by its
+    function rows' vendor and device ids.
+    """
     normalized = {}
     for dimm in _dicts(memory):
-        health, state = _status(dimm)
-        normalized["dimm|%s" % (_member_id(dimm) or "?",)] = {
-            "slot": _text(dimm.get("DeviceLocator")),
-            "socket": _to_int(_dig(dimm, "MemoryLocation", "Socket")),
-            "service_label": _service_label(dimm),
-            "capacity_mib": _to_int(dimm.get("CapacityMiB")),
-            "type": _text(dimm.get("MemoryDeviceType")),
-            # Firmware-scaled (Lenovo's example shows 21333): stored as-is, never banded.
-            "speed_mhz": _to_int(dimm.get("OperatingSpeedMhz")),
-            "serial": _text(dimm.get("SerialNumber")),
-            "part_number": _text(dimm.get("PartNumber")),
-            "manufacturer": _text(dimm.get("Manufacturer")),
-            "health": health,
-            "state": state,
-        }
+        normalized["dimm|%s" % (_member_id(dimm) or "?",)] = _inventory_dimm(dimm)
     for cpu in _dicts(processors):
-        health, state = _status(cpu)
-        # The SE350 CPU is soldered: identity plus health is all this family carries.
-        normalized["cpu|%s" % (_member_id(cpu) or "?",)] = {
-            "model": _text(cpu.get("Model")),
-            "socket": _text(cpu.get("Socket")),
-            "cores": _to_int(cpu.get("TotalCores")),
-            "enabled_cores": _to_int(cpu.get("TotalEnabledCores")),
-            "threads": _to_int(cpu.get("TotalThreads")),
-            "health": health,
-            "state": state,
-        }
+        # The SE350 CPU is soldered: identity, rated limits and health, never a reading.
+        normalized["cpu|%s" % (_member_id(cpu) or "?",)] = _inventory_cpu(cpu)
     for device in _dicts(pcie):
         health, state = _status(device)
         normalized["pcie|%s" % (_member_id(device) or "?",)] = {
@@ -1312,21 +1880,145 @@ def _normalize_inventory(memory, processors, pcie):
             "state": state,
             "location": _service_label(device),
         }
+    for device_id in sorted(functions or {}):
+        for function in _dicts(functions[device_id]):
+            key = "pciefn|%s|%s" % (device_id, _member_id(function) or "?")
+            normalized[key] = _inventory_function(function)
     return normalized
 
 
-def _cpu_clock_speeds(processors):
-    """{cpu Id: CurrentClockSpeedMHz} — a load-driven reading, kept as context, never diffed."""
-    speeds = {}
+# Where a CPU's current clock is served, first found wins: the DMTF OperatingSpeedMHz,
+# a top-level CurrentClockSpeedMHz (not a DMTF property; the leaf this check always
+# read), else Lenovo's OEM leaf — the only one XCC 6.10 fills.
+_INVENTORY_CLOCK_LEAVES = (
+    ("OperatingSpeedMHz",),
+    ("CurrentClockSpeedMHz",),
+    ("Oem", "Lenovo", "CurrentClockSpeedMHz"),
+)
+
+
+def _inventory_caches(cpu):
+    """A CPU's cache sizes: Lenovo's CacheInfo (KiB), else the DMTF ProcessorMemory caches (MiB)."""
+    caches = [
+        {
+            "level": _text(entry.get("CacheLevel")),
+            "installed_kib": _to_int(entry.get("InstalledSizeKByte")),
+            "max_kib": _to_int(entry.get("MaxCacheSizeKByte")),
+        }
+        for entry in _dicts(_dig(cpu, "Oem", "Lenovo", "CacheInfo"))
+    ]
+    if caches:
+        return {"source": "Oem.Lenovo.CacheInfo", "caches": caches}
+    caches = [
+        {"level": _text(entry.get("MemoryType")), "capacity_mib": _to_int(entry.get("CapacityMiB"))}
+        for entry in _dicts(cpu.get("ProcessorMemory"))
+        if str(entry.get("MemoryType") or "").lower().endswith("cache")
+    ]
+    return {"source": "ProcessorMemory" if caches else None, "caches": caches}
+
+
+def _inventory_cpu_context(processors):
+    """Per CPU: the current clock (a load-driven reading), the leaf it came from, cache sizes."""
+    speeds, sources, caches = {}, {}, {}
     for cpu in _dicts(processors):
-        speeds[_member_id(cpu) or "?"] = _to_int(cpu.get("CurrentClockSpeedMHz"))
-    return speeds
+        cpu_id = _member_id(cpu) or "?"
+        speeds[cpu_id], sources[cpu_id] = None, None
+        for path in _INVENTORY_CLOCK_LEAVES:
+            speed = _to_int(_dig(cpu, *path))
+            if speed is not None:
+                speeds[cpu_id], sources[cpu_id] = speed, ".".join(path)
+                break
+        caches[cpu_id] = _inventory_caches(cpu)
+    return {"clock_speed_mhz": speeds, "clock_speed_source": sources, "cpu_caches": caches}
+
+
+# A PCIe device in one of these states may legitimately carry no function rows.
+_PCIE_UNENUMERATED_STATES = frozenset({"Absent", "Disabled"})
+
+
+def _inventory_functions(ctx, devices, budget, try_expand):
+    """({device id: [PCIeFunction]}, {device id: how it was read}, raw) for every PCIe device.
+
+    A device's ``PCIeFunctions`` collection is read with one $expand GET (``$levels=2`` on
+    the device collection does not inline it on XCC 6.10), else walked member by member;
+    a device that links no collection but lists ``Links.PCIeFunctions`` (the deprecated
+    array) has each function read by its own link. ``try_expand`` starts as the device
+    collection's own answer and turns off at the first refusal, so a firmware that
+    refuses $expand pays for the attempt once, never once per device. A listed device
+    (State neither Absent nor Disabled) whose linked collection answers 404 or empty
+    refuses the check: unmeasured, never recorded as a device without functions.
+    """
+    plan = []
+    for device in _dicts(devices):
+        collection = _fenced_link(device.get("PCIeFunctions"), "bmc_inventory PCIeFunctions")
+        links = []
+        if collection is None:
+            for item in _dicts(_dig(device, "Links", "PCIeFunctions")):
+                link = _fenced_link(item, "bmc_inventory Links.PCIeFunctions")
+                if link is not None:
+                    links.append(link)
+        plan.append((_member_id(device) or "?", collection, links, _status(device)[1]))
+    # Complete-or-refused: the fewest GETs these reads can take must fit before one is sent.
+    needed = sum(1 if collection else len(links) for _id, collection, links, _state in plan)
+    left = _budget_left(budget)
+    if left is not None and needed > left:
+        raise CollectError(
+            "bmc_inventory: the PCIe functions of %d device(s) take at least %d GET(s) but only "
+            "%d are left in the budget of %d — refused rather than recorded partially"
+            % (len(plan), needed, left, budget.max_gets)
+        )
+    functions, report, raw, unmeasured = {}, {}, {}, []
+    for device_id, collection, links, state in plan:
+        if collection is not None:
+            members, meta, member_raw = _fetch_collection(
+                ctx,
+                collection,
+                "bmc_inventory PCIeFunctions",
+                ok_404=True,
+                budget=budget,
+                try_expand=try_expand,
+            )
+            raw.update(member_raw)
+            if meta.get("expand_refused"):
+                try_expand = False
+            if not members and state not in _PCIE_UNENUMERATED_STATES:
+                # Every PCI device has at least function 0: a listed device's empty or
+                # missing function collection is unmeasured, never "no functions".
+                unmeasured.append(device_id)
+            functions[device_id] = members or []
+            report[device_id] = {
+                "source": "PCIeFunctions",
+                "strategy": meta["strategy"],
+                "members": len(members) if members is not None else None,
+            }
+        elif links:
+            functions[device_id] = []
+            for link in links:
+                member = _get(ctx, link)
+                raw[link] = _curate(member)
+                functions[device_id].append(member)
+            report[device_id] = {
+                "source": "Links.PCIeFunctions",
+                "strategy": "members",
+                "members": len(links),
+            }
+        else:
+            report[device_id] = {"source": None, "strategy": None, "members": None}
+    if unmeasured:
+        raise CollectError(
+            "bmc_inventory: the PCIeFunctions collection of device(s) %s answered 404 or with "
+            "zero members — every PCI device has at least one function, so the read is "
+            "unmeasured (populated at POST), never 'no functions'; capture again after the "
+            "host completes POST" % (", ".join(unmeasured),)
+        )
+    return functions, report, raw
 
 
 def _collect_inventory(ctx):
     raw = {}
     collections = {}
     context = {"host_power_state": None, "collections": {}, "unmeasured": []}
+    try_expand = True
     with ctx.budget("bmc_inventory", _BUDGET_INVENTORY) as budget:
         targets = _targets(ctx)
         system = _get(ctx, targets["system"])
@@ -1337,37 +2029,52 @@ def _collect_inventory(ctx):
             ("pcie", _sub(targets["chassis"], "PCIeDevices")),
         ):
             members, meta, family_raw = _fetch_collection(
-                ctx, path, "bmc_inventory %s" % (family,), ok_404=True, budget=budget
+                ctx,
+                path,
+                "bmc_inventory %s" % (family,),
+                ok_404=True,
+                budget=budget,
+                try_expand=try_expand,
             )
+            if meta.get("expand_refused"):
+                try_expand = False  # a refusal is paid for once per check, never per family
             collections[family] = members
             context["collections"][family] = dict(
                 meta, members=len(members) if members is not None else None
             )
             raw.update(family_raw)
-    if all(members is None for members in collections.values()):
-        raise SkipCheck("Memory, Processors and PCIeDevices collections all answered 404")
-    # Inventory is POST-populated (UEFI / Host Interface). An empty 200
-    # collection is unmeasured — with the host off, or On but still in POST,
-    # or on a firmware that never enumerates the family — and a diff cannot
-    # tell "unmeasured" from "every part gone", so the read is refused
-    # whatever the power state says; a Memory or Processors collection is
-    # never legitimately empty on a server.
-    for family, members in collections.items():
-        if members is not None and not members:
-            context["unmeasured"].append(family)
-    if context["unmeasured"]:
-        raise CollectError(
-            "%s answered with zero members (host PowerState %s) — inventory is populated "
-            "at POST and an empty collection is unmeasured, never 'all parts gone'; capture "
-            "again after the host completes POST"
-            % (", ".join(context["unmeasured"]), context["host_power_state"])
+        if all(members is None for members in collections.values()):
+            raise SkipCheck("Memory, Processors and PCIeDevices collections all answered 404")
+        # Inventory is POST-populated (UEFI / Host Interface). An empty 200
+        # collection is unmeasured — with the host off, or On but still in POST,
+        # or on a firmware that never enumerates the family — and a diff cannot
+        # tell "unmeasured" from "every part gone", so the read is refused
+        # whatever the power state says (before any function is read); a Memory
+        # or Processors collection is never legitimately empty on a server.
+        for family, members in collections.items():
+            if members is not None and not members:
+                context["unmeasured"].append(family)
+        if context["unmeasured"]:
+            raise CollectError(
+                "%s answered with zero members (host PowerState %s) — inventory is populated "
+                "at POST and an empty collection is unmeasured, never 'all parts gone'; capture "
+                "again after the host completes POST"
+                % (", ".join(context["unmeasured"]), context["host_power_state"])
+            )
+        functions, context["pcie_functions"], functions_raw = _inventory_functions(
+            ctx,
+            collections["pcie"],
+            budget,
+            try_expand=try_expand and context["collections"]["pcie"]["strategy"] == "expand",
         )
+        raw.update(functions_raw)
     normalized = _normalize_inventory(
-        collections["memory"], collections["processors"], collections["pcie"]
+        collections["memory"], collections["processors"], collections["pcie"], functions
     )
     # Clock speed is load-driven (and this CPU is soldered): a reading, so it
-    # rides in context next to the identity rows and stays in raw, never diffed.
-    context["clock_speed_mhz"] = _cpu_clock_speeds(collections["processors"])
+    # rides in context next to the identity rows and stays in raw, never diffed;
+    # so do the cache sizes (bulk, and fixed by the part the rows already name).
+    context.update(_inventory_cpu_context(collections["processors"]))
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
@@ -1429,62 +2136,148 @@ def _collect_host_nics(ctx):
         # false-green on every capture.
         raise SkipCheck("LinkStatus is null on every host port — link state not reported")
     context.update(meta)
+    # The collection that carried the ports: the System's EthernetInterfaces
+    # (the Chassis NetworkAdapters tree describes the same ports per adapter).
+    context["port_source"] = path
     context["host_power_state"] = _text(_dig(system, "PowerState"))
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
 # --- bmc_firmware ------------------------------------------------------------
+# GETs: FirmwareInventory (one $expand GET; the fallback walk is 1 + 1 + 15 on
+# the lab unit), the Manager (its Links.ActiveSoftwareImage; the same cached
+# read bmc_system and bmc_security make), the UpdateService (Lenovo's backup
+# promotion policy, and the link to a SoftwareInventory collection where one is
+# served — XCC 6.10 links none, so nothing more is requested there) and that
+# collection. The lab worst case, 17 + 1 + 1 = 19 beyond the id resolution, sits
+# inside _BUDGET_FIRMWARE (24 + _TARGET_GETS).
+_FIRMWARE_UPDATE_SERVICE = "/redfish/v1/UpdateService"
 
 
-def _normalize_firmware(members):
-    """'fw|<Id>' -> name, version (verbatim), software_id, updateable, health.
-
-    Status.State is never emitted: the backup XCC bank toggles between
-    StandbyOffline and Enabled after a BMC reboot. ReleaseDate, etags,
-    LowestSupportedVersion, Description and Oem.* are excluded.
-    """
-    normalized = {}
+def _firmware_rows(members, prefix):
+    """'<prefix>|<Id>' -> name, version (verbatim), software_id, updateable, health."""
+    rows = {}
     for member in sorted(_dicts(members), key=lambda item: _member_id(item) or ""):
         health, _state = _status(member)
-        normalized["fw|%s" % (_member_id(member) or "?",)] = {
+        rows["%s|%s" % (prefix, _member_id(member) or "?")] = {
             "name": _text(member.get("Name")),
             "version": _text(member.get("Version")),
             "software_id": _text(member.get("SoftwareId")),
             "updateable": _to_bool(member.get("Updateable")),
             "health": health,
         }
+    return rows
+
+
+def _normalize_firmware(members, software=None, manager=None, update_service=None):
+    """The firmware view: 'fw|<Id>' and 'sw|<Id>' rows plus two scalars, always present.
+
+    Rows come from FirmwareInventory and, where served, SoftwareInventory (the same
+    fields). Status.State is never emitted: the backup XCC bank toggles between
+    StandbyOffline and Enabled after a BMC reboot. ReleaseDate, etags,
+    LowestSupportedVersion, Description and Oem.* are excluded. The '-Pending'
+    members are kept (a version there is a staged update). ``manager_active_image``
+    is the leaf id of the Manager's Links.ActiveSoftwareImage (the inventory member
+    the BMC runs from); ``backup_auto_promote`` is Lenovo's
+    UpdateService.Oem.Lenovo.XCCBackupAutoPromote. Both None when unserved.
+    """
+    normalized = _firmware_rows(members, "fw")
+    normalized.update(_firmware_rows(software, "sw"))
+    active = _fenced_link(
+        _dig(manager, "Links", "ActiveSoftwareImage"), "bmc_firmware Links.ActiveSoftwareImage"
+    )
+    normalized["manager_active_image"] = _leaf_id(active) if active else None
+    normalized["backup_auto_promote"] = _to_bool(
+        _dig(update_service, "Oem", "Lenovo", "XCCBackupAutoPromote")
+    )
     return normalized
 
 
 def _collect_firmware(ctx):
+    software = None
+    software_meta = {"linked": False}
     with ctx.budget("bmc_firmware", _BUDGET_FIRMWARE) as budget:
         targets = _targets(ctx)
         members, meta, raw = _fetch_collection(ctx, _FIRMWARE, "bmc_firmware", budget=budget)
-    if not members:
-        raise CollectError("UpdateService/FirmwareInventory lists no members")
+        if not members:
+            raise CollectError("UpdateService/FirmwareInventory lists no members")
+        manager = _get(ctx, targets["manager"])
+        update_path = (
+            _fenced_link(_dig(_get(ctx, _ROOT), "UpdateService"), "bmc_firmware UpdateService")
+            or _FIRMWARE_UPDATE_SERVICE
+        )
+        update_service = _get_optional(ctx, update_path)
+        software_link = _fenced_link(
+            _dig(update_service, "SoftwareInventory"), "bmc_firmware SoftwareInventory"
+        )
+        if software_link:
+            # The FirmwareInventory's answer decides: a refused $expand is not paid twice.
+            software, software_fetch, software_raw = _fetch_collection(
+                ctx,
+                software_link,
+                "bmc_firmware SoftwareInventory",
+                ok_404=True,
+                budget=budget,
+                try_expand=meta["strategy"] == "expand",
+            )
+            raw.update(software_raw)
+            software_meta = {
+                "linked": True,
+                "strategy": software_fetch["strategy"],
+                "members": len(software) if software is not None else None,
+            }
+    if update_service is not None:
+        raw[update_path] = _curate(update_service)
+    context = dict(meta, members=len(members))
+    context.update(
+        {
+            "update_service": update_path if update_service is not None else None,
+            "software_inventory": software_meta,
+        }
+    )
     return {
         "raw": raw,
-        "normalized": _normalize_firmware(members),
-        "context": _with_resolution(dict(meta, members=len(members)), targets),
+        "normalized": _normalize_firmware(members, software, manager, update_service),
+        "context": _with_resolution(context, targets),
     }
 
 
 # --- bmc_event_log -----------------------------------------------------------
 
 _KEYED_SEVERITIES = frozenset({"warning", "critical"})
+# Log services read beside the platform log, found by id among the
+# LogServices members (Lenovo's names, compared lower-cased): the ActiveLog
+# (the BMC's unresolved conditions, every entry keyed), the MaintenanceLog
+# (firmware-update and hardware history: context and raw), the IPMI SEL (a
+# probe: its size policy, never its entries) and the AuditLog (its SERVICE
+# resource's sequence numbers, read only where the platform log's service
+# lacks them; never its entries, where the capture's own logins would land).
+_EVENT_LOG_ACTIVE = "activelog"
+_EVENT_LOG_MAINTENANCE = "maintenancelog"
+_EVENT_LOG_SEL = "sel"
+_EVENT_LOG_AUDIT = "auditlog"
+# Newest MaintenanceLog rows kept in raw (XCC 6.10 holds up to 750; the lab
+# unit's whole history is 73). bmc_firmware carries the versions themselves.
+_EVENT_LOG_MAINTENANCE_ROWS = 100
 
 
 def _pick_log_service(links, targets=None):
     """PlatformLog (gen-1 guide, V2 too) else StandardLog (Purley era, XCC 6.10) else a lone member.
 
     Those two names are Lenovo's; another vendor with several log services
-    has no mapping yet and records not-present naming them.
+    has no mapping yet and records not-present naming them. An audit log is
+    never the lone member taken: its entries hold the capture's own logins.
     """
     by_id = {_leaf_id(link): link for link in links}
     for wanted in ("PlatformLog", "StandardLog"):
         if wanted in by_id:
             return by_id[wanted], wanted
     if len(links) == 1:
+        if "audit" in _leaf_id(links[0]).lower():
+            raise SkipCheck(
+                "the only log service is %s, an audit log, whose entries are never read"
+                % (_leaf_id(links[0]),)
+            )
         return links[0], _leaf_id(links[0])
     if targets is not None and not _is_lenovo(targets):
         raise _no_mapping(
@@ -1501,17 +2294,78 @@ def _entry_sort_id(entry):
     return (0, value) if value is not None else (1, str(entry.get("Id")))
 
 
-def _normalize_event_log(entries, log_service=None):
-    """(normalized, context) over the whole Entries collection.
+def _event_log_code(entry):
+    """The event class an entry is keyed and counted by: CommonEventID, else MessageId."""
+    return (
+        _text(_dig(entry, "Oem", "Lenovo", "CommonEventID"))
+        or _text(_dig(entry, "MessageId"))
+        or "unknown"
+    )
 
-    Keys 'sel|<CommonEventID>|<Id>' for Severity Warning/Critical only — the
-    event code sits in the key so additions can be grouped by event class.
-    Every other entry is counted per CommonEventID in context.
-    Ids are the BMC's monotonic sequence numbers. Whether the log was
-    cleared is a cross-capture fact (a post newest_id below the pre
-    newest_id) that one capture cannot know, so context carries the facts
-    the comparison needs — first_id, newest_id, the service's own platform
-    sequence numbers (XCC 6.10 spells them ``PlatformFirstSeqNum`` /
+
+def _event_log_serviceable(value):
+    """Lenovo's Serviceable as a boolean; None when it says neither.
+
+    The LenovoLogEntry schema's enum is 'Not Serviceable', 'ServiceableByLenovo'
+    and 'ServiceableByCustomer' (case, spaces and separators are ignored here);
+    Lenovo's older samples serve a boolean; a one-element list (the schema's
+    collection form) reads as its element. Who services it is
+    _event_log_serviceable_by.
+    """
+    if isinstance(value, list):
+        verdicts = {_event_log_serviceable(item) for item in value}
+        return verdicts.pop() if len(verdicts) == 1 else None
+    if isinstance(value, str):
+        squashed = re.sub(r"[^a-z]", "", value.lower())
+        if squashed.startswith("notserviceable"):
+            return False
+        if squashed.startswith("serviceable"):
+            return True
+    return _to_bool(value)
+
+
+def _event_log_serviceable_by(value):
+    """'Lenovo' / 'Customer' from ServiceableByLenovo / ServiceableByCustomer; else None."""
+    if isinstance(value, list):
+        parties = {_event_log_serviceable_by(item) for item in value}
+        return parties.pop() if len(parties) == 1 else None
+    if isinstance(value, str):
+        match = re.match(r"serviceable[\s_-]*by[\s_-]*([a-z]+)$", value.strip(), re.IGNORECASE)
+        if match:
+            return match.group(1).capitalize()
+    return None
+
+
+def _event_log_failing_fru(entry):
+    """Oem.Lenovo.FailingFRU as sorted [{part, serial}]; None when the leaf is not served.
+
+    XCC 6.10 serves one {"FRUNumber": "", "FRUSerialNumber": ""} placeholder
+    on an entry that names no part: placeholders are dropped, so "no part" is [].
+    """
+    node = _dig(entry, "Oem", "Lenovo", "FailingFRU")
+    if node is None:
+        return None
+    frus = []
+    for fru in _dicts(node):
+        part, serial = _text(fru.get("FRUNumber")), _text(fru.get("FRUSerialNumber"))
+        if part is not None or serial is not None:
+            frus.append({"part": part, "serial": serial})
+    return sorted(frus, key=lambda fru: (fru["part"] or "", fru["serial"] or ""))
+
+
+def _normalize_event_log(entries, log_service=None):
+    """(normalized, context) over the whole platform-log Entries collection.
+
+    Keys 'sel|<code>|<Id>' for Severity Warning/Critical only — the event
+    code (Lenovo's CommonEventID, else the entry's MessageId) sits in the key
+    so additions can be grouped by event class; values add the failing FRUs
+    and Lenovo's LogType (platform or audit) to severity, source, serviceable,
+    event_id and hidden. Every other entry is counted per code in context,
+    and every entry per LogType. Ids are the BMC's monotonic sequence numbers.
+    Whether the log was cleared is a cross-capture fact (a post newest_id
+    below the pre newest_id) that one capture cannot know, so context carries
+    the facts the comparison needs — first_id, newest_id, the service's own
+    platform sequence numbers (XCC 6.10 spells them ``PlatformFirstSeqNum`` /
     ``PlatformLastSeqNum``; ``FirstSeqNum`` / ``LastSeqNum`` elsewhere;
     ``seq_num_source`` names the spelling read), entries_total — and
     ``at_capacity`` (the log holds MaxNumberOfRecords entries, so the next
@@ -1520,16 +2374,20 @@ def _normalize_event_log(entries, log_service=None):
     """
     normalized = {}
     informational = {}
+    by_log_type = {}
     hidden_total = 0
     ids = []
     newest = None
     for entry in _dicts(entries):
         entry_id = _text(entry.get("Id")) or "?"
-        code = _text(_dig(entry, "Oem", "Lenovo", "CommonEventID")) or "unknown"
+        code = _event_log_code(entry)
         severity = _text(entry.get("Severity"))
         hidden = _to_bool(_dig(entry, "Oem", "Lenovo", "Hidden"))
+        log_type = _text(_dig(entry, "Oem", "Lenovo", "LogType"))
         if hidden:
             hidden_total += 1
+        if log_type is not None:
+            by_log_type[log_type] = by_log_type.get(log_type, 0) + 1
         numeric = _to_int(entry.get("Id"))
         if numeric is not None:
             ids.append(numeric)
@@ -1540,9 +2398,14 @@ def _normalize_event_log(entries, log_service=None):
                 "severity": severity,
                 "source": _text(_dig(entry, "Oem", "Lenovo", "Source"))
                 or _text(entry.get("SensorType")),
-                "serviceable": _to_bool(_dig(entry, "Oem", "Lenovo", "Serviceable")),
+                "serviceable": _event_log_serviceable(_dig(entry, "Oem", "Lenovo", "Serviceable")),
+                "serviceable_by": _event_log_serviceable_by(
+                    _dig(entry, "Oem", "Lenovo", "Serviceable")
+                ),
                 "event_id": _text(entry.get("EventId")),
                 "hidden": bool(hidden),
+                "failing_fru": _event_log_failing_fru(entry),
+                "log_type": log_type,
             }
         else:
             informational[code] = informational.get(code, 0) + 1
@@ -1556,6 +2419,7 @@ def _normalize_event_log(entries, log_service=None):
         "keyed_entries": len(normalized),
         "hidden_entries": hidden_total,
         "informational_by_code": dict(sorted(informational.items())),
+        "entries_by_log_type": dict(sorted(by_log_type.items())),
         "first_id": min(ids) if ids else None,
         "newest_id": max(ids) if ids else None,
         "newest_created": _text(newest.get("Created")) if newest else None,
@@ -1583,174 +2447,555 @@ def _platform_seq_nums(log_service):
     return {"first_seq_num": None, "last_seq_num": None, "seq_num_source": None}
 
 
-def _curate_entries(entries):
-    """Per-entry audit rows for raw (newest first, capped): Id, Created, Severity, code, Message."""
-    ordered = sorted(_dicts(entries), key=_entry_sort_id, reverse=True)
-    rows = []
-    for entry in ordered[:_RAW_LOG_ENTRIES]:
-        rows.append(
-            {
-                "Id": entry.get("Id"),
-                "Created": entry.get("Created"),
-                "Severity": entry.get("Severity"),
-                "EventId": entry.get("EventId"),
-                "CommonEventID": _dig(entry, "Oem", "Lenovo", "CommonEventID"),
-                "Hidden": _dig(entry, "Oem", "Lenovo", "Hidden"),
-                "Message": entry.get("Message"),
-            }
+def _event_log_audit_seq(platform, platform_id, audit=None, audit_id=None):
+    """({first, last}, source) of the audit log's sequence numbers, from a SERVICE resource.
+
+    The platform log's service first (XCC 6.10's StandardLog carries
+    Oem.Lenovo.AuditFirstSeqNum / AuditLastSeqNum beside its platform
+    counters), else an AuditLog service's own resource (the Audit* spelling,
+    else its plain FirstSeqNum / LastSeqNum). The AuditLog's entries are
+    never read.
+    """
+    for label, service, spellings in (
+        (platform_id, platform, (("AuditFirstSeqNum", "AuditLastSeqNum"),)),
+        (
+            audit_id,
+            audit,
+            (("AuditFirstSeqNum", "AuditLastSeqNum"), ("FirstSeqNum", "LastSeqNum")),
+        ),
+    ):
+        oem = _dig(service, "Oem", "Lenovo")
+        if not isinstance(oem, dict):
+            continue
+        for first, last in spellings:
+            if first in oem or last in oem:
+                return (
+                    {"first": _to_int(oem.get(first)), "last": _to_int(oem.get(last))},
+                    "%s Oem.Lenovo.%s/%s" % (label, first, last),
+                )
+    return {"first": None, "last": None}, None
+
+
+def _event_log_sel_wrapping(sel, sel_id, platform, platform_id):
+    """(enabled, source) of Lenovo's EnableSELWrapping: the SEL service's, else the platform's."""
+    for label, service in ((sel_id, sel), (platform_id, platform)):
+        oem = _dig(service, "Oem", "Lenovo")
+        if isinstance(oem, dict) and "EnableSELWrapping" in oem:
+            return _to_bool(oem["EnableSELWrapping"]), "%s Oem.Lenovo.EnableSELWrapping" % (label,)
+    return None, None
+
+
+def _event_log_service_facts(service):
+    """Size policy of a log service resource; every field None when it was not served."""
+    served = isinstance(service, dict)
+    return {
+        "served": served,
+        "service_enabled": _to_bool(_dig(service, "ServiceEnabled")),
+        "max_records": _to_int(_dig(service, "MaxNumberOfRecords")),
+        "overwrite_policy": _text(_dig(service, "OverWritePolicy")),
+        "entries_link": bool(_dig(service, "Entries", "@odata.id")) if served else None,
+    }
+
+
+def _event_log_normalize_active(entries):
+    """'active|<code>|<Id>' for EVERY ActiveLog entry, whatever its severity.
+
+    Values: severity, message_id (the DMTF MessageId), created (the
+    condition's own timestamp, stable per entry), serviceable, failing_fru.
+    """
+    normalized = {}
+    for entry in _dicts(entries):
+        key = "active|%s|%s" % (_event_log_code(entry), _member_id(entry) or "?")
+        normalized[key] = {
+            "severity": _text(entry.get("Severity")),
+            "message_id": _text(entry.get("MessageId")),
+            "created": _text(entry.get("Created")),
+            "serviceable": _event_log_serviceable(_dig(entry, "Oem", "Lenovo", "Serviceable")),
+            "serviceable_by": _event_log_serviceable_by(
+                _dig(entry, "Oem", "Lenovo", "Serviceable")
+            ),
+            "failing_fru": _event_log_failing_fru(entry),
+        }
+    return normalized
+
+
+def _event_log_history(entries):
+    """MaintenanceLog counts: total, per EventGroupId, first/newest id and newest Created.
+
+    Every field is None when the log was not read (``entries`` None).
+    """
+    if entries is None:
+        return dict.fromkeys(
+            ("entries_total", "by_event_group_id", "first_id", "newest_id", "newest_created")
         )
-    return rows, max(0, len(ordered) - _RAW_LOG_ENTRIES)
+    entries = _dicts(entries)
+    ids = [value for value in (_to_int(entry.get("Id")) for entry in entries) if value is not None]
+    by_group = {}
+    for entry in entries:
+        group = entry.get("EventGroupId")
+        label = "none" if group is None else str(group)
+        by_group[label] = by_group.get(label, 0) + 1
+    newest = max(entries, key=_entry_sort_id) if entries else None
+    return {
+        "entries_total": len(entries),
+        "by_event_group_id": dict(sorted(by_group.items())),
+        "first_id": min(ids) if ids else None,
+        "newest_id": max(ids) if ids else None,
+        "newest_created": _text(newest.get("Created")) if newest else None,
+    }
+
+
+def _event_log_platform_row(entry):
+    """A raw row of the platform log."""
+    return {
+        "Id": entry.get("Id"),
+        "Created": entry.get("Created"),
+        "Severity": entry.get("Severity"),
+        "EventId": entry.get("EventId"),
+        "CommonEventID": _dig(entry, "Oem", "Lenovo", "CommonEventID"),
+        "LogType": _dig(entry, "Oem", "Lenovo", "LogType"),
+        "Hidden": _dig(entry, "Oem", "Lenovo", "Hidden"),
+        "Message": entry.get("Message"),
+    }
+
+
+def _event_log_aux_row(entry):
+    """A raw row of the ActiveLog or the MaintenanceLog."""
+    return {
+        "Id": entry.get("Id"),
+        "Created": entry.get("Created"),
+        "Severity": entry.get("Severity"),
+        "MessageId": entry.get("MessageId"),
+        "CommonEventID": _dig(entry, "Oem", "Lenovo", "CommonEventID"),
+        "EventGroupId": entry.get("EventGroupId"),
+        "Message": entry.get("Message"),
+    }
+
+
+def _curate_entries(entries, cap=_RAW_LOG_ENTRIES, row=None):
+    """Per-entry rows for raw, newest first and capped: (rows, how many were left out).
+
+    ``row`` builds one row from an entry; the default is the platform log's
+    (Id, Created, Severity, EventId, CommonEventID, LogType, Hidden, Message).
+    """
+    ordered = sorted(_dicts(entries), key=_entry_sort_id, reverse=True)
+    build = row or _event_log_platform_row
+    return [build(entry) for entry in ordered[:cap]], max(0, len(ordered) - cap)
+
+
+def _event_log_raw_page(entries, pages, served_count, cap, row=None):
+    """The raw record of one log's Entries: curated rows plus what was read and left out."""
+    rows, omitted = _curate_entries(entries, cap, row)
+    return {
+        "Members@odata.count": served_count,
+        "Members": rows,
+        "entries_omitted_from_raw": omitted,
+        "pages_fetched": pages,
+    }
+
+
+def _event_log_read_entries(ctx, entries_link, label):
+    """(entries, pages, served count) of one log's whole Entries collection.
+
+    The whole collection, no query string: $top is undocumented on XCC and
+    where honoured returns the OLDEST entries first. A firmware that pages
+    hands back Members@odata.nextLink; the fence lets its $skip / $skiptoken
+    through and refuses a link carrying $top (or anything else) loudly rather
+    than reading a partial log, and a continuation naming a page already read
+    fails too (the per-run cache would answer it forever). Every page passes
+    the log redactor: Lenovo audit rows name people in the message.
+    """
+    page = _get(ctx, entries_link, redact=_redact_log_page)
+    if not isinstance(page, dict):
+        raise CollectError("%s answered without a collection body" % (entries_link,))
+    entries = list(_dicts(page.get("Members")))
+    pages = [entries_link]
+    served_count = page.get("Members@odata.count")
+    while _text(page.get("Members@odata.nextLink")):
+        next_link = _fenced_link(
+            {"@odata.id": page["Members@odata.nextLink"]}, "%s continuation" % (label,)
+        )
+        if next_link in pages:
+            raise CollectError("%s continuation: %s names a page already read" % (label, next_link))
+        page = _get(ctx, next_link, redact=_redact_log_page)
+        if not isinstance(page, dict):
+            raise CollectError("%s answered without a collection body" % (next_link,))
+        entries.extend(_dicts(page.get("Members")))
+        pages.append(next_link)
+    if not isinstance(served_count, int) or isinstance(served_count, bool):
+        served_count = len(entries)
+    return entries, pages, served_count
+
+
+def _event_log_services(ctx, services_path, targets):
+    """The platform log's service and the ones read beside it, the cheapest way offered.
+
+    One ``$expand`` GET inlines every service resource (XCC 6.10: six). When
+    the firmware refuses or ignores it, the collection is read plain and only
+    the services this check uses are fetched — the platform log first, so a
+    tree this family has no mapping for is not-present before any other
+    member is read; a listed auxiliary service that answers 404 is not served.
+    Returns ``links`` (every member, fenced), ``platform_link`` /
+    ``platform_id`` / ``platform``, ``services`` ({lower-cased id: (link,
+    resource or None)} for the ActiveLog, MaintenanceLog, SEL and — only where
+    the platform service carries no audit sequence numbers — the AuditLog),
+    ``strategy`` (expand / members), ``expand_refused`` and ``raw``.
+    """
+    raw = {}
+    inline = None
+    expand_refused = None
+    if _expand_advertised(_get(ctx, _ROOT)) is not False:
+        expanded_path = services_path + _EXPAND
+        try:
+            payload = _get_optional(ctx, expanded_path)
+        except Exception as exc:  # transport error class is not importable here
+            if _http_status(exc) is None:
+                raise  # budget, fence or network failure — never a fallback trigger
+            payload, expand_refused = None, "HTTP %s" % (_http_status(exc),)
+        if payload is not None and _expanded(_dicts(payload.get("Members"))):
+            raw[expanded_path] = _curate(payload)
+            inline = {}
+            for member in _dicts(payload.get("Members")):
+                link = _fenced_link(member, "bmc_event_log log service")
+                if link is not None:
+                    inline[link] = member
+        elif payload is not None:
+            expand_refused = "members returned as links"
+    if inline is not None:
+        links = list(inline)
+    else:
+        collection = _get(ctx, services_path)
+        raw[services_path] = _curate(collection)
+        links = _member_links(collection, "bmc_event_log")
+
+    def read(link, required):
+        if inline is not None:
+            return inline.get(link)
+        payload = _get(ctx, link) if required else _get_optional(ctx, link)
+        raw[link] = _curate(payload) if payload is not None else None
+        return payload
+
+    platform_link, platform_id = _pick_log_service(links, targets)
+    platform = read(platform_link, True)
+    if not isinstance(platform, dict):
+        raise CollectError("%s answered without a resource body" % (platform_link,))
+    by_id = {}
+    for link in links:
+        by_id.setdefault(_leaf_id(link).lower(), link)
+    wanted = [_EVENT_LOG_ACTIVE, _EVENT_LOG_MAINTENANCE, _EVENT_LOG_SEL]
+    if _event_log_audit_seq(platform, platform_id)[1] is None:
+        wanted.append(_EVENT_LOG_AUDIT)
+    services = {_EVENT_LOG_AUDIT: (None, None)}
+    for name in wanted:
+        link = by_id.get(name)
+        if link is None:
+            services[name] = (None, None)
+        elif link == platform_link:
+            services[name] = (link, platform)
+        else:
+            services[name] = (link, read(link, False))
+    return {
+        "links": links,
+        "platform_link": platform_link,
+        "platform_id": platform_id,
+        "platform": platform,
+        "services": services,
+        "strategy": "expand" if inline is not None else "members",
+        "expand_refused": expand_refused,
+        "raw": raw,
+    }
+
+
+def _event_log_read_aux(ctx, found, name):
+    """(service, entries link, entries, pages, served count) of the ActiveLog or MaintenanceLog.
+
+    Nothing is read when the service is not served, links no Entries, or is
+    the platform log itself (whose entries are read already).
+    """
+    link, service = found["services"][name]
+    if service is None or link == found["platform_link"]:
+        return service, None, [], [], None
+    label = "bmc_event_log %s" % (_leaf_id(link),)
+    entries_link = _fenced_link(_dig(service, "Entries"), label)
+    if entries_link is None:
+        return service, None, [], [], None
+    return (service, entries_link) + _event_log_read_entries(ctx, entries_link, label)
 
 
 def _collect_event_log(ctx):
     with ctx.budget("bmc_event_log", _BUDGET_EVENT_LOG):
         targets = _targets(ctx)
-        services_path = _sub(targets["system"], "LogServices")
-        services = _get(ctx, services_path)
-        service_link, service_id = _pick_log_service(
-            _member_links(services, "bmc_event_log"), targets
+        found = _event_log_services(ctx, _sub(targets["system"], "LogServices"), targets)
+        entries_link = _fenced_link(found["platform"].get("Entries"), "bmc_event_log") or (
+            found["platform_link"] + "/Entries"
         )
-        service = _get(ctx, service_link)
-        entries_link = _fenced_link(service.get("Entries"), "bmc_event_log") or (
-            service_link + "/Entries"
+        entries, pages, served_count = _event_log_read_entries(ctx, entries_link, "bmc_event_log")
+        active_read = _event_log_read_aux(ctx, found, _EVENT_LOG_ACTIVE)
+        history_read = _event_log_read_aux(ctx, found, _EVENT_LOG_MAINTENANCE)
+    normalized, context = _normalize_event_log(entries, found["platform"])
+    raw = dict(found["raw"])
+    raw[entries_link] = _event_log_raw_page(entries, pages, served_count, _RAW_LOG_ENTRIES)
+    service, link, active, active_pages, count = active_read
+    active_log = dict(
+        _event_log_service_facts(service), entries_total=None, pages=len(active_pages)
+    )
+    if link is not None:
+        normalized.update(_event_log_normalize_active(active))
+        active_log["entries_total"] = len(active)
+        raw[link] = _event_log_raw_page(
+            active, active_pages, count, _RAW_LOG_ENTRIES, _event_log_aux_row
         )
-        # The whole collection, no query string: $top is undocumented on XCC
-        # and where honoured returns the OLDEST entries first. A firmware that
-        # pages hands back Members@odata.nextLink; the fence lets its $skip /
-        # $skiptoken through and refuses a link carrying $top (or anything
-        # else) loudly rather than reading a partial log. Every page passes
-        # the log redactor: Lenovo audit rows name people in the message.
-        page = _get(ctx, entries_link, redact=_redact_log_page)
-        entries = list(_dicts(page.get("Members")))
-        pages = [entries_link]
-        while _text(page.get("Members@odata.nextLink")):
-            next_link = _fenced_link(
-                {"@odata.id": page["Members@odata.nextLink"]}, "bmc_event_log continuation"
-            )
-            page = _get(ctx, next_link, redact=_redact_log_page)
-            entries.extend(_dicts(page.get("Members")))
-            pages.append(next_link)
-    normalized, context = _normalize_event_log(entries, service)
-    rows, omitted = _curate_entries(entries)
-    raw = {
-        services_path: _curate(services),
-        service_link: _curate(service),
-        entries_link: {
-            "Members@odata.count": page.get("Members@odata.count", len(entries)),
-            "Members": rows,
-            "entries_omitted_from_raw": omitted,
-            "pages_fetched": pages,
-        },
-    }
-    context.update({"log_service_used": service_id, "pages": len(pages)})
+    service, link, history, history_pages, count = history_read
+    maintenance_log = dict(_event_log_service_facts(service), pages=len(history_pages))
+    maintenance_log.update(_event_log_history(history if link is not None else None))
+    if link is not None:
+        raw[link] = _event_log_raw_page(
+            history, history_pages, count, _EVENT_LOG_MAINTENANCE_ROWS, _event_log_aux_row
+        )
+    total, limit = maintenance_log["entries_total"], maintenance_log["max_records"]
+    maintenance_log["at_capacity"] = (
+        total >= limit if total is not None and limit is not None else None
+    )
+    sel_link, sel = found["services"][_EVENT_LOG_SEL]
+    audit_link, audit = found["services"][_EVENT_LOG_AUDIT]
+    audit_seq, audit_source = _event_log_audit_seq(
+        found["platform"], found["platform_id"], audit, _leaf_id(audit_link) if audit_link else None
+    )
+    wrapping, wrapping_source = _event_log_sel_wrapping(
+        sel, _leaf_id(sel_link) if sel_link else None, found["platform"], found["platform_id"]
+    )
+    context.update(
+        {
+            "log_service_used": found["platform_id"],
+            "pages": len(pages),
+            "log_services_served": sorted(_leaf_id(link) for link in found["links"]),
+            "log_services_strategy": found["strategy"],
+            "log_services_expand_refused": found["expand_refused"],
+            "audit_log_seq": audit_seq,
+            "audit_log_seq_source": audit_source,
+            "sel_wrapping_enabled": wrapping,
+            "sel_wrapping_source": wrapping_source,
+            "sel": _event_log_service_facts(sel),
+            "active_log": active_log,
+            "maintenance_log": maintenance_log,
+        }
+    )
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
 # --- bmc_bios ----------------------------------------------------------------
 
-# UEFI attribute names are Lenovo's (``Processors_HyperThreading``,
-# ``BootModes_SystemBootMode`` ...) and are harvested at shakedown; the
-# curated set is therefore a token list matched case-insensitively on the
-# attribute name: virtualisation, SR-IOV, hyper-threading, operating mode,
-# C-states/C1E, turbo, boot mode, MMIO above 4G, TPM/secure boot, NUMA.
-_BIOS_TOKENS = (
-    "hyperthread",
-    "hyper-thread",
-    "turbo",
-    "cstate",
-    "c-state",
-    "c1e",
-    "operatingmode",
-    "vtd",
-    "vt-d",
-    "iommu",
-    "directedio",
-    "sriov",
-    "sr-iov",
-    "bootmode",
-    "mmio",
-    "above4g",
-    "mmconfig",
-    "tpm",
-    "tcm",
-    "secureboot",
-    "powerperformance",
-    "energyefficient",
-    "numa",
-    "speedstep",
-    "pstate",
-    "p-state",
-    "prefetch",
-    "uncore",
-    "hwpm",
-)
+# Registry ids are ``<Name>.<Major>.<Minor>.<Errata>`` in the DMTF form
+# (BiosAttributeRegistry.1.0.0 on XCC 6.10); an id outside that form (Lenovo's
+# documentation sample spells BiosAttributeRegistryHYE134C-2.31) is kept whole
+# as the name, with no version.
+_BIOS_REGISTRY_ID = re.compile(r"^(?P<name>.+?)\.(?P<version>\d+\.\d+\.\d+)$")
 
 
-def _bios_selected(name):
-    lowered = str(name).lower()
-    return any(token in lowered for token in _BIOS_TOKENS)
+def _bios_registry(value):
+    """{id, name, version} of an AttributeRegistry string; all None when unserved."""
+    registry_id = _text(value)
+    if registry_id is None:
+        return {"id": None, "name": None, "version": None}
+    match = _BIOS_REGISTRY_ID.match(registry_id)
+    if match is None:
+        return {"id": registry_id, "name": registry_id, "version": None}
+    return {"id": registry_id, "name": match.group("name"), "version": match.group("version")}
 
 
-def _normalize_bios(bios):
-    """'bios|<attribute>' -> value for the curated (token-matched) attributes; scalars verbatim."""
-    attributes = _dig(bios, "Attributes")
-    normalized = {}
+def _bios_attributes(payload):
+    """{name: value} of a Bios resource or settings object, password-valued attributes dropped.
+
+    Values are verbatim, except that an empty (or blank) string reads None:
+    an unset string attribute, never ''.
+    """
+    attributes = _dig(payload, "Attributes")
     if not isinstance(attributes, dict):
-        return normalized
-    for name in sorted(attributes):
-        if _bios_selected(name) and not _is_secret(name, attributes[name]):
-            normalized["bios|%s" % (name,)] = attributes[name]
+        return {}
+    return {
+        name: None if isinstance(value, str) and not value.strip() else value
+        for name, value in attributes.items()
+        if not _is_secret(name, value)
+    }
+
+
+def _normalize_bios(bios, pending=None):
+    """Every UEFI attribute keyed, the pending differences keyed, and the reset/password flags.
+
+    'bios|<Attribute>' -> the current value verbatim, for EVERY attribute
+    (a password-valued one is dropped by the exact-name rule, never stored);
+    'pending|<Attribute>' -> the value the settings object holds, ONLY where
+    it differs from the current one (a firmware that serves the whole set
+    there, as XCC 6.10 does, and one that serves only the changes read
+    alike), so the pending family is empty on a healthy unit;
+    reset_to_defaults_pending (DMTF) and Lenovo's uefi_admin_password_set /
+    uefi_power_on_password_set — always present, None when unserved.
+    """
+    current = _bios_attributes(bios)
+    normalized = {"bios|%s" % (name,): current[name] for name in sorted(current)}
+    for name, value in sorted(_bios_attributes(pending).items()):
+        if name not in current or current[name] != value:
+            normalized["pending|%s" % (name,)] = value
+    lenovo = _dig(bios, "Oem", "Lenovo")
+    normalized["reset_to_defaults_pending"] = _to_bool(_dig(bios, "ResetBiosToDefaultsPending"))
+    normalized["uefi_admin_password_set"] = _to_bool(_dig(lenovo, "IsUefiAdminPasswordSet"))
+    normalized["uefi_power_on_password_set"] = _to_bool(_dig(lenovo, "IsUefiPowerOnPasswordSet"))
     return normalized
 
 
+def _bios_context(bios, pending, settings_link, normalized):
+    """Registry, counts and the settings object's apply facts (all volatile or descriptive)."""
+    settings = _dig(bios, "@Redfish.Settings")
+    attributes = _dig(bios, "Attributes") if isinstance(_dig(bios, "Attributes"), dict) else {}
+    pending_attributes = _dig(pending, "Attributes")
+    return {
+        "attribute_registry": _bios_registry(_dig(bios, "AttributeRegistry")),
+        "attributes_total": len(attributes),
+        "password_attributes_dropped": len(attributes) - len(_bios_attributes(bios)),
+        "pending_total": len([key for key in normalized if key.startswith("pending|")]),
+        "settings_object": settings_link,
+        "settings_object_served": (pending is not None) if settings_link else None,
+        "settings_object_attributes": (
+            len(pending_attributes) if isinstance(pending_attributes, dict) else None
+        ),
+        "settings_apply_time": _text(_dig(settings, "Time")),
+        "supported_apply_times": sorted(
+            _text(item) for item in _aslist(_dig(settings, "SupportedApplyTimes")) if _text(item)
+        ),
+        "settings_messages": [
+            _text(_dig(message, "MessageId")) for message in _dicts(_dig(settings, "Messages"))
+        ],
+        "pending_apply_time": _text(_dig(pending, "@Redfish.SettingsApplyTime", "ApplyTime")),
+    }
+
+
 def _collect_bios(ctx):
+    pending = None
+    settings_link = None
     with ctx.budget("bmc_bios", _BUDGET_BIOS):
         targets = _targets(ctx)
         path = _sub(targets["system"], "Bios")
         bios = _get_optional(ctx, path)
-    if bios is None:
-        raise SkipCheck("%s is not served by this firmware" % (path,))
-    attributes = _dig(bios, "Attributes")
-    if not isinstance(attributes, dict) or not attributes:
-        raise CollectError("%s answered without an Attributes block" % (path,))
-    normalized = _normalize_bios(bios)
-    selected = {key.split("|", 1)[1] for key in normalized}
-    curated = _curate(bios)
-    curated.pop("Attributes", None)
-    curated["attributes_selected"] = {name: attributes[name] for name in sorted(selected)}
-    curated["attributes_other"] = _capped_lines(
-        (name, value)
-        for name, value in attributes.items()
-        if name not in selected and not _is_secret(name, value)
-    )
+        if bios is None:
+            raise SkipCheck("%s is not served by this firmware" % (path,))
+        attributes = _dig(bios, "Attributes")
+        if not isinstance(attributes, dict) or not attributes:
+            raise CollectError("%s answered without an Attributes block" % (path,))
+        # The settings object (a change armed for the next reset) is linked
+        # by the server: fenced before it is followed, optional when read.
+        settings_link = _fenced_link(
+            _dig(bios, "@Redfish.Settings", "SettingsObject"), "bmc_bios settings object"
+        )
+        if settings_link is not None:
+            pending = _get_optional(ctx, settings_link)
+    normalized = _normalize_bios(bios, pending)
+    raw = {path: _curate(bios)}
+    if settings_link is not None:
+        raw[settings_link] = _curate(pending) if pending is not None else None
     return {
-        "raw": {path: curated},
+        "raw": raw,
         "normalized": normalized,
         "context": _with_resolution(
-            {
-                "attributes_total": len(attributes),
-                "attributes_selected": len(selected),
-                "attribute_registry": _text(bios.get("AttributeRegistry")),
-            },
-            targets,
+            _bios_context(bios, pending, settings_link, normalized), targets
         ),
     }
 
 
 # --- bmc_storage -------------------------------------------------------------
+# GETs, the lab layout (four Storage members of one AHCI controller and one M.2
+# drive each, empty Volumes, no Controllers link, no Chassis Drives): with
+# $expand honoured 1 (Storage) + 4 (drives) + 4 (Volumes) + 1 (the Chassis, the
+# same cached read bmc_chassis makes) = 10 beyond the id resolution; with
+# $expand refused or ignored 1 (the attempt) + 1 (the collection) + 4 (members)
+# + 4 (drives) + 4 (Volumes, $expand never re-tried) + 1 = 15, inside
+# _BUDGET_STORAGE (18 + _TARGET_GETS). A Controllers collection costs one GET
+# per Storage member that links one, a Chassis Drives collection one more;
+# their member walks are pre-checked against the budget like every other.
+_STORAGE_SMART_CAP = 2048  # characters of a drive's Lenovo SMARTData kept in raw
 
 
-def _normalize_storage(controllers, drives, volumes):
-    """(normalized, context) over Storage members, their Drives[] and Volumes.
+def _storage_raid_levels(controller):
+    """(sorted RAID levels, the leaf read): DMTF SupportedRAIDTypes, else Lenovo's text.
+
+    Lenovo's ``SupportedRaidLevels`` is one string (its schema says so); its
+    comma-separated parts are the levels. (None, None) when neither is served.
+    """
+    served = controller.get("SupportedRAIDTypes")
+    if isinstance(served, list):
+        return sorted({_text(item) for item in served if _text(item)}), "SupportedRAIDTypes"
+    text = _text(_dig(controller, "Oem", "Lenovo", "SupportedRaidLevels"))
+    if text is None:
+        return None, None
+    levels = sorted({part.strip() for part in text.split(",") if part.strip()})
+    return levels, "Oem.Lenovo.SupportedRaidLevels"
+
+
+def _storage_battery(battery):
+    """A controller battery's readings (context only): capacities as served, mV, mA, °C."""
+    return {
+        "design_capacity": _text(battery.get("DesignCapacity")),
+        "full_charge_capacity": _text(battery.get("FullChargeCapacity")),
+        "remaining_capacity": _text(battery.get("RemainingCapacity")),
+        "design_voltage_mv": _to_int(battery.get("DesignVoltageMV")),
+        "voltage_mv": _to_int(battery.get("VoltageMV")),
+        "current_ma": _to_int(battery.get("CurrentMA")),
+        "temperature_c": _to_int(battery.get("TemperatureCelsius")),
+    }
+
+
+def _storage_drive(drive):
+    """One 'drive|<Id>' row: identity, media, link and cache settings, health."""
+    health, state = _status(drive)
+    return {
+        "serial": _text(drive.get("SerialNumber")),
+        "model": _text(drive.get("Model")),
+        "manufacturer": _text(drive.get("Manufacturer")),
+        "revision": _text(drive.get("Revision")),
+        "capacity_bytes": _to_int(drive.get("CapacityBytes")),
+        "media_type": _text(drive.get("MediaType")),
+        "protocol": _text(drive.get("Protocol")),
+        "health": health,
+        "state": state,
+        "failure_predicted": _to_bool(drive.get("FailurePredicted")),
+        "encryption_ability": _text(drive.get("EncryptionAbility")),
+        "encryption_status": _text(drive.get("EncryptionStatus")),
+        "location": _service_label(drive) or _text(_dig(drive, "PhysicalLocation", "Info")),
+        "negotiated_speed_gbs": _to_float(drive.get("NegotiatedSpeedGbs")),
+        "rotation_rpm": _to_int(drive.get("RotationSpeedRPM")),
+        "block_size_bytes": _to_int(drive.get("BlockSizeBytes")),
+        "hotspare_type": _text(drive.get("HotspareType")),
+        "write_cache_enabled": _to_bool(drive.get("WriteCacheEnabled")),
+        "drive_status": _text(_dig(drive, "Oem", "Lenovo", "DriveStatus")),
+    }
+
+
+def _normalize_storage(controllers, drives, volumes, controller_members=None, chassis_drives=None):
+    """(normalized, context) over Storage members, their controllers, Drives[] and Volumes.
 
     ``controllers`` is the list of Storage member payloads; ``drives`` and
-    ``volumes`` map a controller id to its member payloads. Keys are
-    'controller|<Id>', 'drive|<Id>' and 'volume|<Id>'; a drive/volume id that
-    repeats across controllers is prefixed with the controller id.
+    ``volumes`` map a Storage id to its member payloads; ``controller_members``
+    maps a Storage id to the members of its ``Controllers`` collection where one
+    was read (preferred to the deprecated ``StorageControllers[]`` when it lists
+    any — context.controller_source names which one fed each row);
+    ``chassis_drives`` are drives the Chassis links that no Storage member lists.
+    Keys are 'controller|<Id>' (one per Storage member, from its first
+    controller), 'drive|<Id>' and 'volume|<Id>'; a drive/volume id that repeats is
+    prefixed with its Storage id ('chassis' for a drive only the Chassis lists).
     """
     normalized = {}
-    context = {"life_left_pct": {}, "drives_total": 0, "volumes_total": 0}
+    context = {
+        "life_left_pct": {},
+        "drives_total": 0,
+        "volumes_total": 0,
+        "controller_source": {},
+        "raid_levels_source": {},
+        "battery": {},
+        "drive_temperature_c": {},
+    }
+    controller_members = controller_members or {}
+    chassis_drives = _dicts(chassis_drives)
     drive_ids = [_member_id(d) for rows in drives.values() for d in _dicts(rows)]
+    drive_ids += [_member_id(d) for d in chassis_drives]
     volume_ids = [_member_id(v) for rows in volumes.values() for v in _dicts(rows)]
 
     def _key(kind, controller_id, item_id, all_ids):
@@ -1758,11 +3003,28 @@ def _normalize_storage(controllers, drives, volumes):
             return "%s|%s|%s" % (kind, controller_id, item_id)
         return "%s|%s" % (kind, item_id)
 
+    def _add_drive(owner, drive):
+        context["drives_total"] += 1
+        key = _key("drive", owner, _member_id(drive) or "?", drive_ids)
+        normalized[key] = _storage_drive(drive)
+        context["life_left_pct"][key] = _to_float(drive.get("PredictedMediaLifeLeftPercent"))
+        context["drive_temperature_c"][key] = _to_int(_dig(drive, "Oem", "Lenovo", "Temperature"))
+
     for controller in _dicts(controllers):
         controller_id = _member_id(controller) or "?"
-        first = next(iter(_dicts(controller.get("StorageControllers"))), {})
+        embedded = _dicts(controller.get("StorageControllers"))
+        from_collection = _dicts(controller_members.get(controller_id))
+        if from_collection:
+            first, source = from_collection[0], "Controllers"
+        elif embedded:
+            first, source = embedded[0], "StorageControllers"
+        else:
+            first, source = {}, None
         health, state = _status(controller)
-        normalized["controller|%s" % (controller_id,)] = {
+        raid_levels, raid_source = _storage_raid_levels(first)
+        battery = _dig(first, "Oem", "Lenovo", "Battery")
+        key = "controller|%s" % (controller_id,)
+        normalized[key] = {
             "name": _text(controller.get("Name")),
             "model": _text(first.get("Model")),
             "manufacturer": _text(first.get("Manufacturer")),
@@ -1772,28 +3034,17 @@ def _normalize_storage(controllers, drives, volumes):
             "state": state or _text(_dig(first, "Status", "State")),
             "drive_count": len(_dicts(drives.get(controller_id))),
             "volume_count": len(_dicts(volumes.get(controller_id))),
+            "cache_size_mib": _to_int(_dig(first, "CacheSummary", "TotalCacheSizeMiB")),
+            "battery_operational_status": _text(_dig(battery, "OperationalStatus")),
+            "supported_raid_levels": raid_levels,
+            "mode": _text(_dig(first, "Oem", "Lenovo", "Mode")),
         }
+        context["controller_source"][controller_id] = source
+        context["raid_levels_source"][controller_id] = raid_source
+        if isinstance(battery, dict):
+            context["battery"][key] = _storage_battery(battery)
         for drive in _dicts(drives.get(controller_id)):
-            context["drives_total"] += 1
-            drive_id = _member_id(drive) or "?"
-            key = _key("drive", controller_id, drive_id, drive_ids)
-            health, state = _status(drive)
-            normalized[key] = {
-                "serial": _text(drive.get("SerialNumber")),
-                "model": _text(drive.get("Model")),
-                "manufacturer": _text(drive.get("Manufacturer")),
-                "revision": _text(drive.get("Revision")),
-                "capacity_bytes": _to_int(drive.get("CapacityBytes")),
-                "media_type": _text(drive.get("MediaType")),
-                "protocol": _text(drive.get("Protocol")),
-                "health": health,
-                "state": state,
-                "failure_predicted": _to_bool(drive.get("FailurePredicted")),
-                "encryption_ability": _text(drive.get("EncryptionAbility")),
-                "encryption_status": _text(drive.get("EncryptionStatus")),
-                "location": _service_label(drive) or _text(_dig(drive, "PhysicalLocation", "Info")),
-            }
-            context["life_left_pct"][key] = _to_float(drive.get("PredictedMediaLifeLeftPercent"))
+            _add_drive(controller_id, drive)
         for volume in _dicts(volumes.get(controller_id)):
             context["volumes_total"] += 1
             volume_id = _member_id(volume) or "?"
@@ -1804,6 +3055,7 @@ def _normalize_storage(controllers, drives, volumes):
                 for item in _dicts(_dig(volume, "Links", "Drives"))
                 if item.get("@odata.id")
             )
+            lenovo = _dig(volume, "Oem", "Lenovo")
             normalized[key] = {
                 "name": _text(volume.get("Name")),
                 "raid_type": _text(volume.get("RAIDType")) or _text(volume.get("VolumeType")),
@@ -1812,13 +3064,109 @@ def _normalize_storage(controllers, drives, volumes):
                 "state": state,
                 "encrypted": _to_bool(volume.get("Encrypted")),
                 "drives": member_drives,
+                "read_cache_policy": _text(volume.get("ReadCachePolicy")),
+                "write_cache_policy": _text(volume.get("WriteCachePolicy")),
+                "strip_size_bytes": _to_int(volume.get("StripSizeBytes")),
+                "is_boot_capable": _to_bool(volume.get("IsBootCapable")),
+                "raid_level": _text(_dig(lenovo, "RaidLevel")),
+                "bootable": _to_bool(_dig(lenovo, "Bootable")),
+                "access_policy": _text(_dig(lenovo, "AccessPolicy")),
+                "io_policy": _text(_dig(lenovo, "IOPolicy")),
+                "drive_cache_policy": _text(_dig(lenovo, "DriveCachePolicy")),
             }
+    for drive in chassis_drives:
+        _add_drive("chassis", drive)
     return normalized, context
+
+
+def _storage_resource(link):
+    """The resource part of a path or an @odata.id (fragment, query and trailing '/' dropped)."""
+    return str(link or "").partition("#")[0].partition("?")[0].rstrip("/")
+
+
+def _storage_chassis_drives(ctx, targets, drives, listed_links, budget, try_expand):
+    """(drives, meta, raw): the drives the Chassis links that no Storage member lists.
+
+    Read from the Chassis's ``Drives`` collection when it links one (none on XCC
+    6.10), else from its ``Links.Drives`` array (empty there); the Chassis itself
+    is the read bmc_chassis makes (cached per run). A drive at a path a Storage
+    member already listed — or carrying a listed drive's serial number — is that
+    drive, never a second one. A walked collection is pre-checked for all its
+    members although the listed ones answer from the cache (loud, never partial).
+    """
+    listed_paths = {_storage_resource(link) for link in listed_links}
+    listed_serials = set()
+    for rows in drives.values():
+        for drive in _dicts(rows):
+            listed_paths.add(_storage_resource(drive.get("@odata.id")))
+            if _text(drive.get("SerialNumber")):
+                listed_serials.add(_text(drive.get("SerialNumber")))
+    listed_paths.discard("")
+    meta = {"source": None, "strategy": None, "members": 0, "unlisted": 0}
+    raw = {}
+    chassis = _get(ctx, targets["chassis"])
+    collection = _fenced_link(_dig(chassis, "Drives"), "bmc_storage chassis Drives")
+    if collection is not None:
+        members, fetch, raw = _fetch_collection(
+            ctx,
+            collection,
+            "bmc_storage chassis Drives",
+            ok_404=True,
+            budget=budget,
+            try_expand=try_expand,
+        )
+        meta.update(source="Drives", strategy=fetch["strategy"], members=len(members or []))
+        candidates = members or []
+    else:
+        links = []
+        for item in _dicts(_dig(chassis, "Links", "Drives")):
+            link = _fenced_link(item, "bmc_storage chassis Links.Drives")
+            if link is not None:
+                links.append(link)
+        unread = [link for link in links if _storage_resource(link) not in listed_paths]
+        _require_budget(budget, len(unread), "bmc_storage chassis Links.Drives", "drives")
+        candidates = []
+        for link in unread:
+            drive = _get(ctx, link)
+            raw[link] = _curate(drive)
+            candidates.append(drive)
+        if links:
+            meta.update(source="Links.Drives", strategy="members", members=len(links))
+    unlisted = []
+    for drive in candidates:
+        serial = _text(drive.get("SerialNumber"))
+        if _storage_resource(drive.get("@odata.id")) in listed_paths:
+            continue
+        if serial is not None and serial in listed_serials:
+            continue
+        unlisted.append(drive)
+    meta["unlisted"] = len(unlisted)
+    return unlisted, meta, raw
+
+
+def _storage_cap_smart(node):
+    """A curated payload with every SMARTData text capped (raw only; never normalized)."""
+    if isinstance(node, dict):
+        out = {}
+        for key, value in node.items():
+            if key == "SMARTData" and isinstance(value, str) and len(value) > _STORAGE_SMART_CAP:
+                out[key] = value[:_STORAGE_SMART_CAP] + "...[truncated %d chars]" % (
+                    len(value) - _STORAGE_SMART_CAP,
+                )
+            else:
+                out[key] = _storage_cap_smart(value)
+        return out
+    if isinstance(node, list):
+        return [_storage_cap_smart(item) for item in node]
+    return node
 
 
 def _collect_storage(ctx):
     drives = {}
     volumes = {}
+    controller_members = {}
+    controllers_read = {}
+    listed_links = []
     with ctx.budget("bmc_storage", _BUDGET_STORAGE) as budget:
         targets = _targets(ctx)
         system = _get(ctx, targets["system"])
@@ -1833,6 +3181,9 @@ def _collect_storage(ctx):
                 "%s lists no controllers (host PowerState %s; non-RAID M.2 may not "
                 "enumerate at all)" % (path, _text(_dig(system, "PowerState")))
             )
+        # The $expand-refusal memory: the Storage collection's answer decides for
+        # every sub-collection, and the first refusal after it turns $expand off.
+        expand_ok = meta["strategy"] == "expand"
         for controller in controllers:
             controller_id = _member_id(controller) or "?"
             drive_links = []
@@ -1842,35 +3193,72 @@ def _collect_storage(ctx):
                     drive_links.append(link)
             _require_budget(budget, len(drive_links), "bmc_storage", "drives")
             drives[controller_id] = []
+            volumes[controller_id] = []
             for link in drive_links:
                 drive = _get(ctx, link)
                 raw[link] = _curate(drive)
                 drives[controller_id].append(drive)
-            volumes_link = _fenced_link(controller.get("Volumes"), "bmc_storage")
-            volumes[controller_id] = []
-            if volumes_link:
-                members, _vmeta, vraw = _fetch_collection(
+                listed_links.append(link)
+            for label, link in (
+                ("controllers", _fenced_link(controller.get("Controllers"), "bmc_storage")),
+                ("volumes", _fenced_link(controller.get("Volumes"), "bmc_storage")),
+            ):
+                if not link:
+                    continue
+                members, fetch, member_raw = _fetch_collection(
                     ctx,
-                    volumes_link,
-                    "bmc_storage volumes",
+                    link,
+                    "bmc_storage %s" % (label,),
                     ok_404=True,
                     budget=budget,
-                    try_expand=meta["strategy"] == "expand",
+                    try_expand=expand_ok,
                 )
-                raw.update(vraw)
-                volumes[controller_id] = members or []
-    normalized, context = _normalize_storage(controllers, drives, volumes)
+                raw.update(member_raw)
+                expand_ok = expand_ok and not fetch.get("expand_refused")
+                if label == "volumes":
+                    volumes[controller_id] = members or []
+                    continue
+                controllers_read[controller_id] = {
+                    "strategy": fetch["strategy"],
+                    "members": len(members) if members is not None else None,
+                }
+                if members is not None:
+                    controller_members[controller_id] = members
+        chassis_drives, chassis_meta, chassis_raw = _storage_chassis_drives(
+            ctx, targets, drives, listed_links, budget, expand_ok
+        )
+        raw.update(chassis_raw)
+    normalized, context = _normalize_storage(
+        controllers, drives, volumes, controller_members, chassis_drives
+    )
     context.update(meta)
+    context["controllers_collection"] = controllers_read
+    context["chassis_drives"] = chassis_meta
     context["host_power_state"] = _text(_dig(system, "PowerState"))
+    raw = {request: _storage_cap_smart(payload) for request, payload in raw.items()}
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
 # --- bmc_manager_network -----------------------------------------------------
 
 _PROTOCOLS = ("HTTP", "HTTPS", "SSH", "IPMI", "SNMP", "VirtualMedia", "KVMIP", "SSDP", "Telnet")
-# Unset DNS slots are served as placeholders (XCC 6.10: '' and '::' in
-# NameServers, '0.0.0.0' and '::' in StaticNameServers) — never servers.
+# Unset address slots are served as placeholders (XCC 6.10: '' and '::' in
+# NameServers, '0.0.0.0' and '::' in StaticNameServers and in the Lenovo DNS
+# resource's IPv4Address1-3 / IPv6Address1-3, '::' as IPv6DefaultGateway) —
+# never addresses.
 _DNS_PLACEHOLDERS = frozenset({"", "::", "0.0.0.0"})
+# The Lenovo DNS resource's server slots, in the order the analyst reads them.
+_MANAGER_NETWORK_DNS_SLOTS = tuple("IPv4Address%d" % (n,) for n in (1, 2, 3)) + tuple(
+    "IPv6Address%d" % (n,) for n in (1, 2, 3)
+)
+# Services the Lenovo block of NetworkProtocol carries beside the DMTF ones:
+# (key prefix, block name, whether the block serves a Port).
+_MANAGER_NETWORK_LENOVO_SERVICES = (
+    ("cimoverhttps", "CimOverHTTPS", True),
+    ("slp", "SLP", True),
+    ("sftp", "SFTP", True),
+    ("webhttps", "WebOverHTTPS", False),
+)
 
 
 def _dns_servers(values):
@@ -1904,8 +3292,79 @@ def _snmp_enablement(protocol, vendor_snmp):
     return None, port, None
 
 
-def _normalize_manager_network(protocol, nic, vendor_snmp=None):
-    """Flat scalars: NTP, per-protocol enabled/port, host names, and the NIC's addressing."""
+def _manager_network_address(value):
+    """An address leaf; None for an unset-slot placeholder ('', '::', '0.0.0.0')."""
+    text = _text(value)
+    return None if text in _DNS_PLACEHOLDERS else text
+
+
+def _manager_network_leaf(node, name):
+    """``node[name]`` matched case-insensitively (XCC 6.10 spells PreferredAddresstype)."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if str(key).lower() == name.lower():
+                return value
+    return None
+
+
+def _manager_network_list(node, key):
+    """The placeholder-free address list at ``node[key]``; None when the leaf is not served."""
+    if not isinstance(node, dict) or key not in node:
+        return None
+    return _dns_servers(node.get(key))
+
+
+def _manager_network_dns_servers(dns):
+    """The Lenovo DNS slots (IPv4 1-3, then IPv6 1-3), placeholders dropped; None unserved."""
+    if not isinstance(dns, dict):
+        return None
+    slots = [name for name in _MANAGER_NETWORK_DNS_SLOTS if name in dns]
+    return _dns_servers([dns[name] for name in slots]) if slots else None
+
+
+def _manager_network_ddns(dns):
+    """Every DDNS entry of the Lenovo DNS resource in served order; None when not served."""
+    if not isinstance(dns, dict) or not isinstance(dns.get("DDNS"), list):
+        return None
+    return [
+        {
+            "enabled": _to_bool(entry.get("DDNSEnable")),
+            "domain_name_source": _text(entry.get("DomainNameSource")),
+            "domain_name": _text(entry.get("DomainName")),
+        }
+        for entry in _dicts(dns["DDNS"])
+    ]
+
+
+def _manager_network_ports(values):
+    """OpenPorts (served as strings) as sorted unique ints; None when not served."""
+    if not isinstance(values, list):
+        return None
+    return sorted({port for port in (_to_int(value) for value in values) if port is not None})
+
+
+def _normalize_manager_network(
+    protocol,
+    nic,
+    vendor_snmp=None,
+    *,
+    manager=None,
+    dns=None,
+    datetime_service=None,
+    host_interface=None,
+    usb_lan=None,
+):
+    """Flat scalars: the BMC's services, addressing, DNS, time and host interface.
+
+    ``protocol`` is NetworkProtocol and ``nic`` the management port (DMTF,
+    with their Oem.Lenovo leaves); ``vendor_snmp``, ``dns`` and
+    ``datetime_service`` are the Lenovo SNMP, DNS and DateTimeService
+    resources (None on other vendors and where not served), ``manager`` the
+    Manager (KCSEnabled), ``host_interface`` the HostInterface described and
+    ``usb_lan`` the BMC-side interface it names (ToHost on XCC 6.10).
+    Every key is always present: None where the leaf is not served, a list
+    only where the list is.
+    """
     protocol = protocol if isinstance(protocol, dict) else {}
     nic = nic if isinstance(nic, dict) else {}
     ipv4 = _first_ipv4(nic)
@@ -1924,6 +3383,7 @@ def _normalize_manager_network(protocol, nic, vendor_snmp=None):
     normalized["snmp_enabled"] = snmp_enabled
     normalized["snmp_port"] = snmp_port
     vlan_enabled = _to_bool(_dig(nic, "VLAN", "VLANEnable"))
+    lenovo_nic = _dig(nic, "Oem", "Lenovo")
     normalized.update(
         {
             "nic_hostname": _text(nic.get("HostName")),
@@ -1936,45 +3396,190 @@ def _normalize_manager_network(protocol, nic, vendor_snmp=None):
             "dns_servers": _dns_servers(nic.get("NameServers")),
             "static_dns_servers": _dns_servers(nic.get("StaticNameServers")),
             "ipv6_address_count": len(_dicts(nic.get("IPv6Addresses"))),
-            "ipv6_gateway": _text(nic.get("IPv6DefaultGateway")),
+            "ipv6_gateway": _manager_network_address(nic.get("IPv6DefaultGateway")),
             "mtu": _to_int(nic.get("MTUSize")),
             "autoneg": _to_bool(nic.get("AutoNeg")),
             "vlan_enabled": vlan_enabled,
             "vlan_id": _to_int(_dig(nic, "VLAN", "VLANId")) if vlan_enabled else None,
             "interface_enabled": _to_bool(nic.get("InterfaceEnabled")),
+            # the management port's Lenovo leaves
+            "nic_mode": _text(_dig(lenovo_nic, "InterfaceNicMode")),
+            "failover_mode": _text(_dig(lenovo_nic, "InterfaceFailoverMode")),
+            "ipv4_assigned_by": _text(_dig(lenovo_nic, "IPv4AddressAssignedby")),
+            "domain_name": _text(_dig(lenovo_nic, "DomainName")),
+            "hostname_from_dhcp": _to_bool(_dig(lenovo_nic, "HostNameFromDHCPEnabled")),
+            # DNS (the Lenovo DNS resource)
+            "dns_enabled": _to_bool(_dig(dns, "DNSEnable")),
+            "dns_preferred_family": _text(_manager_network_leaf(dns, "PreferredAddresstype")),
+            "dns_configured_servers": _manager_network_dns_servers(dns),
+            "ddns": _manager_network_ddns(dns),
+            "lxca_discovery_enabled": _to_bool(
+                _dig(dns, "LXCADNSDiscovery", "DiscoverLXCAEnabled")
+            ),
+            # time (the Lenovo DateTimeService; Frequency is in minutes)
+            "time_setting_method": _text(_dig(datetime_service, "SettingMethod")),
+            "time_ntp_servers": _manager_network_list(datetime_service, "NTPServerAddresses"),
+            "utc_offset": _text(_dig(datetime_service, "UTCOffset")),
+            "auto_dst": _to_bool(_dig(datetime_service, "AutoDST")),
+            "ntp_sync_interval_min": _to_int(_dig(datetime_service, "Frequency")),
+            # the Redfish host interface (DMTF HostInterface)
+            "host_interface_enabled": _to_bool(_dig(host_interface, "InterfaceEnabled")),
+            "host_interface_externally_accessible": _to_bool(
+                _dig(host_interface, "ExternallyAccessible")
+            ),
+            "credential_bootstrapping_enabled": _to_bool(
+                _dig(host_interface, "CredentialBootstrapping", "Enabled")
+            ),
+            "credential_bootstrapping_role": _text(
+                _dig(host_interface, "CredentialBootstrapping", "RoleId")
+            ),
+            "credential_bootstrapping_enable_after_reset": _to_bool(
+                _dig(host_interface, "CredentialBootstrapping", "EnableAfterReset")
+            ),
+            "host_interface_address": _manager_network_usb_lan_address(usb_lan),
+            "host_interface_address_mode": _text(_dig(usb_lan, "Oem", "Lenovo", "AddressMode")),
+        }
+    )
+    lenovo_protocol = _dig(protocol, "Oem", "Lenovo")
+    for prefix, block, has_port in _MANAGER_NETWORK_LENOVO_SERVICES:
+        node = _dig(lenovo_protocol, block)
+        normalized[prefix + "_enabled"] = _to_bool(_dig(node, "ProtocolEnabled"))
+        if has_port:
+            normalized[prefix + "_port"] = _to_int(_dig(node, "Port"))
+    normalized.update(
+        {
+            "open_ports": _manager_network_ports(_dig(lenovo_protocol, "OpenPorts")),
+            "snmpv3_agent_enabled": _to_bool(_dig(vendor_snmp, "SNMPv3Agent", "ProtocolEnabled")),
+            "snmp_traps_enabled": _to_bool(_dig(vendor_snmp, "SNMPTraps", "ProtocolEnabled")),
+            "kcs_enabled": _to_bool(_dig(manager, "Oem", "Lenovo", "KCSEnabled")),
         }
     )
     return normalized
 
 
+def _manager_network_host_interface(members):
+    """(the HostInterface the scalars describe, every member id): the lowest id when several."""
+    rows = sorted(_dicts(members), key=lambda member: _member_id(member) or "")
+    return (rows[0] if rows else None), [_member_id(row) for row in rows]
+
+
+def _manager_network_usb_lan(ctx, nic, nic_meta, host_interface):
+    """(payload, member, raw): the BMC side of the Redfish host interface — its USB LAN.
+
+    The HostInterface names it as its ManagerEthernetInterface, a DMTF link
+    read for every vendor (one GET; ``ToHost`` on XCC 6.10, where the host
+    OS's address as the BMC sees it, Oem.Lenovo.OSIPv4Address, also sits).
+    The management port itself when the link names it; None when the host
+    interface links nothing or the link answers 404.
+    """
+    link = _fenced_link(
+        _dig(host_interface, "ManagerEthernetInterface"),
+        "bmc_manager_network ManagerEthernetInterface",
+    )
+    if link is None:
+        return None, None, {}
+    if _leaf_id(link).lower() == str(nic_meta.get("member") or "").lower():
+        return nic, nic_meta.get("member"), {}
+    usb_lan = _get_optional(ctx, link)
+    if usb_lan is None:
+        return None, None, {}
+    return usb_lan, _member_id(usb_lan), {link: _curate(usb_lan)}
+
+
+def _manager_network_usb_lan_address(usb_lan):
+    """The USB LAN's IPv4 address (the unset 0.0.0.0 placeholder reads None)."""
+    address = _text(_first_ipv4(usb_lan).get("Address")) if isinstance(usb_lan, dict) else None
+    return None if address in _DNS_PLACEHOLDERS else address
+
+
 def _collect_manager_network(ctx):
     raw = {}
-    vendor_snmp = None
-    with ctx.budget("bmc_manager_network", _BUDGET_MANAGER_NETWORK):
+    vendor_snmp = dns = datetime_service = host_interface = host_meta = None
+    snmp_link = dns_link = datetime_link = None
+    os_address = os_member = None
+    with ctx.budget("bmc_manager_network", _BUDGET_MANAGER_NETWORK) as budget:
         targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
         protocol_path = _sub(targets["manager"], "NetworkProtocol")
         protocol = _get(ctx, protocol_path)
-        snmp_link = None
-        if _snmp_enablement(protocol, None)[0] is None and _is_lenovo(targets):
+        manager = _get(ctx, targets["manager"])
+        if lenovo:
             snmp_link = _fenced_link(
                 _dig(protocol, "Oem", "Lenovo", "SNMP"), "bmc_manager_network SNMP"
             )
             vendor_snmp = _get_optional(ctx, snmp_link) if snmp_link else None
+            dns_node = _dig(protocol, "Oem", "Lenovo", "DNS")
+            dns_link = _fenced_link(dns_node, "bmc_manager_network DNS")
+            if dns_link is not None:
+                dns = _get_optional(ctx, dns_link)
+            elif isinstance(dns_node, dict) and dns_node:
+                dns = dns_node  # served inline: nothing to fetch
+            datetime_link = _fenced_link(
+                _dig(manager, "Oem", "Lenovo", "DateTimeService"),
+                "bmc_manager_network DateTimeService",
+            )
+            datetime_service = _get_optional(ctx, datetime_link) if datetime_link else None
+        host_link = _fenced_link(
+            _dig(manager, "HostInterfaces"), "bmc_manager_network HostInterfaces"
+        )
+        if host_link is not None:
+            members, meta, host_raw = _fetch_collection(
+                ctx, host_link, "bmc_manager_network host interfaces", ok_404=True, budget=budget
+            )
+            raw.update(host_raw)
+            host_interface, host_ids = _manager_network_host_interface(members)
+            host_meta = dict(meta, members=host_ids, used=_member_id(host_interface))
         nic, nic_meta, nic_raw = _fetch_manager_nic(ctx, targets)
+        usb_lan, usb_member, usb_raw = _manager_network_usb_lan(ctx, nic, nic_meta, host_interface)
+        raw.update(usb_raw)
+    # The host OS's address as the BMC sees it (a Lenovo leaf, read from the
+    # payloads already fetched): on the port read, else on the USB LAN.
+    for payload, member in ((nic, nic_meta.get("member")), (usb_lan, usb_member)):
+        os_address = _text(_dig(payload, "Oem", "Lenovo", "OSIPv4Address"))
+        if os_address is not None:
+            os_member = member
+            break
     raw[protocol_path] = _curate(protocol)
-    if vendor_snmp is not None:
-        raw[snmp_link] = _curate(vendor_snmp)
+    raw[targets["manager"]] = _curate(manager)
+    for link, payload in (
+        (snmp_link, vendor_snmp),
+        (dns_link, dns),
+        (datetime_link, datetime_service),
+    ):
+        if link is not None and payload is not None:
+            raw[link] = _curate(payload)
     raw.update(nic_raw)
     _enabled, _port, snmp_source = _snmp_enablement(protocol, vendor_snmp)
+    if dns is None:
+        dns_source = None
+    else:
+        dns_source = dns_link or "%s Oem.Lenovo.DNS (inline)" % (protocol_path,)
     return {
         "raw": raw,
-        "normalized": _normalize_manager_network(protocol, nic, vendor_snmp),
+        "normalized": _normalize_manager_network(
+            protocol,
+            nic,
+            vendor_snmp,
+            manager=manager,
+            dns=dns,
+            datetime_service=datetime_service,
+            host_interface=host_interface,
+            usb_lan=usb_lan,
+        ),
         "context": _with_resolution(
             {
                 "manager_nic": nic_meta,
                 "nic_speed_mbps": _to_int(_dig(nic, "SpeedMbps")) if nic else None,
                 "nic_link_status": _text(_dig(nic, "LinkStatus")) if nic else None,
                 "snmp_source": snmp_source,
+                "dns_source": dns_source,
+                "host_interfaces": host_meta,
+                "os_ipv4_address": os_address,
+                "os_ipv4_address_member": os_member,
+                "host_interface_usb_lan_member": usb_member,
+                "bmc_datetime": _text(_dig(manager, "DateTime")),
+                "bmc_datetime_offset": _text(_dig(manager, "DateTimeLocalOffset")),
+                "time_zone_name": _text(_dig(manager, "TimeZoneName")),
             },
             targets,
         ),
@@ -1984,15 +3589,51 @@ def _collect_manager_network(ctx):
 # --- bmc_chassis -------------------------------------------------------------
 
 
-def _normalize_chassis_location(chassis):
-    """Flat scalars: chassis identity, Location.PostalAddress/Placement leaves, intrusion sensor.
+def _chassis_led_key(name, led_id, name_counts):
+    """'led|<Name>'; '|<Id>' appended only when a Name repeats; 'led|<Id>' when Name is null.
 
-    PostalAddress and Placement are passed through generically as
-    'postal_<field>' / 'placement_<field>' so whichever leaves this firmware
-    fills are compared; the operator-maintained record is expected to be
-    edited when the chassis is relocated.
+    The lab SE350's four LEDs have unique Names (BMC Heartbeat, Identify,
+    Power, Fault) while their Location repeats, so the Name is the key.
+    """
+    if name is None:
+        return "led|%s" % (led_id,)
+    if name_counts.get(name, 0) > 1:
+        return "led|%s|%s" % (name, led_id)
+    return "led|%s" % (name,)
+
+
+def _normalize_chassis_leds(members):
+    """'led|<Name>' -> color, state (On | Off | Blink, verbatim), location, per LED member."""
+    leds = _dicts(members)
+    name_counts = {}
+    for led in leds:
+        name = _text(led.get("Name"))
+        if name is not None:
+            name_counts[name] = name_counts.get(name, 0) + 1
+    rows = {}
+    for led in leds:
+        key = _chassis_led_key(_text(led.get("Name")), _member_id(led) or "?", name_counts)
+        rows[key] = {
+            "color": _text(led.get("Color")),
+            "state": _text(led.get("State")),
+            "location": _text(led.get("Location")),
+        }
+    return rows
+
+
+def _normalize_chassis_location(chassis, leds=None, lenovo=False):
+    """Chassis identity, indicator, Location record and intrusion scalars, plus 'led|' rows.
+
+    Every scalar is always present (None when unserved); ``lenovo`` gates the
+    Lenovo identity leaves (system-board serial, product name, FRU part
+    number, switch board). PostalAddress and Placement are passed through
+    generically as 'postal_<field>' / 'placement_<field>' so whichever leaves
+    this firmware fills are compared, an empty one reading None; the
+    operator-maintained record is expected to be edited when the chassis is
+    relocated. ``leds`` is the LED collection's members (Lenovo), or None.
     """
     chassis = chassis if isinstance(chassis, dict) else {}
+    oem = _dig(chassis, "Oem", "Lenovo") if lenovo else None
     health, state = _status(chassis)
     normalized = {
         "chassis_type": _text(chassis.get("ChassisType")),
@@ -2004,6 +3645,12 @@ def _normalize_chassis_location(chassis):
         "health": health,
         "state": state,
         "power_state": _text(chassis.get("PowerState")),
+        "indicator_led": _text(chassis.get("IndicatorLED")),
+        "location_indicator_active": _to_bool(chassis.get("LocationIndicatorActive")),
+        "system_board_serial": _text(_dig(oem, "SystemBoardSerialNumber")),
+        "product_name": _text(_dig(oem, "ProductName")),
+        "fru_part_number": _text(_dig(oem, "FruPartNumber")),
+        "has_switch_board": _to_bool(_dig(oem, "HasSwitchBoard")),
         "location_info": _text(_dig(chassis, "Location", "Info")),
         "location_info_format": _text(_dig(chassis, "Location", "InfoFormat")),
         "intrusion_sensor": _text(_dig(chassis, "PhysicalSecurity", "IntrusionSensor")),
@@ -2017,27 +3664,60 @@ def _normalize_chassis_location(chassis):
             value = node[key]
             if isinstance(value, (dict, list)) or str(key).startswith("@"):
                 continue
-            normalized[prefix + _snake(key)] = value
+            normalized[prefix + _snake(key)] = _text(value) if isinstance(value, str) else value
+    normalized.update(_normalize_chassis_leds(leds))
     return normalized
 
 
+def _chassis_context(chassis, leds_meta):
+    """Size and rating facts of the enclosure, and how the LED collection was read."""
+    return {
+        "height_mm": _to_float(chassis.get("HeightMm")),
+        "width_mm": _to_float(chassis.get("WidthMm")),
+        "depth_mm": _to_float(chassis.get("DepthMm")),
+        "weight_kg": _to_float(chassis.get("WeightKg")),
+        "environmental_class": _text(chassis.get("EnvironmentalClass")),
+        "location_present": isinstance(chassis.get("Location"), dict),
+        "physical_security_present": isinstance(chassis.get("PhysicalSecurity"), dict),
+        "leds": leds_meta,
+    }
+
+
 def _collect_chassis_location(ctx):
-    with ctx.budget("bmc_chassis", _BUDGET_CHASSIS):
+    raw = {}
+    leds = None
+    leds_meta = {"resource": None, "strategy": None, "members": None, "note": None}
+    with ctx.budget("bmc_chassis", _BUDGET_CHASSIS) as budget:
         targets = _targets(ctx)
         chassis = _get(ctx, targets["chassis"])
-    if not isinstance(chassis, dict) or not chassis:
-        raise CollectError("%s answered without a resource body" % (targets["chassis"],))
+        if not isinstance(chassis, dict) or not chassis:
+            raise CollectError("%s answered without a resource body" % (targets["chassis"],))
+        lenovo = _is_lenovo(targets)
+        # The LED collection is Lenovo's (Chassis Oem.Lenovo.LEDs), read only
+        # through the link the Chassis serves; DMTF IndicatorLED and
+        # LocationIndicatorActive are the scalars every vendor gets.
+        link = None
+        if lenovo:
+            link = _fenced_link(_dig(chassis, "Oem", "Lenovo", "LEDs"), "bmc_chassis LEDs")
+            if link is None:
+                leds_meta["note"] = "the Chassis links no Oem.Lenovo.LEDs collection"
+        else:
+            leds_meta["note"] = "no %s mapping for the chassis LEDs yet" % (
+                targets["vendor"] or "unknown-vendor",
+            )
+        if link is not None:
+            leds, meta, leds_raw = _fetch_collection(
+                ctx, link, "bmc_chassis LEDs", ok_404=True, budget=budget
+            )
+            raw.update(leds_raw)
+            leds_meta = dict(
+                meta, resource=link, members=len(leds) if leds is not None else None, note=None
+            )
+    raw[targets["chassis"]] = _curate(chassis)
     return {
-        "raw": {targets["chassis"]: _curate(chassis)},
-        "normalized": _normalize_chassis_location(chassis),
-        "context": _with_resolution(
-            {
-                "indicator_led": _text(chassis.get("IndicatorLED")),
-                "location_present": isinstance(chassis.get("Location"), dict),
-                "physical_security_present": isinstance(chassis.get("PhysicalSecurity"), dict),
-            },
-            targets,
-        ),
+        "raw": raw,
+        "normalized": _normalize_chassis_location(chassis, leds, lenovo=lenovo),
+        "context": _with_resolution(_chassis_context(chassis, leds_meta), targets),
     }
 
 
@@ -2333,14 +4013,18 @@ register(
     CheckDef(
         id="bmc_system",
         platform="bmc",
-        description="System identity, health, boot settings, SecureBoot and the BMC's own address.",
+        description=(
+            "System identity, health, boot override, SecureBoot, power/watchdog/console policy, "
+            "TPM, and the BMC's own services and address."
+        ),
         tier=1,
         compare={"mode": "equality_scalar"},
         miss_meaning=(
             "An identity field (serial/uuid/model/BIOS/BMC firmware) differs — a different "
             "chassis or a firmware change; a boot/SecureBoot change means the host was "
-            "not booted the intended way; a BMC address change means the BMC was "
-            "re-addressed or re-leased."
+            "not booted the intended way; a power-restore, watchdog, console or TPM change "
+            "alters how the host comes back after an AC loss or a hang and what can reach its "
+            "console; a BMC address change means the BMC was re-addressed or re-leased."
         ),
         collector=_collect_system,
         tags=("platform", "identity"),
@@ -2351,13 +4035,18 @@ register(
     CheckDef(
         id="bmc_security",
         platform="bmc",
-        description="ThinkEdge Security Pack state: lockdown, motion/intrusion detection, SED.",
+        description=(
+            "BMC security settings leaf by leaf (TLS, HTTPS/LDAPS/CIM, firmware rollback, key "
+            "manager) and ThinkEdge tamper state."
+        ),
         tier=1,
-        compare={"mode": "equality_scalar"},
+        compare={"mode": "equality_set"},
         miss_meaning=(
-            "The tamper-protection state changed: an active lockdown denies SED keys until "
-            "re-activation; motion detection flipping off together with lockdown Active is "
-            "the lockdown itself, not an operator edit."
+            "A management-plane security setting changed — TLS mode or minimum version, "
+            "HTTPS/LDAPS/CIM-over-HTTPS enablement, firmware rollback, encapsulation, the "
+            "external key manager — or, on a ThinkEdge unit, the tamper state: an active "
+            "lockdown denies SED keys until re-activation, and motion detection flipping off "
+            "together with lockdown Active is the lockdown itself, not an operator edit."
         ),
         collector=_collect_security_state,
         tags=("platform", "security"),
@@ -2368,7 +4057,10 @@ register(
     CheckDef(
         id="bmc_thermal",
         platform="bmc",
-        description="Chassis temperature sensors and fans: health/state, ambient-class readings.",
+        description=(
+            "Chassis temperature sensors and fans (Thermal, else ThermalSubsystem fans): "
+            "health/state, ambient-class readings."
+        ),
         tier=1,
         compare={
             "mode": "equality_set",
@@ -2391,7 +4083,9 @@ register(
     CheckDef(
         id="bmc_power",
         platform="bmc",
-        description="Power supplies/adapters, redundancy and voltage rails from Chassis Power.",
+        description=(
+            "Power supplies, redundancy and voltage rails (Chassis Power, else PowerSubsystem)."
+        ),
         tier=1,
         compare={
             "mode": "equality_set",
@@ -2399,7 +4093,8 @@ register(
         },
         miss_meaning=(
             "A feed was lost or changed: a supply not Enabled/OK, input out of its declared "
-            "range, redundancy degraded, or a rail outside its thresholds."
+            "range or reported LossOfInput/OutOfRange, redundancy degraded, or a rail outside its "
+            "thresholds."
         ),
         collector=_collect_power,
         tags=("platform", "environment"),
@@ -2410,12 +4105,13 @@ register(
     CheckDef(
         id="bmc_inventory",
         platform="bmc",
-        description="DIMM, processor and PCIe device inventory with per-part identity and health.",
+        description="DIMMs, CPUs, PCIe devices and functions: identity, configuration, health.",
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A part is missing, replaced or unhealthy — a DIMM or riser that did not come "
-            "back is a missing key, a swapped part is a serial change."
+            "back is a missing key or an Absent slot, a swapped part is a serial or PCI id "
+            "change; a different CPU microcode is a UEFI update."
         ),
         collector=_collect_inventory,
         tags=("platform", "inventory"),
@@ -2442,12 +4138,13 @@ register(
     CheckDef(
         id="bmc_firmware",
         platform="bmc",
-        description="Firmware inventory: every component's version and SoftwareId.",
+        description="Firmware and software inventory, the BMC's active image and bank policy.",
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A firmware version changed or a component vanished from the inventory — an "
-            "undeclared update, or an adapter that did not enumerate."
+            "undeclared update, or an adapter that did not enumerate; a version on a -Pending "
+            "member is a staged update; a changed active image is a BMC bank switch."
         ),
         collector=_collect_firmware,
         tags=("platform", "firmware"),
@@ -2458,16 +4155,17 @@ register(
     CheckDef(
         id="bmc_event_log",
         platform="bmc",
-        description="BMC platform event log: Warning/Critical entries keyed by event code and id.",
+        description="BMC logs: platform Warning/Critical entries and every ActiveLog condition.",
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
-            "A Warning/Critical event was logged between captures — a hardware finding "
-            "unless its event code was declared; a removed key means the log was cleared "
-            "or wrapped."
+            "A Warning/Critical event was logged (sel key added) or an unresolved condition "
+            "was raised (active key added) between captures — a hardware or environment "
+            "finding; a removed sel key means the log was cleared or wrapped, a removed "
+            "active key a condition that cleared."
         ),
         collector=_collect_event_log,
-        tags=("platform", "logs"),
+        tags=("platform", "logs", EMPTY_OK_TAG),  # nothing keyed is the healthy state
     )
 )
 
@@ -2475,13 +4173,14 @@ register(
     CheckDef(
         id="bmc_bios",
         platform="bmc",
-        description="Curated UEFI settings: VT-d, SR-IOV, HT, power/turbo, boot mode, TPM.",
+        description="Every UEFI setting, settings armed for the next reset, UEFI password flags.",
         tier=2,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A UEFI setting reverted or changed — a defaults load, CMOS/RTC reset or an "
-            "operator edit; the host OS's virtualisation and performance tuning depends on "
-            "these."
+            "operator edit, and the host OS's virtualisation and performance tuning depends "
+            "on these; a pending key that appears is a setting armed but not yet applied, "
+            "one that disappears was applied at a reset or withdrawn."
         ),
         collector=_collect_bios,
         tags=("platform", "bios"),
@@ -2492,13 +4191,14 @@ register(
     CheckDef(
         id="bmc_storage",
         platform="bmc",
-        description="Storage controllers, physical drives (health, SED status) and RAID volumes.",
+        description="Storage controllers (cache, battery, RAID), drives and volumes (policies).",
         tier=1,
         compare={"mode": "equality_set"},
         miss_meaning=(
             "A drive or volume degraded, vanished or was replaced — a RAID1 member failure "
             "is invisible to the hypervisor's LUN view; an encryption flag change is a "
-            "key-management event."
+            "key-management event; a cache policy or controller battery change puts written "
+            "data at risk."
         ),
         collector=_collect_storage,
         tags=("platform", "storage"),
@@ -2509,13 +4209,16 @@ register(
     CheckDef(
         id="bmc_manager_network",
         platform="bmc",
-        description="BMC network services: NTP, DNS, enabled protocols/ports, addressing origin.",
+        description=(
+            "BMC network, time and services: addressing, DNS, NTP, protocols/ports, host interface."
+        ),
         tier=2,
         compare={"mode": "equality_scalar"},
         miss_meaning=(
             "The BMC's own network/time configuration changed — NTP or DNS lost means "
             "back-dated event-log timestamps and broken outbound paths (key management, "
-            "alert delivery, management-server discovery)."
+            "alert delivery, management-server discovery); a service or port opened, or the "
+            "host interface's credential bootstrapping switched on, widens who can reach the BMC."
         ),
         collector=_collect_manager_network,
         tags=("platform", "management"),
@@ -2526,14 +4229,19 @@ register(
     CheckDef(
         id="bmc_chassis",
         platform="bmc",
-        description="Operator-maintained chassis Location record and the intrusion sensor state.",
-        tier=3,
-        compare={"mode": "equality_scalar"},
+        description=(
+            "Chassis identity, LEDs and indicator, the operator-maintained Location record and "
+            "the intrusion sensor."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
         miss_meaning=(
-            "The location record changed (expected when a chassis is relocated — declare it) "
-            "or the intrusion sensor left Normal."
+            "A chassis LED changed — a Fault LED leaving Off is a hardware finding, a lit "
+            "Identify LED means someone is locating the server — or the chassis or system-board "
+            "identity changed, the location record changed (expected when a chassis is "
+            "relocated — declare it), or the intrusion sensor left Normal."
         ),
         collector=_collect_chassis_location,
-        tags=("platform", "location"),
+        tags=("platform", "identity", "location"),
     )
 )
