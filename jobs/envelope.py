@@ -73,8 +73,7 @@ INTERPRETATION_GUIDE = [
     "device.bmc.captured says whether the BMC's checks ran. device.host_captured "
     "false means the host's own platform produced no data in this capture: "
     "device.platform_supported is false when the suite does not support that "
-    "platform yet; otherwise the host checks' errors (or an override_checks "
-    "selection) say why.",
+    "platform yet; otherwise the host checks' errors say why.",
 ]
 
 

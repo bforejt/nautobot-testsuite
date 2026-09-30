@@ -7,6 +7,10 @@ absent, and what failed outright — with the full transport trace attached so
 every verdict comes with its evidence. The trace doubles as the fixture
 harvest for the CI battery: sanitize real captures before committing them.
 
+``only_checks`` narrows a run to the named check ids, for bringing up one
+collector without waiting for the whole catalog; the discovery probes still
+run, and the report records the filter.
+
 A BMC modelled as an interface on the device (jobs/bmc_target.py) is shaken
 down in the same run: its ``bmc`` family runs through a second debug context,
 ``discovery["bmc"]`` answers the questions a first run against a new BMC
@@ -24,7 +28,7 @@ default job list (development tooling, not an operator surface).
 import json
 import time
 
-from nautobot.apps.jobs import Job, ObjectVar
+from nautobot.apps.jobs import Job, ObjectVar, StringVar
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
@@ -308,6 +312,13 @@ class CollectorShakedown(Job):
         model=Device,
         description="One device to shake the collectors down against.",
     )
+    only_checks = StringVar(
+        required=False,
+        description=(
+            "Comma-separated check ids to run instead of every check for the device's "
+            "platform and BMC; blank runs them all. Discovery probes always run."
+        ),
+    )
     secrets_group = ObjectVar(
         model=SecretsGroup,
         required=False,
@@ -317,7 +328,8 @@ class CollectorShakedown(Job):
     class Meta:
         name = "Test Suite Shakedown (dev)"
         description = (
-            "Development tool: runs every registered check for this device's "
+            "Development tool: runs every registered check (or only those named in "
+            "`only_checks`) for this device's "
             "platform in debug mode and attaches `shakedown_*.json` (per-check "
             "verdicts with advisories, module inventory, discovered naming) plus "
             "`shakedown-trace_*.json` (every transport interaction WITH full "
@@ -330,13 +342,17 @@ class CollectorShakedown(Job):
         # Budget: one device, every check serially, debug payload capture.
         soft_time_limit = 1500
         time_limit = 1800
-        field_order = ["device", "secrets_group"]
+        field_order = ["device", "only_checks", "secrets_group"]
 
-    def run(self, *, device=None, secrets_group=None):
+    def run(self, *, device=None, only_checks="", secrets_group=None):
         """Shake down one device and its modelled BMC. Every kwarg defaults (ScheduledJob rule)."""
         self.logger.info("Test Suite Shakedown — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
         if device is None:
             raise RuntimeError("Pick a device.")
+        try:
+            only_ids = registry.parse_check_ids(only_checks)
+        except ValueError as exc:
+            raise RuntimeError("only_checks: %s" % (exc,)) from exc
         log_extra = {"object": device}
 
         platform, driver = _map_platform(device)
@@ -349,6 +365,18 @@ class CollectorShakedown(Job):
             raise RuntimeError(
                 "%s: cannot map platform (%r) to %s, and no BMC interface with an address is "
                 "modelled on it — %s." % (device.name, driver, PLATFORM_NAMES, PLATFORM_HINT)
+            )
+        host_checks = registry.checks_for(platform, only_ids) if platform is not None else []
+        bmc_checks = registry.checks_for("bmc", only_ids) if bmc_addressed else []
+        if not (host_checks or bmc_checks):
+            # Only a selection can leave nothing to run; fail before any transport opens.
+            raise RuntimeError(
+                "%s: none of the checks named in only_checks apply here (platform %s%s)."
+                % (
+                    device.name,
+                    platform or "unsupported",
+                    ", plus its BMC" if bmc_addressed else "",
+                )
             )
         host = _device_host(device)
 
@@ -413,16 +441,17 @@ class CollectorShakedown(Job):
                 logger=self.logger,
                 debug=True,
             )
-            families.append(("host", host_ctx, sorted(registry.checks_for(platform), key=order)))
+            families.append(("host", host_ctx, sorted(host_checks, key=order)))
         if bmc_live:
             bmc_ctx = CollectorContext(
                 device.name, "bmc", restconf=bmc_client, logger=self.logger, debug=True
             )
-            families.append(("bmc", bmc_ctx, sorted(registry.checks_for("bmc"), key=order)))
+            families.append(("bmc", bmc_ctx, sorted(bmc_checks, key=order)))
         report = {
             "schema": 1,
             "generated_at": envelope.utcnow_iso(),
             "framework": {"name": C.FRAMEWORK_NAME, "version": C.JOB_VERSION},
+            "only_checks": only_ids,
             "device": {
                 "name": device.name,
                 "platform": driver,

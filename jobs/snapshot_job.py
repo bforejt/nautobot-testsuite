@@ -183,20 +183,6 @@ def _device_host(device):
     return device.name
 
 
-def _parse_override_checks(raw):
-    """None when blank; else the validated id list. Unknown ids abort the whole run."""
-    ids = [token.strip() for token in str(raw or "").split(",") if token.strip()]
-    if not ids:
-        return None
-    unknown = sorted(set(ids) - set(registry.CHECKS))
-    if unknown:
-        raise RuntimeError(
-            "Unknown check id(s) in override_checks: %s. Valid ids: %s"
-            % (", ".join(unknown), ", ".join(sorted(registry.CHECKS)))
-        )
-    return ids
-
-
 def _describe_check(check):
     """Self-description embedded with every check entry (schema 1.1)."""
     return {
@@ -254,10 +240,6 @@ class CaptureSnapshot(Job):
         choices=KINDS,
         default="pre",
         description="Which side of the change this capture is.",
-    )
-    override_checks = StringVar(
-        required=False,
-        description="Comma-separated check ids replacing the package selection.",
     )
     secrets_group = ObjectVar(
         model=SecretsGroup,
@@ -320,7 +302,6 @@ class CaptureSnapshot(Job):
             "change_id",
             "change_description",
             "kind",
-            "override_checks",
             "secrets_group",
             "dryrun",
             "debug",
@@ -334,7 +315,6 @@ class CaptureSnapshot(Job):
         change_description="",
         kind="pre",
         package="full",
-        override_checks="",
         secrets_group=None,
         dryrun=False,
         debug=False,
@@ -351,7 +331,6 @@ class CaptureSnapshot(Job):
             )
         if kind not in dict(KINDS):
             raise RuntimeError("kind must be one of: %s" % (", ".join(dict(KINDS)),))
-        override_ids = _parse_override_checks(override_checks)
         if package not in ("", "full", None):
             # Retired input, kept in the signature so stored ScheduledJob
             # kwargs replay cleanly. Capture is always-everything by doctrine.
@@ -370,7 +349,6 @@ class CaptureSnapshot(Job):
                     change_description=str(change_description or "").strip(),
                     kind=kind,
                     package=package,
-                    override_ids=override_ids,
                     secrets_group=secrets_group,
                     dryrun=dryrun,
                     debug=debug,
@@ -638,7 +616,6 @@ class CaptureSnapshot(Job):
         change_id,
         kind,
         package,
-        override_ids,
         secrets_group,
         dryrun,
         debug=False,
@@ -697,27 +674,13 @@ class CaptureSnapshot(Job):
             )
 
         order = lambda check: (check.tier, check.id)  # noqa: E731
-        host_checks = sorted(registry.checks_for(platform, override_ids), key=order)
+        host_checks = sorted(registry.checks_for(platform), key=order)
         if platform is None:
             host_checks = []
         bmc_checks = []
         if bmc_addressed:
-            bmc_checks = sorted(registry.checks_for("bmc", override_ids), key=order)
-            if not bmc_checks:
-                bmc_note = "no bmc check selected by override_checks"
+            bmc_checks = sorted(registry.checks_for("bmc"), key=order)
         check_ids = [check.id for check in host_checks + bmc_checks]
-        if not check_ids:
-            # An empty selection is operator error (override_checks naming
-            # another platform's ids), and an empty "baseline" would pass
-            # every later compare — fail loudly.
-            self.logger.error(
-                "%s: no checks in the selection apply to platform %s%s — fix override_checks.",
-                device.name,
-                platform,
-                " or to its BMC" if bmc_addressed else "",
-                extra=log_extra,
-            )
-            return False
 
         host = _device_host(device)
         restconf = ssh = api = None
