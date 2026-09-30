@@ -29,6 +29,7 @@ import ipaddress
 import json
 import re
 import unittest
+from unittest import mock
 
 if __package__:
     from . import _loader
@@ -2355,7 +2356,16 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
         result = bmc._collect_power_policy(ctx)
         view, context = result["normalized"], result["context"]
         slot = {"activated": False, "interval": "Daily", "time": "00:00"}
-        unset = {"timer_s": None, "timeout_interval_s": None}
+        unset = {"timer": None, "timeout_interval": None}
+        job = {
+            "enabled_days_of_week": [],
+            "enabled_days_of_month": None,
+            "enabled_months_of_year": None,
+            "enabled_intervals": None,
+            "recurrence_interval": None,
+            "lifetime": None,
+            "max_occurrences": None,
+        }
         self.assertEqual(
             view,
             {
@@ -2406,9 +2416,13 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
                 "watchdog|4": {
                     "type": "IPMI",
                     "state": "Enabled",
-                    "timer_s": 15,
-                    "timeout_interval_s": 15,
+                    "timer": 15,
+                    "timeout_interval": 15,
                 },
+                # the scheduled power actions' JobService twins: no day enabled on the lab unit
+                "job|PowerOff": dict(job, name="Power Off", schedule_name="Lenovo:Power Off"),
+                "job|PowerOn": dict(job, name="Power On", schedule_name="Lenovo:Power On"),
+                "job|Restart": dict(job, name="Restart", schedule_name="Lenovo:Restart"),
             },
         )
         self.assertEqual(
@@ -3114,7 +3128,8 @@ class TestBmcLabAlerting(unittest.TestCase):
             ctx.gets,
             self.RESOLVE
             + [self.ES, self.MGR, self.NP, self.SNMP, self.SMTP]
-            + [self.SUBS + _XCC_EXPAND, self.RCPT + _XCC_EXPAND, self.LS + _XCC_EXPAND],
+            # the log services before the walks, so each walk knows what is left
+            + [self.LS + _XCC_EXPAND, self.SUBS + _XCC_EXPAND, self.RCPT + _XCC_EXPAND],
         )
         for family in ("subscriptions", "recipients"):
             self.assertEqual(
@@ -3152,18 +3167,18 @@ class TestBmcLabAlerting(unittest.TestCase):
 
     def test_the_walk_without_expand_fits_the_budget(self):
         # resolution 5; the EventService, Manager, NetworkProtocol, SNMP resource and SMTP
-        # client; the Subscriptions $expand attempt (refused) and collection; the Recipients
-        # collection (the refusal is not asked again); the LogServices collection and the
-        # StandardLog
+        # client; the LogServices $expand attempt (refused), collection and StandardLog; then
+        # the Subscriptions and Recipients collections (the refusal is not asked again)
         payloads, errors = TestBmcLabInventory._walked()
         ctx = _FakeCtx(payloads, errors=errors)
         result = bmc._collect_alerting(ctx)
         self.assertEqual(result["normalized"], bmc._collect_alerting(_xcc_lab_ctx())["normalized"])
-        self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + _XCC_EXPAND])
-        self.assertEqual(len(ctx.gets), 5 + 5 + 2 + 1 + 2)
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.LS + _XCC_EXPAND])
+        self.assertEqual(len(ctx.gets), 5 + 5 + 3 + 1 + 1)
         self.assertLessEqual(len(ctx.gets), bmc._BUDGET_ALERTING)
-        self.assertEqual(result["context"]["subscriptions"]["expand_refused"], "HTTP 501")
+        self.assertEqual(result["context"]["syslog_filters_source"]["expand_refused"], "HTTP 501")
         self.assertEqual(result["context"]["syslog_filters_source"]["strategy"], "members")
+        self.assertEqual(result["context"]["subscriptions"]["strategy"], "members")
 
 
 class TestBmcLabCertificates(unittest.TestCase):
@@ -3202,7 +3217,11 @@ class TestBmcLabCertificates(unittest.TestCase):
 
     def test_certificates(self):
         ctx = _FakeCtx(self.payloads())
-        result = bmc._collect_certificates(ctx)
+        # a fixed clock: the expiry tallies must not start failing when the real one passes
+        # the certificate's end date
+        fixed = bmc._certificates_instant("2026-09-30T00:00:00Z")
+        with mock.patch.object(bmc, "_certificates_now", return_value=fixed):
+            result = bmc._collect_certificates(ctx)
         view, context = result["normalized"], result["context"]
         self.assertEqual(view, {self.KEY: self.ROW})
         # after the resolution: CertificateLocations and the one certificate it lists

@@ -180,6 +180,9 @@ def _base_payloads():
         ),
         # bmc_pcie_slots: the Lenovo slot table the hand-built Chassis links (Oem.Lenovo.Slots)
         CH + "/Slots" + EXPAND: _fx("xcc_pcie_slots_lenovo_expanded.json"),
+        # the FoD service the hand-built Manager links: the lab's own, Tier1 with no key
+        MGR + "/Oem/Lenovo/FoD": _fx("xcc_manager_lenovo_fod_lab.json"),
+        MGR + "/Oem/Lenovo/FoD/Keys" + EXPAND: _fx("xcc_manager_lenovo_fod_keys_lab.json"),
         SYS + "/EthernetInterfaces" + EXPAND: _fx("xcc_host_nics_expanded.json"),
         "/redfish/v1/UpdateService/FirmwareInventory" + EXPAND: _fx("xcc_firmware_expanded.json"),
         SYS + "/LogServices": _fx("xcc_log_services.json"),
@@ -3741,8 +3744,9 @@ class TestWholeFamily(unittest.TestCase):
         # + bmc_network_adapters' 6 (its hand-built adapter tree)
         # + bmc_pcie_slots' 2 (a PCIeSlots probe the base set answers 404, the Lenovo table)
         # + bmc_accounts' 1 (the AccountService the base set answers 404: not-present)
-        # + bmc_licenses' 2 (the LicenseService path and the FoD link, both 404 there)
-        self.assertLessEqual(len(ctx.gets), 43)
+        # + bmc_licenses' 3 (the LicenseService path, 404 there; the FoD service and its
+        # empty Keys collection)
+        self.assertLessEqual(len(ctx.gets), 44)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3761,8 +3765,8 @@ class TestWholeFamily(unittest.TestCase):
         # (+ bmc_network_adapters' 17: its hand-built adapter tree walked)
         # (+ bmc_pcie_slots' 6: the PCIeSlots probe, then the Lenovo table walked)
         # (+ bmc_accounts' 1: the AccountService probe)
-        # (+ bmc_licenses' 2: the LicenseService path and the FoD link)
-        self.assertLessEqual(len(ctx.gets), 93)
+        # (+ bmc_licenses' 4: the LicenseService path, the FoD service, the Keys walk)
+        self.assertLessEqual(len(ctx.gets), 95)
 
 
 class TestResolution(unittest.TestCase):
@@ -4174,6 +4178,62 @@ class TestStorageWalkBudget(unittest.TestCase):
         # resolution 5, the attempt, the collection, 4 members, 4 drives, 4 Volumes, the Chassis
         self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 4 + 4 + 4 + 1)
         self.assertLessEqual(len(ctx.gets), checks._BUDGET_STORAGE)
+
+
+class TestUrlHygiene(unittest.TestCase):
+    def test_a_urls_query_and_fragment_are_scrubbed_family_wide(self):
+        # a presigned image link or an HTTP boot URI can carry its token in the query
+        payload = {
+            "Image": "https://images.example.net/esxi.iso?X-Amz-Signature=abc&X-Amz-Expires=60",
+            "HttpBootUri": "http://boot.example.net/uefi/boot.efi#token=abc",
+            "ImageName": "esxi.iso",
+            "Path": "/redfish/v1/Systems/1?not=a-url",  # no scheme: a Redfish path, untouched
+            "Text": "see https://kb.example.net/a?b=c for details",
+        }
+        scrubbed = checks._scrub_payload(payload)
+        self.assertEqual(scrubbed["Image"], "https://images.example.net/esxi.iso?***scrubbed***")
+        self.assertEqual(
+            scrubbed["HttpBootUri"], "http://boot.example.net/uefi/boot.efi#***scrubbed***"
+        )
+        self.assertEqual(scrubbed["ImageName"], "esxi.iso")
+        self.assertEqual(scrubbed["Path"], "/redfish/v1/Systems/1?not=a-url")
+        self.assertEqual(
+            scrubbed["Text"], "see https://kb.example.net/a?***scrubbed*** for details"
+        )
+        self.assertEqual(checks._scrub_payload(scrubbed), scrubbed)  # idempotent
+        # userinfo and query together
+        self.assertEqual(
+            checks._scrub_payload({"Image": "smb://u:p@share/iso?t=1"})["Image"],
+            "smb://***scrubbed***@share/iso?***scrubbed***",
+        )
+
+    def test_a_certificates_email_keeps_its_domain_wherever_it_sits(self):
+        cert = {
+            "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1",
+            "Subject": {
+                "CommonName": "bmc.example.net",
+                "DisplayString": "CN=bmc.example.net,O=Example,emailAddress=ops.lead@example.net",
+                "Email": "ops.lead@example.net",
+            },
+            "Issuer": {"DisplayString": "CN=Example CA,emailAddress=pki.admin@example.net"},
+        }
+        redacted = checks._certificates_redact(cert)
+        self.assertEqual(
+            redacted["Subject"]["DisplayString"],
+            "CN=bmc.example.net,O=Example,emailAddress=***scrubbed***@example.net",
+        )
+        self.assertEqual(redacted["Subject"]["Email"], checks._SCRUBBED)
+        self.assertEqual(
+            redacted["Issuer"]["DisplayString"],
+            "CN=Example CA,emailAddress=***scrubbed***@example.net",
+        )
+        self.assertEqual(checks._certificates_redact(redacted), redacted)  # idempotent
+
+    def test_an_out_of_range_instant_reads_none(self):
+        self.assertIsNone(checks._certificates_instant("9999-12-31T23:59:59-05:00"))
+        self.assertEqual(
+            checks._certificates_utc("9999-12-31T23:59:59-05:00"), "9999-12-31T23:59:59-05:00"
+        )
 
 
 class TestIscsiBootHygiene(unittest.TestCase):
@@ -5454,7 +5514,9 @@ class TestPowerPolicy(unittest.TestCase):
             [key for key in view if "|" in key],
             ["control|IntakeTemperature", "control|PowerLimit"]
             + ["sched|1", "sched|2", "sched|3"]
-            + ["watchdog|1", "watchdog|2", "watchdog|3", "watchdog|4"],
+            + ["watchdog|1", "watchdog|2", "watchdog|3", "watchdog|4"]
+            # the JobService's scheduled jobs: the power actions' twins, where the weekday lives
+            + ["job|PowerOff", "job|PowerOn", "job|Restart"],
         )
         self.assertEqual(
             view["control|PowerLimit"],
@@ -5495,15 +5557,16 @@ class TestPowerPolicy(unittest.TestCase):
         )
         self.assertEqual(
             view["watchdog|4"],
-            {"type": "IPMI", "state": "Enabled", "timer_s": 15, "timeout_interval_s": 15},
+            # as served: the names say seconds, Lenovo's schema counts the IPMI one in tenths
+            {"type": "IPMI", "state": "Enabled", "timer": 15, "timeout_interval": 15},
         )
         self.assertEqual(
             view["watchdog|1"],
             {
                 "type": "OSBootProcess",
                 "state": "Disabled",
-                "timer_s": None,
-                "timeout_interval_s": None,
+                "timer": None,
+                "timeout_interval": None,
             },
         )
         self.assertEqual(
@@ -5512,10 +5575,58 @@ class TestPowerPolicy(unittest.TestCase):
         self.assertEqual(context["jobs"]["PowerOn"]["state"], "Suspended")
         self.assertEqual(context["jobs"]["PowerOn"]["schedule"]["name"], "Lenovo:Power On")
         self.assertEqual(context["jobs"]["PowerOn"]["schedule"]["enabled_days_of_week"], [])
+        self.assertEqual(
+            view["job|PowerOn"],
+            {
+                "name": "Power On",
+                "schedule_name": "Lenovo:Power On",
+                "enabled_days_of_week": [],
+                "enabled_days_of_month": None,
+                "enabled_months_of_year": None,
+                "enabled_intervals": None,
+                "recurrence_interval": None,
+                "lifetime": None,
+                "max_occurrences": None,
+            },
+        )
         # every row of a family carries the same fields, whatever its member serves
-        for prefix in ("control|", "sched|", "watchdog|"):
+        for prefix in ("control|", "sched|", "watchdog|", "job|"):
             shapes = {tuple(sorted(row)) for key, row in view.items() if key.startswith(prefix)}
             self.assertEqual(len(shapes), 1, prefix)
+
+    def test_moving_a_scheduled_job_to_another_day_is_one_changed_row(self):
+        # the weekday a scheduled power action fires on lives only on its JobService twin
+        pre = self._collect(self._payloads())[1]["normalized"]
+        payloads = self._payloads()
+        job = [
+            member
+            for member in payloads[self.JOBS + EXPAND]["Members"]
+            if member["Id"] == "PowerOff"
+        ][0]
+        job["Schedule"]["EnabledDaysOfWeek"] = ["Wednesday", "Sunday"]
+        job["JobState"] = "Pending"  # the state it moves to: context, never a key
+        post = self._collect(payloads)[1]["normalized"]
+        self.assertEqual(post["job|PowerOff"]["enabled_days_of_week"], ["Sunday", "Wednesday"])
+        diff = _loader.diffcore.diff_check(pre, post, registry.CHECKS["bmc_power_policy"].compare)
+        self.assertEqual(
+            [(row["key"], row["field"]) for row in diff["changed"]],
+            [("job|PowerOff", "enabled_days_of_week")],
+        )
+        # a job without a Schedule (a one-shot job) is context only
+        del job["Schedule"]
+        view = self._collect(payloads)[1]["normalized"]
+        self.assertNotIn("job|PowerOff", view)
+
+    def test_watchdog_timers_keep_what_is_served(self):
+        row = checks._power_policy_watchdog_row(
+            {
+                "Type": "IPMI",
+                "State": "Enabled",
+                "TimerValueInSec": 1.5,
+                "TimeoutIntervalInSec": "15",
+            }
+        )
+        self.assertEqual((row["timer"], row["timeout_interval"]), (1.5, 15))
 
     def test_one_expand_get_per_collection_and_the_shared_reads_come_from_the_cache(self):
         ctx, result = self._collect(self._payloads())
@@ -5622,7 +5733,9 @@ class TestPowerPolicy(unittest.TestCase):
             self.assertIsNone(view[field], field)  # although the payloads carry Oem.Lenovo
         self.assertEqual((view["power_restore_policy"], view["power_limit_w"]), ("LastState", 450))
         self.assertEqual(
-            [key for key in view if "|" in key], ["control|IntakeTemperature", "control|PowerLimit"]
+            [key for key in view if "|" in key],
+            ["control|IntakeTemperature", "control|PowerLimit"]
+            + ["job|PowerOff", "job|PowerOn", "job|Restart"],  # the DMTF JobService's jobs
         )
         self.assertEqual(sorted(context["jobs"]), ["PowerOff", "PowerOn", "Restart"])
         self.assertIn("no Contoso mapping", context["unmapped"])
@@ -7463,6 +7576,15 @@ class TestAlerting(unittest.TestCase):
                 "Password": "hunter2",
             },
         }
+        if expand:
+            # the log services in their $expand form, as XCC serves them: the syslog
+            # filters are read from it, and no refusal reaches the walks after it
+            services = SYS + "/LogServices"
+            payloads[services + EXPAND] = {
+                "@odata.id": services,
+                "Members": [payloads[services + "/PlatformLog"]],
+                "Members@odata.count": 1,
+            }
         return payloads
 
     def test_every_scalar_and_row_is_read_from_its_resource(self):
@@ -7602,9 +7724,10 @@ class TestAlerting(unittest.TestCase):
             ctx.gets,
             RESOLVE
             + [self.ES, MGR, self.NP, self.SNMP, self.SMTP]
-            + [self.SUBS + EXPAND, self.RCPT + EXPAND]
-            # the platform log service, read the way bmc_event_log reads it
-            + [self.LS + EXPAND, self.LS, self.LS + "/PlatformLog"],
+            # the platform log service, read the way bmc_event_log reads it (inline in the
+            # LogServices $expand answer) before the walks, which then know what is left
+            + [self.LS + EXPAND]
+            + [self.SUBS + EXPAND, self.RCPT + EXPAND],
         )
         self.assertEqual(
             context["sources"],
@@ -7628,8 +7751,8 @@ class TestAlerting(unittest.TestCase):
             context["syslog_filters_source"],
             {
                 "service": "PlatformLog",
-                "strategy": "members",
-                "expand_refused": "HTTP 404",
+                "strategy": "expand",  # the LogServices $expand answer, members inline
+                "expand_refused": None,
                 "note": None,
             },
         )
@@ -7687,7 +7810,7 @@ class TestAlerting(unittest.TestCase):
         redactors = dict(ctx.redacted)
         for path in (self.ES, self.SMTP, self.SUBS + EXPAND, self.RCPT + EXPAND):
             self.assertEqual(redactors[path], "_alerting_redact", path)
-        for path in (MGR, self.NP, self.SNMP, self.LS, self.LS + "/PlatformLog"):
+        for path in (MGR, self.NP, self.SNMP, self.LS + EXPAND):
             self.assertEqual(redactors[path], "_scrub_payload", path)
 
     def test_the_redactor_is_idempotent_and_never_mutates_its_input(self):
@@ -7704,7 +7827,8 @@ class TestAlerting(unittest.TestCase):
         self.assertEqual(member, original)
         self.assertEqual(
             redacted["Destination"],
-            "https://***scrubbed***@collector.example.com:8443/in?***scrubbed***#top",
+            # the family scrubs a URL's query and fragment alike (either can carry a token)
+            "https://***scrubbed***@collector.example.com:8443/in?***scrubbed***",
         )
         self.assertEqual(redacted["Context"], checks._SCRUBBED)  # it can be a shared secret
         self.assertEqual(redacted["HttpHeaders"], ["***scrubbed***"])  # the count survives
@@ -7832,7 +7956,7 @@ class TestAlerting(unittest.TestCase):
         )
 
     def test_the_platform_log_is_left_unread_where_the_family_cannot_resolve_one(self):
-        payloads = self._payloads()
+        payloads = self._payloads(expand=False)
         payloads[self.LS] = {
             "Members": [{"@odata.id": self.LS + "/Audit"}, {"@odata.id": self.LS + "/Other"}]
         }
@@ -7846,23 +7970,32 @@ class TestAlerting(unittest.TestCase):
         self.assertEqual(source["note"], self.LS + " answered 404")
         # any other failure of the read fails the check
         with self.assertRaises(_FakeRedfishError):
-            checks._collect_alerting(_FakeCtx(self._payloads(), errors={self.LS: 500}))
+            checks._collect_alerting(_FakeCtx(self._payloads(expand=False), errors={self.LS: 500}))
 
     def test_a_refused_expand_is_paid_once_and_the_walk_is_complete(self):
         expanded = checks._collect_alerting(_FakeCtx(self._payloads()))["normalized"]
-        for payloads, errors in (
-            (self._payloads(expand=False), {}),  # $expand answers 404
-            (self._payloads(), {self.SUBS + EXPAND: 501}),  # $expand refused
+        log_services = SYS + "/LogServices" + EXPAND
+        for payloads, errors, attempts, gets in (
+            # every $expand form answers 404: paid once, on the log services read first (the
+            # attempt — a 404 beside a served collection is a refusal — the collection, the
+            # platform log), then the subscriptions and recipients walked (1 + 5, 1 + 2)
+            (self._payloads(expand=False), {}, [log_services], 3 + 5 + 3 + 6 + 3),
+            # $expand refused on Subscriptions only: the log services come inline, then the
+            # refused attempt + the collection + 5 members, the recipients walked (1 + 2)
+            (
+                self._payloads(),
+                {self.SUBS + EXPAND: 501},
+                [log_services, self.SUBS + EXPAND],
+                3 + 5 + 1 + 7 + 3,
+            ),
         ):
             ctx = _FakeCtx(payloads, errors=errors)
             result = checks._collect_alerting(ctx)
             self.assertEqual(result["normalized"], expanded)
-            self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + EXPAND])
+            self.assertEqual([path for path in ctx.gets if "?" in path], attempts)
             self.assertEqual(result["context"]["subscriptions"]["strategy"], "members")
             self.assertEqual(result["context"]["recipients"]["strategy"], "members")
-            # resolution 3, five singletons, the attempt + the collection + 5 members,
-            # the collection + 2 members, the LogServices collection + the platform log
-            self.assertEqual(len(ctx.gets), 3 + 5 + 7 + 3 + 2)
+            self.assertEqual(len(ctx.gets), gets)
             self.assertLessEqual(len(ctx.gets), checks._BUDGET_ALERTING)
             # the raw of a walk is every request sent, each member curated and redacted
             self.assertIn(self.SUBS + "/1", result["raw"])
@@ -7877,7 +8010,9 @@ class TestAlerting(unittest.TestCase):
             result["context"]["subscriptions"]["expand_refused"], "members returned as links"
         )
         self.assertEqual(len([key for key in result["normalized"] if "subscription|" in key]), 4)
-        self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + EXPAND])
+        self.assertEqual(
+            [path for path in ctx.gets if "?" in path], [self.LS + EXPAND, self.SUBS + EXPAND]
+        )
 
     def test_a_walk_the_budget_cannot_cover_is_refused_before_its_first_member(self):
         payloads = self._payloads(expand=False)
@@ -8577,6 +8712,22 @@ class TestLicenses(unittest.TestCase):
             sorted([self.SERVICE, self.FOD, self.LICENSES + EXPAND, self.KEYS + EXPAND]),
         )
 
+    def test_an_end_date_is_compared_in_utc(self):
+        # the BMC renders the stored instant in its own offset: a time-zone change is no change
+        east = {"Id": "1", "ExpirationDate": "2026-10-31T00:00:00-04:00"}
+        west = {"Id": "1", "ExpirationDate": "2026-10-30T23:00:00-05:00"}
+        pre, _readings = checks._normalize_licenses({}, [east])
+        post, readings = checks._normalize_licenses({}, [west])
+        self.assertEqual(pre["license|1"]["expiration_date"], "2026-10-31T04:00:00Z")
+        compare = registry.CHECKS["bmc_licenses"].compare
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        self.assertEqual(  # the served string rides in context
+            readings["license|1"]["expiration_date_served"], "2026-10-30T23:00:00-05:00"
+        )
+        # a value that is no date-time is kept verbatim
+        view, _readings = checks._normalize_licenses({}, [{"Id": "2", "ExpirationDate": "never"}])
+        self.assertEqual(view["license|2"]["expiration_date"], "never")
+
     def test_what_moves_on_its_own_rides_in_context(self):
         context = checks._collect_licenses(_FakeCtx(self._payloads()))["context"]
         self.assertEqual(
@@ -8584,16 +8735,19 @@ class TestLicenses(unittest.TestCase):
             {
                 "license|1": {
                     "install_date": "2026-03-01T12:00:00Z",
+                    "expiration_date_served": "2027-06-30T00:00:00Z",
                     "remaining_duration": "P272DT12H0M0S",
                     "remaining_use_count": 4,
                 },
                 "license|2": {
                     "install_date": None,
+                    "expiration_date_served": None,
                     "remaining_duration": None,
                     "remaining_use_count": None,
                 },
                 "license|3": {
                     "install_date": "2026-09-01T08:30:00Z",
+                    "expiration_date_served": "2026-10-31T00:00:00Z",
                     "remaining_duration": "P31DT0H0M0S",
                     "remaining_use_count": None,
                 },
@@ -8780,30 +8934,36 @@ class TestLicenses(unittest.TestCase):
         self.assertIn(self.SERVICE + " answered 404", str(caught.exception))
         self.assertEqual(ctx.gets, RESOLVE + [self.SERVICE])
 
-    def test_a_lenovo_bmc_serving_neither_service_is_not_present(self):
-        # The hand-built family set: its root links no LicenseService and its Manager
-        # links a FoD resource the set does not serve.
+    def test_a_linked_resource_answering_404_fails_and_nothing_served_is_not_present(self):
+        # a FoD resource the Manager links that answers 404 is a failed read, never "no key"
         ctx = _FakeCtx(self._unlicensed())
-        with self.assertRaises(registry.SkipCheck) as caught:
+        with self.assertRaises(registry.CollectError) as caught:
             checks._collect_licenses(ctx)
-        self.assertEqual(
-            str(caught.exception),
-            "neither a DMTF LicenseService (the service root links none and %s answered 404) "
-            "nor Lenovo's FoD service (%s answered 404) is served" % (self.SERVICE, self.FOD),
-        )
-        # the service's standard path is read once, then the Manager and its FoD link
+        self.assertIn("links %s but it answered 404" % (self.FOD,), str(caught.exception))
         self.assertEqual(ctx.gets, RESOLVE + [self.SERVICE, MGR, self.FOD])
-        # a linked service answering 404 with no FoD linked is not-present too
+        # so is a LicenseService the root links, whatever the FoD side says — never a
+        # not-present with a vendor-mapping reason
         payloads = self._payloads()
         del payloads[self.SERVICE]
+        payloads[MGR] = copy.deepcopy(payloads[MGR])
+        del payloads[MGR]["Oem"]["Lenovo"]["FoD"]
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_licenses(_FakeCtx(payloads))
+        self.assertIn("links %s but it answered 404" % (self.SERVICE,), str(caught.exception))
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        with self.assertRaises(registry.CollectError):
+            checks._collect_licenses(_FakeCtx(payloads))
+        # nothing linked and nothing served: not-present
+        payloads = self._unlicensed()
         payloads[MGR] = copy.deepcopy(payloads[MGR])
         del payloads[MGR]["Oem"]["Lenovo"]["FoD"]
         with self.assertRaises(registry.SkipCheck) as caught:
             checks._collect_licenses(_FakeCtx(payloads))
         self.assertEqual(
             str(caught.exception),
-            "neither a DMTF LicenseService (%s answered 404) nor Lenovo's FoD service (the "
-            "Manager links no Oem.Lenovo.FoD) is served" % (self.SERVICE,),
+            "neither a DMTF LicenseService (the service root links none and %s answered 404) "
+            "nor Lenovo's FoD service (the Manager links no Oem.Lenovo.FoD) is served"
+            % (self.SERVICE,),
         )
 
     def test_the_fod_keys_alone_where_no_licence_service_is_served(self):
@@ -8903,7 +9063,12 @@ class TestLicenses(unittest.TestCase):
             readings,
             {
                 "license|a": dict.fromkeys(
-                    ("install_date", "remaining_duration", "remaining_use_count")
+                    (
+                        "install_date",
+                        "expiration_date_served",
+                        "remaining_duration",
+                        "remaining_use_count",
+                    )
                 ),
                 "fodkey|b": {"use_count": None},
             },

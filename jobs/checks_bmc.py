@@ -180,6 +180,11 @@ _COUNT_ONLY_KEYS = frozenset({"currentloggedusers"})
 # A login embedded in a URL (virtual-media Image, an event Destination):
 # scheme://user:password@host/... keeps everything but the userinfo.
 _URL_USERINFO = re.compile(r"(?<=://)[^/@\s]+@")
+# A URL's query and fragment (a presigned image link's token, an access key):
+# scrubbed whole, the scheme, host and path kept, so a rotated token never diffs.
+_URL_QUERY = re.compile(r"(\b[A-Za-z][A-Za-z0-9+.-]*://[^\s?#]*)([?#])\S+")
+# The local part of an e-mail address names a person; its domain is kept.
+_EMAIL_LOCAL = re.compile(r"[^\s@<>()\[\],;:\"'/\\?#&=]+(?=@[A-Za-z0-9])")
 _SCRUBBED = "***scrubbed***"
 _RAW_TEXT_CAP = 20000  # chars kept for a sorted key=value remainder in raw
 _RAW_LOG_ENTRIES = 500  # newest event-log entries kept in raw (curated, per entry)
@@ -234,8 +239,14 @@ def _scrub_payload(node, keep_user_names=False):
     if isinstance(node, list):
         return [_scrub_payload(item, keep_user_names) for item in node]
     if isinstance(node, str) and "://" in node:
-        return _URL_USERINFO.sub(_SCRUBBED + "@", node)
+        node = _URL_USERINFO.sub(_SCRUBBED + "@", node)
+        return _URL_QUERY.sub(lambda match: match.group(1) + match.group(2) + _SCRUBBED, node)
     return node
+
+
+def _mask_email_local(text):
+    """``text`` with the local part of every e-mail address in it scrubbed (the domain stays)."""
+    return _EMAIL_LOCAL.sub(_SCRUBBED, text)
 
 
 def _looks_secret(key, value=None):
@@ -4534,8 +4545,51 @@ def _power_policy_watchdog_row(watchdog):
     return {
         "type": _text(watchdog.get("Type")),
         "state": _text(watchdog.get("State")),
-        "timer_s": _to_int(watchdog.get("TimerValueInSec")),
-        "timeout_interval_s": _to_int(watchdog.get("TimeoutIntervalInSec")),
+        # TimerValueInSec / TimeoutIntervalInSec as served (decimals kept): the names say
+        # seconds, but Lenovo's schema counts the IPMI watchdog's in tenths of a second
+        "timer": _power_policy_number(watchdog.get("TimerValueInSec")),
+        "timeout_interval": _power_policy_number(watchdog.get("TimeoutIntervalInSec")),
+    }
+
+
+def _power_policy_number(value):
+    """A served number as an int when whole, else a float; None when not a number."""
+    number = _to_float(value)
+    if number is None:
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def _power_policy_set(value):
+    """A served list of scalars as a set would compare: sorted (numbers before strings)."""
+    items = _power_policy_list(value)
+    if items is None:
+        return None
+    return sorted(
+        (item for item in items if item is not None),
+        key=lambda item: (isinstance(item, str), item),
+    )
+
+
+def _power_policy_job_row(job):
+    """One 'job|<Id>' row: a scheduled JobService job's standing schedule.
+
+    The days, months and intervals it fires on (sets, so sorted), its
+    recurrence, lifetime and occurrence cap — configuration a person sets
+    (Lenovo's scheduled power actions have these twins). Its state, status and
+    start time move as it runs: context.jobs.
+    """
+    schedule = job.get("Schedule") if isinstance(job.get("Schedule"), dict) else {}
+    return {
+        "name": _text(job.get("Name")),
+        "schedule_name": _text(schedule.get("Name")),
+        "enabled_days_of_week": _power_policy_set(schedule.get("EnabledDaysOfWeek")),
+        "enabled_days_of_month": _power_policy_set(schedule.get("EnabledDaysOfMonth")),
+        "enabled_months_of_year": _power_policy_set(schedule.get("EnabledMonthsOfYear")),
+        "enabled_intervals": _power_policy_set(schedule.get("EnabledIntervals")),
+        "recurrence_interval": _text(schedule.get("RecurrenceInterval")),
+        "lifetime": _text(schedule.get("Lifetime")),
+        "max_occurrences": _to_int(schedule.get("MaxOccurrences")),
     }
 
 
@@ -4811,6 +4865,11 @@ def _collect_power_policy(ctx):
         power_subsystem=power_subsystem,
     )
     jobs = members["jobs"]
+    for job in _dicts(jobs):
+        # a job carrying a Schedule is standing configuration (on XCC 6.10 the scheduled
+        # power actions' twins, where the weekday lives); a one-shot job is context only
+        if isinstance(job.get("Schedule"), dict):
+            normalized["job|%s" % (_member_id(job) or "?",)] = _power_policy_job_row(job)
     context.update(
         {
             "host_power_state": _text(_dig(system, "PowerState")),
@@ -6589,6 +6648,10 @@ def _collect_alerting(ctx):
                 snmp = _alerting_linked(ctx, snmp_link, protocol_path, _scrub_payload)
             if smtp_link is not None:
                 smtp_client = _alerting_linked(ctx, smtp_link, protocol_path, _alerting_redact)
+        # the single reads first: every walk below is pre-checked against what is left
+        platform_log, syslog_source = _alerting_platform_log(ctx, targets, try_expand)
+        if (syslog_source or {}).get("expand_refused"):
+            try_expand = False  # the log services refused or ignored $expand: paid once
         if subscriptions_link is not None:
             subscriptions, collections["subscriptions"], found = _alerting_collection(
                 ctx,
@@ -6611,7 +6674,6 @@ def _collect_alerting(ctx):
             )
             raw.update(found)
             try_expand = try_expand and not collections["recipients"]["expand_refused"]
-        platform_log, syslog_source = _alerting_platform_log(ctx, targets, try_expand)
     if all(found is None for found in (event_service, recipients, snmp, smtp_client)):
         raise SkipCheck(
             "the service root links no EventService and the Manager and NetworkProtocol link "
@@ -6752,6 +6814,14 @@ def _certificates_redact(node):
             key: _scrub_value(value) if _certificates_withheld(key, person) else value
             for key, value in subject.items()
         }
+    for side in ("Subject", "Issuer"):
+        # an e-mail left in any leaf (Identifier.DisplayString repeats the whole DN,
+        # emailAddress included) keeps its domain only
+        if isinstance(node.get(side), dict):
+            node[side] = {
+                key: _mask_email_local(value) if isinstance(value, str) else value
+                for key, value in node[side].items()
+            }
     return node
 
 
@@ -6784,9 +6854,9 @@ def _certificates_instant(value):
     offset = "+00:00" if offset in ("Z", "z") else offset
     try:
         stamp = datetime.datetime.fromisoformat("%sT%s%s" % (day, clock, offset))
-    except ValueError:
+        return stamp.astimezone(datetime.timezone.utc)
+    except (ValueError, OverflowError):  # a year past 9999 once shifted to UTC
         return None
-    return stamp.astimezone(datetime.timezone.utc)
 
 
 def _certificates_utc(value):
@@ -7091,8 +7161,9 @@ def _licenses_license_row(license_):
         "state": state,
         "health": health,
         "authorization_scope": _text(license_.get("AuthorizationScope")),
-        # The licence's own end date: fixed, unlike the remaining duration (a reading).
-        "expiration_date": _text(license_.get("ExpirationDate")),
+        # The licence's own end date, in UTC (the BMC renders it in its own offset, so a
+        # time-zone change is no change): fixed, unlike the remaining duration (a reading).
+        "expiration_date": _certificates_utc(license_.get("ExpirationDate")),
         "grace_period_days": _to_int(license_.get("GracePeriodDays")),
         "max_authorized_devices": _to_int(license_.get("MaxAuthorizedDevices")),
         "authorized_devices": _licenses_paths(_dig(license_, "Links", "AuthorizedDevices")),
@@ -7103,6 +7174,7 @@ def _licenses_license_readings(license_):
     """What moves on its own for a licence: its install time, remaining term and uses left."""
     return {
         "install_date": _text(license_.get("InstallDate")),
+        "expiration_date_served": _text(license_.get("ExpirationDate")),
         "remaining_duration": _text(license_.get("RemainingDuration")),
         "remaining_use_count": _to_int(license_.get("RemainingUseCount")),
     }
@@ -7120,7 +7192,11 @@ def _licenses_key_row(key):
         "description": _text(key.get("Description")),
         "id_types": _licenses_sorted_text(key.get("IdTypes")),
         "status": _licenses_value(key.get("Status")),
-        "expires": _licenses_value(key.get("Expires")),
+        "expires": (
+            _certificates_utc(key.get("Expires"))
+            if _certificates_instant(key.get("Expires")) is not None
+            else _licenses_value(key.get("Expires"))
+        ),
         "description_type_code": _licenses_value(key.get("DescTypeCode")),
         "use_limit": _licenses_value(key.get("UseLimit")),
     }
@@ -7202,13 +7278,7 @@ def _licenses_served_or_refused(
         service_detail = "the service root links none and %s answered 404" % (service_path,)
     else:
         service_detail = "%s answered 404" % (service_path,)
-    if service is None and fod is None:
-        if not _is_lenovo(targets):
-            raise _no_mapping(targets, "licences (%s)" % (service_detail,))
-        raise SkipCheck(
-            "neither a DMTF LicenseService (%s) nor Lenovo's FoD service (%s) is served"
-            % (service_detail, fod_note)
-        )
+    # A linked service answering 404 is a failed read, whatever the other one says.
     if service is None and service_link is not None:
         raise CollectError(
             "bmc_licenses LicenseService: the service root links %s but it answered 404 — the "
@@ -7218,6 +7288,13 @@ def _licenses_served_or_refused(
         raise CollectError(
             "bmc_licenses FoD: the Manager links %s but it answered 404 — the activation keys "
             "are unmeasured, never recorded as none" % (fod_link,)
+        )
+    if service is None and fod is None:
+        if not _is_lenovo(targets):
+            raise _no_mapping(targets, "licences (%s)" % (service_detail,))
+        raise SkipCheck(
+            "neither a DMTF LicenseService (%s) nor Lenovo's FoD service (%s) is served"
+            % (service_detail, fod_note)
         )
 
 

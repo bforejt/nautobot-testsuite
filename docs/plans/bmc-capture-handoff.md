@@ -606,7 +606,9 @@ collector through a real `CollectorContext` (Appendix C). What remains:
    not-present on both sides); each widening and new check is re-measured
    the same way on the lab unit before it is reported done. For PR B's
    widened twelve: three real captures at 04:44, 04:52 and 05:26 UTC — every
-   pair diffs to nothing on all twelve checks.
+   pair diffs to nothing on all twelve checks. For the family of 22 with PR
+   C: captures at 06:28 and 07:12 UTC diff to nothing on all 21 compared
+   checks (`bmc_tasks` is informational, never compared).
 
 ## 8. Tests
 
@@ -719,7 +721,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    (87 GETs in 100 s), shakedown 22/22 ok (117 GETs) with the log's
    sequence numbers 140/176 before and after; local account names appear
    only where decision 5 puts them (`bmc_accounts`' keys, its raw Accounts
-   read and that read's trace entry), nowhere else in any artifact. The first four ran live through the dev
+   read and that read's trace entry), nowhere else in any artifact. The
+   review is §10a item 14. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -990,6 +993,29 @@ Recorded as they were found, each with how it was resolved.
       family's `_redact_task_page` (the same redactor `bmc_power_policy` uses
       for Jobs, so the per-run cache keeps one redaction whichever reads
       first). A paged answer is refused, as in `bmc_sensors`.
+14. **An adversarially verified review of PR C** (five lenses — the catalog
+    against the lab payloads and the firmware's own schema files, split in
+    two; stability and hygiene through the real `CollectorContext`; tests and
+    robustness; the family's seams — each checked by a verifier) confirmed
+    nine defects, all fixed in one commit: the weekday a scheduled power
+    action fires on lived only in context (moving it never diffed) — each
+    JobService job that carries a Schedule is now a `job|<Id>` row in
+    `bmc_power_policy`; the watchdog timers claimed seconds although Lenovo's
+    schema counts the IPMI watchdog's in tenths (renamed `timer` /
+    `timeout_interval`, served values kept); a URL's query and fragment
+    (a presigned image link's token) reached `bmc_boot`'s keys and raw — the
+    family scrubber now scrubs them in every absolute URL; a certificate's
+    `DisplayString` repeated the e-mail its `Email` leaf scrubs (an e-mail
+    anywhere in a Subject or Issuer now keeps its domain only); a licence's
+    end date was keyed in the BMC's own offset (now UTC, the served string in
+    context); a linked LicenseService answering 404 read as not-present with
+    a vendor-mapping reason (now a failed read, as everywhere); an
+    out-of-range certificate date could raise out of the check; the lab
+    certificate test would have started failing in 2030 (a fixed clock); and
+    `bmc_alerting`'s walks were pre-checked before the log-service reads that
+    followed them (those now come first). Two findings were refuted. The
+    hand-built family set now serves the FoD service its Manager links, so a
+    linked resource answering 404 there is no longer an accident of the set.
 
 ## 11. Decisions still open (default assumed in parentheses)
 
