@@ -218,6 +218,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_manager_network",
         "bmc_chassis",
         "bmc_sensors",
+        "bmc_boot",
     }
 
     def test_all_registered_once(self):
@@ -4937,6 +4938,362 @@ class TestSensors(unittest.TestCase):
                 ("sensor|Fan 1", "thresholds"),
                 ("sensor|Inlet Temperature", "reading"),
             ],
+        )
+
+
+class TestBoot(unittest.TestCase):
+    """bmc_boot on the shapes the lab unit lacks, hand-built from the schema vocabulary.
+
+    xcc_boot_dmtf_boot_block.json (every DMTF ComputerSystem Boot leaf),
+    xcc_boot_bootoptions_expanded.json (a BootOption collection),
+    xcc_boot_virtualmedia_inserted_expanded.json (a slot with an image inserted)
+    and xcc_boot_mountimages_expanded.json (one LenovoRemoteMountMedia member:
+    Size and Readonly, its schema's own leaves) are hand-built; the Lenovo boot
+    manager is the lab unit's real BootSettings collection.
+    """
+
+    BOOT_OPTIONS = SYS + "/BootOptions"
+    SETTINGS = SYS + "/Oem/Lenovo/BootSettings"
+    MEDIA = SYS + "/VirtualMedia"
+    RC = MGR + "/Oem/Lenovo/RemoteControl"
+    MOUNTS = RC + "/MountImages"
+    SCALARS = (
+        "boot_order",
+        "alias_boot_order",
+        "boot_order_property_selection",
+        "boot_override",
+        "boot_override_target",
+        "boot_override_mode",
+        "uefi_target",
+        "boot_next",
+        "automatic_retry_config",
+        "automatic_retry_attempts",
+        "stop_boot_on_fault",
+        "trusted_module_required_to_boot",
+        "http_boot_uri",
+    )
+
+    def _payloads(self, expand=True):
+        payloads = _base_payloads()
+        system = payloads[SYS]
+        system["Boot"] = _fx("xcc_boot_dmtf_boot_block.json")
+        system["VirtualMedia"] = {"@odata.id": self.MEDIA}
+        system["Oem"]["Lenovo"]["BootSettings"] = {"@odata.id": self.SETTINGS}
+        payloads[MGR]["Oem"]["Lenovo"]["RemoteControl"] = {"@odata.id": self.RC}
+        payloads[self.RC] = {
+            "@odata.id": self.RC,
+            "Id": "RemoteControl",
+            "ServiceEnabled": True,
+            "MountImages": {"@odata.id": self.MOUNTS},
+            "Sessions": {"@odata.id": self.RC + "/Sessions"},
+        }
+        collections = {
+            self.SETTINGS: _fx("xcc_system_lenovo_bootsettings_expanded_lab.json"),
+            self.MEDIA: _fx("xcc_boot_virtualmedia_inserted_expanded.json"),
+            self.MOUNTS: _fx("xcc_boot_mountimages_expanded.json"),
+            self.BOOT_OPTIONS: _fx("xcc_boot_bootoptions_expanded.json"),
+        }
+        for path, expanded in collections.items():
+            if expand:
+                payloads[path + EXPAND] = expanded
+            else:
+                plain, members = _split_collection(expanded)
+                payloads[path] = plain
+                payloads.update(members)
+        return payloads
+
+    def test_every_scalar_is_present_and_none_without_a_boot_block(self):
+        view, context = checks._normalize_boot({})
+        self.assertEqual(view, dict.fromkeys(self.SCALARS))
+        self.assertEqual(
+            context,
+            {
+                "host_power_state": None,
+                "remaining_automatic_retry_attempts": None,
+                "boot_order_supported": None,
+                "override_targets_allowable": None,
+                "mount_image_sizes": None,
+            },
+        )
+
+    def test_the_dmtf_boot_block_keeps_its_orders_and_the_retry_countdown_is_context(self):
+        system = {"Boot": _fx("xcc_boot_dmtf_boot_block.json"), "PowerState": "Off"}
+        view, context = checks._normalize_boot(system)
+        self.assertEqual(
+            {key: view[key] for key in self.SCALARS if key != "http_boot_uri"},
+            {
+                # both orders exactly as served: the order is the fact
+                "boot_order": ["Boot0002", "Boot0000", "Boot0001", "Boot0004", "Boot0003"],
+                "alias_boot_order": ["Hdd", "Pxe", "UefiHttp", "UefiShell"],
+                "boot_order_property_selection": "BootOrder",
+                "boot_override": "Once",
+                "boot_override_target": "UefiBootNext",
+                "boot_override_mode": "UEFI",
+                "uefi_target": None,
+                "boot_next": "Boot0004",
+                "automatic_retry_config": "RetryAttempts",
+                "automatic_retry_attempts": 3,
+                "stop_boot_on_fault": "Never",
+                "trusted_module_required_to_boot": "Disabled",
+            },
+        )
+        self.assertEqual(context["remaining_automatic_retry_attempts"], 2)
+        self.assertEqual(context["host_power_state"], "Off")
+        self.assertIn("UefiBootNext", context["override_targets_allowable"])
+        # the countdown moves on its own: never a diff
+        system["Boot"]["RemainingAutomaticRetryAttempts"] = 1
+        self.assertEqual(checks._normalize_boot(system)[0], view)
+
+    def test_collector_reads_each_source_in_one_expand_get(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_boot(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [MGR, self.SETTINGS + EXPAND, self.MEDIA + EXPAND, self.RC, self.MOUNTS + EXPAND]
+            + [self.BOOT_OPTIONS + EXPAND],
+        )
+        self.assertEqual(
+            sorted(key.split("|", 1)[0] for key in view if "|" in key),
+            ["mount"] + ["option"] * 5 + ["order"] * 5 + ["vmedia"] * 2,
+        )
+        self.assertEqual(
+            view["option|Boot0003"],
+            {
+                "display_name": "UEFI: Built-in EFI Shell",
+                "enabled": False,  # the option's own BootOptionEnabled
+                "uefi_device_path": "Fv(00000000-0000-4000-8000-000000000002)/"
+                "FvFile(00000000-0000-4000-8000-000000000003)",
+                "alias": "UefiShell",
+            },
+        )
+        self.assertEqual(
+            view["vmedia|RDOC1"],
+            {
+                "inserted": True,
+                "image": "https://***scrubbed***@203.0.113.30/iso/installer.iso",
+                "image_name": "installer.iso",
+                "media_types": ["CD", "DVD", "Floppy", "USBStick"],  # sorted
+                "connected_via": "URI",
+                "write_protected": True,
+                "transfer_protocol_type": "HTTPS",
+                "transfer_method": "Stream",
+                "verify_certificate": False,
+            },
+        )
+        # a LenovoRemoteMountMedia serves Size and Readonly; the remote-map leaves read None
+        self.assertEqual(
+            view["mount|1"],
+            {"name": "installer.iso", "path": None, "mounted": None, "readonly": True},
+        )
+        self.assertEqual(context["mount_image_sizes"], {"1": 1073741824})
+        self.assertEqual(
+            view["http_boot_uri"], "https://***scrubbed***@203.0.113.20/boot/efi/bootx64.efi"
+        )
+        self.assertIs(context["remote_control_enabled"], True)
+        self.assertEqual(context["remote_control"], {"resource": self.RC, "served": True})
+        for label, path in (
+            ("boot_options", self.BOOT_OPTIONS),
+            ("boot_settings", self.SETTINGS),
+            ("virtual_media", self.MEDIA),
+            ("mount_images", self.MOUNTS),
+        ):
+            self.assertEqual(
+                (context[label]["resource"], context[label]["strategy"]), (path, "expand"), label
+            )
+        self.assertEqual(context["virtual_media"]["owner"], "System")
+        # no credential of the image share or the HTTP boot server anywhere
+        text = json.dumps(result)
+        for secret in ("user-a", "pw-a"):
+            self.assertNotIn(secret, text)
+        self.assertEqual({name for _path, name in ctx.redacted}, {"_scrub_payload"})
+        self.assertNotIn(self.RC + "/Sessions", ctx.gets)  # who is connected is never read
+
+    def test_without_expand_every_collection_is_walked_and_the_refusal_paid_once(self):
+        expanded = checks._collect_boot(_FakeCtx(self._payloads()))
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_boot(ctx)
+        self.assertEqual(result["normalized"], expanded["normalized"])
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)], [self.SETTINGS + EXPAND]
+        )
+        # resolution 3, the Manager, BootSettings 1 + 1 + 5, VirtualMedia 1 + 2,
+        # RemoteControl, MountImages 1 + 1, BootOptions 1 + 5
+        self.assertEqual(len(ctx.gets), 3 + 1 + 7 + 3 + 1 + 2 + 6)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_BOOT)
+        self.assertEqual(result["context"]["boot_options"]["strategy"], "members")
+
+    def test_a_boot_options_walk_the_budget_cannot_cover_is_refused_before_it_starts(self):
+        payloads = self._payloads(expand=False)
+        payloads[self.BOOT_OPTIONS]["Members"] = [
+            {"@odata.id": self.BOOT_OPTIONS + "/Boot%04X" % (n,)}
+            for n in range(checks._BUDGET_BOOT)
+        ]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(ctx)
+        self.assertIn("%d members" % (checks._BUDGET_BOOT,), str(caught.exception))
+        self.assertEqual(ctx.gets[-1], self.BOOT_OPTIONS)  # no option was fetched
+
+    def test_an_empty_uefi_collection_is_unmeasured_never_every_entry_gone(self):
+        # boot options and the boot manager are the host UEFI's, populated at POST
+        payloads = self._payloads()
+        payloads[self.BOOT_OPTIONS + EXPAND]["Members"] = []
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn("Boot.BootOptions", str(caught.exception))
+        self.assertIn("host PowerState On", str(caught.exception))
+        payloads = self._payloads()
+        payloads[self.SETTINGS + EXPAND]["Members"] = []
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn("zero members", str(caught.exception))
+        payloads = self._payloads()
+        for member in payloads[self.SETTINGS + EXPAND]["Members"]:
+            member.update(BootOrderCurrent=[], BootOrderNext=[], BootOrderSupported=[])
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn("lists no boot entry in any of its 5 members", str(caught.exception))
+
+    def test_an_empty_bmc_side_collection_is_an_empty_view(self):
+        payloads = self._payloads()
+        payloads[self.MEDIA + EXPAND]["Members"] = []
+        payloads[self.MOUNTS + EXPAND]["Members"] = []
+        result = checks._collect_boot(_FakeCtx(payloads))
+        view, context = result["normalized"], result["context"]
+        self.assertFalse([key for key in view if key.startswith(("vmedia|", "mount|"))])
+        self.assertEqual(
+            (context["virtual_media"]["members"], context["mount_images"]["members"]), (0, 0)
+        )
+        self.assertEqual(context["mount_image_sizes"], {})
+
+    def test_a_linked_resource_that_answers_404_is_a_failed_read(self):
+        payloads = self._payloads()
+        del payloads[self.MEDIA + EXPAND]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn(self.MEDIA + " is linked but answered 404", str(caught.exception))
+        payloads = self._payloads()
+        del payloads[self.RC]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn(self.RC + " is linked but answered 404", str(caught.exception))
+
+    def test_other_vendors_get_the_dmtf_reads_only(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_boot(ctx)
+        view, context = result["normalized"], result["context"]
+        # the System links its VirtualMedia: the Manager is not even read
+        self.assertEqual(ctx.gets, RESOLVE + [self.MEDIA + EXPAND, self.BOOT_OPTIONS + EXPAND])
+        self.assertEqual(len([key for key in view if key.startswith("option|")]), 5)
+        self.assertEqual(len([key for key in view if key.startswith("vmedia|")]), 2)
+        self.assertFalse([key for key in view if key.startswith(("order|", "mount|"))])
+        self.assertIn("no Contoso mapping for the boot manager", context["boot_settings"]["note"])
+        self.assertIn("no Contoso mapping", context["mount_images"]["note"])
+        self.assertEqual(context["remote_control"], {"resource": None, "served": False})
+        self.assertIsNone(context["remote_control_enabled"])
+        self.assertIsNone(context["boot_order_supported"])
+
+    def test_the_dmtf_reads_follow_dell_shaped_links(self):
+        dell_system = "/redfish/v1/Systems/System.Embedded.1"
+
+        def dellify(text):
+            text = text.replace(SYS, dell_system)
+            text = text.replace(MGR, "/redfish/v1/Managers/iDRAC.Embedded.1")
+            return text.replace(CH, "/redfish/v1/Chassis/System.Embedded.1")
+
+        payloads = {
+            dellify(path): json.loads(dellify(json.dumps(body)))
+            for path, body in self._payloads().items()
+        }
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads["/redfish/v1/Systems"] = {"Members": [{"@odata.id": dell_system}]}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_boot(ctx)
+        self.assertEqual(
+            ctx.gets,
+            ["/redfish/v1/", "/redfish/v1/Systems", dell_system]
+            + [dell_system + "/VirtualMedia" + EXPAND, dell_system + "/BootOptions" + EXPAND],
+        )
+        view = result["normalized"]
+        self.assertEqual(len([key for key in view if key.startswith("option|")]), 5)
+        self.assertEqual(view["boot_order"][0], "Boot0002")
+        self.assertIs(view["vmedia|RDOC1"]["inserted"], True)
+        self.assertEqual(result["context"]["resolution"]["system"], dell_system)
+
+    def test_the_managers_virtual_media_where_the_system_links_none(self):
+        payloads = self._payloads()
+        del payloads[SYS]["VirtualMedia"]
+        manager_media = MGR + "/VirtualMedia"
+        payloads[MGR]["VirtualMedia"] = {"@odata.id": manager_media}
+        payloads[manager_media + EXPAND] = json.loads(
+            json.dumps(payloads.pop(self.MEDIA + EXPAND)).replace(self.MEDIA, manager_media)
+        )
+        result = checks._collect_boot(_FakeCtx(payloads))
+        media = result["context"]["virtual_media"]
+        self.assertEqual((media["owner"], media["resource"]), ("Manager", manager_media))
+        self.assertIs(result["normalized"]["vmedia|RDOC1"]["inserted"], True)
+
+    def test_not_present_only_when_nothing_about_booting_is_served(self):
+        payloads = _base_payloads()
+        del payloads[SYS]["Boot"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_boot(_FakeCtx(payloads))
+        self.assertIn("serves no Boot block", str(caught.exception))
+        # a Boot block alone is a view: its scalars
+        view = checks._collect_boot(_FakeCtx(_base_payloads()))["normalized"]
+        self.assertEqual(set(view), set(self.SCALARS))
+        self.assertEqual(view["boot_override"], "Disabled")
+
+    def test_links_into_actions_are_refused(self):
+        for mutate in (
+            lambda p: p[SYS]["Boot"].update(BootOptions={"@odata.id": SYS + "/Actions/x"}),
+            lambda p: p[MGR]["Oem"]["Lenovo"].update(
+                RemoteControl={"@odata.id": MGR + "/Actions/x"}
+            ),
+            lambda p: p[self.RC].update(MountImages={"@odata.id": self.RC + "/Actions/x"}),
+        ):
+            payloads = self._payloads()
+            mutate(payloads)
+            with self.assertRaises(checks.CollectError):
+                checks._collect_boot(_FakeCtx(payloads))
+
+    def test_a_repeated_or_missing_reference_keys_by_id(self):
+        rows = checks._boot_option_rows(
+            [
+                {"Id": "A", "BootOptionReference": "Boot0001"},
+                {"Id": "B", "BootOptionReference": "Boot0001"},
+                {"Id": "C", "BootOptionReference": None, "BootOptionEnabled": True},
+                {"Id": "D", "BootOptionReference": "Boot0002"},
+            ]
+        )
+        self.assertEqual(
+            sorted(rows), ["option|Boot0001|A", "option|Boot0001|B", "option|Boot0002", "option|C"]
+        )
+        self.assertEqual(
+            rows["option|C"],
+            {"display_name": None, "enabled": True, "uefi_device_path": None, "alias": None},
+        )
+
+    def test_a_reordered_boot_order_is_a_change_and_reordered_media_types_are_not(self):
+        compare = registry.CHECKS["bmc_boot"].compare
+        self.assertEqual(compare, {"mode": "equality_set"})
+        pre = checks._collect_boot(_FakeCtx(self._payloads()))["normalized"]
+        payloads = self._payloads()
+        payloads[self.MEDIA + EXPAND]["Members"][1]["MediaTypes"].reverse()
+        post = checks._collect_boot(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        payloads[SYS]["Boot"]["BootOrder"][:2] = ["Boot0000", "Boot0002"]
+        members = payloads[self.SETTINGS + EXPAND]["Members"]
+        members[0]["BootOrderNext"] = ["proxmox", "TrueNAS-0"] + members[0]["BootOrderNext"][2:]
+        post = checks._collect_boot(_FakeCtx(payloads))["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"]) for row in diff["changed"]],
+            [("boot_order", None), ("order|BootOrder.BootOrder", "next")],
         )
 
 

@@ -1742,7 +1742,9 @@ class TestBmcLabFamily(unittest.TestCase):
         # the widened family on the real payloads: measured, kept tight on purpose
         # (+ bmc_sensors: its Sensors $expand and EnvironmentMetrics; the ThermalMetrics read
         # it makes first is the one bmc_thermal then finds in the cache)
-        self.assertLessEqual(len(ctx.gets), 48)
+        # (+ bmc_boot's 5: BootSettings, VirtualMedia, RemoteControl and MountImages
+        # twice — the harvest kept that collection's plain form only)
+        self.assertLessEqual(len(ctx.gets), 53)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -1999,6 +2001,177 @@ class TestBmcLabSensors(unittest.TestCase):
         # resolution 5, the Chassis, EnvironmentMetrics, ThermalMetrics, the refused
         # attempt and the collection
         self.assertEqual(len(ctx.gets), 5 + 1 + 2 + 1 + 1)
+
+
+class TestBmcLabBoot(unittest.TestCase):
+    """bmc_boot on the lab payloads: the boot order lives only in Lenovo's boot manager."""
+
+    SYS = "/redfish/v1/Systems/1"
+    MGR = "/redfish/v1/Managers/1"
+    SETTINGS = SYS + "/Oem/Lenovo/BootSettings"
+    MEDIA = SYS + "/VirtualMedia"
+    RC = MGR + "/Oem/Lenovo/RemoteControl"
+    MAIN = [
+        "TrueNAS-0",
+        "proxmox",
+        "Linux Boot Manager",
+        "CD/DVD Rom",
+        "Hard Disk",
+        "Network",
+    ]
+
+    def test_boot(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_boot(ctx)
+        view, context = result["normalized"], result["context"]
+        # XCC 6.10 serves the override trio and the retry policy; the DMTF order, BootNext,
+        # the retry count, the fault and TPM policies and the HTTP boot URI are not served
+        self.assertEqual(
+            {key: value for key, value in view.items() if "|" not in key},
+            {
+                "boot_order": None,
+                "alias_boot_order": None,
+                "boot_order_property_selection": None,
+                "boot_override": "Disabled",
+                "boot_override_target": "None",
+                "boot_override_mode": "UEFI",
+                "uefi_target": None,  # served null
+                "boot_next": None,
+                "automatic_retry_config": "RetryAlways",
+                "automatic_retry_attempts": None,
+                "stop_boot_on_fault": None,
+                "trusted_module_required_to_boot": None,
+                "http_boot_uri": None,
+            },
+        )
+        # no BootOptions collection at all: no option| key, nothing requested for it
+        self.assertFalse([key for key in view if key.startswith("option|")])
+        self.assertEqual(
+            context["boot_options"]["note"], "the System's Boot block links no BootOptions"
+        )
+        # the five boot-manager members, both lists in the firmware's order
+        orders = {key: row for key, row in view.items() if key.startswith("order|")}
+        self.assertEqual(
+            sorted(orders),
+            [
+                "order|BootOrder.BootOrder",
+                "order|BootOrder.CDDVDROMBootOrder",
+                "order|BootOrder.HardDiskBootOrder",
+                "order|BootOrder.NetworkBootOrder",
+                "order|BootOrder.USBBootOrder",
+            ],
+        )
+        self.assertEqual(
+            orders["order|BootOrder.BootOrder"], {"current": self.MAIN, "next": self.MAIN}
+        )
+        for empty in ("CDDVDROMBootOrder", "USBBootOrder"):  # no such boot device: [] and real
+            self.assertEqual(orders["order|BootOrder." + empty], {"current": [], "next": []})
+        disks = orders["order|BootOrder.HardDiskBootOrder"]["current"]
+        self.assertEqual(len(disks), 5)
+        # the entries embed the drive's model and (sanitized) serial: what a reorder shows
+        self.assertEqual(disks[0], "LEGACY: ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN")
+        self.assertTrue(disks[4].startswith("UEFI:   ATPAF480GSTIC-LV2"))
+        self.assertEqual(len(orders["order|BootOrder.NetworkBootOrder"]["next"]), 8)
+        # the supported lists are context: USB Storage is bootable but not in the order
+        supported = context["boot_order_supported"]
+        self.assertEqual(supported["BootOrder.BootOrder"], self.MAIN + ["USB Storage"])
+        self.assertEqual(supported["BootOrder.USBBootOrder"], [])
+        # the two RDOC slots, empty and write-protected
+        for slot in ("RDOC1", "RDOC2"):
+            self.assertEqual(
+                view["vmedia|" + slot],
+                {
+                    "inserted": False,
+                    "image": None,
+                    "image_name": None,
+                    "media_types": ["CD", "DVD", "Floppy", "USBStick"],
+                    "connected_via": "NotConnected",
+                    "write_protected": True,
+                    "transfer_protocol_type": None,
+                    "transfer_method": None,
+                    "verify_certificate": False,
+                },
+            )
+        self.assertEqual(
+            (context["virtual_media"]["owner"], context["virtual_media"]["resource"]),
+            ("System", self.MEDIA),
+        )
+        # the remote-control service is enabled and holds no image: an empty view, ok
+        self.assertFalse([key for key in view if key.startswith("mount|")])
+        self.assertIs(context["remote_control_enabled"], True)
+        self.assertEqual(context["mount_images"]["members"], 0)
+        self.assertEqual(context["mount_image_sizes"], {})
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertIsNone(context["remaining_automatic_retry_attempts"])
+        self.assertEqual(len(context["override_targets_allowable"]), 8)
+        # one $expand GET per collection; the harvest read MountImages plain only, so its
+        # $expand form answers 404 here and the plain read follows
+        self.assertEqual(
+            ctx.gets,
+            ["/redfish/v1/", "/redfish/v1/Systems", self.SYS, self.MGR]
+            + [self.SETTINGS + _XCC_EXPAND, self.MEDIA + _XCC_EXPAND, self.RC]
+            + [self.RC + "/MountImages" + _XCC_EXPAND, self.RC + "/MountImages"],
+        )
+        self.assertEqual(context["mount_images"]["expand_refused"], "HTTP 404")
+        self.assertNotIn(self.RC + "/Sessions", ctx.gets)
+        self.assertNotIn("Actions", result["raw"][self.RC])
+
+    def test_the_managers_virtual_media_is_the_same_pair(self):
+        # why one collection is read: the Manager's lists the same two slots, leaf for leaf
+        system = bmc._boot_media_rows(J("xcc_system_virtualmedia_expanded_lab.json")["Members"])
+        manager = bmc._boot_media_rows(J("xcc_manager_virtualmedia_expanded_lab.json")["Members"])
+        self.assertEqual(system, manager)
+        self.assertEqual(sorted(system), ["vmedia|RDOC1", "vmedia|RDOC2"])
+
+    def test_the_budget_covers_the_lab_layout_without_expand(self):
+        # resolution 5, the Manager, BootSettings 1 + 1 + 5 (the refusal is paid there,
+        # once), VirtualMedia 1 + 2, RemoteControl, MountImages 1 (empty, never re-tried)
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_boot(ctx)
+        self.assertEqual(result["normalized"], bmc._collect_boot(_xcc_lab_ctx())["normalized"])
+        self.assertEqual(len(ctx.gets), 5 + 1 + 7 + 3 + 1 + 1)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_BOOT)
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(_XCC_EXPAND)],
+            [self.SETTINGS + _XCC_EXPAND],
+        )
+        self.assertEqual(result["context"]["boot_settings"]["expand_refused"], "HTTP 501")
+
+    def test_a_reorder_and_an_armed_change_are_changed_rows(self):
+        compare = _loader.registry.CHECKS["bmc_boot"].compare
+        pre = bmc._collect_boot(_xcc_lab_ctx())["normalized"]
+        payloads = _xcc_lab_payloads()
+        members = {
+            member["Id"]: member for member in payloads[self.SETTINGS + _XCC_EXPAND]["Members"]
+        }
+        # the operator moved proxmox first; the change applies at the next boot
+        members["BootOrder.BootOrder"]["BootOrderNext"] = ["proxmox", "TrueNAS-0"] + self.MAIN[2:]
+        # a disk dropped out of the hard-disk sub-order (and out of what the UEFI can boot)
+        disks = members["BootOrder.HardDiskBootOrder"]
+        for leaf in ("BootOrderCurrent", "BootOrderNext", "BootOrderSupported"):
+            disks[leaf] = disks[leaf][:2] + disks[leaf][3:]
+        post = bmc._collect_boot(_FakeCtx(payloads))["normalized"]
+        diff = diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"]) for row in diff["changed"]],
+            [
+                ("order|BootOrder.BootOrder", "next"),
+                ("order|BootOrder.HardDiskBootOrder", "current"),
+                ("order|BootOrder.HardDiskBootOrder", "next"),
+            ],
+        )
+        self.assertEqual((diff["added"], diff["removed"]), ([], []))
+
+    def test_a_boot_manager_the_uefi_has_not_populated_is_refused(self):
+        payloads = _xcc_lab_payloads()
+        for member in payloads[self.SETTINGS + _XCC_EXPAND]["Members"]:
+            for leaf in ("BootOrderCurrent", "BootOrderNext", "BootOrderSupported"):
+                member[leaf] = []
+        with self.assertRaises(_loader.registry.CollectError) as caught:
+            bmc._collect_boot(_FakeCtx(payloads))
+        self.assertIn("host PowerState On", str(caught.exception))
+        self.assertIn("unmeasured", str(caught.exception))
 
 
 if __name__ == "__main__":

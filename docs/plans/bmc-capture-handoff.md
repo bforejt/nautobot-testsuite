@@ -710,8 +710,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    **State (2026-09-30):** ten builders, one per check, each in its own
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
-   `bmc_sensors` landed. What the builders found wrong in §5b is §10a
-   item 13.
+   `bmc_sensors` and `bmc_boot` landed. What the builders found wrong in
+   §5b is §10a item 13.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
    discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
@@ -874,6 +874,20 @@ Recorded as they were found, each with how it was resolved.
       served). The family-wide tests over the hand-built set now accept
       not-present from a check newer than that set (it serves no Sensors
       collection).
+    - `bmc_boot`: the table's `boot_order_current` / `boot_order_next`
+      scalars and the lab note's `order|<member>` rows disagree — built as
+      rows, one per boot-manager member, current and next kept in order.
+      Appendix B gives a remote-control image (`LenovoRemoteMountMedia`)
+      only `Size` and `Readonly`; `FilePath` and `Mounted` belong to the
+      remote-map image, so `mount|` rows read `path`/`mounted` from their own
+      leaves (null for remote-control images) and `Size` rides in context;
+      the remote-map service itself is not linked on XCC 6.10 and is not
+      read. XCC 6.10 serves none of `Boot.BootOrder`, `AliasBootOrder`,
+      `BootNext`, `AutomaticRetryAttempts`, `StopBootOnFault`,
+      `TrustedModuleRequiredToBoot`, `HttpBootUri` or `BootOptions`: those
+      are coded from the DMTF schema on hand-built fixtures. Beyond the plan:
+      a boot manager none of whose members lists an entry is unmeasured
+      (refused), like an empty collection.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

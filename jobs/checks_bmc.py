@@ -4040,6 +4040,342 @@ def _collect_sensors(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_boot ----------------------------------------------------------------
+# What the host boots from next, as the BMC holds it: the System's DMTF Boot
+# block (the cached System read), its Boot.BootOptions collection where the
+# System links one (XCC 6.10 links none), Lenovo's UEFI boot manager (System
+# Oem.Lenovo.BootSettings: the boot order and its per-class sub-orders, the only
+# place XCC 6.10 serves the order), the virtual media slots the BMC presents to
+# the host (the System's VirtualMedia collection; the Manager's only where the
+# System links none — on the lab unit both list the same two RDOC slots, so one
+# is read) and the images Lenovo's remote-control service holds (Manager
+# Oem.Lenovo.RemoteControl and its MountImages collection).
+#
+# GETs, the lab SE350 with $expand honoured: the Manager (the read bmc_system
+# makes, cached for the family), BootSettings, VirtualMedia, RemoteControl and
+# MountImages, one each — 5 beyond the id resolution. The per-member fallback,
+# $expand advertised but refused (the attempt is paid once, on BootSettings,
+# and never asked again): the Manager 1, BootSettings 1 + 1 + 5, VirtualMedia
+# 1 + 2, RemoteControl 1, MountImages 1 (empty) — 13 beyond a full five-GET
+# resolution, 18 in all. _BUDGET_BOOT = 30 + _TARGET_GETS leaves 17 for a
+# Boot.BootOptions collection walked the same way (the collection and 16
+# options) on firmware that links one: it is read last, and every walk is
+# pre-checked against what is left of the budget (_fetch_collection), so a
+# bigger one is refused with its member count, never recorded partially.
+_BUDGET_BOOT = 30 + _TARGET_GETS
+
+
+def _boot_list(value):
+    """A served list kept in the firmware's order (the order is the fact); None when unserved."""
+    return list(value) if isinstance(value, list) else None
+
+
+def _boot_sorted(value):
+    """A served list's strings sorted (their order is not state); None when not a list."""
+    if not isinstance(value, list):
+        return None
+    return sorted(text for text in (_text(item) for item in value) if text is not None)
+
+
+def _boot_scalars(boot):
+    """The DMTF Boot block's scalars, every one present (None when the leaf is not served).
+
+    The override trio repeats bmc_system's keys of the same names for one
+    release; uefi_target is the device path a UefiTarget override boots.
+    """
+    boot = boot if isinstance(boot, dict) else {}
+    return {
+        "boot_order": _boot_list(boot.get("BootOrder")),
+        "alias_boot_order": _boot_list(boot.get("AliasBootOrder")),
+        "boot_order_property_selection": _text(boot.get("BootOrderPropertySelection")),
+        # Strings, never booleans: Disabled | Once | Continuous.
+        "boot_override": _text(boot.get("BootSourceOverrideEnabled")),
+        "boot_override_target": _text(boot.get("BootSourceOverrideTarget")),
+        "boot_override_mode": _text(boot.get("BootSourceOverrideMode")),
+        "uefi_target": _text(boot.get("UefiTargetBootSourceOverride")),
+        "boot_next": _text(boot.get("BootNext")),
+        "automatic_retry_config": _text(boot.get("AutomaticRetryConfig")),
+        "automatic_retry_attempts": _to_int(boot.get("AutomaticRetryAttempts")),
+        "stop_boot_on_fault": _text(boot.get("StopBootOnFault")),
+        "trusted_module_required_to_boot": _text(boot.get("TrustedModuleRequiredToBoot")),
+        # Its userinfo is scrubbed by the family redactor before anything sees it.
+        "http_boot_uri": _text(boot.get("HttpBootUri")),
+    }
+
+
+def _boot_option_rows(options):
+    """'option|<BootOptionReference>' rows; '|<Id>' appended when a reference repeats.
+
+    A member serving no reference is keyed 'option|<Id>'. ``enabled`` is the
+    option's own BootOptionEnabled, None where it is not served.
+    """
+    options = _dicts(options)
+    counts = {}
+    for option in options:
+        reference = _text(option.get("BootOptionReference"))
+        if reference is not None:
+            counts[reference] = counts.get(reference, 0) + 1
+    rows = {}
+    for option in options:
+        reference = _text(option.get("BootOptionReference"))
+        key = _sensor_key("option", reference, _member_id(option) or "?", counts)
+        rows[key] = {
+            "display_name": _text(option.get("DisplayName")),
+            "enabled": _to_bool(option.get("BootOptionEnabled")),
+            "uefi_device_path": _text(option.get("UefiDevicePath")),
+            "alias": _text(option.get("Alias")),
+        }
+    return rows
+
+
+def _boot_order_rows(orders):
+    """('order|<Id>' rows, {Id: BootOrderSupported}) of Lenovo's boot-manager members.
+
+    current (BootOrderCurrent) and next (BootOrderNext) are kept in the
+    firmware's order: a reorder is a change. An empty sub-order (no CD/DVD or
+    USB boot device) is [] and real; a list the member does not serve is None.
+    """
+    rows, supported = {}, {}
+    for member in _dicts(orders):
+        member_id = _member_id(member) or "?"
+        rows["order|%s" % (member_id,)] = {
+            "current": _boot_list(member.get("BootOrderCurrent")),
+            "next": _boot_list(member.get("BootOrderNext")),
+        }
+        supported[member_id] = _boot_list(member.get("BootOrderSupported"))
+    return rows, supported
+
+
+def _boot_manager_empty(orders):
+    """True when no boot-manager member lists a single entry (current, next or supported)."""
+    for member in _dicts(orders):
+        for leaf in ("BootOrderCurrent", "BootOrderNext", "BootOrderSupported"):
+            if _boot_list(member.get(leaf)):
+                return False
+    return True
+
+
+def _boot_media_rows(media):
+    """'vmedia|<Id>' rows: what each virtual media slot presents to the host."""
+    rows = {}
+    for slot in _dicts(media):
+        rows["vmedia|%s" % (_member_id(slot) or "?",)] = {
+            "inserted": _to_bool(slot.get("Inserted")),
+            "image": _text(slot.get("Image")),
+            "image_name": _text(slot.get("ImageName")),
+            "media_types": _boot_sorted(slot.get("MediaTypes")),
+            "connected_via": _text(slot.get("ConnectedVia")),
+            "write_protected": _to_bool(slot.get("WriteProtected")),
+            "transfer_protocol_type": _text(slot.get("TransferProtocolType")),
+            "transfer_method": _text(slot.get("TransferMethod")),
+            "verify_certificate": _to_bool(slot.get("VerifyCertificate")),
+        }
+    return rows
+
+
+def _boot_mount_rows(mounts):
+    """('mount|<Id>' rows, {Id: Size}) of the images Lenovo's remote-control service holds.
+
+    Lenovo's schemas give a remote-control mount image (LenovoRemoteMountMedia)
+    Size and Readonly, and a remote-map image (LenovoRemoteMapMedia) FilePath,
+    Mounted and Readonly: each field reads its own leaf and is None where the
+    member serves none (no populated member has been observed). Size rides in
+    context: whether it is final while an upload runs is unobserved.
+    """
+    rows, sizes = {}, {}
+    for image in _dicts(mounts):
+        image_id = _member_id(image) or "?"
+        rows["mount|%s" % (image_id,)] = {
+            "name": _text(image.get("Name")),
+            "path": _text(image.get("FilePath")),
+            "mounted": _to_bool(image.get("Mounted")),
+            "readonly": _to_bool(image.get("Readonly")),
+        }
+        sizes[image_id] = _to_int(image.get("Size"))
+    return rows, sizes
+
+
+def _normalize_boot(system, options=None, orders=None, media=None, mounts=None):
+    """(normalized, context) of the host's boot path.
+
+    ``system`` is the ComputerSystem (its Boot block); ``options`` the
+    Boot.BootOptions members, ``orders`` the Lenovo boot-manager members,
+    ``media`` the VirtualMedia members and ``mounts`` the Lenovo
+    remote-control mount images — each None when not read. Every scalar is
+    always present; every row carries every field (None when unserved).
+    """
+    system = system if isinstance(system, dict) else {}
+    boot = system.get("Boot") if isinstance(system.get("Boot"), dict) else {}
+    normalized = _boot_scalars(boot)
+    normalized.update(_boot_option_rows(options))
+    order_rows, supported = _boot_order_rows(orders)
+    normalized.update(order_rows)
+    normalized.update(_boot_media_rows(media))
+    mount_rows, sizes = _boot_mount_rows(mounts)
+    normalized.update(mount_rows)
+    context = {
+        "host_power_state": _text(system.get("PowerState")),
+        # Counts down on its own as failed boots are retried.
+        "remaining_automatic_retry_attempts": _to_int(boot.get("RemainingAutomaticRetryAttempts")),
+        # Every device the UEFI could boot: moves as devices come and go.
+        "boot_order_supported": supported if orders is not None else None,
+        "override_targets_allowable": _boot_list(
+            boot.get("BootSourceOverrideTarget@Redfish.AllowableValues")
+        ),
+        "mount_image_sizes": sizes if mounts is not None else None,
+    }
+    return normalized, context
+
+
+def _boot_collection(ctx, link, label, budget, try_expand):
+    """(members, meta, raw) of a collection the service links: a 404 there is a failed read."""
+    members, meta, raw = _fetch_collection(
+        ctx, link, label, ok_404=True, budget=budget, try_expand=try_expand
+    )
+    if members is None:
+        raise CollectError("%s: %s is linked but answered 404" % (label, link))
+    return members, meta, raw
+
+
+def _boot_unmeasured(what, link, detail, power_state):
+    """The refusal for a host-UEFI family with nothing to key: it is populated at POST."""
+    return CollectError(
+        "bmc_boot: %s (%s) %s (host PowerState %s) — the host UEFI populates it at POST, so "
+        "the read is unmeasured, never 'no boot entry'; capture again after the host "
+        "completes POST" % (what, link, detail, power_state)
+    )
+
+
+def _boot_source(link, meta=None, members=None, note=None):
+    """How one source was read, for context: its resource, strategy and member count."""
+    if meta is None:
+        return {"resource": link, "strategy": None, "members": None, "note": note}
+    return dict(meta, resource=link, members=len(members), note=note)
+
+
+def _collect_boot(ctx):
+    raw = {}
+    options = orders = media = mounts = remote_control = None
+    try_expand = True  # turned off at the first refusal: a firmware pays for it once
+    with ctx.budget("bmc_boot", _BUDGET_BOOT) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        vendor = targets["vendor"] or "unknown-vendor"
+        system = _get(ctx, targets["system"])
+        power_state = _text(system.get("PowerState"))
+        options_link = _fenced_link(_dig(system, "Boot", "BootOptions"), "bmc_boot BootOptions")
+        media_link = _fenced_link(system.get("VirtualMedia"), "bmc_boot VirtualMedia")
+        media_owner = "System" if media_link is not None else None
+        manager = None
+        if lenovo or media_link is None:
+            manager = _get(ctx, targets["manager"])
+        if media_link is None:
+            # Before ComputerSystem v1_13 the slots hang off the Manager only.
+            media_link = _fenced_link(_dig(manager, "VirtualMedia"), "bmc_boot VirtualMedia")
+            media_owner = "Manager" if media_link is not None else None
+        # The host UEFI's boot manager (Lenovo): populated at POST.
+        settings_link = None
+        if lenovo:
+            settings_link = _fenced_link(
+                _dig(system, "Oem", "Lenovo", "BootSettings"), "bmc_boot BootSettings"
+            )
+            settings = _boot_source(None, note="the System links no Oem.Lenovo.BootSettings")
+        else:
+            settings = _boot_source(None, note="no %s mapping for the boot manager yet" % (vendor,))
+        if settings_link is not None:
+            orders, meta, part = _boot_collection(
+                ctx, settings_link, "bmc_boot BootSettings", budget, try_expand
+            )
+            raw.update(part)
+            try_expand = try_expand and not meta.get("expand_refused")
+            settings = _boot_source(settings_link, meta, orders)
+            if not orders:
+                raise _boot_unmeasured(
+                    "the boot manager", settings_link, "answered with zero members", power_state
+                )
+            if _boot_manager_empty(orders):
+                raise _boot_unmeasured(
+                    "the boot manager",
+                    settings_link,
+                    "lists no boot entry in any of its %d members" % (len(orders),),
+                    power_state,
+                )
+        # The BMC's own virtual media slots: an empty collection is an empty view.
+        if media_link is not None:
+            media, meta, part = _boot_collection(
+                ctx, media_link, "bmc_boot VirtualMedia", budget, try_expand
+            )
+            raw.update(part)
+            try_expand = try_expand and not meta.get("expand_refused")
+            virtual_media = dict(_boot_source(media_link, meta, media), owner=media_owner)
+        else:
+            virtual_media = dict(
+                _boot_source(None, note="neither the System nor the Manager links VirtualMedia"),
+                owner=None,
+            )
+        # Images the Lenovo remote-control service holds (its sessions are never read).
+        rc_link = mounts_link = None
+        if lenovo:
+            rc_link = _fenced_link(
+                _dig(manager, "Oem", "Lenovo", "RemoteControl"), "bmc_boot RemoteControl"
+            )
+            mount_images = _boot_source(None, note="the Manager links no Oem.Lenovo.RemoteControl")
+        else:
+            mount_images = _boot_source(
+                None, note="no %s mapping for the remote-control images yet" % (vendor,)
+            )
+        if rc_link is not None:
+            remote_control = _get_optional(ctx, rc_link)
+            if remote_control is None:
+                raise CollectError(
+                    "bmc_boot RemoteControl: %s is linked but answered 404" % (rc_link,)
+                )
+            raw[rc_link] = _curate(remote_control)
+            mounts_link = _fenced_link(_dig(remote_control, "MountImages"), "bmc_boot MountImages")
+            mount_images = _boot_source(None, note="RemoteControl links no MountImages")
+        if mounts_link is not None:
+            mounts, meta, part = _boot_collection(
+                ctx, mounts_link, "bmc_boot MountImages", budget, try_expand
+            )
+            raw.update(part)
+            try_expand = try_expand and not meta.get("expand_refused")
+            mount_images = _boot_source(mounts_link, meta, mounts)
+        # The UEFI's boot options (DMTF): populated at POST, sized by the host's
+        # devices — the one open-ended walk, read last against what is left.
+        if options_link is not None:
+            options, meta, part = _boot_collection(
+                ctx, options_link, "bmc_boot BootOptions", budget, try_expand
+            )
+            raw.update(part)
+            boot_options = _boot_source(options_link, meta, options)
+            if not options:
+                raise _boot_unmeasured(
+                    "Boot.BootOptions", options_link, "answered with zero members", power_state
+                )
+        else:
+            boot_options = _boot_source(None, note="the System's Boot block links no BootOptions")
+    if not isinstance(system.get("Boot"), dict) and all(
+        found is None for found in (options, orders, media, mounts)
+    ):
+        raise SkipCheck(
+            "%s serves no Boot block and links no boot options, boot manager or virtual media"
+            % (targets["system"],)
+        )
+    raw[targets["system"]] = _curate(system)
+    normalized, context = _normalize_boot(system, options, orders, media, mounts)
+    context.update(
+        {
+            "remote_control_enabled": _to_bool(_dig(remote_control, "ServiceEnabled")),
+            "boot_options": boot_options,
+            "boot_settings": settings,
+            "virtual_media": virtual_media,
+            "remote_control": {"resource": rc_link, "served": remote_control is not None},
+            "mount_images": mount_images,
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -4615,5 +4951,27 @@ register(
         ),
         collector=_collect_sensors,
         tags=("platform", "environment", "security"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_boot",
+        platform="bmc",
+        description=(
+            "Boot path: boot order and override, retry and fault policy, boot options, Lenovo "
+            "boot-manager orders, virtual media slots and remote-control images."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "The host's boot path changed — a boot order reordered, a device gone from or "
+            "added to an order, a change armed for the next boot, an override or one-time "
+            "boot set, or an image left inserted in a virtual media slot or held by the BMC: "
+            "the classic cause of a server coming back on the wrong device, invisible from "
+            "the OS."
+        ),
+        collector=_collect_boot,
+        tags=("platform", "boot"),
     )
 )

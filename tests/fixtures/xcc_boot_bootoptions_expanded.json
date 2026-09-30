@@ -1,0 +1,58 @@
+{
+ "@odata.id": "/redfish/v1/Systems/1/BootOptions",
+ "@odata.type": "#BootOptionCollection.BootOptionCollection",
+ "Name": "Boot Option Collection",
+ "Members@odata.count": 5,
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/BootOptions/Boot0000",
+   "Id": "Boot0000",
+   "Name": "Boot Option",
+   "BootOptionReference": "Boot0000",
+   "DisplayName": "UEFI: PXE IPv4 Intel(R) Ethernet Connection X722 for 10GbE SFP+",
+   "BootOptionEnabled": true,
+   "UefiDevicePath": "PciRoot(0x0)/Pci(0x1C,0x4)/Pci(0x0,0x0)/MAC(0200000000A1,0x1)/IPv4(0.0.0.0)",
+   "Alias": "Pxe"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/BootOptions/Boot0001",
+   "Id": "Boot0001",
+   "Name": "Boot Option",
+   "BootOptionReference": "Boot0001",
+   "DisplayName": "UEFI: SATA 1: EXAMPLE-SSD-480 S0000001",
+   "BootOptionEnabled": true,
+   "UefiDevicePath": "PciRoot(0x0)/Pci(0x17,0x0)/Sata(0x1,0xFFFF,0x0)",
+   "Alias": "Hdd"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/BootOptions/Boot0002",
+   "Id": "Boot0002",
+   "Name": "Boot Option",
+   "BootOptionReference": "Boot0002",
+   "DisplayName": "proxmox",
+   "BootOptionEnabled": true,
+   "UefiDevicePath": "HD(2,GPT,00000000-0000-4000-8000-000000000001,0x800,0x100000)/\\EFI\\proxmox\\grubx64.efi",
+   "Alias": "Hdd"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/BootOptions/Boot0003",
+   "Id": "Boot0003",
+   "Name": "Boot Option",
+   "BootOptionReference": "Boot0003",
+   "DisplayName": "UEFI: Built-in EFI Shell",
+   "BootOptionEnabled": false,
+   "UefiDevicePath": "Fv(00000000-0000-4000-8000-000000000002)/FvFile(00000000-0000-4000-8000-000000000003)",
+   "Alias": "UefiShell"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/BootOptions/Boot0004",
+   "Id": "Boot0004",
+   "Name": "Boot Option",
+   "BootOptionReference": "Boot0004",
+   "DisplayName": "UEFI: HTTP IPv4 Intel(R) Ethernet Connection X722 for 10GbE SFP+",
+   "BootOptionEnabled": true,
+   "UefiDevicePath": "PciRoot(0x0)/Pci(0x1C,0x4)/Pci(0x0,0x0)/MAC(0200000000A1,0x1)/IPv4(0.0.0.0)/Uri()",
+   "Alias": "UefiHttp"
+  }
+ ]
+}

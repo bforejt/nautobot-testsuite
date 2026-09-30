@@ -1,0 +1,16 @@
+{
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/MountImages",
+ "@odata.type": "#LenovoRemoteMountMediaCollection.LenovoRemoteMountMediaCollection",
+ "Name": "MountImages",
+ "Description": "A collection of RemoteMountMedia resource instances.",
+ "Members@odata.count": 1,
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/MountImages/1",
+   "Id": "1",
+   "Name": "installer.iso",
+   "Size": 1073741824,
+   "Readonly": true
+  }
+ ]
+}
