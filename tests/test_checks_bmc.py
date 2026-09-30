@@ -217,6 +217,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_storage",
         "bmc_manager_network",
         "bmc_chassis",
+        "bmc_sensors",
     }
 
     def test_all_registered_once(self):
@@ -3709,7 +3710,9 @@ class TestWholeFamily(unittest.TestCase):
     def test_every_check_succeeds_on_the_fixture_set_within_its_budget(self):
         ctx = _FakeCtx(_base_payloads())
         for check in registry.checks_for("bmc"):
-            result = check.collector(ctx)
+            result = _collect_on_base_set(check, ctx)
+            if result is None:
+                continue  # a check newer than the hand-built set: not-present on it
             self.assertEqual(set(result), {"raw", "normalized", "context"}, check.id)
             self.assertTrue(result["normalized"], check.id)
             for key in result["raw"]:
@@ -3720,7 +3723,8 @@ class TestWholeFamily(unittest.TestCase):
         self.assertEqual(ctx.gets.count("/redfish/v1/"), 1)
         self.assertEqual(ctx.gets.count(MGR + "/EthernetInterfaces/NIC"), 1)
         self.assertEqual(ctx.gets.count("/redfish/v1/Systems"), 1)
-        self.assertLessEqual(len(ctx.gets), 31)
+        # + bmc_sensors' two 404s (the base set serves no Sensors collection)
+        self.assertLessEqual(len(ctx.gets), 32)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3730,10 +3734,13 @@ class TestWholeFamily(unittest.TestCase):
     def test_every_check_succeeds_without_expand_support(self):
         ctx = _FakeCtx(_without_expand(_base_payloads()))
         for check in registry.checks_for("bmc"):
-            result = check.collector(ctx)
+            result = _collect_on_base_set(check, ctx)
+            if result is None:
+                continue  # a check newer than the hand-built set: not-present on it
             self.assertTrue(result["normalized"], check.id)
         # PR B's widened family, every $expand refused: measured, kept tight on purpose
-        self.assertLessEqual(len(ctx.gets), 65)
+        # (+ bmc_sensors' two 404s: the base set serves no Sensors collection)
+        self.assertLessEqual(len(ctx.gets), 67)
 
 
 class TestResolution(unittest.TestCase):
@@ -3867,7 +3874,9 @@ class TestResolution(unittest.TestCase):
     def test_every_check_records_the_resolution(self):
         ctx = _FakeCtx(_base_payloads())
         for check in registry.checks_for("bmc"):
-            result = check.collector(ctx)
+            result = _collect_on_base_set(check, ctx)
+            if result is None:
+                continue  # a check newer than the hand-built set: not-present on it
             self.assertEqual(result["context"]["resolution"]["system"], SYS, check.id)
 
 
@@ -4092,7 +4101,7 @@ class TestHygiene(unittest.TestCase):
     def test_every_read_passes_the_scrubber(self):
         ctx = _FakeCtx(_base_payloads())
         for check in registry.checks_for("bmc"):
-            check.collector(ctx)
+            _collect_on_base_set(check, ctx)
         self.assertTrue(ctx.redacted)
         for path, redactor in ctx.redacted:
             self.assertIn(redactor, ("_scrub_payload", "_redact_log_page"), path)
@@ -4396,6 +4405,539 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(payload["Members"][0]["UserName"], "admin-person")  # a copy
         self.assertEqual(once["Members"][0]["Password"], checks._SCRUBBED)
         self.assertEqual(redact({"UserName": "someone"})["UserName"], checks._SCRUBBED)
+
+
+# The hand-built base set (_base_payloads) models the twelve checks PR B shipped. A check
+# added since brings its own fixtures, so on that set its resources answer 404 and it is
+# not-present there: the family-wide loops above (TestWholeFamily, TestResolution,
+# TestHygiene) accept that from a newer check and never from one of the twelve.
+_BASE_SET_CHECKS = frozenset(
+    {
+        "bmc_system",
+        "bmc_security",
+        "bmc_thermal",
+        "bmc_power",
+        "bmc_inventory",
+        "bmc_host_nics",
+        "bmc_firmware",
+        "bmc_event_log",
+        "bmc_bios",
+        "bmc_storage",
+        "bmc_manager_network",
+        "bmc_chassis",
+    }
+)
+
+
+def _collect_on_base_set(check, ctx):
+    """``check``'s result on the hand-built base set; None for a newer check not-present there."""
+    try:
+        return check.collector(ctx)
+    except registry.SkipCheck:
+        if check.id in _BASE_SET_CHECKS:
+            raise
+        return None
+
+
+class TestSensors(unittest.TestCase):
+    """bmc_sensors on hand-built payloads: the DMTF vocabulary another vendor serves
+    (xcc_sensors_dmtf_*.json, built from the Sensor and EnvironmentMetrics schemas — every
+    value an invention) and Lenovo shapes the lab unit lacks. The lab SE350's own 89 sensors
+    are pinned in test_lab_fixtures.TestBmcLabSensors."""
+
+    SENSORS = CH + "/Sensors"
+    ENV = CH + "/EnvironmentMetrics"
+    SUB = CH + "/ThermalSubsystem"
+    FIELDS = {
+        "reading_type",
+        "physical_context",
+        "physical_sub_context",
+        "state",
+        "health",
+        "reading_units",
+        "thresholds",
+        "reading",
+        "asserted",
+    }
+
+    @staticmethod
+    def _members():
+        return _fx("xcc_sensors_dmtf_expanded.json")["Members"]
+
+    def _sensors(self, expanded, payloads, expand=True):
+        """Serve ``expanded`` as the Sensors collection: $expand form, plain form, members."""
+        payloads.pop(self.SENSORS + EXPAND, None)
+        if expand:
+            payloads[self.SENSORS + EXPAND] = expanded
+        plain, members = _split_collection(expanded)
+        payloads[self.SENSORS] = plain
+        payloads.update(members)
+        return payloads
+
+    def _payloads(self, vendor="Contoso", expand=True):
+        """The hand-built base set with the DMTF sensor fixtures linked from its Chassis."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor=vendor)
+        payloads[CH]["Sensors"] = {"@odata.id": self.SENSORS}
+        payloads[CH]["EnvironmentMetrics"] = {"@odata.id": self.ENV}
+        payloads[self.ENV] = _fx("xcc_sensors_dmtf_environmentmetrics.json")
+        return self._sensors(_fx("xcc_sensors_dmtf_expanded.json"), payloads, expand=expand)
+
+    @staticmethod
+    def _discrete(sensor_id, name, reading, state="Enabled", health="OK", **extra):
+        """A Lenovo-shaped discrete sensor (as XCC 6.10 serves one: ReadingUnits '')."""
+        sensor = {
+            "@odata.id": CH + "/Sensors/" + sensor_id,
+            "Id": sensor_id,
+            "Name": name,
+            "ReadingType": None,
+            "ReadingUnits": "",
+            "Reading": reading,
+            "PhysicalContext": None,
+            "Status": {"State": state, "Health": health},
+        }
+        sensor.update(extra)
+        return sensor
+
+    def test_every_member_is_keyed_with_every_field(self):
+        view, _context = checks._normalize_sensors(self._members())
+        self.assertEqual(
+            sorted(view),
+            sorted(
+                [
+                    "sensor|Inlet Temperature",
+                    "sensor|Exhaust Temperature",
+                    "sensor|CPU1 Temperature",
+                    # a Name that repeats gets its Id; a null Name is the Id
+                    "sensor|DIMM Temperature|DIMMA1Temp",
+                    "sensor|DIMM Temperature|DIMMB1Temp",
+                    "sensor|VR_CPU1",
+                    "sensor|PSU1 Input Power",
+                    "sensor|PSU2 Input Power",
+                    "sensor|Ambient Humidity",
+                    "sensor|Chassis Energy",
+                    "sensor|Fan 1",
+                    "sensor|Chassis Intrusion",
+                ]
+            ),
+        )
+        for key, row in view.items():
+            self.assertEqual(set(row), self.FIELDS, key)
+        self.assertEqual(
+            view["sensor|Inlet Temperature"],
+            {
+                "reading_type": "Temperature",
+                "physical_context": "Intake",
+                "physical_sub_context": None,
+                "state": "Enabled",
+                "health": "OK",
+                "reading_units": "Cel",
+                "thresholds": {"upper_caution": 40, "upper_caution_user": 35, "upper_critical": 45},
+                "reading": 22.5,
+                "asserted": None,
+            },
+        )
+        # an Absent sensor is keyed like any other, its state verbatim and every field present
+        self.assertEqual(
+            view["sensor|PSU2 Input Power"],
+            {
+                "reading_type": "Power",
+                "physical_context": "PowerSupply",
+                "physical_sub_context": "Input",
+                "state": "Absent",
+                "health": None,
+                "reading_units": "W",
+                "thresholds": None,
+                "reading": None,
+                "asserted": None,
+            },
+        )
+        self.assertEqual(view["sensor|DIMM Temperature|DIMMB1Temp"]["health"], "Warning")
+
+    def test_thresholds_are_the_non_null_readings_snake_cased(self):
+        view, _context = checks._normalize_sensors(self._members())
+        thresholds = {key: row["thresholds"] for key, row in view.items()}
+        # a kind served with a null Reading is no threshold; a *User kind keeps its suffix
+        self.assertEqual(
+            thresholds["sensor|Inlet Temperature"],
+            {"upper_caution": 40, "upper_caution_user": 35, "upper_critical": 45},
+        )
+        self.assertEqual(
+            thresholds["sensor|CPU1 Temperature"], {"upper_critical": 95, "upper_fatal": 100}
+        )
+        self.assertEqual(thresholds["sensor|Fan 1"], {"lower_critical": 1000})
+        self.assertEqual(thresholds["sensor|VR_CPU1"], {})  # a block with nothing set
+        self.assertIsNone(thresholds["sensor|PSU1 Input Power"])  # no block served
+        self.assertIsNone(thresholds["sensor|Chassis Intrusion"])
+
+    def test_units_classify_and_only_ambient_class_temperatures_key_a_reading(self):
+        view, context = checks._normalize_sensors(self._members())
+        keyed = {key: row["reading"] for key, row in view.items() if row["reading"] is not None}
+        # 'Ambient Humidity' is ambient-named but no temperature; the CPU and DIMMs follow load
+        self.assertEqual(
+            keyed, {"sensor|Inlet Temperature": 22.5, "sensor|Exhaust Temperature": 31.0}
+        )
+        self.assertEqual(
+            context["counts"],
+            {
+                "total": 12,
+                "numeric": 11,
+                "discrete": 1,
+                "by_reading_type": {
+                    "EnergykWh": 1,
+                    "Humidity": 1,
+                    "Power": 2,
+                    "Rotational": 1,
+                    "Temperature": 5,
+                    "Voltage": 1,
+                    "none": 1,
+                },
+            },
+        )
+        # every numeric reading rides in context, an unreadable one as None
+        self.assertEqual(len(context["readings"]), 11)
+        self.assertEqual(context["readings"]["sensor|CPU1 Temperature"], 58)
+        self.assertEqual(context["readings"]["sensor|Fan 1"], 7200)
+        self.assertIsNone(context["readings"]["sensor|PSU2 Input Power"])
+        # a sensor serving no ReadingUnits at all is discrete
+        self.assertNotIn("sensor|Chassis Intrusion", context["readings"])
+        self.assertIsNone(view["sensor|Chassis Intrusion"]["reading_units"])
+        self.assertIs(view["sensor|Chassis Intrusion"]["asserted"], False)
+        # XCC's 'C' is Celsius too, and a numeric sensor typed Temperature counts whatever its
+        # unit ('Celsius' below is hand-built: a spelling neither XCC 6.10 nor the DMTF uses);
+        # an inlet-named sensor that measures anything else keys no reading
+        view, _context = checks._normalize_sensors(
+            [
+                {"Id": "208L0", "Name": "Ambient Temp", "ReadingUnits": "C", "Reading": 21},
+                {
+                    "Id": "7",
+                    "Name": "Outlet Temp",
+                    "ReadingType": "Temperature",
+                    "ReadingUnits": "Celsius",
+                    "Reading": 35,
+                },
+                {
+                    "Id": "8",
+                    "Name": "Inlet Fan",
+                    "ReadingType": "Rotational",
+                    "ReadingUnits": "RPM",
+                    "Reading": 6000,
+                },
+            ]
+        )
+        self.assertEqual(view["sensor|Ambient Temp"]["reading"], 21)
+        self.assertEqual(view["sensor|Outlet Temp"]["reading"], 35)
+        self.assertIsNone(view["sensor|Inlet Fan"]["reading"])
+
+    def test_a_discrete_reading_is_an_asserted_flag_unless_it_is_a_measurement(self):
+        sensors = [
+            self._discrete("189L0", "Chassis", 0),
+            # hand-built: how an asserted discrete sensor reads (1, a Health change or both)
+            # has not been observed on a live unit — any reading but 0 or null asserts
+            self._discrete("190L0", "Chassis Movement", 1, health="Critical"),
+            self._discrete("128L0", "M2 Drive 0", None, state="Disabled", health=None),
+            self._discrete(
+                "164L0", "Sys Utilization", 37, Thresholds={"UpperCritical": {"Reading": None}}
+            ),
+            self._discrete("235L0", "CPU DTS", -51, ReadingType="Temperature"),
+            self._discrete("901", "CPU1 DTS", 0),  # named DTS: a margin at 0 too
+            self._discrete("902", "PCH Margin", -8),  # a negative reading is headroom
+        ]
+        view, context = checks._normalize_sensors(sensors)
+        self.assertEqual(
+            {key: row["asserted"] for key, row in view.items()},
+            {
+                "sensor|Chassis": False,
+                "sensor|Chassis Movement": True,
+                "sensor|M2 Drive 0": None,
+                "sensor|Sys Utilization": None,
+                "sensor|CPU DTS": None,
+                "sensor|CPU1 DTS": None,
+                "sensor|PCH Margin": None,
+            },
+        )
+        self.assertEqual(view["sensor|Chassis Movement"]["health"], "Critical")
+        self.assertEqual(view["sensor|M2 Drive 0"]["state"], "Disabled")
+        self.assertEqual(view["sensor|Sys Utilization"]["thresholds"], {})
+        # host load and margins are readings: context only, never a key
+        self.assertEqual(context["utilisation_readings"], {"sensor|Sys Utilization": 37})
+        self.assertEqual(
+            context["margin_readings"],
+            {"sensor|CPU DTS": -51, "sensor|CPU1 DTS": 0, "sensor|PCH Margin": -8},
+        )
+        self.assertEqual(context["readings"], {})  # none of them names a unit
+        self.assertEqual((context["counts"]["numeric"], context["counts"]["discrete"]), (0, 7))
+        self.assertEqual({row["reading"] for row in view.values()}, {None})
+
+    def test_reading_times_and_peak_readings_ride_in_context(self):
+        _view, context = checks._normalize_sensors(self._members())
+        self.assertEqual(
+            context["reading_times"],
+            {
+                "sensor|Inlet Temperature": "2026-09-30T10:15:00+00:00",
+                "sensor|Exhaust Temperature": "2026-09-30T10:15:00+00:00",
+            },
+        )
+        self.assertEqual(context["peak_readings"], {"sensor|Inlet Temperature": 26.0})
+
+    def test_environment_metrics_as_served_joined_to_the_sensor_keys(self):
+        _view, context = checks._normalize_sensors(
+            self._members(), environment=_fx("xcc_sensors_dmtf_environmentmetrics.json")
+        )
+        self.assertEqual(
+            context["environment"],
+            {
+                "power_watts": 212.0,
+                "energy_kwh": 1234.5,
+                "temperature_celsius": 22.5,
+                "humidity_percent": 38.0,
+                # by the sensor the excerpt names, else its DeviceName
+                "fan_speeds_percent": {
+                    "sensor|Fan 1": {"reading": 45, "speed_rpm": 7200},
+                    "Fan 2": {"reading": 44, "speed_rpm": 7100},
+                },
+                "sources": {
+                    "power_watts": "sensor|PSU1 Input Power",
+                    "energy_kwh": "sensor|Chassis Energy",
+                    "temperature_celsius": "sensor|Inlet Temperature",
+                    "humidity_percent": "sensor|Ambient Humidity",
+                },
+            },
+        )
+        # an excerpt naming a sensor this read did not list keeps its URI; unserved reads None
+        other = "/redfish/v1/Chassis/2/Sensors/P"
+        _view, context = checks._normalize_sensors(
+            self._members(), environment={"PowerWatts": {"Reading": 90, "DataSourceUri": other}}
+        )
+        self.assertEqual(context["environment"]["sources"]["power_watts"], other)
+        self.assertIsNone(context["environment"]["energy_kwh"])
+        self.assertIsNone(context["environment"]["fan_speeds_percent"])
+        # not read at all: null, as the ThermalMetrics summary is
+        _view, context = checks._normalize_sensors(self._members())
+        self.assertIsNone(context["environment"])
+        self.assertIsNone(context["temperature_summary_c"])
+
+    def test_the_security_sensors_are_named_per_role_on_lenovo_only(self):
+        sensors = [
+            self._discrete("189L0", "Chassis", 0),
+            self._discrete("190L0", "Chassis Movement", 0),
+            self._discrete("246L0", "Lockdown Mode", 0),
+            self._discrete("17L0", "Low Security Jmp", 0),
+            self._discrete("197L0", "Power Adapter 2", 0, ReadingType="Power"),
+            self._discrete("196L0", "Power Adapter 1", 0, ReadingType="Power"),
+            # near misses: the names are matched whole
+            self._discrete("900", "Chassis Intrusion", 0),
+            self._discrete("901", "Power Adapter", 0),
+        ]
+        _view, context = checks._normalize_sensors(sensors, lenovo=True)
+        self.assertEqual(
+            context["security_sensors"],
+            {
+                "chassis_intrusion": ["sensor|Chassis"],
+                "chassis_movement": ["sensor|Chassis Movement"],
+                "lockdown_mode": ["sensor|Lockdown Mode"],
+                "low_security_jumper": ["sensor|Low Security Jmp"],
+                "power_adapters": ["sensor|Power Adapter 1", "sensor|Power Adapter 2"],
+            },
+        )
+        # the names are Lenovo's: another vendor gets no mapping, never a guess
+        self.assertIsNone(checks._normalize_sensors(sensors)[1]["security_sensors"])
+        # none of them served: every role an empty list
+        _view, context = checks._normalize_sensors(self._members(), lenovo=True)
+        self.assertEqual({len(keys) for keys in context["security_sensors"].values()}, {0})
+
+    def test_collector_one_expand_get_and_the_linked_environment_metrics(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_sensors(ctx)
+        # the hand-built Chassis links no ThermalSubsystem: no ThermalMetrics read
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.ENV, self.SENSORS + EXPAND])
+        self.assertEqual(len(result["normalized"]), 12)
+        context = result["context"]
+        self.assertEqual(context["sensors_collection"]["strategy"], "expand")
+        self.assertEqual(context["sensors_source"], self.SENSORS)
+        self.assertEqual(context["environment_source"], self.ENV)
+        self.assertEqual(context["environment"]["power_watts"], 212.0)
+        self.assertIsNone(context["temperature_summary_source"])
+        self.assertIsNone(context["temperature_summary_c"])
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["resolution"]["vendor"], "Contoso")
+        # DMTF reads for every vendor; only the Lenovo sensor names go unmapped
+        self.assertIsNone(context["security_sensors"])
+        self.assertIn("no Contoso mapping", context["security_sensors_note"])
+        self.assertEqual(set(result["raw"]), {self.SENSORS + EXPAND, self.ENV})
+        raw = json.dumps(result["raw"])
+        self.assertNotIn("Actions", raw)
+        self.assertNotIn("@odata.etag", raw)
+        self.assertEqual({redactor for _path, redactor in ctx.redacted}, {"_scrub_payload"})
+
+    def test_the_thermal_metrics_summary_is_one_get_shared_with_bmc_thermal(self):
+        payloads = self._payloads(vendor="Lenovo")
+        payloads[CH]["ThermalSubsystem"] = {"@odata.id": self.SUB}
+        payloads[self.SUB + "/ThermalMetrics"] = {
+            "@odata.id": self.SUB + "/ThermalMetrics",
+            "TemperatureSummaryCelsius": {"Ambient": {"Reading": 23}, "Intake": {"Reading": 23.5}},
+        }
+        ctx = _FakeCtx(payloads)
+        sensors = checks._collect_sensors(ctx)
+        thermal = checks._collect_thermal(ctx)
+        self.assertEqual(ctx.gets.count(self.SUB + "/ThermalMetrics"), 1)
+        summary = {"ambient": 23.0, "intake": 23.5, "exhaust": None, "internal": None}
+        self.assertEqual(sensors["context"]["temperature_summary_c"], summary)
+        self.assertEqual(thermal["context"]["temperature_summary_c"], summary)
+        self.assertEqual(
+            sensors["context"]["temperature_summary_source"], self.SUB + "/ThermalMetrics"
+        )
+        self.assertIn(self.SUB + "/ThermalMetrics", sensors["raw"])
+        self.assertIsNone(sensors["context"]["security_sensors_note"])
+        # a subsystem serving no ThermalMetrics leaves the summary null, never fails
+        del payloads[self.SUB + "/ThermalMetrics"]
+        result = checks._collect_sensors(_FakeCtx(payloads))
+        self.assertIsNone(result["context"]["temperature_summary_c"])
+        self.assertIsNone(result["context"]["temperature_summary_source"])
+        self.assertEqual(result["normalized"], sensors["normalized"])
+
+    def test_members_are_walked_when_expand_is_not_usable(self):
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_sensors(ctx)
+        meta = result["context"]["sensors_collection"]
+        self.assertEqual((meta["strategy"], meta["expand_refused"]), ("members", "HTTP 404"))
+        walked = [path for path in ctx.gets if path.startswith(self.SENSORS + "/")]
+        self.assertEqual(len(walked), 12)
+        self.assertEqual(
+            ctx.gets, RESOLVE + [CH, self.ENV, self.SENSORS + EXPAND, self.SENSORS] + walked
+        )
+        # the same view either way
+        expanded = checks._collect_sensors(_FakeCtx(self._payloads()))
+        self.assertEqual(result["normalized"], expanded["normalized"])
+
+    def _many(self, count):
+        """``count`` discrete sensors, $expand unusable, the System unlinked (the id resolution
+        costs its full five GETs) and both metrics linked: the check's widest walk."""
+        payloads = _base_payloads()
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        payloads[CH]["Sensors"] = {"@odata.id": self.SENSORS}
+        payloads[CH]["EnvironmentMetrics"] = {"@odata.id": self.ENV}
+        payloads[CH]["ThermalSubsystem"] = {"@odata.id": self.SUB}
+        payloads[self.ENV] = _fx("xcc_sensors_dmtf_environmentmetrics.json")
+        payloads[self.SUB + "/ThermalMetrics"] = {"TemperatureSummaryCelsius": {}}
+        members = [self._discrete("%dL0" % n, "Sensor %d" % n, 0) for n in range(1, count + 1)]
+        expanded = {"@odata.id": self.SENSORS, "Members": members, "Members@odata.count": count}
+        return self._sensors(expanded, payloads, expand=False)
+
+    def test_the_widest_walk_fits_the_budget_and_a_wider_one_is_refused_before_it_starts(self):
+        # resolution 5, the Chassis, EnvironmentMetrics, ThermalMetrics, the $expand attempt
+        # and the collection: 10 of the 35, leaving a walk of 25
+        ctx = _FakeCtx(self._many(25))
+        result = checks._collect_sensors(ctx)
+        self.assertEqual(len(result["normalized"]), 25)
+        self.assertEqual(len(ctx.gets), 5 + 1 + 2 + 1 + 1 + 25)
+        self.assertEqual(len(ctx.gets), checks._BUDGET_SENSORS)
+        ctx = _FakeCtx(self._many(26))
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(ctx)
+        self.assertIn("26 members to fetch but only 25 GET(s) left", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.SENSORS + "/")])
+        self.assertEqual(len(ctx.gets), 10)
+
+    def test_not_present_and_failed_shapes(self):
+        # the hand-built Chassis links no Sensors and none is served: not present
+        ctx = _FakeCtx(_base_payloads())
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_sensors(ctx)
+        self.assertIn("links no Sensors collection", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.SENSORS + EXPAND, self.SENSORS])
+        # linked, but answering 404: failed, never "no sensors"
+        payloads = self._payloads()
+        for path in [path for path in payloads if path.startswith(self.SENSORS)]:
+            del payloads[path]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(_FakeCtx(payloads))
+        self.assertIn("but it answered 404", str(caught.exception))
+        # served with zero members: unmeasured, never "every sensor gone"
+        empty = {"@odata.id": self.SENSORS, "Members": [], "Members@odata.count": 0}
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(_FakeCtx(self._sensors(empty, self._payloads())))
+        self.assertIn("zero members (host PowerState On)", str(caught.exception))
+        # a server error on the collection is a failed read (on its $expand form, a refusal)
+        errors = {self.SENSORS + EXPAND: 500, self.SENSORS: 500}
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_sensors(_FakeCtx(self._payloads(), errors=errors))
+        # a linked EnvironmentMetrics answering 404: no environment, the check still ok
+        payloads = self._payloads()
+        del payloads[self.ENV]
+        result = checks._collect_sensors(_FakeCtx(payloads))
+        self.assertIsNone(result["context"]["environment"])
+        self.assertIsNone(result["context"]["environment_source"])
+        self.assertEqual(len(result["normalized"]), 12)
+        # an empty Chassis body is a broken read
+        payloads = self._payloads()
+        payloads[CH] = {}
+        with self.assertRaises(checks.CollectError):
+            checks._collect_sensors(_FakeCtx(payloads))
+
+    def test_a_paged_or_short_collection_is_refused_never_recorded_partially(self):
+        expanded = _fx("xcc_sensors_dmtf_expanded.json")
+        page = dict(expanded, Members=expanded["Members"][:6])
+        page["Members@odata.nextLink"] = self.SENSORS + "?$skip=6"
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(_FakeCtx(self._sensors(page, self._payloads())))
+        self.assertIn("one page of the collection", str(caught.exception))
+        short = dict(expanded, Members=expanded["Members"][:11])  # still counting 12
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(_FakeCtx(self._sensors(short, self._payloads())))
+        self.assertIn("counts 12 members but listed 11", str(caught.exception))
+        # the walked collection is held to the same rule
+        payloads = self._sensors(short, self._payloads(), expand=False)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_sensors(_FakeCtx(payloads))
+        self.assertIn("counts 12 members but listed 11", str(caught.exception))
+
+    def test_links_into_actions_are_refused(self):
+        for leaf in ("Sensors", "EnvironmentMetrics", "ThermalSubsystem"):
+            payloads = self._payloads()
+            payloads[CH][leaf] = {"@odata.id": CH + "/Actions/Chassis.Reset"}
+            with self.assertRaises(checks.CollectError, msg=leaf):
+                checks._collect_sensors(_FakeCtx(payloads))
+
+    def test_two_sensors_on_one_key_are_refused_rather_than_merged(self):
+        sensors = [self._discrete("1L0", "PSU", 0), self._discrete("PSU", None, 0)]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._normalize_sensors(sensors)
+        self.assertIn("sensor|PSU", str(caught.exception))
+
+    def test_only_stable_facts_diff_and_the_ambient_reading_is_banded(self):
+        check = registry.CHECKS["bmc_sensors"]
+        compare = check.compare
+        self.assertEqual(
+            compare, {"mode": "equality_set", "fields": {"reading": {"tolerance": {"abs": 8}}}}
+        )
+        self.assertEqual(check.tier, 1)
+        self.assertNotIn(registry.EMPTY_OK_TAG, check.tags)  # a chassis always has sensors
+        diff = _loader.diffcore.diff_check
+        pre = checks._normalize_sensors(self._members())[0]
+        members = self._members()
+        by_id = {sensor["Id"]: sensor for sensor in members}
+        # every numeric reading moves (load, the room): only the ambient class is keyed
+        for sensor in members:
+            if sensor.get("ReadingUnits") and sensor.get("Reading") is not None:
+                sensor["Reading"] += 7
+        self.assertEqual(
+            diff(pre, checks._normalize_sensors(members)[0], compare)["result"], "pass"
+        )
+        by_id["InletTemp"]["Reading"] = 22.5 + 9  # beyond the 8 °C band
+        by_id["Intrusion"]["Reading"] = 1  # the discrete sensor asserts
+        by_id["Fan1"]["Thresholds"]["LowerCritical"]["Reading"] = 1200  # reconfigured
+        changed = diff(pre, checks._normalize_sensors(members)[0], compare)["changed"]
+        self.assertEqual(
+            sorted((row["key"], row["field"]) for row in changed),
+            [
+                ("sensor|Chassis Intrusion", "asserted"),
+                ("sensor|Fan 1", "thresholds"),
+                ("sensor|Inlet Temperature", "reading"),
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -1740,7 +1740,9 @@ class TestBmcLabFamily(unittest.TestCase):
         self.assertEqual(statuses.pop("bmc_event_log"), "empty")  # healthy: nothing keyed
         self.assertEqual(set(statuses.values()), {"ok"}, statuses)
         # the widened family on the real payloads: measured, kept tight on purpose
-        self.assertLessEqual(len(ctx.gets), 46)
+        # (+ bmc_sensors: its Sensors $expand and EnvironmentMetrics; the ThermalMetrics read
+        # it makes first is the one bmc_thermal then finds in the cache)
+        self.assertLessEqual(len(ctx.gets), 48)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -1753,6 +1755,250 @@ class TestBmcLabFamily(unittest.TestCase):
                 self.assertEqual(pre, post)
                 json.dumps(pre)
                 self.assertEqual(diffcore.diff_check(pre, post, check.compare)["result"], "pass")
+
+
+class TestBmcLabSensors(unittest.TestCase):
+    """bmc_sensors on the lab payloads: the SE350's 89 sensors — the only view it gives of its
+    external power adapters, chassis intrusion and movement, and lockdown state — with its
+    EnvironmentMetrics and the ThermalMetrics summary."""
+
+    CH = "/redfish/v1/Chassis/1"
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    # the twelve sensors that serve a unit (ReadingUnits): the numeric ones
+    NUMERIC = (
+        "Ambient Temp",
+        "CPU Temp",
+        "SysBrd 3.3V",
+        "SysBrd 5V",
+        "SysBrd 12V",
+        "CMOS Battery",
+        "Sys Power",
+        "CPU Power",
+        "Mem Power",
+        "Fan 1 Tach",
+        "Fan 2 Tach",
+        "Fan 3 Tach",
+    )
+    UTILISATION = ("Sys Utilization", "CPU Utilization", "Mem Utilization", "IO Utilization")
+    SECURITY = {
+        "chassis_intrusion": ["sensor|Chassis"],
+        "chassis_movement": ["sensor|Chassis Movement"],
+        "lockdown_mode": ["sensor|Lockdown Mode"],
+        "low_security_jumper": ["sensor|Low Security Jmp"],
+        "power_adapters": ["sensor|Power Adapter 1", "sensor|Power Adapter 2"],
+    }
+
+    @staticmethod
+    def _keys(*names):
+        return sorted("sensor|" + name for name in names)
+
+    def test_one_expand_get_keys_all_89_sensors_by_name(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_sensors(ctx)
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + [
+                self.CH,
+                self.CH + "/EnvironmentMetrics",
+                self.CH + "/ThermalSubsystem/ThermalMetrics",
+                self.CH + "/Sensors" + _XCC_EXPAND,
+            ],
+        )
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(len(view), 89)
+        self.assertEqual([key for key in view if key.count("|") != 1], [])  # every Name unique
+        self.assertEqual(context["sensors_collection"]["strategy"], "expand")
+        # classified by ReadingUnits: 12 numeric, 77 discrete (ReadingType would say 21 / 68)
+        self.assertEqual(
+            context["counts"],
+            {
+                "total": 89,
+                "numeric": 12,
+                "discrete": 77,
+                "by_reading_type": {
+                    "AirFlow": 3,
+                    "Current": 3,
+                    "Power": 4,
+                    "Temperature": 6,
+                    "Voltage": 5,
+                    "none": 68,
+                },
+            },
+        )
+        self.assertEqual(sorted(context["readings"]), self._keys(*self.NUMERIC))
+        self.assertEqual(context["readings"]["sensor|Sys Power"], 50)
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertIsNone(context["security_sensors_note"])
+        self.assertEqual(
+            set(result["raw"]),
+            {
+                self.CH + "/Sensors" + _XCC_EXPAND,
+                self.CH + "/EnvironmentMetrics",
+                self.CH + "/ThermalSubsystem/ThermalMetrics",
+            },
+        )
+        self.assertNotIn("@odata.etag", json.dumps(result["raw"]))
+
+    def test_reading_type_is_verbatim_and_never_the_classification(self):
+        view = bmc._collect_sensors(_xcc_lab_ctx())["normalized"]
+
+        def typed(name):
+            row = view["sensor|" + name]
+            return row["reading_type"], row["reading_units"]
+
+        # numeric: watts typed Current, fan tachometers typed AirFlow (read in RPM)
+        self.assertEqual(typed("Sys Power"), ("Current", "Watts"))
+        self.assertEqual(typed("Fan 1 Tach"), ("AirFlow", "RPM"))
+        self.assertEqual(typed("SysBrd 12V"), ("Voltage", "V"))
+        self.assertEqual(typed("Ambient Temp"), ("Temperature", "C"))
+        # discrete whatever the type: presence sensors typed Power, fault latches typed
+        # Temperature or Voltage, the DTS margin typed Temperature with no unit
+        self.assertEqual(typed("Power Adapter 1"), ("Power", None))
+        self.assertEqual(typed("Host Power"), ("Power", None))
+        self.assertEqual(typed("CPU Overtemp"), ("Temperature", None))
+        self.assertEqual(typed("SysBrd Vol Fault"), ("Voltage", None))
+        self.assertEqual(typed("CPU DTS"), ("Temperature", None))
+        self.assertEqual(typed("Chassis Movement"), (None, None))
+        self.assertEqual(view["sensor|Ambient Temp"]["physical_context"], "Intake")
+        self.assertEqual(view["sensor|DIMM 1"]["physical_context"], "Memory")
+        self.assertEqual({row["physical_sub_context"] for row in view.values()}, {None})
+
+    def test_thresholds_are_the_served_readings(self):
+        view = bmc._collect_sensors(_xcc_lab_ctx())["normalized"]
+        served = {key: row["thresholds"] for key, row in view.items() if row["thresholds"]}
+        self.assertEqual(
+            served,
+            {
+                "sensor|Ambient Temp": {
+                    "upper_caution": 57,
+                    "upper_critical": 59,
+                    "upper_fatal": 61,
+                },
+                "sensor|SysBrd 3.3V": {"lower_critical": 2.964, "upper_critical": 3.6348},
+                "sensor|SysBrd 5V": {"lower_critical": 4.508, "upper_critical": 5.497},
+                "sensor|SysBrd 12V": {"lower_critical": 10.615, "upper_critical": 13.2},
+                "sensor|CMOS Battery": {"lower_caution": 2.392, "lower_critical": 2.249},
+                "sensor|Fan 1 Tach": {"lower_critical": 1552},
+                "sensor|Fan 2 Tach": {"lower_critical": 1552},
+                "sensor|Fan 3 Tach": {"lower_critical": 1552},
+            },
+        )
+        # a Thresholds block with nothing set reads {}; the discrete sensors serve no block
+        self.assertEqual(
+            sorted(key for key, row in view.items() if row["thresholds"] == {}),
+            self._keys(
+                "CPU DTS", "CPU Temp", "Sys Power", "CPU Power", "Mem Power", *self.UTILISATION
+            ),
+        )
+        self.assertEqual(sum(row["thresholds"] is None for row in view.values()), 72)
+
+    def test_only_the_ambient_sensor_keys_a_reading(self):
+        view = bmc._collect_sensors(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(
+            {key: row["reading"] for key, row in view.items() if row["reading"] is not None},
+            {"sensor|Ambient Temp": 21},
+        )
+
+    def test_every_discrete_sensor_reads_0_on_this_healthy_unit(self):
+        result = bmc._collect_sensors(_xcc_lab_ctx())
+        view, context = result["normalized"], result["context"]
+        asserted = {}
+        for key, row in view.items():
+            asserted.setdefault(row["asserted"], []).append(key)
+        self.assertNotIn(True, asserted)
+        self.assertEqual(len(asserted[False]), 70)
+        # null: the numeric sensors, the two Disabled ones (null reading), the utilisation
+        # sensors and the DTS margin — whose readings ride in context
+        self.assertEqual(
+            sorted(asserted[None]),
+            self._keys(*(self.NUMERIC + self.UTILISATION + ("M2 Drive 0", "Progress", "CPU DTS"))),
+        )
+        self.assertEqual(
+            (view["sensor|M2 Drive 0"]["state"], view["sensor|M2 Drive 0"]["health"]),
+            ("Disabled", None),
+        )
+        self.assertEqual(
+            context["utilisation_readings"],
+            {
+                "sensor|Sys Utilization": 1,
+                "sensor|CPU Utilization": 0,
+                "sensor|Mem Utilization": 0,
+                "sensor|IO Utilization": 0,
+            },
+        )
+        self.assertEqual(context["margin_readings"], {"sensor|CPU DTS": -51})
+
+    def test_the_security_sensors_are_the_only_view_of_adapters_intrusion_and_lockdown(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_sensors(ctx)
+        self.assertEqual(result["context"]["security_sensors"], self.SECURITY)
+        for keys in self.SECURITY.values():
+            for key in keys:
+                row = result["normalized"][key]
+                self.assertEqual(
+                    (row["state"], row["health"], row["asserted"]), ("Enabled", "OK", False), key
+                )
+        # nowhere else on this firmware: no PhysicalSecurity, no supplies, no ThinkEdge leaves
+        self.assertNotIn("PhysicalSecurity", J("xcc_chassis_lab.json"))
+        self.assertIsNone(bmc._collect_chassis_location(ctx)["normalized"]["intrusion_sensor"])
+        self.assertNotIn("PowerSupplies", J("xcc_chassis_powersubsystem_lab.json"))
+        self.assertEqual(bmc._collect_power(ctx)["context"]["psu_total"], 0)
+        security = bmc._collect_security_state(ctx)["normalized"]
+        for field in ("lockdown_mode", "motion_detection_enabled", "chassis_intrusion_enabled"):
+            self.assertIsNone(security[field], field)
+
+    def test_environment_metrics_and_the_temperature_summary_as_served(self):
+        context = bmc._collect_sensors(_xcc_lab_ctx())["context"]
+        self.assertEqual(
+            context["environment"],
+            {
+                "power_watts": 40,
+                "energy_kwh": None,  # not served
+                "temperature_celsius": 21,
+                "humidity_percent": None,  # not served
+                # RPM figures in the percent field, as this firmware serves them
+                "fan_speeds_percent": {
+                    "sensor|Fan 1 Tach": {"reading": 6014, "speed_rpm": None},
+                    "sensor|Fan 2 Tach": {"reading": 6014, "speed_rpm": None},
+                    "sensor|Fan 3 Tach": {"reading": 6208, "speed_rpm": None},
+                },
+                "sources": {
+                    "power_watts": "sensor|Sys Power",
+                    "energy_kwh": None,
+                    "temperature_celsius": "sensor|Ambient Temp",
+                    "humidity_percent": None,
+                },
+            },
+        )
+        self.assertEqual(
+            context["temperature_summary_c"],
+            {"ambient": 21, "intake": 21, "exhaust": None, "internal": None},
+        )
+        self.assertEqual(context["environment_source"], self.CH + "/EnvironmentMetrics")
+        # no ReadingTime and no PeakReading on this firmware: empty, and fine
+        self.assertEqual((context["reading_times"], context["peak_readings"]), ({}, {}))
+
+    def test_the_chassis_and_thermal_metrics_reads_are_shared_with_bmc_thermal(self):
+        ctx = _xcc_lab_ctx()
+        bmc._collect_sensors(ctx)
+        bmc._collect_thermal(ctx)
+        self.assertEqual(ctx.gets.count(self.CH), 1)
+        self.assertEqual(ctx.gets.count(self.CH + "/ThermalSubsystem/ThermalMetrics"), 1)
+
+    def test_without_expand_the_89_members_are_refused_before_any_is_read(self):
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        with self.assertRaises(bmc.CollectError) as caught:
+            bmc._collect_sensors(ctx)
+        self.assertIn(
+            "89 members to fetch but only 25 GET(s) left in the budget of 35",
+            str(caught.exception),
+        )
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.CH + "/Sensors/")])
+        # resolution 5, the Chassis, EnvironmentMetrics, ThermalMetrics, the refused
+        # attempt and the collection
+        self.assertEqual(len(ctx.gets), 5 + 1 + 2 + 1 + 1)
 
 
 if __name__ == "__main__":

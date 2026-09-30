@@ -707,6 +707,11 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    `bmc_power_policy` exists.
 4. **PR C — new checks** (§5b, `bmc_telemetry` optional), coverage-map
    section, prompt updates.
+   **State (2026-09-30):** ten builders, one per check, each in its own
+   worktree at the PR B commit, merged one commit per check in the user's
+   order, each with its fixtures, tests, SEMANTICS and README row:
+   `bmc_sensors` landed. What the builders found wrong in §5b is §10a
+   item 13.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
    discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
@@ -854,6 +859,21 @@ Recorded as they were found, each with how it was resolved.
     scrubs every name but the capture's own (which the envelope's transport
     footprint already names). Found by the hygiene count of the dev-stack
     proof, not by a review.
+13. **What PR C's builders found wrong in §5b** (resolved as stated):
+    - `bmc_sensors`: the lab unit's 89 sensors are 12 numeric and 77
+      discrete by the `ReadingUnits` rule (§4b's "21 / 68" counted
+      `ReadingType`, which the lab note itself calls untrustworthy); a
+      discrete `Reading` is not always 0 (two Disabled sensors serve null,
+      a utilisation sensor reads 1); the table keys `sensor|<Id>` while its
+      lab note keys by `Name` — built by Name, the Id only as a tiebreak; it
+      costs three reads beyond the cached Chassis, not 1–2. `CPU DTS` is
+      unitless yet a measurement (a negative margin): it follows
+      `bmc_thermal`'s margin rule into context instead of being keyed as an
+      assertion that would flip at the throttle point. XCC 6.10 puts RPM
+      figures into `EnvironmentMetrics.FanSpeedsPercent` (recorded as
+      served). The family-wide tests over the hand-built set now accept
+      not-present from a check newer than that set (it serves no Sensors
+      collection).
 
 ## 11. Decisions still open (default assumed in parentheses)
 

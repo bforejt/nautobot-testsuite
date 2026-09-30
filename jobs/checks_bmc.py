@@ -3727,6 +3727,319 @@ def _collect_chassis_location(ctx):
     }
 
 
+# --- bmc_sensors -------------------------------------------------------------
+# GETs beyond the id resolution, with $expand honoured (the lab SE350): the
+# Chassis (the read bmc_chassis, bmc_thermal and bmc_power make; cached per
+# run), its EnvironmentMetrics, the ThermalSubsystem's ThermalMetrics (at the
+# path bmc_thermal reads, so one answer serves both) and ONE $expand GET that
+# inlines the whole Sensors collection (89 members, ~55 KB, ~11 s on XCC 6.10)
+# — 4. The two single reads come before the collection, so the member walk,
+# pre-checked against what is left before its first GET, is the last thing
+# the check spends; Sensors is the only collection read, so an $expand refusal
+# is paid at most once. The per-member fallback on the lab layout would be the
+# attempt, the collection and 89 members — 91 GETs for the collection alone,
+# past the transport ceiling of 40 — so it is refused up front naming the
+# member count, never walked into the wall. _BUDGET_SENSORS = 30 +
+# _TARGET_GETS: the resolution (5), the Chassis, the two metrics, the attempt
+# and the collection (10 in all) leave a fallback walk of up to 25 sensors room
+# to complete.
+_BUDGET_SENSORS = 30 + _TARGET_GETS
+# ReadingType is served carelessly (XCC 6.10 types watts Current, presence
+# sensors Power, fan tachometers AirFlow, most discrete sensors null), so a
+# sensor is numeric when it serves a non-empty ReadingUnits, discrete otherwise.
+# A Celsius reading's units: XCC 6.10's 'C', the DMTF's (UCUM) 'Cel'.
+_SENSORS_CELSIUS = frozenset({"C", "Cel"})
+# Unitless sensors whose Reading is host load, never an assertion (Lenovo's
+# Sys/CPU/Mem/IO Utilization): matched on the name.
+_SENSORS_UTILISATION = ("utilization", "utilisation")
+# The sensors that carry what an SE350 on XCC 6.10 exposes nowhere else (no
+# PhysicalSecurity, no PowerSupplies, no ThinkEdge security leaves): the
+# chassis intrusion switch, the motion sensor, the lockdown state, the
+# low-security jumper and the external power adapters — Lenovo's names,
+# matched whole.
+_SENSORS_SECURITY = (
+    ("chassis_intrusion", re.compile(r"Chassis")),
+    ("chassis_movement", re.compile(r"Chassis Movement")),
+    ("lockdown_mode", re.compile(r"Lockdown Mode")),
+    ("low_security_jumper", re.compile(r"Low Security Jmp")),
+    ("power_adapters", re.compile(r"Power Adapter \d+")),
+)
+# The Chassis EnvironmentMetrics excerpts read into context (DMTF
+# EnvironmentMetrics v1), each Reading as served; the FanSpeedsPercent array
+# is read beside them.
+_SENSORS_ENVIRONMENT = (
+    ("power_watts", "PowerWatts"),
+    ("energy_kwh", "EnergykWh"),
+    ("temperature_celsius", "TemperatureCelsius"),
+    ("humidity_percent", "HumidityPercent"),
+)
+
+
+def _sensors_path(link):
+    """The resource part of an @odata.id or DataSourceUri: fragment, query, trailing '/' gone."""
+    return str(link or "").partition("#")[0].partition("?")[0].rstrip("/")
+
+
+def _sensors_thresholds(sensor):
+    """{snake-cased kind: reading} of every Thresholds.<Kind> served with a non-null Reading.
+
+    ``{}`` when the sensor serves a Thresholds block with nothing set (XCC
+    6.10's utilisation and power sensors), None when it serves no block (its
+    discrete sensors). Kinds are the DMTF ones — LowerCaution ... UpperFatal
+    and the *User variants — snake-cased: lower_caution, upper_critical_user.
+    """
+    block = sensor.get("Thresholds")
+    if not isinstance(block, dict):
+        return None
+    found = {}
+    for kind in sorted(block, key=str):
+        if str(kind).startswith("@"):
+            continue
+        value = _to_float(_dig(block, kind, "Reading"))
+        if value is not None:
+            found[_snake(kind)] = value
+    return found
+
+
+def _sensors_is_utilisation(name):
+    lowered = (name or "").lower()
+    return any(token in lowered for token in _SENSORS_UTILISATION)
+
+
+def _sensors_source(excerpt, keys_by_path):
+    """The sensor key an excerpt's DataSourceUri names, else the URI as served, else None."""
+    uri = _text(_dig(excerpt, "DataSourceUri"))
+    if uri is None:
+        return None
+    return keys_by_path.get(_sensors_path(uri), uri)
+
+
+def _sensors_environment(metrics, keys_by_path):
+    """The Chassis EnvironmentMetrics readings as served; None when the resource was not read.
+
+    power_watts, energy_kwh, temperature_celsius and humidity_percent (each
+    excerpt's Reading, None where unserved), fan_speeds_percent ({source:
+    {reading, speed_rpm}}, the source being the sensor key the excerpt's
+    DataSourceUri names, else its DeviceName; None when the array is unserved —
+    XCC 6.10 puts RPM figures in these percent readings) and sources (the
+    sensor behind each single excerpt).
+    """
+    if not isinstance(metrics, dict):
+        return None
+    environment, sources = {}, {}
+    for field, leaf in _SENSORS_ENVIRONMENT:
+        excerpt = metrics.get(leaf)
+        environment[field] = _to_float(_dig(excerpt, "Reading"))
+        sources[field] = _sensors_source(excerpt, keys_by_path)
+    fans = None
+    if isinstance(metrics.get("FanSpeedsPercent"), list):
+        fans = {}
+        for index, excerpt in enumerate(_dicts(metrics["FanSpeedsPercent"])):
+            label = (
+                _sensors_source(excerpt, keys_by_path)
+                or _text(excerpt.get("DeviceName"))
+                or "#%d" % (index,)
+            )
+            if label in fans:
+                label = "%s#%d" % (label, index)
+            fans[label] = {
+                "reading": _to_float(excerpt.get("Reading")),
+                "speed_rpm": _to_float(excerpt.get("SpeedRPM")),
+            }
+    environment["fan_speeds_percent"] = fans
+    environment["sources"] = sources
+    return environment
+
+
+def _sensors_security(named):
+    """{role: sorted keys} of the security-relevant sensors present, from (Name, key) pairs."""
+    found = {role: [] for role, _pattern in _SENSORS_SECURITY}
+    for name, key in named:
+        for role, pattern in _SENSORS_SECURITY:
+            if name is not None and pattern.fullmatch(name):
+                found[role].append(key)
+    return {role: sorted(keys) for role, keys in found.items()}
+
+
+def _normalize_sensors(members, environment=None, metrics=None, lenovo=False):
+    """(normalized, context) over the members of the Chassis Sensors collection.
+
+    'sensor|<Name>' ('|<Id>' appended only when a Name repeats, 'sensor|<Id>'
+    when the Name is null) for EVERY member whatever its state -> reading_type
+    (verbatim, never a classification), physical_context, physical_sub_context,
+    state, health, reading_units, thresholds (_sensors_thresholds), reading and
+    asserted, every field always present. A sensor is numeric when it serves a
+    non-empty ReadingUnits: its reading rides in context.readings, and only an
+    ambient-class temperature (_is_ambient, in Celsius or typed Temperature)
+    keeps it in its row. A discrete sensor's Reading is keyed as asserted (True
+    when neither 0 nor None, False at 0, None when null) except where it is a
+    measurement: a utilisation-class name (context.utilisation_readings) or a
+    margin (_thermal_is_margin: context.margin_readings). ``environment`` is the
+    Chassis EnvironmentMetrics, ``metrics`` the ThermalMetrics resource (None
+    when not read); ``lenovo`` gates the security-sensor names, which are
+    Lenovo's. Two sensors mapping to one key (a nameless sensor whose Id is
+    another's Name) refuse the check rather than merge silently.
+    """
+    sensors = _dicts(members)
+    name_counts = _name_counts(sensors)
+    normalized = {}
+    readings, reading_times, peaks, utilisation, margins = {}, {}, {}, {}, {}
+    by_type = {}
+    numeric = 0
+    named, keys_by_path = [], {}
+    for sensor in sensors:
+        name = _text(sensor.get("Name"))
+        key = _sensor_key("sensor", name, _member_id(sensor) or "?", name_counts)
+        if key in normalized:
+            raise CollectError(
+                "bmc_sensors: two sensors map to the key %s (e.g. a nameless sensor whose Id is "
+                "another's Name) — refused rather than merged into one row" % (key,)
+            )
+        named.append((name, key))
+        link = _sensors_path(sensor.get("@odata.id"))
+        if link:
+            keys_by_path[link] = key
+        health, state = _status(sensor)
+        reading_type = _text(sensor.get("ReadingType"))
+        units = _text(sensor.get("ReadingUnits"))
+        reading = _to_float(sensor.get("Reading"))
+        by_type[reading_type or "none"] = by_type.get(reading_type or "none", 0) + 1
+        row = {
+            "reading_type": reading_type,
+            "physical_context": _text(sensor.get("PhysicalContext")),
+            "physical_sub_context": _text(sensor.get("PhysicalSubContext")),
+            "state": state,
+            "health": health,
+            "reading_units": units,
+            "thresholds": _sensors_thresholds(sensor),
+            "reading": None,
+            "asserted": None,
+        }
+        if units is not None:
+            numeric += 1
+            readings[key] = reading
+            celsius = units in _SENSORS_CELSIUS or reading_type == "Temperature"
+            if celsius and _is_ambient(name):
+                row["reading"] = reading
+        elif _sensors_is_utilisation(name):
+            utilisation[key] = reading
+        elif _thermal_is_margin(name, reading):
+            margins[key] = reading
+        elif reading is not None:
+            row["asserted"] = reading != 0
+        reading_time = _text(sensor.get("ReadingTime"))
+        if reading_time is not None:
+            reading_times[key] = reading_time
+        peak = _to_float(sensor.get("PeakReading"))
+        if peak is not None:
+            peaks[key] = peak
+        normalized[key] = row
+    context = {
+        "counts": {
+            "total": len(sensors),
+            "numeric": numeric,
+            "discrete": len(sensors) - numeric,
+            "by_reading_type": dict(sorted(by_type.items())),
+        },
+        "readings": readings,
+        "reading_times": reading_times,
+        "peak_readings": peaks,
+        "utilisation_readings": utilisation,
+        "margin_readings": margins,
+        "security_sensors": _sensors_security(named) if lenovo else None,
+        "environment": _sensors_environment(environment, keys_by_path),
+        "temperature_summary_c": _thermal_summary(metrics),
+    }
+    return normalized, context
+
+
+def _sensors_require_whole(raw, meta, path):
+    """Refuse a Sensors answer that is not the whole collection: one page of it, or short.
+
+    ``raw`` and ``meta`` are _fetch_collection's; the payload that listed the
+    members is the $expand answer or the plain collection, whichever answered.
+    """
+    listing = raw.get(path + _EXPAND) if meta["strategy"] == "expand" else raw.get(path)
+    if not isinstance(listing, dict):
+        return
+    if _text(listing.get("Members@odata.nextLink")):
+        raise CollectError(
+            "%s answered one page of the collection (Members@odata.nextLink) — the sensor view "
+            "would be partial; refused, never recorded partially" % (path,)
+        )
+    count = listing.get("Members@odata.count")
+    listed = meta["members_total"]
+    if isinstance(count, int) and not isinstance(count, bool) and count > listed:
+        raise CollectError(
+            "%s counts %d members but listed %d — refused, never recorded partially"
+            % (path, count, listed)
+        )
+
+
+def _collect_sensors(ctx):
+    raw = {}
+    environment = metrics = metrics_path = None
+    with ctx.budget("bmc_sensors", _BUDGET_SENSORS) as budget:
+        targets = _targets(ctx)
+        system = _get(ctx, targets["system"])
+        chassis = _get(ctx, targets["chassis"])
+        if not isinstance(chassis, dict) or not chassis:
+            raise CollectError("%s answered without a resource body" % (targets["chassis"],))
+        # The two single reads first: the member walk below, pre-checked against
+        # what is left before its first GET, is then the last thing spent.
+        environment_path = _fenced_link(
+            _dig(chassis, "EnvironmentMetrics"), "bmc_sensors EnvironmentMetrics"
+        )
+        if environment_path is not None:
+            environment = _get_optional(ctx, environment_path)
+        subsystem_link = _fenced_link(
+            _dig(chassis, "ThermalSubsystem"), "bmc_sensors ThermalSubsystem"
+        )
+        if subsystem_link is not None:
+            # The DMTF-mandated child of the linked subsystem, spelled as bmc_thermal
+            # reads it: one cached answer serves both checks.
+            metrics_path = _sub(subsystem_link, "ThermalMetrics")
+            metrics = _get_optional(ctx, metrics_path)
+        sensors_link = _fenced_link(_dig(chassis, "Sensors"), "bmc_sensors Sensors")
+        path = sensors_link or _sub(targets["chassis"], "Sensors")
+        members, meta, sensors_raw = _fetch_collection(
+            ctx, path, "bmc_sensors", ok_404=True, budget=budget
+        )
+    host_power_state = _text(_dig(system, "PowerState"))
+    if members is None:
+        if sensors_link is not None:
+            raise CollectError("the Chassis links %s but it answered 404" % (path,))
+        raise SkipCheck("%s is not served and the Chassis links no Sensors collection" % (path,))
+    _sensors_require_whole(sensors_raw, meta, path)
+    if not members:
+        raise CollectError(
+            "%s answered with zero members (host PowerState %s) — a chassis always carries "
+            "sensors, so an empty collection is unmeasured (a BMC still enumerating them after "
+            "its own restart), never 'every sensor gone'; capture again" % (path, host_power_state)
+        )
+    lenovo = _is_lenovo(targets)
+    normalized, context = _normalize_sensors(members, environment, metrics, lenovo=lenovo)
+    context.update(
+        {
+            "host_power_state": host_power_state,
+            "sensors_source": path,
+            "sensors_collection": meta,
+            "environment_source": environment_path if environment is not None else None,
+            "temperature_summary_source": metrics_path if metrics is not None else None,
+            "security_sensors_note": None
+            if lenovo
+            else "no %s mapping for the security-relevant sensor names yet (only Lenovo is mapped)"
+            % (targets["vendor"] or "unknown-vendor",),
+        }
+    )
+    raw.update(sensors_raw)
+    if environment is not None:
+        raw[environment_path] = _curate(environment)
+    if metrics is not None:
+        raw[metrics_path] = _curate(metrics)
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -4280,5 +4593,27 @@ register(
         ),
         collector=_collect_chassis_location,
         tags=("platform", "identity", "location"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_sensors",
+        platform="bmc",
+        description=(
+            "Every chassis sensor (Sensors collection): reading type, context, state/health, "
+            "units, thresholds, discrete assertions and ambient-class readings."
+        ),
+        tier=1,
+        compare={"mode": "equality_set", "fields": {"reading": {"tolerance": {"abs": 8}}}},
+        miss_meaning=(
+            "A sensor degraded, appeared or vanished, a threshold was reconfigured, a discrete "
+            "sensor asserted or cleared, or the ambient reading moved more than 8 °C — on an "
+            "SE350 the Power Adapter, Chassis, Chassis Movement and Lockdown Mode sensors are the "
+            "only record of the external power adapters, chassis intrusion and movement, and the "
+            "lockdown state."
+        ),
+        collector=_collect_sensors,
+        tags=("platform", "environment", "security"),
     )
 )

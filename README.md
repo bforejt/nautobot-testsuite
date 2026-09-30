@@ -303,6 +303,7 @@ which vendor the BMC reports.
 | `bmc_storage` | bmc | 1 | Controllers (cache, RAID levels, Lenovo mode and battery), drives (health, SED status, link speed, block size, write cache, Lenovo status) and volumes (RAID, cache/strip/boot policies), plus drives only the Chassis lists (not-present when none enumerate) |
 | `bmc_manager_network` | bmc | 2 | BMC network, time and services: addressing, DNS (DMTF and Lenovo, DDNS), NTP and the Lenovo date/time service, DMTF and Lenovo protocols and open ports, KCS, and the host interface: its credential bootstrapping and the BMC's own USB-LAN address |
 | `bmc_chassis` | bmc | 1 | Chassis and system-board identity, LEDs as `led\|<Name>` rows (color, state), the indicator LED, the operator-maintained Location record and the intrusion sensor |
+| `bmc_sensors` | bmc | 1 | Every sensor of the Chassis Sensors collection (`sensor\|<Name>`): reading type verbatim, physical context, state/health, units and non-null thresholds, a discrete sensor's reading as an asserted flag (on an SE350 the only view of the external power adapters, chassis intrusion/movement and lockdown) and ambient-class readings within 8 °C; every other reading, `EnvironmentMetrics` and the `ThermalMetrics` summary in context (one `$expand` GET; a per-member walk the budget cannot fit is refused) |
 
 What this catalog captures per network layer, and the holes still open ranked
 by general value, is tracked in `docs/coverage.md` (the living coverage map).
