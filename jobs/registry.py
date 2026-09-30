@@ -1,4 +1,4 @@
-"""Check registry and test packages. Pure: stdlib only, no Nautobot.
+"""Check registry. Pure: stdlib only, no Nautobot.
 
 A check is a small declarative unit (ANTA-style): identity, platform, tier,
 compare config, a one-line *miss interpretation* rendered next to failures,
@@ -7,8 +7,9 @@ capture job) and return ``{"raw": <any>, "normalized": <dict>}``; they raise
 SkipCheck when the feature legitimately is not present, and CollectError when
 a required read failed — a failed read is never treated as emptiness.
 
-Selection is data, not code: PACKAGES maps a package name to check ids; the
-capture job filters the chosen package to the device's platform at run time.
+Selection: ``checks_for`` resolves a platform to its checks — every one by
+default, or only the ids ``parse_check_ids`` validated, which only the dev
+shakedown job takes. The capture job always runs every check.
 """
 
 from dataclasses import dataclass, field
@@ -59,11 +60,26 @@ def checks_for(platform, check_ids=None):
     return resolved
 
 
+def parse_check_ids(raw):
+    """None when blank; else the validated, de-duplicated id list. Unknown ids raise ValueError."""
+    ids = list(dict.fromkeys(token.strip() for token in str(raw or "").split(",") if token.strip()))
+    if not ids:
+        return None
+    unknown = sorted(set(ids) - set(CHECKS))
+    if unknown:
+        raise ValueError(
+            "Unknown check id(s): %s. Valid ids: %s"
+            % (", ".join(unknown), ", ".join(sorted(CHECKS)))
+        )
+    return ids
+
+
 # Capture-time subsetting (the old "test packages" concept) is retired by
 # doctrine: capture EVERYTHING the platform supports, always — a feature that
 # is not configured records loudly as "not-present", which is information,
 # not noise. Subsets happen at ANALYSIS time, in the engineer's test-plan
-# prompt. `override_checks` on the capture job remains as a development tool.
+# prompt. The dev shakedown job's `only_checks` is the one place ids narrow a
+# run, for bringing up a single collector.
 
 
 # --- per-check semantics (embedded into every snapshot for LLM/human readers) -

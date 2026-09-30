@@ -24,7 +24,8 @@ Two jobs, both under the **Test Suite** grouping:
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
   index locally.)*
 - **Test Suite Shakedown (dev)** — hidden development job: runs *every* registered
-  check for one device's platform in debug mode (and, when a BMC is modelled
+  check (or only the ids in its optional `only_checks` field) for one device's
+  platform in debug mode (and, when a BMC is modelled
   on the device, the `bmc` family through a second debug context) and
   attaches per-check verdicts (each naming its `target`)
   with advisories ("parsed but empty — leaf names likely differ on this
@@ -219,7 +220,7 @@ for iface in Interface.objects.filter(ip_addresses__isnull=False).distinct():
 
 The per-run `secrets_group` override applies to the host platforms only: a
 BMC always uses the group its interface's Relationship names. A dry run
-probes both planes, and `override_checks` filters both families. A Device
+probes both planes. A Device
 whose own platform names a BMC (`xcc`, `redfish`, `lenovo`) maps no platform:
 model the BMC as an interface on its host instead (the "cannot map platform"
 error says so).
@@ -383,7 +384,9 @@ per device automatically. Features that are not in use record loudly as
 firewall, or DHCP config vanishing from a switch, is exactly the kind of
 change worth seeing. Subsets happen at **analysis time**, in the engineer's
 test-plan prompt ("for this change, focus on the session matrix and routes").
-`override_checks` remains as a development tool for running a single check.
+The capture job has no check filter; the one place ids narrow a run is the
+hidden **Test Suite Shakedown (dev)** job's `only_checks` field, for running a
+single collector during development.
 
 ## Catalyst 9800 wireless controllers
 
@@ -513,6 +516,9 @@ the read-only grep guard and the SOAP operation guard.
 ### Bringing a collector up against a real device
 
 1. Run **Test Suite Shakedown (dev)** against one device of the platform.
+   Once one collector is under work, `only_checks` (comma-separated check
+   ids; the discovery probes still run, and the report records the filter)
+   re-runs just that one instead of the whole catalog.
 2. Read the advisories: `ok` needs nothing (a check whose healthy state is an
    empty view, such as `bmc_event_log` on a unit with nothing to report, reads
    "ok — empty is this check's healthy state"); "parsed but empty" means the trace
