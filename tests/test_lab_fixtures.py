@@ -1747,7 +1747,8 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_power_policy's 4: Controls, ScheduledPowerActions, Watchdogs and Jobs)
         # (+ bmc_network_adapters' 10: the collection, then Ports, NetworkPorts and
         # NetworkDeviceFunctions for each of three adapters)
-        self.assertLessEqual(len(ctx.gets), 67)
+        # (+ bmc_pcie_slots' 2: PCIeSlots and the Lenovo slot table)
+        self.assertLessEqual(len(ctx.gets), 69)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -2581,6 +2582,108 @@ class TestBmcLabNetworkAdapters(unittest.TestCase):
             },
             {"members"},
         )
+
+
+class TestBmcLabPcieSlots(unittest.TestCase):
+    """bmc_pcie_slots on the lab payloads: one DMTF slot and Lenovo's six-slot table."""
+
+    CH = "/redfish/v1/Chassis/1"
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    SLOTS = CH + "/PCIeSlots"
+    TABLE = CH + "/Oem/Lenovo/Slots"
+
+    def test_the_slot_and_the_slot_table(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_pcie_slots(ctx)
+        view, context = result["normalized"], result["context"]
+        # both tables are linked from the Chassis; the slot table answers one $expand GET
+        self.assertEqual(ctx.gets, self.RESOLVE + [self.CH, self.SLOTS, self.TABLE + _XCC_EXPAND])
+        # the one DMTF slot holds the slot-6 NIC; XCC 6.10 serves no type, generation or width
+        self.assertEqual(
+            view["slot|PCIe 6"],
+            {
+                "slot_type": None,
+                "pcie_type": None,
+                "lanes": None,
+                "state": "Enabled",
+                "health": "OK",
+                "hot_pluggable": False,
+                "location": "PCIe 6",
+                "linked_devices": ["slot_6"],
+            },
+        )
+        # five M.2 sockets and the x16, none hot-pluggable; the member Id is not the slot
+        # number (member 2 is 'Slot 5'), and every member is named 'LenovoSlot'
+        rows = {key: row for key, row in view.items() if key.startswith("lenovo_slot|")}
+        self.assertEqual(
+            {
+                key: (row["number"], row["connector_layout"], row["max_data_width"])
+                for key, row in rows.items()
+            },
+            {
+                "lenovo_slot|1": ("Slot 1", "M.2 Socket 2 (Mechanical Key B)", "2x or x2"),
+                "lenovo_slot|2": ("Slot 5", "M.2 Socket 3 (Mechanical Key M)", "4x or x4"),
+                "lenovo_slot|3": ("Slot 4", "M.2 Socket 3 (Mechanical Key M)", "4x or x4"),
+                "lenovo_slot|4": ("Slot 3", "M.2 Socket 3 (Mechanical Key M)", "4x or x4"),
+                "lenovo_slot|5": ("Slot 2", "M.2 Socket 3 (Mechanical Key M)", "4x or x4"),
+                "lenovo_slot|6": ("Slot 6", "PCI Express Gen 3 x16", "16x or x16"),
+            },
+        )
+        self.assertEqual({row["name"] for row in rows.values()}, {"LenovoSlot"})
+        self.assertEqual({row["supports_hot_plug"] for row in rows.values()}, {False})
+        self.assertEqual(len(view), 7)
+        self.assertEqual(
+            (context["slots_total"], context["slots_occupied"], context["lenovo_slots_total"]),
+            (1, 1, 6),
+        )
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["pcie_slots_source"], self.SLOTS)
+        table = context["lenovo_slots"]
+        self.assertEqual(
+            (table["resource"], table["strategy"], table["members"], table["note"]),
+            (self.TABLE, "expand", 6, None),
+        )
+        self.assertEqual(sorted(result["raw"]), sorted([self.SLOTS, self.TABLE + _XCC_EXPAND]))
+
+    def test_the_slot_links_the_device_bmc_inventory_keys(self):
+        ctx = _xcc_lab_ctx()
+        slots = bmc._collect_pcie_slots(ctx)["normalized"]
+        inventory = bmc._collect_inventory(ctx)["normalized"]
+        linked = [
+            device
+            for key, row in slots.items()
+            if key.startswith("slot|")
+            for device in row["linked_devices"]
+        ]
+        self.assertEqual(linked, ["slot_6"])
+        # the join: the device row exists and names the same slot label
+        self.assertEqual(inventory["pcie|slot_6"]["location"], "PCIe 6")
+
+    def test_the_walk_without_expand_fits_the_budget(self):
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_pcie_slots(ctx)
+        # resolution 5, the Chassis, PCIeSlots, the refused $expand, the table, 6 members
+        self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 1 + 1 + 6)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_PCIE_SLOTS)
+        self.assertEqual(result["context"]["lenovo_slots"]["strategy"], "members")
+        self.assertEqual(result["context"]["lenovo_slots"]["expand_refused"], "HTTP 501")
+        expanded = bmc._collect_pcie_slots(_xcc_lab_ctx())
+        self.assertEqual(result["normalized"], expanded["normalized"])
+
+    def test_an_emptied_table_is_refused_not_recorded_as_no_slots(self):
+        # Simulated on the real shapes (the lab host was up): a BMC whose host has not
+        # completed POST may serve the tables empty — unmeasured, never "every slot gone".
+        payloads = _xcc_lab_payloads()
+        payloads[self.SLOTS]["Slots"] = []
+        payloads[self.TABLE + _XCC_EXPAND]["Members"] = []
+        with self.assertRaises(_loader.registry.CollectError) as caught:
+            bmc._collect_pcie_slots(_FakeCtx(payloads))
+        message = str(caught.exception)
+        self.assertIn(
+            self.SLOTS + " (no Slots[] entry) and %s (no member)" % (self.TABLE,), message
+        )
+        self.assertIn("host PowerState On", message)
 
 
 if __name__ == "__main__":

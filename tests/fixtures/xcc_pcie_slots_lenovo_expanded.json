@@ -1,0 +1,42 @@
+{
+  "@odata.type": "#LenovoSlotCollection.LenovoSlotCollection",
+  "@odata.id": "/redfish/v1/Chassis/1/Slots",
+  "@odata.etag": "\"ls1\"",
+  "@odata.context": "/redfish/v1/$metadata#LenovoSlotCollection.LenovoSlotCollection",
+  "Name": "Lenovo Slot Collection",
+  "Members@odata.count": 3,
+  "Members": [
+    {
+      "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+      "@odata.id": "/redfish/v1/Chassis/1/Slots/1",
+      "@odata.etag": "\"ls1-1\"",
+      "Id": "1",
+      "Name": "LenovoSlot",
+      "Number": "Slot 1",
+      "ConnectorLayout": "PCI Express Gen 4 x16",
+      "MaxDataWidth": "16x or x16",
+      "SupportsHotPlug": false
+    },
+    {
+      "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+      "@odata.id": "/redfish/v1/Chassis/1/Slots/2",
+      "@odata.etag": "\"ls1-2\"",
+      "Id": "2",
+      "Name": "LenovoSlot",
+      "Number": "Slot 2",
+      "ConnectorLayout": "PCI Express Gen 3 x8",
+      "MaxDataWidth": "8x or x8",
+      "SupportsHotPlug": true
+    },
+    {
+      "@odata.type": "#LenovoSlot.v1_0_0.LenovoSlot",
+      "@odata.id": "/redfish/v1/Chassis/1/Slots/3",
+      "@odata.etag": "\"ls1-3\"",
+      "Id": "3",
+      "Name": "LenovoSlot",
+      "Number": "",
+      "ConnectorLayout": "M.2 Socket 3 (Mechanical Key M)",
+      "MaxDataWidth": "4x or x4"
+    }
+  ]
+}

@@ -604,7 +604,9 @@ collector through a real `CollectorContext` (Appendix C). What remains:
    the dev stack 25 minutes apart diffed to nothing under
    `tools/diff_snapshots.py` on all eleven checks that ran (`bmc_security`
    not-present on both sides); each widening and new check is re-measured
-   the same way on the lab unit before it is reported done.
+   the same way on the lab unit before it is reported done. For PR B's
+   widened twelve: three real captures at 04:44, 04:52 and 05:26 UTC — every
+   pair diffs to nothing on all twelve checks.
 
 ## 8. Tests
 
@@ -710,9 +712,11 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    **State (2026-09-30):** ten builders, one per check, each in its own
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
-   `bmc_sensors`, `bmc_boot`, `bmc_power_policy` and
-   `bmc_network_adapters` landed. What the builders found wrong in §5b is
-   §10a item 13.
+   `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`
+   and `bmc_pcie_slots` landed. The first four ran live through the dev
+   stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
+   two captures five minutes apart diff to nothing. What the builders found
+   wrong in §5b is §10a item 13.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
    discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
@@ -915,6 +919,14 @@ Recorded as they were found, each with how it was resolved.
       multiplier in a decimal unit): kept as served, in context. The iSCSI
       boot CHAP secrets and user names were not in the family scrubber (nor
       the sanitizer's rule): added to both.
+    - `bmc_pcie_slots`: `PCIeSlots` is one resource whose `Slots[]` array
+      lists the slots, never a collection; XCC 6.10's single slot serves no
+      `SlotType`, `PCIeType` or `Lanes` (generation and width appear only in
+      Lenovo's SMBIOS-style strings, kept verbatim), so those read null. A
+      Lenovo slot member's `Id` is not the slot number and its `Name` is the
+      constant `LenovoSlot`; the rows are keyed by `Id`. The hand-built
+      Chassis's Lenovo slot link was a pre-lab guess of the path; the check
+      follows whatever the Chassis links, and the lab tests pin the real one.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

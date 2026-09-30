@@ -5391,6 +5391,207 @@ def _collect_network_adapters(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_pcie_slots ----------------------------------------------------------
+# GETs, the lab SE350 (one DMTF slot, six Lenovo slots): the Chassis (the read
+# bmc_chassis makes, cached per run), its PCIeSlots resource (ONE resource whose
+# Slots[] array lists every slot — never a collection) and Lenovo's slot table
+# (Chassis Oem.Lenovo.Slots, one $expand GET): 3 beyond the id resolution. The
+# per-member fallback, $expand advertised but refused or ignored: the Chassis 1
+# + PCIeSlots 1 + the refused attempt 1 + the collection 1 + 6 members = 10 on
+# the lab layout. The slot table is this check's only collection, so a refusal
+# is paid once by construction. _BUDGET_PCIE_SLOTS = 24 + _TARGET_GETS walks a
+# table of up to 20 slots member by member; a bigger one without $expand is
+# refused loudly with its member count before the first member is read.
+_BUDGET_PCIE_SLOTS = 24 + _TARGET_GETS
+
+
+def _pcie_slots_label(slot):
+    """A DMTF slot's Location.PartLocation.ServiceLabel; '' and null read None."""
+    return _text(_dig(slot, "Location", "PartLocation", "ServiceLabel"))
+
+
+def _pcie_slots_keys(served):
+    """'slot|<ServiceLabel, else the 0-based position>' per (position, slot) pair.
+
+    '|<position>' is appended wherever that name repeats — two slots sharing a
+    label, or a label that spells another slot's bare position — so no row is
+    ever overwritten.
+    """
+    names = [_pcie_slots_label(slot) or str(index) for index, slot in served]
+    counts = {}
+    for name in names:
+        counts[name] = counts.get(name, 0) + 1
+    return [
+        "slot|%s|%d" % (name, index) if counts[name] > 1 else "slot|%s" % (name,)
+        for name, (index, _slot) in zip(names, served)
+    ]
+
+
+def _pcie_slots_devices(slot):
+    """Sorted ids of the PCIe devices a slot links (fenced); None when Links.PCIeDevice is unserved.
+
+    The ids are the devices' own (the leaf of each link), the ids bmc_inventory
+    keys as 'pcie|<Id>'.
+    """
+    links = _dig(slot, "Links", "PCIeDevice")
+    if not isinstance(links, list):
+        return None
+    ids = []
+    for item in _dicts(links):
+        link = _fenced_link(item, "bmc_pcie_slots Links.PCIeDevice")
+        if link is not None:
+            ids.append(_leaf_id(link))
+    return sorted(ids)
+
+
+def _pcie_slots_row(slot):
+    """One 'slot|' row: the DMTF slot's type, generation, width, state, health and devices."""
+    health, state = _status(slot)
+    return {
+        "slot_type": _text(slot.get("SlotType")),
+        "pcie_type": _text(slot.get("PCIeType")),
+        "lanes": _to_int(slot.get("Lanes")),
+        "state": state,
+        "health": health,
+        "hot_pluggable": _to_bool(slot.get("HotPluggable")),
+        "location": _pcie_slots_label(slot),
+        "linked_devices": _pcie_slots_devices(slot),
+    }
+
+
+def _pcie_slots_lenovo_row(member):
+    """One 'lenovo_slot|<Id>' row: Lenovo's description of a connector, strings verbatim."""
+    return {
+        "name": _text(member.get("Name")),
+        "number": _text(member.get("Number")),
+        "connector_layout": _text(member.get("ConnectorLayout")),
+        "max_data_width": _text(member.get("MaxDataWidth")),
+        "supports_hot_plug": _to_bool(member.get("SupportsHotPlug")),
+    }
+
+
+def _normalize_pcie_slots(pcie_slots, lenovo_slots=None):
+    """(normalized, context) from the Chassis PCIeSlots resource and Lenovo's slot table.
+
+    ``pcie_slots`` is the PCIeSlots resource (None when not served): every entry
+    of its Slots[] array is a 'slot|' row (_pcie_slots_keys; the position is the
+    one Slots[] serves) -> slot_type, pcie_type, lanes, state, health,
+    hot_pluggable, location (the ServiceLabel) and linked_devices.
+    ``lenovo_slots`` is the members of Chassis.Oem.Lenovo.Slots (None when not
+    read): 'lenovo_slot|<Id>' -> name, number, connector_layout, max_data_width,
+    supports_hot_plug. Every field is always present (None when unserved).
+    context: slots_total, slots_occupied (state Enabled with a linked device)
+    and lenovo_slots_total, each None when its source was not read.
+    """
+    normalized = {}
+    served = [
+        (index, slot)
+        for index, slot in enumerate(_aslist(_dig(pcie_slots, "Slots")))
+        if isinstance(slot, dict)
+    ]
+    occupied = 0
+    for key, (_index, slot) in zip(_pcie_slots_keys(served), served):
+        row = _pcie_slots_row(slot)
+        normalized[key] = row
+        if row["state"] == "Enabled" and row["linked_devices"]:
+            occupied += 1
+    for member in _dicts(lenovo_slots):
+        normalized["lenovo_slot|%s" % (_member_id(member) or "?",)] = _pcie_slots_lenovo_row(member)
+    context = {
+        "slots_total": len(served) if pcie_slots is not None else None,
+        "slots_occupied": occupied if pcie_slots is not None else None,
+        "lenovo_slots_total": len(_dicts(lenovo_slots)) if lenovo_slots is not None else None,
+    }
+    return normalized, context
+
+
+def _collect_pcie_slots(ctx):
+    raw = {}
+    lenovo = None
+    lenovo_meta = {"resource": None, "strategy": None, "members": None, "note": None}
+    with ctx.budget("bmc_pcie_slots", _BUDGET_PCIE_SLOTS) as budget:
+        targets = _targets(ctx)
+        system = _get(ctx, targets["system"])
+        chassis = _get(ctx, targets["chassis"])
+        if not isinstance(chassis, dict) or not chassis:
+            raise CollectError("%s answered without a resource body" % (targets["chassis"],))
+        # DMTF, every vendor: the link the Chassis serves, else the schema's own
+        # child path (a firmware serving the resource without linking it).
+        link = _fenced_link(_dig(chassis, "PCIeSlots"), "bmc_pcie_slots PCIeSlots")
+        path = link or _sub(targets["chassis"], "PCIeSlots")
+        slots = _get_optional(ctx, path)
+        if _is_lenovo(targets):
+            # Lenovo's slot table, only through the link the Chassis serves.
+            lenovo_link = _fenced_link(
+                _dig(chassis, "Oem", "Lenovo", "Slots"), "bmc_pcie_slots Oem.Lenovo.Slots"
+            )
+            if lenovo_link is None:
+                lenovo_meta["note"] = "the Chassis links no Oem.Lenovo.Slots collection"
+            else:
+                lenovo, meta, lenovo_raw = _fetch_collection(
+                    ctx,
+                    lenovo_link,
+                    "bmc_pcie_slots Oem.Lenovo.Slots",
+                    ok_404=True,
+                    budget=budget,
+                )
+                raw.update(lenovo_raw)
+                lenovo_meta = dict(
+                    meta,
+                    resource=lenovo_link,
+                    members=len(lenovo) if lenovo is not None else None,
+                    note=None,
+                )
+        else:
+            lenovo_meta["note"] = "no %s mapping for an OEM slot table yet" % (
+                targets["vendor"] or "unknown-vendor",
+            )
+    power_state = _text(_dig(system, "PowerState"))
+    if slots is not None and (not isinstance(slots, dict) or not slots):
+        raise CollectError("%s answered without a resource body" % (path,))
+    for linked, served in ((link, slots), (lenovo_meta["resource"], lenovo)):
+        if linked is not None and served is None:
+            # A linked table that is not there is a failed read, never "no slots".
+            raise CollectError(
+                "the Chassis links %s but it answered 404 (host PowerState %s)"
+                % (linked, power_state)
+            )
+    if slots is None and lenovo is None:
+        if not _is_lenovo(targets):
+            raise _no_mapping(
+                targets,
+                "the PCIe slot table (the Chassis serves no DMTF PCIeSlots at %s)" % (path,),
+            )
+        raise SkipCheck(
+            "%s is not served and the Chassis links no Oem.Lenovo.Slots collection" % (path,)
+        )
+    # Slot occupancy is populated at POST, like the PCIe inventory: an empty table
+    # is unmeasured — host off, still in POST, or never enumerated — and a diff
+    # cannot tell that from "every slot gone", so the read is refused.
+    unmeasured = []
+    if slots is not None and not _dicts(slots.get("Slots")):
+        unmeasured.append("%s (no Slots[] entry)" % (path,))
+    if lenovo is not None and not lenovo:
+        unmeasured.append("%s (no member)" % (lenovo_meta["resource"],))
+    if unmeasured:
+        raise CollectError(
+            "%s answered with no slot (host PowerState %s) — slot occupancy is populated at "
+            "POST and an empty slot table is unmeasured, never 'every slot gone'; capture "
+            "again after the host completes POST" % (" and ".join(unmeasured), power_state)
+        )
+    if slots is not None:
+        raw[path] = _curate(slots)
+    normalized, context = _normalize_pcie_slots(slots, lenovo)
+    context.update(
+        {
+            "host_power_state": power_state,
+            "pcie_slots_source": path if slots is not None else None,
+            "lenovo_slots": lenovo_meta,
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -6032,5 +6233,27 @@ register(
         ),
         collector=_collect_network_adapters,
         tags=("platform", "interfaces"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_pcie_slots",
+        platform="bmc",
+        description=(
+            "PCIe slots: type, generation, lanes, state and the devices each holds (DMTF "
+            "PCIeSlots), and Lenovo's slot table (connector layout, data width, hot-plug)."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A slot changed — a card unseated, failed or moved reads as its slot leaving "
+            "Enabled or its linked devices changing, even where the card's own row simply "
+            "vanishes from bmc_inventory; a slot added or gone, or a changed type, width or "
+            "hot-plug capability, is a riser, system-board or firmware change. Compare "
+            "captures taken in the same host power state."
+        ),
+        collector=_collect_pcie_slots,
+        tags=("platform", "inventory"),
     )
 )

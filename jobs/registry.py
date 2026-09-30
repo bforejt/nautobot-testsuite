@@ -1610,6 +1610,38 @@ SEMANTICS = {
         "boot credentials (CHAP user names and secrets) are never keyed and are scrubbed from "
         "raw. " + _BMC_RESOLUTION
     ),
+    "bmc_pcie_slots": (
+        "Keys 'slot|<ServiceLabel>', one per entry of the Slots[] array of the Chassis "
+        "PCIeSlots resource (DMTF, read for every vendor), named by its "
+        "Location.PartLocation.ServiceLabel ('PCIe 6' on the lab SE350), else 'slot|<position>' "
+        "(its 0-based position in Slots[]), with '|<position>' appended wherever that name "
+        "repeats -> slot_type (SlotType), pcie_type (PCIeType, the PCIe generation the slot "
+        "supports), lanes, state (Status.State verbatim: Enabled for a slot holding a card, "
+        "Absent for an empty slot the firmware lists), health, hot_pluggable, location (the "
+        "ServiceLabel) and linked_devices (the sorted ids of the PCIe devices the slot links — "
+        "the ids bmc_inventory keys as 'pcie|<Id>'; null where the slot serves no such link); "
+        "every field is null where not served (XCC 6.10 serves no SlotType, PCIeType or "
+        "Lanes). A slot is a fixture of the board, so an unseated card or one that no longer "
+        "enumerates reads HERE as one changed row — its slot turning Absent (or leaving "
+        "Enabled) with linked_devices emptying — even where the card's own row simply vanishes "
+        "from bmc_inventory. 'lenovo_slot|<Id>' (Lenovo's slot table, Chassis Oem.Lenovo.Slots: "
+        "the board's connectors as the firmware describes them — five M.2 sockets and the PCIe "
+        "x16 on the lab SE350) -> name, number (the board's own slot designation, e.g. 'Slot "
+        "5' on member 2 — never the member Id), connector_layout and max_data_width (verbatim, "
+        "e.g. 'PCI Express Gen 3 x16', '16x or x16') and supports_hot_plug; these rows describe "
+        "connectors, not what is fitted in them. Slot occupancy is populated at POST: a "
+        "PCIeSlots resource listing no slot, or a Lenovo slot table with no member, is "
+        "unmeasured and the check refuses (failed, never zero rows), naming the table and the "
+        "host power state; a table the Chassis links that answers 404 is a failed read too. "
+        "context: slots_total, slots_occupied (slots whose state is Enabled with at least one "
+        "linked device), lenovo_slots_total, host_power_state (compare captures taken in the "
+        "same host power state), pcie_slots_source (the PCIeSlots path read — the Chassis's "
+        "link, else the schema's own child path; null when not served) and lenovo_slots (how "
+        "the slot table was read — one $expand GET or a member walk — or why it was not). "
+        "Not-present when neither table is served; on a vendor this family has no mapping for "
+        "(Lenovo only) whose Chassis serves no PCIeSlots, not-present names the vendor. "
+        + _BMC_RESOLUTION
+    ),
 }
 
 

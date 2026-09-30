@@ -178,6 +178,8 @@ def _base_payloads():
         CH + "/PCIeDevices/ob_1/PCIeFunctions" + EXPAND: _fx(
             "xcc_inventory_pciefunctions_expanded.json"
         ),
+        # bmc_pcie_slots: the Lenovo slot table the hand-built Chassis links (Oem.Lenovo.Slots)
+        CH + "/Slots" + EXPAND: _fx("xcc_pcie_slots_lenovo_expanded.json"),
         SYS + "/EthernetInterfaces" + EXPAND: _fx("xcc_host_nics_expanded.json"),
         "/redfish/v1/UpdateService/FirmwareInventory" + EXPAND: _fx("xcc_firmware_expanded.json"),
         SYS + "/LogServices": _fx("xcc_log_services.json"),
@@ -224,6 +226,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_boot",
         "bmc_power_policy",
         "bmc_network_adapters",
+        "bmc_pcie_slots",
     }
 
     def test_all_registered_once(self):
@@ -3731,7 +3734,8 @@ class TestWholeFamily(unittest.TestCase):
         self.assertEqual(ctx.gets.count("/redfish/v1/Systems"), 1)
         # + bmc_sensors' two 404s (the base set serves no Sensors collection)
         # + bmc_network_adapters' 6 (its hand-built adapter tree)
-        self.assertLessEqual(len(ctx.gets), 38)
+        # + bmc_pcie_slots' 2 (a PCIeSlots probe the base set answers 404, the Lenovo table)
+        self.assertLessEqual(len(ctx.gets), 40)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3748,7 +3752,8 @@ class TestWholeFamily(unittest.TestCase):
         # PR B's widened family, every $expand refused: measured, kept tight on purpose
         # (+ bmc_sensors' two 404s: the base set serves no Sensors collection)
         # (+ bmc_network_adapters' 17: its hand-built adapter tree walked)
-        self.assertLessEqual(len(ctx.gets), 84)
+        # (+ bmc_pcie_slots' 6: the PCIeSlots probe, then the Lenovo table walked)
+        self.assertLessEqual(len(ctx.gets), 90)
 
 
 class TestResolution(unittest.TestCase):
@@ -6378,6 +6383,344 @@ class TestNetworkAdapters(unittest.TestCase):
             self.assertIn(phrase, text)
         self.assertLessEqual(
             checks._BUDGET_NETWORK_ADAPTERS, _loader.constants.REDFISH_MAX_CHECK_BUDGET
+        )
+
+
+class TestPcieSlots(unittest.TestCase):
+    """bmc_pcie_slots: the DMTF PCIeSlots rows and Lenovo's slot table.
+
+    xcc_pcie_slots_mixed.json (DMTF PCIeSlots) and xcc_pcie_slots_lenovo_expanded.json
+    (LenovoSlot members) are HAND-BUILT from the schema vocabulary: the lab unit has one
+    labelled, occupied slot and serves no SlotType/PCIeType/Lanes, so empty, unlabelled,
+    repeated and bifurcated slots are invented here. The lab shapes are pinned in
+    test_lab_fixtures.TestBmcLabPcieSlots.
+    """
+
+    SLOTS = CH + "/PCIeSlots"
+    LENOVO = CH + "/Slots"  # where the hand-built Chassis links Oem.Lenovo.Slots
+    SLOT_FIELDS = {
+        "slot_type",
+        "pcie_type",
+        "lanes",
+        "state",
+        "health",
+        "hot_pluggable",
+        "location",
+        "linked_devices",
+    }
+    LENOVO_FIELDS = {"name", "number", "connector_layout", "max_data_width", "supports_hot_plug"}
+
+    def _payloads(self, expand=True, linked=True):
+        payloads = _base_payloads()
+        if linked:
+            payloads[CH]["PCIeSlots"] = {"@odata.id": self.SLOTS}
+        payloads[self.SLOTS] = _fx("xcc_pcie_slots_mixed.json")
+        return payloads if expand else _without_expand(payloads)
+
+    def _big_table(self, count):
+        """No $expand, an unlinked System (the resolution's full five GETs), ``count`` slots."""
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        members = []
+        for number in range(1, count + 1):
+            link = self.LENOVO + "/%d" % (number,)
+            members.append({"@odata.id": link})
+            payloads[link] = {
+                "@odata.id": link,
+                "Id": str(number),
+                "Name": "LenovoSlot",
+                "Number": "Slot %d" % (number,),
+                "ConnectorLayout": "PCI Express Gen 3 x8",
+                "MaxDataWidth": "8x or x8",
+                "SupportsHotPlug": False,
+            }
+        payloads[self.LENOVO] = {
+            "@odata.id": self.LENOVO,
+            "Members": members,
+            "Members@odata.count": count,
+        }
+        return payloads
+
+    def test_registered_tier_1_equality_set_never_empty_when_ok(self):
+        check = registry.CHECKS["bmc_pcie_slots"]
+        self.assertEqual((check.platform, check.tier), ("bmc", 1))
+        self.assertEqual(check.compare, {"mode": "equality_set"})
+        # an ok view always holds rows: an empty slot table is refused, never recorded
+        self.assertNotIn(registry.EMPTY_OK_TAG, check.tags)
+        semantics = registry.SEMANTICS["bmc_pcie_slots"]
+        self.assertIn("unseated card", semantics)
+        self.assertIn("vanishes from bmc_inventory", semantics)
+        self.assertTrue(semantics.endswith(registry._BMC_RESOLUTION))
+        self.assertLessEqual(checks._BUDGET_PCIE_SLOTS, _loader.constants.REDFISH_MAX_CHECK_BUDGET)
+
+    def test_rows_keyed_by_label_else_position_every_field_present(self):
+        view, context = checks._normalize_pcie_slots(_fx("xcc_pcie_slots_mixed.json"))
+        # 'Riser 1' labels two slots: the position tells them apart; '' is no label
+        self.assertEqual(
+            sorted(view),
+            ["slot|2", "slot|PCIe 1", "slot|PCIe 2", "slot|Riser 1|3", "slot|Riser 1|4"],
+        )
+        self.assertEqual(
+            view["slot|PCIe 1"],
+            {
+                "slot_type": "FullLength",
+                "pcie_type": "Gen4",
+                "lanes": 16,
+                "state": "Enabled",
+                "health": "OK",
+                "hot_pluggable": False,
+                "location": "PCIe 1",
+                "linked_devices": ["slot_1"],
+            },
+        )
+        # an empty slot the firmware lists: Absent, no device, no health — still a row
+        empty = view["slot|PCIe 2"]
+        self.assertEqual(
+            (empty["state"], empty["health"], empty["linked_devices"], empty["hot_pluggable"]),
+            ("Absent", None, [], True),
+        )
+        # no link list served is null, never an empty list; no label is a null location
+        self.assertIsNone(view["slot|2"]["linked_devices"])
+        self.assertIsNone(view["slot|2"]["location"])
+        self.assertIsNone(view["slot|2"]["hot_pluggable"])
+        # a bifurcated riser slot holds two devices, sorted
+        self.assertEqual(view["slot|Riser 1|3"]["linked_devices"], ["riser_1a", "riser_1b"])
+        bare = view["slot|Riser 1|4"]
+        self.assertEqual((bare["state"], bare["location"]), ("Absent", "Riser 1"))
+        for field in ("slot_type", "pcie_type", "lanes", "health", "hot_pluggable"):
+            self.assertIsNone(bare[field], field)
+        for key, row in view.items():
+            self.assertEqual(set(row), self.SLOT_FIELDS, key)
+            self.assertNotIn("", row.values(), key)
+        # occupied: Enabled AND a linked device ('slot|2' is Enabled without a link)
+        self.assertEqual(
+            context, {"slots_total": 5, "slots_occupied": 2, "lenovo_slots_total": None}
+        )
+
+    def test_a_label_spelling_another_slots_position_never_overwrites_it(self):
+        view, _context = checks._normalize_pcie_slots(
+            {
+                "Slots": [
+                    {"Location": {"PartLocation": {"ServiceLabel": "1"}}},
+                    {"Status": {"State": "Absent"}},
+                    None,  # not a slot: skipped, the positions stay the served ones
+                    {"Location": {"PartLocation": {"ServiceLabel": "PCIe 3"}}},
+                ]
+            }
+        )
+        self.assertEqual(sorted(view), ["slot|1|0", "slot|1|1", "slot|PCIe 3"])
+
+    def test_lenovo_rows_every_field_verbatim(self):
+        members = _fx("xcc_pcie_slots_lenovo_expanded.json")["Members"]
+        view, context = checks._normalize_pcie_slots(None, members)
+        self.assertEqual(sorted(view), ["lenovo_slot|1", "lenovo_slot|2", "lenovo_slot|3"])
+        self.assertEqual(
+            view["lenovo_slot|2"],
+            {
+                "name": "LenovoSlot",
+                "number": "Slot 2",
+                "connector_layout": "PCI Express Gen 3 x8",
+                "max_data_width": "8x or x8",
+                "supports_hot_plug": True,
+            },
+        )
+        self.assertIsNone(view["lenovo_slot|3"]["number"])  # '' reads None
+        self.assertIsNone(view["lenovo_slot|3"]["supports_hot_plug"])  # not served
+        for key, row in view.items():
+            self.assertEqual(set(row), self.LENOVO_FIELDS, key)
+        self.assertEqual(
+            context, {"slots_total": None, "slots_occupied": None, "lenovo_slots_total": 3}
+        )
+
+    def test_collector_two_gets_beyond_the_chassis(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_pcie_slots(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.SLOTS, self.LENOVO + EXPAND])
+        self.assertEqual(ctx.budgets, [("bmc_pcie_slots", checks._BUDGET_PCIE_SLOTS)])
+        self.assertEqual(len([key for key in view if key.startswith("slot|")]), 5)
+        self.assertEqual(len([key for key in view if key.startswith("lenovo_slot|")]), 3)
+        self.assertEqual(
+            (context["slots_total"], context["slots_occupied"], context["lenovo_slots_total"]),
+            (5, 2, 3),
+        )
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["pcie_slots_source"], self.SLOTS)
+        lenovo = context["lenovo_slots"]
+        self.assertEqual(
+            (lenovo["resource"], lenovo["strategy"], lenovo["members"], lenovo["note"]),
+            (self.LENOVO, "expand", 3, None),
+        )
+        self.assertEqual(context["resolution"]["chassis"], CH)
+        # raw: the two tables, keyed by the request sent, curated
+        self.assertEqual(sorted(result["raw"]), [self.SLOTS, self.LENOVO + EXPAND])
+        self.assertNotIn("@odata.etag", result["raw"][self.SLOTS])
+        self.assertNotIn("@odata.etag", result["raw"][self.LENOVO + EXPAND]["Members"][0])
+        self.assertEqual({name for _path, name in ctx.redacted}, {"_scrub_payload"})
+
+    def test_an_unlinked_pcie_slots_is_read_at_the_schema_path_or_absent(self):
+        ctx = _FakeCtx(self._payloads(linked=False))
+        result = checks._collect_pcie_slots(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.SLOTS, self.LENOVO + EXPAND])
+        self.assertEqual(result["context"]["pcie_slots_source"], self.SLOTS)
+        payloads = self._payloads(linked=False)
+        del payloads[self.SLOTS]
+        result = checks._collect_pcie_slots(_FakeCtx(payloads))
+        context = result["context"]
+        self.assertIsNone(context["pcie_slots_source"])
+        self.assertEqual((context["slots_total"], context["slots_occupied"]), (None, None))
+        self.assertEqual(
+            sorted(result["normalized"]), ["lenovo_slot|1", "lenovo_slot|2", "lenovo_slot|3"]
+        )
+
+    def test_the_table_is_walked_when_expand_is_not_honoured(self):
+        ctx = _FakeCtx(self._payloads(expand=False))
+        result = checks._collect_pcie_slots(ctx)
+        members = [self.LENOVO + "/%d" % (number,) for number in (1, 2, 3)]
+        self.assertEqual(
+            ctx.gets, RESOLVE + [CH, self.SLOTS, self.LENOVO + EXPAND, self.LENOVO] + members
+        )
+        self.assertEqual(result["context"]["lenovo_slots"]["strategy"], "members")
+        expanded = checks._collect_pcie_slots(_FakeCtx(self._payloads()))
+        self.assertEqual(result["normalized"], expanded["normalized"])
+
+    def test_twenty_slots_walked_fit_the_budget_and_one_more_is_refused_whole(self):
+        ctx = _FakeCtx(self._big_table(20))
+        result = checks._collect_pcie_slots(ctx)
+        self.assertEqual(result["context"]["lenovo_slots_total"], 20)
+        # resolution 5, the Chassis, PCIeSlots, the $expand attempt, the table, 20 members
+        self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 1 + 1 + 20)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_PCIE_SLOTS)
+        ctx = _FakeCtx(self._big_table(21))
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(ctx)
+        self.assertIn("21 members", str(caught.exception))
+        self.assertEqual(ctx.gets[-1], self.LENOVO)  # no member was fetched
+
+    def test_an_empty_table_is_unmeasured_naming_it_and_the_power_state(self):
+        payloads = self._payloads()
+        payloads[self.SLOTS]["Slots"] = []
+        payloads[SYS]["PowerState"] = "Off"
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        message = str(caught.exception)
+        self.assertIn(self.SLOTS + " (no Slots[] entry)", message)
+        self.assertIn("host PowerState Off", message)
+        self.assertIn("unmeasured", message)
+        # host On changes nothing, and the Lenovo table is named when it is empty too
+        payloads = self._payloads()
+        payloads[self.LENOVO + EXPAND]["Members"] = []
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        self.assertIn(self.LENOVO + " (no member)", str(caught.exception))
+        self.assertIn("host PowerState On", str(caught.exception))
+        del payloads[self.SLOTS]["Slots"]  # a body without the array is no slot either
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        self.assertIn(
+            "(no Slots[] entry) and %s (no member)" % (self.LENOVO,), str(caught.exception)
+        )
+
+    def test_a_linked_table_that_is_not_there_is_a_failed_read(self):
+        payloads = self._payloads()
+        del payloads[self.SLOTS]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        self.assertIn("links %s but it answered 404" % (self.SLOTS,), str(caught.exception))
+        payloads = self._payloads()
+        del payloads[self.LENOVO + EXPAND], payloads[self.LENOVO]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        self.assertIn("links %s but it answered 404" % (self.LENOVO,), str(caught.exception))
+        payloads = self._payloads()
+        payloads[self.SLOTS] = {}
+        with self.assertRaises(checks.CollectError):
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        # any other HTTP error is the transport's failed read, never absence
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_pcie_slots(_FakeCtx(self._payloads(), errors={self.SLOTS: 500}))
+
+    def test_not_present_when_neither_table_is_served(self):
+        payloads = _base_payloads()  # no PCIeSlots link, nothing at the schema path
+        del payloads[CH]["Oem"]["Lenovo"]["Slots"]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_pcie_slots(ctx)
+        self.assertIn("links no Oem.Lenovo.Slots", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.SLOTS])
+
+    def test_other_vendors_read_the_dmtf_slots_only(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_pcie_slots(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [CH, self.SLOTS])
+        self.assertEqual(len(result["normalized"]), 5)  # the DMTF rows, every vendor
+        self.assertFalse([key for key in result["normalized"] if key.startswith("lenovo_slot|")])
+        self.assertIn("no Contoso mapping", result["context"]["lenovo_slots"]["note"])
+        self.assertIsNone(result["context"]["lenovo_slots_total"])
+        # nothing DMTF to read: not-present, naming the vendor
+        del payloads[self.SLOTS], payloads[CH]["PCIeSlots"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_pcie_slots(_FakeCtx(payloads))
+        self.assertIn("no Contoso mapping for the PCIe slot table", str(caught.exception))
+
+    def test_the_slots_hang_off_the_resolved_chassis(self):
+        dell_chassis = "/redfish/v1/Chassis/System.Embedded.1"
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads[SYS]["Links"]["Chassis"] = [{"@odata.id": dell_chassis}]
+        payloads[dell_chassis] = dict(
+            copy.deepcopy(payloads[CH]),
+            PCIeSlots={"@odata.id": dell_chassis + "/PCIeSlots"},
+        )
+        payloads[dell_chassis + "/PCIeSlots"] = payloads.pop(self.SLOTS)
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_pcie_slots(ctx)
+        self.assertEqual(ctx.gets, RESOLVE + [dell_chassis, dell_chassis + "/PCIeSlots"])
+        self.assertEqual(result["context"]["resolution"]["chassis"], dell_chassis)
+        self.assertEqual(len(result["normalized"]), 5)
+
+    def test_links_into_actions_are_refused_before_any_is_sent(self):
+        def pcie_slots(payloads):
+            payloads[CH]["PCIeSlots"] = {"@odata.id": CH + "/Actions/Oem/PCIeSlots"}
+
+        def slot_table(payloads):
+            payloads[CH]["Oem"]["Lenovo"]["Slots"] = {"@odata.id": CH + "/Actions/Oem/Slots"}
+
+        def device(payloads):
+            links = payloads[self.SLOTS]["Slots"][0]["Links"]["PCIeDevice"]
+            links.append({"@odata.id": CH + "/PCIeDevices/slot_1/Actions/x"})
+
+        for mutate in (pcie_slots, slot_table, device):
+            payloads = self._payloads()
+            mutate(payloads)
+            ctx = _FakeCtx(payloads)
+            with self.assertRaises(checks.CollectError, msg=mutate.__name__):
+                checks._collect_pcie_slots(ctx)
+            self.assertFalse([path for path in ctx.gets if "Actions" in path], mutate.__name__)
+
+    def test_an_unseated_card_is_one_changed_row(self):
+        compare = registry.CHECKS["bmc_pcie_slots"].compare
+        pre = checks._collect_pcie_slots(_FakeCtx(self._payloads()))["normalized"]
+        again = checks._collect_pcie_slots(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, again, compare)["result"], "pass")
+        payloads = self._payloads()
+        slot = payloads[self.SLOTS]["Slots"][0]
+        slot["Status"] = {"State": "Absent"}
+        slot["Links"] = {"PCIeDevice@odata.count": 0, "PCIeDevice": []}
+        post = checks._collect_pcie_slots(_FakeCtx(payloads))["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual((diff["added"], diff["removed"]), ([], []))
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [
+                ("slot|PCIe 1", "health", "OK", None),
+                ("slot|PCIe 1", "linked_devices", ["slot_1"], []),
+                ("slot|PCIe 1", "state", "Enabled", "Absent"),
+            ],
         )
 
 
