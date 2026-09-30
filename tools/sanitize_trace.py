@@ -244,6 +244,8 @@ SECRET_NAMES = frozenset(
         "OAuthServiceSigningKeys",
         "CHAPSecret",
         "MutualCHAPSecret",
+        "HttpHeaders",
+        "JsonBody",
     )
 )
 PERSON_KEYS = frozenset(

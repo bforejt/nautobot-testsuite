@@ -144,6 +144,12 @@ _SECRET_NAMES = frozenset(
         # NetworkDeviceFunction.iSCSIBoot: the CHAP secrets an adapter boots with
         "CHAPSecret",
         "MutualCHAPSecret",
+        # A Task's or Job's Payload: the request it will send — its HTTP headers
+        # (an Authorization header among them, possibly) and JSON body are free
+        # text no exact-name rule can see into, so both go whole (emptiness and
+        # element counts kept); the operation and the target URI stay.
+        "HttpHeaders",
+        "JsonBody",
     )
 )
 # Leaves that name a person's account outside the local-accounts collection
@@ -339,6 +345,27 @@ def _redact_log_page(page):
     if isinstance(page, dict) and isinstance(page.get("Members"), list):
         page["Members"] = [_redact_log_entry(member) for member in page["Members"]]
     return page
+
+
+def _redact_task_messages(item):
+    """A Task or Job with the account names its Messages reveal scrubbed (the log rule)."""
+    if isinstance(item, dict) and isinstance(item.get("Messages"), list):
+        item = dict(item, Messages=[_redact_log_entry(message) for message in item["Messages"]])
+    return item
+
+
+def _redact_task_page(node):
+    """The redactor for TaskService Tasks and JobService Jobs: a page, or one member alone.
+
+    _scrub_payload — which takes a Payload's HttpHeaders and JsonBody whole —
+    then the account names in each member's Messages ("... set by user x"),
+    so every check that reads the same collection redacts it alike, whichever
+    reads first. Idempotent.
+    """
+    node = _scrub_payload(node)
+    if isinstance(node, dict) and isinstance(node.get("Members"), list):
+        node["Members"] = [_redact_task_messages(member) for member in node["Members"]]
+    return _redact_task_messages(node)
 
 
 # --- shared helpers ----------------------------------------------------------
@@ -4397,11 +4424,6 @@ def _collect_boot(ctx):
 # the budget cannot cover is refused loudly, with the counts, before its first
 # member is read.
 _BUDGET_POWER_POLICY = 24 + _TARGET_GETS
-# A DMTF Job's Payload is the request the job will send: its HTTP headers (an
-# Authorization header among them, possibly) and its JSON body are free text
-# the exact-name scrub cannot see into, so both are scrubbed whole (emptiness
-# and element counts kept); the operation and the target URI stay.
-_POWER_POLICY_JOB_PAYLOAD_TEXT = ("HttpHeaders", "JsonBody")
 
 
 def _power_policy_scalar(value):
@@ -4411,35 +4433,6 @@ def _power_policy_scalar(value):
     if isinstance(value, (dict, list)):
         return None
     return value
-
-
-def _power_policy_redact_job(job):
-    """One Job resource with its Payload's headers and body scrubbed whole and, in each of its
-    Messages, the account names the text reveals scrubbed (the log redactor's rule)."""
-    if not isinstance(job, dict):
-        return job
-    payload = job.get("Payload")
-    if isinstance(payload, dict):
-        scrubbed = dict(payload)
-        for name in _POWER_POLICY_JOB_PAYLOAD_TEXT:
-            if name in scrubbed:
-                scrubbed[name] = _scrub_value(scrubbed[name])
-        job = dict(job, Payload=scrubbed)
-    if isinstance(job.get("Messages"), list):
-        job = dict(job, Messages=[_redact_log_entry(message) for message in job["Messages"]])
-    return job
-
-
-def _power_policy_redact_jobs(node):
-    """The redactor for the JobService's Jobs: _scrub_payload, then each job's payload, messages.
-
-    Applied alike to the collection page (expanded or not) and to a member
-    read on its own; idempotent, as ``ctx.get`` requires.
-    """
-    node = _scrub_payload(node)
-    if isinstance(node, dict) and isinstance(node.get("Members"), list):
-        node = dict(node, Members=[_power_policy_redact_job(member) for member in node["Members"]])
-    return _power_policy_redact_job(node)
 
 
 def _power_policy_first(items):
@@ -4765,7 +4758,7 @@ def _collect_power_policy(ctx):
             (
                 "jobs",
                 _sub(job_service, "Jobs") if job_service is not None else None,
-                _power_policy_redact_jobs,
+                _redact_task_page,
                 False,
             )
         )

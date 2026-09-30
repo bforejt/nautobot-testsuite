@@ -2297,7 +2297,7 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
             ["/redfish/v1/", "/redfish/v1/Systems", self.SYS, self.CH, self.CH + "/Power", self.MGR]
             + [path + _XCC_EXPAND for path in collections],
         )
-        self.assertIn((self.JOBS + _XCC_EXPAND, "_power_policy_redact_jobs"), ctx.redacted)
+        self.assertIn((self.JOBS + _XCC_EXPAND, "_redact_task_page"), ctx.redacted)
 
     def test_what_xcc_6_10_does_not_serve(self):
         # the AC-restore policy: in neither the System nor Lenovo's capabilities block

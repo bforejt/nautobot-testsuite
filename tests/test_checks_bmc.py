@@ -4117,7 +4117,9 @@ class TestHygiene(unittest.TestCase):
             _collect_on_base_set(check, ctx)
         self.assertTrue(ctx.redacted)
         for path, redactor in ctx.redacted:
-            self.assertIn(redactor, ("_scrub_payload", "_redact_log_page"), path)
+            self.assertIn(
+                redactor, ("_scrub_payload", "_redact_log_page", "_redact_task_page"), path
+            )
 
 
 class TestStorageWalkBudget(unittest.TestCase):
@@ -5680,7 +5682,7 @@ class TestPowerPolicy(unittest.TestCase):
             Messages=[{"Message": "Power Off schedule set by user erin.", "MessageArgs": ["erin"]}],
         )
         ctx, result = self._collect(payloads)
-        self.assertIn((self.JOBS + EXPAND, "_power_policy_redact_jobs"), ctx.redacted)
+        self.assertIn((self.JOBS + EXPAND, "_redact_task_page"), ctx.redacted)
         text = json.dumps(result)
         for secret in ("c2VjcmV0LXRva2Vu", "X-Request", "hunter2", "ForceOff", "jane", "erin"):
             self.assertNotIn(secret, text, secret)
@@ -5696,11 +5698,9 @@ class TestPowerPolicy(unittest.TestCase):
             raw_job["Messages"][0]["Message"], "Power Off schedule set by user ***scrubbed***."
         )
         # the collection page and a member read on its own alike, and idempotent
-        page = checks._power_policy_redact_jobs(payloads[self.JOBS + EXPAND])
-        self.assertEqual(checks._power_policy_redact_jobs(page), page)
-        self.assertEqual(
-            checks._power_policy_redact_jobs(job)["Payload"]["JsonBody"], checks._SCRUBBED
-        )
+        page = checks._redact_task_page(payloads[self.JOBS + EXPAND])
+        self.assertEqual(checks._redact_task_page(page), page)
+        self.assertEqual(checks._redact_task_page(job)["Payload"]["JsonBody"], checks._SCRUBBED)
         # every other read of the check passes the family's scrubber
         self.assertEqual(
             {name for path, name in ctx.redacted if path != self.JOBS + EXPAND},
