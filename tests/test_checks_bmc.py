@@ -4358,12 +4358,44 @@ class TestDiscovery(unittest.TestCase):
         }
         ctx = _FakeCtx(payloads)
         ctx.restconf = type("Client", (), {"username": "netops"})()
+        # a check that keeps every account name (bmc_accounts, decision 5) read it first
+        accounts = "/redfish/v1/AccountService/Accounts"
+        checks._fetch_collection(ctx, accounts, "accounts", redact=checks._scrub_accounts)
         report = checks._discover_account(ctx)
         self.assertEqual(report["role_id"], "CustomRole4")
         self.assertEqual(report["oem_privileges"], ["ReadOnly"])
         self.assertEqual(report["account_types"], ["Redfish", "WebUI"])
         self.assertNotIn("admin-person", json.dumps(report))
         self.assertNotIn("netops", json.dumps(report))
+        # discovery read the list again, fresh, and what it read (and the trace kept)
+        # names no account but the capture's own
+        self.assertEqual(ctx.gets.count(accounts + EXPAND), 2)
+        fresh = [
+            payload
+            for key, payload in ctx._cache.items()
+            if key[0] == accounts + EXPAND and len(key) > 2
+        ]
+        self.assertEqual(
+            [row["UserName"] for row in fresh[0]["Members"]], [checks._SCRUBBED, "netops"]
+        )
+
+    def test_the_discovery_redactor_is_idempotent_and_copies(self):
+        redact = checks._discovery_account_redactor("netops")
+        payload = {
+            "Members": [
+                {"UserName": "admin-person", "Password": "pw"},
+                {"UserName": "netops"},
+                {"UserName": ""},
+            ]
+        }
+        once = redact(payload)
+        self.assertEqual(once, redact(once))
+        self.assertEqual(
+            [row["UserName"] for row in once["Members"]], [checks._SCRUBBED, "netops", ""]
+        )
+        self.assertEqual(payload["Members"][0]["UserName"], "admin-person")  # a copy
+        self.assertEqual(once["Members"][0]["Password"], checks._SCRUBBED)
+        self.assertEqual(redact({"UserName": "someone"})["UserName"], checks._SCRUBBED)
 
 
 if __name__ == "__main__":

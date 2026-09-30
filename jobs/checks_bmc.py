@@ -457,18 +457,19 @@ def _http_status(exc):
     return getattr(exc, "status_code", None)
 
 
-def _get(ctx, path, redact=_scrub_payload):
+def _get(ctx, path, redact=_scrub_payload, **kwargs):
     """Required resource: a 404 is a failed read (the transport raises).
 
     ``redact`` runs inside ``ctx.get`` before the trace, the cache and the
     caller see the payload; the default scrubs secrets and user names.
+    ``kwargs`` go to the transport (and into the cache key).
     """
-    return ctx.get(path, redact=redact)
+    return ctx.get(path, redact=redact, **kwargs)
 
 
-def _get_optional(ctx, path, redact=_scrub_payload):
+def _get_optional(ctx, path, redact=_scrub_payload, **kwargs):
     """Optional resource: None on 404. Always the same kwargs so the cache is shared."""
-    return ctx.get(path, ok_404=True, redact=redact)
+    return ctx.get(path, ok_404=True, redact=redact, **kwargs)
 
 
 def _budget_left(budget):
@@ -517,6 +518,7 @@ def _fetch_collection(
     budget=None,
     redact=_scrub_payload,
     try_expand=True,
+    fresh=False,
 ):
     """Members of a Redfish collection as full resources: (members, meta, raw).
 
@@ -527,15 +529,19 @@ def _fetch_collection(
     ``raw`` maps each request path actually sent to its curated payload.
     ``redact`` is the redactor every read of the walk passes to ``ctx.get``;
     ``try_expand=False`` skips the ``$expand`` attempt (a check that already
-    saw it refused or ignored does not pay for it again).
+    saw it refused or ignored does not pay for it again). ``fresh`` reads past
+    the per-run cache (a distinct timeout is a distinct cache key), so a caller
+    with a stricter redactor never shares a cached copy with a laxer reader of
+    the same collection, whichever reads first.
     """
+    fresh_kwargs = {"timeout": C.REDFISH_GET_TIMEOUT + 1} if fresh else {}
     raw = {}
     meta = {"strategy": None, "members_total": 0, "excluded": [], "expand_advertised": None}
     meta["expand_advertised"] = _expand_advertised(_get(ctx, _ROOT))
     if meta["expand_advertised"] is not False and try_expand:
         expanded_path = path + _EXPAND
         try:
-            payload = _get_optional(ctx, expanded_path, redact=redact)
+            payload = _get_optional(ctx, expanded_path, redact=redact, **fresh_kwargs)
         except Exception as exc:  # transport error class is not importable here
             if _http_status(exc) is None:
                 raise  # budget, fence or network failure — never a fallback trigger
@@ -559,9 +565,9 @@ def _fetch_collection(
         meta["expand_advertised"] is not False and try_expand and "expand_refused" not in meta
     )
     if ok_404:
-        collection = _get_optional(ctx, path, redact=redact)
+        collection = _get_optional(ctx, path, redact=redact, **fresh_kwargs)
     else:
-        collection = _get(ctx, path, redact=redact)
+        collection = _get(ctx, path, redact=redact, **fresh_kwargs)
     if collection is None:
         meta["strategy"] = "absent"
         return None, meta, raw
@@ -579,7 +585,7 @@ def _fetch_collection(
     _require_budget(budget, len(kept), label, "members")
     members = []
     for link in kept:
-        member = _get(ctx, link, redact=redact)
+        member = _get(ctx, link, redact=redact, **fresh_kwargs)
         raw[link] = _curate(member)
         members.append(member)
     meta.update(strategy="members", members_total=len(links), excluded=excluded)
@@ -3926,8 +3932,34 @@ def _discover_security(ctx):
     }
 
 
+def _discovery_account_redactor(username):
+    """The accounts redactor, then every account name but the capture account's scrubbed.
+
+    Discovery lists the accounts only to find its own; the other local account
+    names are bmc_accounts' keys (decision 5), never the shakedown trace's.
+    Idempotent, and it returns a copy (``_scrub_accounts`` does).
+    """
+
+    def redact(node):
+        node = _scrub_accounts(node)
+        if not isinstance(node, dict):
+            return node
+        rows = _dicts(node.get("Members")) + ([node] if "UserName" in node else [])
+        for row in rows:
+            if row.get("UserName") not in (None, "", username):
+                row["UserName"] = _SCRUBBED
+        return node
+
+    return redact
+
+
 def _discover_account(ctx):
-    """The capture account's role and privileges as the BMC reports them (no other account)."""
+    """The capture account's role and privileges as the BMC reports them (no other account).
+
+    The account list is read fresh (never the cached copy bmc_accounts keeps
+    with every name) through a redactor that scrubs every name but this
+    capture's own, which the envelope's transport footprint already names.
+    """
     username = getattr(getattr(ctx, "restconf", None), "username", None)
     if not username:
         return {"note": "the transport does not name its account"}
@@ -3940,7 +3972,12 @@ def _discover_account(ctx):
         service_link, "Accounts"
     )
     members, meta, _raw = _fetch_collection(
-        ctx, accounts_link, "discovery accounts", ok_404=True, redact=_scrub_accounts
+        ctx,
+        accounts_link,
+        "discovery accounts",
+        ok_404=True,
+        redact=_discovery_account_redactor(username),
+        fresh=True,
     )
     mine = [member for member in _dicts(members) if member.get("UserName") == username]
     if not mine:
