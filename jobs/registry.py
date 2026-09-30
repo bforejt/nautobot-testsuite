@@ -1771,6 +1771,45 @@ SEMANTICS = {
         "refusal is not asked again within the check) and the EventService's capabilities "
         "(registry prefixes, resource types, event formats). " + _BMC_RESOLUTION
     ),
+    "bmc_certificates": (
+        "Every certificate the BMC's CertificateService lists (CertificateLocations, "
+        "Links.Certificates; DMTF, every vendor), each read by its own link and keyed "
+        "'cert|<resource path>'. Each row: certificate_type (PEM, "
+        "PKCS7 ... verbatim); subject_cn, subject_o and subject_ou (the Subject's CommonName, "
+        "Organization and OrganizationalUnit) and issuer_cn and issuer_o (the Issuer's); "
+        "valid_not_before and valid_not_after in UTC ('...Z': the BMC renders them in its own "
+        "offset, -05:00 on the lab unit, so a time-zone or daylight-saving change on the BMC is "
+        "no change here; verbatim when a value does not parse); key_usage and usage_types "
+        "(KeyUsage and CertificateUsageTypes, sorted; null where the firmware serves no such "
+        "list — XCC 6.10 serves no usage types); signature_algorithm (null on XCC 6.10, which "
+        "serves none); and self_signed (the Subject equals the Issuer, leaf for leaf; null when "
+        "either is unserved). Every field is always present, null where unserved. XCC 6.10 "
+        "lists one certificate, the HTTPS server certificate the BMC generated for itself "
+        "(self-signed, CN XCC-<machine type>-<serial>, valid ten years): a BMC reset to "
+        "defaults regenerates it, which reads as changed validity dates; an imported CA-signed "
+        "certificate changes issuer and validity; a trust certificate (LDAP over TLS, a key "
+        "manager, a remote update server) added or removed is an added or removed key. The PEM "
+        "body (CertificateString) is scrubbed before the trace, the cache or raw keep a copy "
+        "and is never stored. So is every Identifier's Email (the contact a certificate names), "
+        "in the Subject and the Issuer alike, and a user certificate (CertificateUsageTypes "
+        "User, or one held under an account) keeps only the organisation leaves (Organization, "
+        "OrganizationalUnit, City, State, Country) of its Subject — its holder's common name "
+        "and every other name read '***scrubbed***' — and of its Issuer wherever a leaf repeats "
+        "the Subject's (a self-signed user certificate); self_signed compares the leaves as "
+        "scrubbed. Context: per key the serial_number, fingerprint and "
+        "fingerprint_hash_algorithm where served (none on XCC 6.10) and days_to_expiry (whole "
+        "days from the capture host's UTC clock to ValidNotAfter, negative once past); the "
+        "expired and expiring_within_30_days tallies, soonest_expiry and as_of (that clock); "
+        "listed (the certificates CertificateLocations names), the resources read and "
+        "host_power_state (a vendor that lists certificates the host's UEFI or devices supply, "
+        "such as Secure Boot databases or SPDM, may list them only once the host has completed "
+        "POST). An empty view means the BMC lists no certificate at all; the shakedown flags it "
+        "(a Redfish service runs on at least its own HTTPS certificate). A listing of "
+        "more than twelve certificates is refused whole (failed, naming the count), as is a "
+        "listed certificate that answers 404, an entry that is not a link or a link the path "
+        "fence refuses: never recorded partially. Not-present when the service root links no "
+        "CertificateService or its CertificateLocations is not served. " + _BMC_RESOLUTION
+    ),
 }
 
 

@@ -1,0 +1,47 @@
+{
+  "@odata.type": "#Certificate.v1_5_0.Certificate",
+  "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1",
+  "@odata.etag": "\"c1\"",
+  "@odata.context": "/redfish/v1/$metadata#Certificate.Certificate",
+  "Id": "1",
+  "Name": "HTTPS Certificate",
+  "Description": "Hand-built from the DMTF Certificate schema: a CA-signed HTTPS server certificate with the leaves XCC 6.10 does not serve; every value an invention.",
+  "CertificateString": "-----BEGIN CERTIFICATE-----\nTk9UIEEgUkVBTCBDRVJUSUZJQ0FURQ==\n-----END CERTIFICATE-----\n",
+  "CertificateType": "PEM",
+  "CertificateUsageTypes": [
+    "Web"
+  ],
+  "Subject": {
+    "CommonName": "bmc-a.lab.example",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "Infrastructure",
+    "City": "Springfield",
+    "State": "NC",
+    "Country": "US"
+  },
+  "Issuer": {
+    "CommonName": "Example Issuing CA 1",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "PKI",
+    "Country": "US"
+  },
+  "ValidNotBefore": "2026-01-05T09:30:00-05:00",
+  "ValidNotAfter": "2027-01-05T09:30:00-05:00",
+  "KeyUsage": [
+    "KeyEncipherment",
+    "DigitalSignature",
+    "ServerAuthentication"
+  ],
+  "SerialNumber": "5E:1A:00:00:00:00:00:00:00:2B",
+  "Fingerprint": "0A:1B:2C:3D:4E:5F:60:71:82:93:A4:B5:C6:D7:E8:F9:0A:1B:2C:3D:4E:5F:60:71:82:93:A4:B5:C6:D7:E8:F9",
+  "FingerprintHashAlgorithm": "TPM_ALG_SHA256",
+  "SignatureAlgorithm": "sha256WithRSAEncryption",
+  "Actions": {
+    "#Certificate.Rekey": {
+      "target": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1/Actions/Certificate.Rekey"
+    },
+    "#Certificate.Renew": {
+      "target": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1/Actions/Certificate.Renew"
+    }
+  }
+}

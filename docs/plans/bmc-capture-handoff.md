@@ -713,7 +713,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
    `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
-   `bmc_pcie_slots`, `bmc_accounts` and `bmc_alerting` landed. The first four ran live through the dev
+   `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting` and `bmc_certificates`
+   landed. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -957,6 +958,17 @@ Recorded as they were found, each with how it was resolved.
       linked Lenovo SNMP resource answering 404 fails this check while
       `bmc_manager_network` records the same read as not served — left as
       built, noted for the review.
+    - `bmc_certificates`: §6's "refused when `$expand` is not honoured" does
+      not apply — CertificateLocations lists its certificates in `Links`,
+      which `$expand=.($levels=1)` never inlines, so each listed certificate
+      is one GET and the only refusal is a listing longer than twelve. On XCC
+      6.10 `Fingerprint`, `SerialNumber`, `SignatureAlgorithm` and the usage
+      types are not served (null or absent there). Every certificate's
+      subject and issuer e-mail is scrubbed (promoted to the family scrubber
+      and the sanitizer at merge) and a user certificate keeps only its
+      organisation leaves. Whether CertificateLocations lists the trust
+      certificates of LDAP, the key manager, single sign-on and virtual media
+      once configured is unverifiable on the lab unit (all empty).
 
 ## 11. Decisions still open (default assumed in parentheses)
 

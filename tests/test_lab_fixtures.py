@@ -1727,8 +1727,15 @@ class TestBmcLabEnvironmentNetwork(unittest.TestCase):
 class TestBmcLabFamily(unittest.TestCase):
     """The whole bmc family on the lab payloads: statuses, GETs, hygiene, stability."""
 
+    @staticmethod
+    def _ctx():
+        # bmc_certificates reads the lab's one certificate by the link CertificateLocations
+        # lists; the harvest kept it only inside its expanded collection, so it is served at
+        # its own @odata.id here, as the XCC serves it
+        return _FakeCtx(TestBmcLabCertificates.payloads())
+
     def test_every_check_reads_the_real_shapes(self):
-        ctx = _xcc_lab_ctx()
+        ctx = self._ctx()
         statuses = {}
         for check in _loader.registry.checks_for("bmc"):
             try:
@@ -1750,14 +1757,15 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_pcie_slots' 2: PCIeSlots and the Lenovo slot table)
         # (+ bmc_accounts' 4: the AccountService, Accounts, Roles and the LDAP client)
         # (+ bmc_alerting's 4: the EventService, the SMTP client, Subscriptions, Recipients)
-        self.assertLessEqual(len(ctx.gets), 77)
+        # (+ bmc_certificates' 2: CertificateLocations and the one certificate it lists)
+        self.assertLessEqual(len(ctx.gets), 79)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
             with self.subTest(check.id):
                 try:
-                    pre = check.collector(_xcc_lab_ctx())["normalized"]
-                    post = check.collector(_xcc_lab_ctx())["normalized"]
+                    pre = check.collector(self._ctx())["normalized"]
+                    post = check.collector(self._ctx())["normalized"]
                 except _loader.registry.SkipCheck:
                     continue
                 self.assertEqual(pre, post)
@@ -3002,6 +3010,129 @@ class TestBmcLabAlerting(unittest.TestCase):
         self.assertLessEqual(len(ctx.gets), bmc._BUDGET_ALERTING)
         self.assertEqual(result["context"]["subscriptions"]["expand_refused"], "HTTP 501")
         self.assertEqual(result["context"]["syslog_filters_source"]["strategy"], "members")
+
+
+class TestBmcLabCertificates(unittest.TestCase):
+    """bmc_certificates on the lab payloads: one location, the HTTPS certificate the XCC
+    generated for itself (self-signed; no fingerprint, serial or signature algorithm served)."""
+
+    SERVICE = "/redfish/v1/CertificateService"
+    LOCATIONS = SERVICE + "/CertificateLocations"
+    HTTPS = "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates"
+    CERT = HTTPS + "/1"
+    KEY = "cert|" + CERT
+    ROW = {
+        "certificate_type": "PEM",
+        "subject_cn": "XCC-7Z46-L261500J",  # XCC-<machine type>-<serial>
+        "subject_o": "Lenovo",
+        "subject_ou": None,  # not served
+        "issuer_cn": "XCC-7Z46-L261500J",
+        "issuer_o": "Lenovo",
+        # served as 2020-11-15T10:05:26-05:00 and 2030-11-13T10:05:26-05:00, the BMC's offset
+        "valid_not_before": "2020-11-15T15:05:26Z",
+        "valid_not_after": "2030-11-13T15:05:26Z",
+        "key_usage": ["DigitalSignature", "KeyEncipherment", "NonRepudiation"],
+        "signature_algorithm": None,  # not served on XCC 6.10
+        "self_signed": True,
+        "usage_types": None,  # not served on XCC 6.10
+    }
+
+    @classmethod
+    def payloads(cls):
+        """The lab set with the HTTPS certificate served at its own @odata.id, as the XCC
+        serves it (the harvest kept it only inside its expanded collection)."""
+        payloads = _xcc_lab_payloads()
+        for member in payloads[cls.HTTPS + _XCC_EXPAND]["Members"]:
+            payloads.setdefault(member["@odata.id"], member)
+        return payloads
+
+    def test_certificates(self):
+        ctx = _FakeCtx(self.payloads())
+        result = bmc._collect_certificates(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(view, {self.KEY: self.ROW})
+        # after the resolution: CertificateLocations and the one certificate it lists
+        self.assertEqual(
+            ctx.gets,
+            ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+            + [self.LOCATIONS, self.CERT],
+        )
+        facts = context["certificates"][self.KEY]
+        for field in ("serial_number", "fingerprint", "fingerprint_hash_algorithm"):
+            self.assertIsNone(facts[field], field)  # none served on XCC 6.10
+        self.assertIsInstance(facts["days_to_expiry"], int)
+        self.assertEqual((context["listed"], context["expired"]), (1, 0))
+        self.assertEqual(context["certificate_service"], self.SERVICE)
+        self.assertEqual(context["certificate_locations"], self.LOCATIONS)
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["resolution"]["vendor"], "Lenovo")
+        raw = result["raw"]
+        self.assertEqual(sorted(raw), [self.LOCATIONS, self.CERT])
+        self.assertEqual(raw[self.CERT]["CertificateString"], "***scrubbed***")
+        self.assertNotIn("Actions", raw[self.CERT])
+
+    def test_the_listing_is_links_that_expand_does_not_inline(self):
+        # why each certificate is read by its own link: $expand=.($levels=1) leaves the Links
+        # array as it is, and the listing names the HTTPS collection's only member
+        for name in (
+            "xcc_certificateservice_certificatelocations_lab.json",
+            "xcc_certificateservice_certificatelocations_expanded_lab.json",
+        ):
+            self.assertEqual(J(name)["Links"]["Certificates"], [{"@odata.id": self.CERT}], name)
+        self.assertEqual(
+            J("xcc_manager_networkprotocol_https_certificates_lab.json")["Members"],
+            [{"@odata.id": self.CERT}],
+        )
+        self.assertEqual(
+            J("xcc_certificateservice_lab.json")["CertificateLocations"],
+            {"@odata.id": self.LOCATIONS},
+        )
+
+    def test_days_to_expiry_against_a_fixed_clock(self):
+        cert = bmc._certificates_redact(self.payloads()[self.CERT])
+        now = bmc._certificates_instant("2026-09-30T00:00:00Z")
+        context = bmc._certificates_context({self.KEY: cert}, now)
+        self.assertEqual(context["certificates"][self.KEY]["days_to_expiry"], 1505)
+        self.assertEqual((context["expired"], context["expiring_within_30_days"]), (0, 0))
+        self.assertEqual(context["soonest_expiry"], self.KEY)
+
+    def test_the_budget_covers_the_lab_layout_without_expand(self):
+        # the resolution's full five GETs, CertificateLocations and the certificate: no $expand
+        # is asked, so a firmware refusing it costs this check nothing more
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_certificates(ctx)
+        self.assertEqual(result["normalized"], {self.KEY: self.ROW})
+        self.assertEqual(len(ctx.gets), 5 + 1 + 1)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_CERTIFICATES)
+
+    def test_an_empty_listing_is_an_empty_view_not_absence(self):
+        payloads = self.payloads()
+        payloads[self.LOCATIONS]["Links"]["Certificates"] = []
+        ctx = _FakeCtx(payloads)
+        result = bmc._collect_certificates(ctx)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual(result["context"]["listed"], 0)
+        self.assertNotIn(self.CERT, ctx.gets)
+
+    def test_a_regenerated_certificate_is_a_change_and_a_re_rendered_one_is_not(self):
+        compare = _loader.registry.CHECKS["bmc_certificates"].compare
+        pre = bmc._collect_certificates(_FakeCtx(self.payloads()))["normalized"]
+        # the same instants rendered at other offsets (a time-zone or daylight-saving change)
+        payloads = self.payloads()
+        payloads[self.CERT]["ValidNotBefore"] = "2020-11-15T11:05:26-04:00"
+        payloads[self.CERT]["ValidNotAfter"] = "2030-11-13T15:05:26+00:00"
+        post = bmc._collect_certificates(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(diffcore.diff_check(pre, post, compare)["result"], "pass")
+        # a reset to defaults: the XCC signs a fresh certificate for itself
+        payloads[self.CERT]["ValidNotBefore"] = "2026-09-30T10:00:00-05:00"
+        payloads[self.CERT]["ValidNotAfter"] = "2036-09-28T10:00:00-05:00"
+        post = bmc._collect_certificates(_FakeCtx(payloads))["normalized"]
+        diff = diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"]) for row in diff["changed"]],
+            [(self.KEY, "valid_not_after"), (self.KEY, "valid_not_before")],
+        )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,37 @@
+{
+  "@odata.type": "#Certificate.v1_5_0.Certificate",
+  "@odata.id": "/redfish/v1/AccountService/Accounts/3/Certificates/1",
+  "@odata.etag": "\"c3\"",
+  "@odata.context": "/redfish/v1/$metadata#Certificate.Certificate",
+  "Id": "1",
+  "Name": "User Certificate",
+  "Description": "Hand-built from the DMTF Certificate schema: a user identity certificate held under a manager account, its Subject naming a person; every value an invention.",
+  "CertificateString": "-----BEGIN CERTIFICATE-----\nTk9UIEEgUkVBTCBDRVJUSUZJQ0FURQ==\n-----END CERTIFICATE-----\n",
+  "CertificateType": "PEM",
+  "CertificateUsageTypes": [
+    "User"
+  ],
+  "Subject": {
+    "CommonName": "Jane Roe",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "Operations",
+    "Country": "US",
+    "Email": "jane.roe@example.com"
+  },
+  "Issuer": {
+    "CommonName": "Example Issuing CA 1",
+    "Organization": "Example Corp",
+    "OrganizationalUnit": "PKI",
+    "Country": "US"
+  },
+  "ValidNotBefore": "2026-03-01T08:00:00.000+00:00",
+  "ValidNotAfter": "2027-03-01T08:00:00.000+00:00",
+  "KeyUsage": [
+    "DigitalSignature",
+    "ClientAuthentication"
+  ],
+  "SerialNumber": "7C:00:00:00:00:00:00:00:00:4D",
+  "Fingerprint": "11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00",
+  "FingerprintHashAlgorithm": "TPM_ALG_SHA256",
+  "SignatureAlgorithm": "sha256WithRSAEncryption"
+}

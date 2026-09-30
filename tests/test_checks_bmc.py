@@ -229,6 +229,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_pcie_slots",
         "bmc_accounts",
         "bmc_alerting",
+        "bmc_certificates",
     }
 
     def test_all_registered_once(self):
@@ -7980,6 +7981,413 @@ class TestAlerting(unittest.TestCase):
             [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
             [("recipient|1", "enabled", True, False)],
         )
+
+
+class TestCertificates(unittest.TestCase):
+    """bmc_certificates on hand-built payloads (xcc_certificates_*.json, built from the DMTF
+    Certificate and CertificateLocations schemas — every value an invention): a CA-signed HTTPS
+    certificate serving the leaves XCC 6.10 does not, the root CA an LDAP server is trusted by
+    and a user certificate naming a person. The lab SE350's one self-signed HTTPS certificate is
+    pinned in test_lab_fixtures.TestBmcLabCertificates."""
+
+    SERVICE = "/redfish/v1/CertificateService"
+    LOCATIONS = SERVICE + "/CertificateLocations"
+    HTTPS = MGR + "/NetworkProtocol/HTTPS/Certificates/1"
+    LDAP = "/redfish/v1/AccountService/LDAP/Certificates/1"
+    USER = "/redfish/v1/AccountService/Accounts/3/Certificates/1"
+    FIELDS = {
+        "certificate_type",
+        "subject_cn",
+        "subject_o",
+        "subject_ou",
+        "issuer_cn",
+        "issuer_o",
+        "valid_not_before",
+        "valid_not_after",
+        "key_usage",
+        "signature_algorithm",
+        "self_signed",
+        "usage_types",
+    }
+
+    @staticmethod
+    def _now():
+        """The capture clock the context tests count from: 2026-09-30T00:00:00Z."""
+        return checks._certificates_instant("2026-09-30T00:00:00Z")
+
+    def _payloads(self):
+        """The base set with a CertificateService linked and the hand-built listing served."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(
+            payloads["/redfish/v1/"], CertificateService={"@odata.id": self.SERVICE}
+        )
+        payloads[self.LOCATIONS] = _fx("xcc_certificates_locations_populated.json")
+        payloads[self.HTTPS] = _fx("xcc_certificates_https_ca_signed.json")
+        payloads[self.LDAP] = _fx("xcc_certificates_ldap_ca.json")
+        payloads[self.USER] = _fx("xcc_certificates_user.json")
+        return payloads
+
+    def _listing(self, count):
+        """``count`` LDAP trust certificates listed, the System unlinked so that the id
+        resolution costs its full five GETs: the worst case the budget is sized for."""
+        payloads = self._payloads()
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        links = []
+        for number in range(1, count + 1):
+            path = "/redfish/v1/AccountService/LDAP/Certificates/%d" % (number,)
+            payloads[path] = dict(_fx("xcc_certificates_ldap_ca.json"), Id=str(number))
+            payloads[path]["@odata.id"] = path
+            links.append({"@odata.id": path})
+        payloads[self.LOCATIONS]["Links"] = {"Certificates": links}
+        return payloads
+
+    def test_every_listed_certificate_is_read_by_its_link(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_certificates(ctx)
+        # CertificateLocations, then each certificate it lists: no $expand is asked (a Links
+        # array is never inlined by it) and no collection is guessed from a path
+        self.assertEqual(ctx.gets, RESOLVE + [self.LOCATIONS, self.HTTPS, self.LDAP, self.USER])
+        self.assertEqual(ctx.budgets, [("bmc_certificates", checks._BUDGET_CERTIFICATES)])
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            sorted(view), ["cert|" + p for p in sorted((self.HTTPS, self.LDAP, self.USER))]
+        )
+        for key, row in view.items():
+            self.assertEqual(set(row), self.FIELDS, key)
+        self.assertEqual(
+            sorted(result["raw"]), sorted([self.LOCATIONS, self.HTTPS, self.LDAP, self.USER])
+        )
+        self.assertEqual(context["listed"], 3)
+        self.assertEqual(context["certificate_service"], self.SERVICE)
+        self.assertEqual(context["certificate_locations"], self.LOCATIONS)
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["resolution"]["system"], SYS)
+
+    def test_the_leaves_xcc_6_10_does_not_serve_are_read_where_served(self):
+        view = checks._collect_certificates(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(
+            view["cert|" + self.HTTPS],
+            {
+                "certificate_type": "PEM",
+                "subject_cn": "bmc-a.lab.example",
+                "subject_o": "Example Corp",
+                "subject_ou": "Infrastructure",
+                "issuer_cn": "Example Issuing CA 1",
+                "issuer_o": "Example Corp",
+                # served at -05:00, compared in UTC
+                "valid_not_before": "2026-01-05T14:30:00Z",
+                "valid_not_after": "2027-01-05T14:30:00Z",
+                "key_usage": ["DigitalSignature", "KeyEncipherment", "ServerAuthentication"],
+                "signature_algorithm": "sha256WithRSAEncryption",
+                "self_signed": False,
+                "usage_types": ["Web"],
+            },
+        )
+
+    def test_serial_fingerprint_and_days_to_expiry_ride_in_context(self):
+        payloads = self._payloads()
+        certificates = {
+            "cert|" + path: checks._certificates_redact(payloads[path])
+            for path in (self.HTTPS, self.LDAP, self.USER)
+        }
+        context = checks._certificates_context(certificates, self._now())
+        self.assertEqual(
+            context["certificates"]["cert|" + self.HTTPS],
+            {
+                "serial_number": "5E:1A:00:00:00:00:00:00:00:2B",
+                "fingerprint": (
+                    "0A:1B:2C:3D:4E:5F:60:71:82:93:A4:B5:C6:D7:E8:F9:"
+                    "0A:1B:2C:3D:4E:5F:60:71:82:93:A4:B5:C6:D7:E8:F9"
+                ),
+                "fingerprint_hash_algorithm": "TPM_ALG_SHA256",
+                "days_to_expiry": 97,
+            },
+        )
+        days = {key: facts["days_to_expiry"] for key, facts in context["certificates"].items()}
+        self.assertEqual(
+            days, {"cert|" + self.HTTPS: 97, "cert|" + self.LDAP: -121, "cert|" + self.USER: 152}
+        )
+        self.assertEqual((context["expired"], context["expiring_within_30_days"]), (1, 0))
+        self.assertEqual(context["soonest_expiry"], "cert|" + self.LDAP)
+        self.assertEqual(context["as_of"], "2026-09-30T00:00:00Z")
+        # the collector counts from the capture's own clock; the LDAP root expired in June 2026
+        live = checks._collect_certificates(_FakeCtx(payloads))["context"]
+        self.assertGreaterEqual(live["expired"], 1)
+        self.assertRegex(live["as_of"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertTrue(
+            all(isinstance(facts["days_to_expiry"], int) for facts in live["certificates"].values())
+        )
+
+    def test_the_expiry_tallies_at_their_bounds(self):
+        certificates = {
+            "cert|a": {"ValidNotAfter": "2026-10-30T00:00:00Z"},  # 30 days ahead: expiring
+            "cert|b": {"ValidNotAfter": "2026-10-31T00:00:00Z"},  # 31 days ahead: not yet
+            "cert|c": {"ValidNotAfter": "2026-09-30T12:00:00Z"},  # later today: 0, expiring
+            "cert|d": {"ValidNotAfter": "2026-09-29T23:59:59Z"},  # a second ago: expired
+            "cert|e": {"ValidNotAfter": "not a date"},  # unparsable: never counted
+            "cert|f": {},  # unserved
+        }
+        context = checks._certificates_context(certificates, self._now())
+        days = {key: facts["days_to_expiry"] for key, facts in context["certificates"].items()}
+        self.assertEqual(
+            days,
+            {"cert|a": 30, "cert|b": 31, "cert|c": 0, "cert|d": -1, "cert|e": None, "cert|f": None},
+        )
+        self.assertEqual((context["expired"], context["expiring_within_30_days"]), (1, 2))
+        self.assertEqual(context["soonest_expiry"], "cert|d")
+        empty = checks._certificates_context({}, self._now())
+        self.assertEqual((empty["expired"], empty["expiring_within_30_days"]), (0, 0))
+        self.assertIsNone(empty["soonest_expiry"])
+
+    def test_the_pem_body_is_scrubbed_before_anything_keeps_a_copy(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_certificates(ctx)
+        for path in (self.HTTPS, self.LDAP, self.USER):
+            # the redactor rides the read itself: the trace and the cache see its output
+            self.assertIn((path, "_certificates_redact"), ctx.redacted)
+            self.assertEqual(result["raw"][path]["CertificateString"], checks._SCRUBBED)
+            self.assertNotIn("Actions", result["raw"][path])
+        self.assertIn((self.LOCATIONS, "_scrub_payload"), ctx.redacted)
+        text = json.dumps(result)
+        self.assertNotIn("BEGIN CERTIFICATE", text)
+        self.assertNotIn("Tk9UIEEgUkVBTCBDRVJUSUZJQ0FURQ", text)
+
+    def test_a_user_certificate_names_its_holder_nowhere(self):
+        result = checks._collect_certificates(_FakeCtx(self._payloads()))
+        self.assertEqual(
+            result["normalized"]["cert|" + self.USER],
+            {
+                "certificate_type": "PEM",
+                "subject_cn": checks._SCRUBBED,
+                "subject_o": "Example Corp",
+                "subject_ou": "Operations",
+                # the issuing CA is an organisation, not the holder: kept
+                "issuer_cn": "Example Issuing CA 1",
+                "issuer_o": "Example Corp",
+                "valid_not_before": "2026-03-01T08:00:00Z",
+                "valid_not_after": "2027-03-01T08:00:00Z",
+                "key_usage": ["ClientAuthentication", "DigitalSignature"],
+                "signature_algorithm": "sha256WithRSAEncryption",
+                "self_signed": False,
+                "usage_types": ["User"],
+            },
+        )
+        subject = result["raw"][self.USER]["Subject"]
+        self.assertEqual((subject["CommonName"], subject["Email"]), (checks._SCRUBBED,) * 2)
+        self.assertEqual((subject["Organization"], subject["Country"]), ("Example Corp", "US"))
+        text = json.dumps(result)
+        for name in ("Jane", "Roe", "jane.roe"):
+            self.assertNotIn(name, text)
+
+    def test_a_self_signed_user_certificate_is_scrubbed_in_both_names(self):
+        payloads = self._payloads()
+        user = payloads[self.USER]
+        user["Issuer"] = copy.deepcopy(user["Subject"])
+        del user["CertificateUsageTypes"]  # held under an account: a user certificate all the same
+        result = checks._collect_certificates(_FakeCtx(payloads))
+        row = result["normalized"]["cert|" + self.USER]
+        self.assertEqual((row["subject_cn"], row["issuer_cn"]), (checks._SCRUBBED,) * 2)
+        self.assertEqual((row["subject_o"], row["issuer_o"]), ("Example Corp",) * 2)
+        self.assertIs(row["self_signed"], True)
+        self.assertIsNone(row["usage_types"])
+        self.assertNotIn("Jane", json.dumps(result))
+
+    def test_who_is_a_user_certificate(self):
+        person = checks._certificates_names_a_person
+        self.assertTrue(person({"CertificateUsageTypes": ["User"], "@odata.id": self.HTTPS}))
+        self.assertTrue(person({"@odata.id": self.USER}))
+        self.assertTrue(
+            person({"@odata.id": MGR + "/RemoteAccountService/Accounts/2/Certificates/1"})
+        )
+        self.assertFalse(person({"CertificateUsageTypes": ["Web"], "@odata.id": self.HTTPS}))
+        self.assertFalse(person({"@odata.id": self.LDAP}))  # AccountService is not an account
+        self.assertFalse(person({}))
+
+    def test_a_contact_email_is_scrubbed_in_every_certificate(self):
+        result = checks._collect_certificates(_FakeCtx(self._payloads()))
+        for block in ("Subject", "Issuer"):
+            identifier = result["raw"][self.LDAP][block]
+            self.assertEqual(identifier["Email"], checks._SCRUBBED, block)
+            self.assertEqual(identifier["CommonName"], "Example Root CA", block)
+        row = result["normalized"]["cert|" + self.LDAP]
+        self.assertIs(row["self_signed"], True)  # a root CA is its own issuer
+        self.assertEqual(row["key_usage"], ["CRLSigning", "KeyCertSign"])
+        self.assertIsNone(row["usage_types"])  # served by no usage-type list
+        self.assertNotIn("pki-contact", json.dumps(result))
+
+    def test_the_redactor_is_idempotent_and_keeps_emptiness(self):
+        for name in (
+            "xcc_certificates_https_ca_signed.json",
+            "xcc_certificates_ldap_ca.json",
+            "xcc_certificates_user.json",
+        ):
+            once = checks._certificates_redact(_fx(name))
+            self.assertEqual(checks._certificates_redact(once), once, name)
+        redacted = checks._certificates_redact(
+            {
+                "CertificateUsageTypes": ["User"],
+                # any leaf but the organisation's names the holder: scrubbed, emptiness kept
+                "Subject": {"CommonName": "", "Email": None, "AdditionalCommonNames": ["a", "b"]},
+            }
+        )
+        self.assertEqual(
+            redacted["Subject"],
+            {"CommonName": "", "Email": None, "AdditionalCommonNames": [checks._SCRUBBED] * 2},
+        )
+
+    def test_not_present_without_a_certificate_service_and_nothing_read(self):
+        ctx = _FakeCtx(_base_payloads())  # a service root that links no CertificateService
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_certificates(ctx)
+        self.assertIn("links no CertificateService", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE)
+
+    def test_not_present_when_certificate_locations_is_not_served(self):
+        payloads = self._payloads()
+        del payloads[self.LOCATIONS]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_certificates(ctx)
+        self.assertIn(self.LOCATIONS + " is not served", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE + [self.LOCATIONS])
+
+    def test_an_empty_listing_is_an_empty_view_not_absence(self):
+        payloads = self._payloads()
+        payloads[self.LOCATIONS]["Links"] = {"Certificates@odata.count": 0, "Certificates": []}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_certificates(ctx)
+        self.assertEqual(result["normalized"], {})
+        self.assertEqual((result["context"]["listed"], result["context"]["expired"]), (0, 0))
+        self.assertEqual(ctx.gets, RESOLVE + [self.LOCATIONS])
+        # a CertificateLocations serving no Links block at all reads the same
+        del payloads[self.LOCATIONS]["Links"]
+        self.assertEqual(checks._collect_certificates(_FakeCtx(payloads))["normalized"], {})
+
+    def test_failed_reads_are_failures_never_emptiness(self):
+        # a listed certificate that answers 404
+        payloads = self._payloads()
+        del payloads[self.LDAP]
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_certificates(_FakeCtx(payloads))
+        self.assertIn(self.LDAP + ", which answered 404", str(caught.exception))
+        # a server error on one
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_certificates(_FakeCtx(self._payloads(), errors={self.USER: 500}))
+        # a CertificateLocations without a body
+        payloads = self._payloads()
+        payloads[self.LOCATIONS] = {}
+        with self.assertRaises(registry.CollectError):
+            checks._collect_certificates(_FakeCtx(payloads))
+        # a certificate without a body
+        payloads = self._payloads()
+        payloads[self.HTTPS] = {}
+        with self.assertRaises(registry.CollectError):
+            checks._collect_certificates(_FakeCtx(payloads))
+
+    def test_a_listing_is_refused_whole_before_any_certificate_is_read(self):
+        for entry, error in (
+            ({"@odata.id": self.HTTPS + "/Actions/Certificate.Renew"}, "refused"),
+            ({"Name": "no link"}, "entry 3 is not a link"),
+            (self.LDAP, "entry 3 is not a link"),
+        ):
+            payloads = self._payloads()
+            payloads[self.LOCATIONS]["Links"]["Certificates"].append(entry)
+            ctx = _FakeCtx(payloads)
+            with self.assertRaises(registry.CollectError) as caught:
+                checks._collect_certificates(ctx)
+            self.assertIn(error, str(caught.exception))
+            self.assertEqual(ctx.gets, RESOLVE + [self.LOCATIONS])
+
+    def test_twelve_certificates_fit_after_a_full_resolution_and_a_thirteenth_is_refused(self):
+        ctx = _FakeCtx(self._listing(12))
+        self.assertEqual(len(checks._collect_certificates(ctx)["normalized"]), 12)
+        self.assertEqual(len(ctx.gets), 5 + 1 + 12)
+        self.assertEqual(len(ctx.gets), checks._BUDGET_CERTIFICATES)
+        ctx = _FakeCtx(self._listing(13))
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_certificates(ctx)
+        self.assertIn("lists 13 certificate(s)", str(caught.exception))
+        self.assertIn("at most 12", str(caught.exception))
+        self.assertEqual(len(ctx.gets), 5 + 1)  # refused before the first certificate
+        # the cap holds whatever is left of the budget: with the resolution cached by an
+        # earlier check, or on a transport that exposes no count, thirteen are still refused
+        ctx = _FakeCtx(self._listing(13))
+        checks._targets(ctx)
+        with self.assertRaises(registry.CollectError):
+            checks._collect_certificates(ctx)
+        ctx = _FakeCtx(self._listing(13), opaque_budget=True)
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_certificates(ctx)
+        self.assertIn("unknown GET(s) left", str(caught.exception))
+        opaque = _FakeCtx(self._listing(12), opaque_budget=True)
+        self.assertEqual(len(checks._collect_certificates(opaque)["normalized"]), 12)
+
+    def test_a_certificate_listed_twice_is_read_once(self):
+        payloads = self._payloads()
+        listed = payloads[self.LOCATIONS]["Links"]["Certificates"]
+        listed.append({"@odata.id": self.HTTPS + "/"})  # the same resource, a trailing slash
+        listed.append({"@odata.id": self.LDAP})
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_certificates(ctx)
+        self.assertEqual(len(result["normalized"]), 3)
+        self.assertEqual(result["context"]["listed"], 3)
+        self.assertEqual(ctx.gets, RESOLVE + [self.LOCATIONS, self.HTTPS, self.LDAP, self.USER])
+
+    def test_validity_is_compared_in_utc_whatever_offset_the_bmc_renders(self):
+        utc = checks._certificates_utc
+        self.assertEqual(utc("2030-11-13T10:05:26-05:00"), "2030-11-13T15:05:26Z")
+        self.assertEqual(utc("2030-11-13T11:05:26-04:00"), "2030-11-13T15:05:26Z")  # summer time
+        self.assertEqual(utc("2030-11-13T20:35:26+05:30"), "2030-11-13T15:05:26Z")
+        self.assertEqual(utc("2030-11-13T15:05:26.000Z"), "2030-11-13T15:05:26Z")
+        # verbatim when it does not parse (no offset, another format, no such day)
+        for text in ("2030-11-13T15:05:26", "Nov 13 15:05:26 2030 GMT", "2030-02-30T00:00:00Z"):
+            self.assertEqual(utc(text), text)
+            self.assertIsNone(checks._certificates_instant(text))
+        for unset in (None, "", "  "):
+            self.assertIsNone(utc(unset))
+
+    def test_every_vendor_gets_the_same_reads(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"]["Vendor"] = "Contoso"
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_certificates(ctx)
+        self.assertEqual(result["context"]["resolution"]["vendor"], "Contoso")
+        self.assertEqual(len(result["normalized"]), 3)
+        self.assertFalse([path for path in ctx.gets if "/Oem/" in path])
+
+    def test_unserved_leaves_read_none(self):
+        row = checks._certificates_row({"Subject": {"CommonName": " "}, "KeyUsage": "Web"})
+        self.assertEqual(set(row), self.FIELDS)
+        self.assertTrue(all(value is None for value in row.values()), row)
+
+    def test_a_regenerated_certificate_is_a_changed_row_and_a_removed_trust_a_removed_key(self):
+        compare = registry.CHECKS["bmc_certificates"].compare
+        pre = checks._collect_certificates(_FakeCtx(self._payloads()))["normalized"]
+        again = checks._collect_certificates(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, again, compare)["result"], "pass")
+        payloads = self._payloads()
+        https = payloads[self.HTTPS]
+        # reset to defaults: the BMC signs a fresh certificate for itself
+        https["Issuer"] = copy.deepcopy(https["Subject"])
+        https["ValidNotBefore"] = "2026-09-30T08:00:00-05:00"
+        https["ValidNotAfter"] = "2036-09-27T08:00:00-05:00"
+        listed = payloads[self.LOCATIONS]["Links"]["Certificates"]
+        listed[:] = [item for item in listed if item["@odata.id"] != self.LDAP]
+        post = checks._collect_certificates(_FakeCtx(payloads))["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"]) for row in diff["changed"]],
+            [
+                ("cert|" + self.HTTPS, "issuer_cn"),
+                ("cert|" + self.HTTPS, "self_signed"),
+                ("cert|" + self.HTTPS, "valid_not_after"),
+                ("cert|" + self.HTTPS, "valid_not_before"),
+            ],
+        )
+        self.assertEqual([row["key"] for row in diff["removed"]], ["cert|" + self.LDAP])
+        self.assertEqual(diff["added"], [])
 
 
 if __name__ == "__main__":

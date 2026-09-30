@@ -62,6 +62,7 @@ host-independent. The System's ``PowerState`` rides in context wherever it
 matters.
 """
 
+import datetime
 import re
 
 from . import constants as C
@@ -170,8 +171,9 @@ _USER_NAME_KEYS = frozenset(
 # names are kept; emptiness kept.
 _PERSON_KEYS = frozenset(
     {"contactname", "contactperson", "emailaddress", "phonenumber"}
-    # a directory user in a role mapping; where an account's one-time passcodes go
-    | {"remoteuser", "onetimepasscodedeliveryaddress"}
+    # a directory user in a role mapping; where an account's one-time passcodes go;
+    # a certificate subject's or issuer's e-mail (DMTF Certificate Identifier.Email)
+    | {"remoteuser", "onetimepasscodedeliveryaddress", "email"}
 )
 # Lists that record who is logged in right now: reduced to their length.
 _COUNT_ONLY_KEYS = frozenset({"currentloggedusers"})
@@ -6660,6 +6662,325 @@ def _collect_alerting(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_certificates --------------------------------------------------------
+# Every certificate the BMC lists (DMTF, every vendor): beneath the
+# CertificateService the service root links, CertificateLocations (at the URI
+# the DMTF schema fixes there; the CertificateService resource itself, a link
+# and two actions, is not read) names each installed certificate in its
+# Links.Certificates array, and each one is read by that link. $expand has
+# nothing to offer here: .($levels=1) never inlines a Links array (the lab's
+# expanded CertificateLocations still lists a bare link), and a certificate's
+# own collection is never guessed from its path.
+#
+# GETs, the lab SE350 (one location: the self-signed HTTPS server certificate):
+# CertificateLocations and that certificate — 2 beyond the id resolution, with
+# or without $expand (the service root, which links the CertificateService, is
+# the resolution's own read). _BUDGET_CERTIFICATES = 13 + _TARGET_GETS:
+# CertificateLocations and _CERTIFICATES_MAX (12) certificates even when this
+# check pays a full five-GET resolution. A longer listing is refused with its
+# count before the first certificate is read, whatever is left of the budget,
+# so whether a capture completes never depends on which check paid the
+# resolution; it is never recorded partially.
+_BUDGET_CERTIFICATES = 13 + _TARGET_GETS
+_CERTIFICATES_MAX = 12
+# A certificate whose ValidNotAfter is at most this many whole days ahead of
+# the capture's clock is counted as expiring in context (a past one as expired).
+_CERTIFICATES_EXPIRING_DAYS = 30
+# A Redfish date-time (Edm.DateTimeOffset): the offset is part of the value.
+_CERTIFICATES_TIME = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(?:\.\d+)?([Zz]|[+-]\d{2}:\d{2})$"
+)
+# Identifier (Subject, Issuer) leaves that describe an organisation, never a
+# person: all a user certificate keeps of the names it carries.
+_CERTIFICATES_ORG_LEAVES = frozenset(
+    {"organization", "organizationalunit", "city", "state", "country"}
+)
+# The Identifier leaf the DMTF schema describes as the e-mail address of the
+# contact a certificate names: scrubbed in every certificate.
+_CERTIFICATES_CONTACT_LEAVES = frozenset({"email"})
+
+
+def _certificates_names_a_person(cert):
+    """True for a user certificate: its CertificateUsageTypes lists User, or it is held under
+    an account (the DMTF AccountService/Accounts/<id>/Certificates collection)."""
+    usages = cert.get("CertificateUsageTypes")
+    if isinstance(usages, list) and "user" in {str(usage).strip().lower() for usage in usages}:
+        return True
+    return "accounts" in str(cert.get("@odata.id") or "").lower().split("/")
+
+
+def _certificates_withheld(name, person, repeats_the_holder=True):
+    """True for an Identifier leaf the redactor scrubs: the contact e-mail of any certificate,
+    and every non-organisation leaf naming a user certificate's holder."""
+    lowered = str(name).lower()
+    if lowered.startswith("@"):
+        return False
+    if lowered in _CERTIFICATES_CONTACT_LEAVES:
+        return True
+    return person and repeats_the_holder and lowered not in _CERTIFICATES_ORG_LEAVES
+
+
+def _certificates_redact(node):
+    """The redactor for a certificate read: _scrub_payload, then the people it can name.
+
+    _scrub_payload scrubs the PEM body (CertificateString) with the family's
+    key material. On top of it the Email of the Subject and of the Issuer is
+    scrubbed in every certificate, and a user certificate
+    (_certificates_names_a_person) keeps only the organisation leaves of its
+    Subject — the holder's common name, e-mail and any other name go — and of
+    its Issuer wherever a leaf repeats the Subject's (a self-signed user
+    certificate names its holder twice); an issuing CA's name stays. Applied
+    before the trace, the cache and raw keep a copy; emptiness is kept, and it
+    is idempotent, as ``ctx.get`` requires.
+    """
+    node = _scrub_payload(node)
+    if not isinstance(node, dict):
+        return node
+    person = _certificates_names_a_person(node)
+    subject = node.get("Subject") if isinstance(node.get("Subject"), dict) else None
+    issuer = node.get("Issuer")
+    if isinstance(issuer, dict):
+        holder = subject or {}
+        node["Issuer"] = {
+            key: _scrub_value(value)
+            if _certificates_withheld(key, person, holder.get(key) == value)
+            else value
+            for key, value in issuer.items()
+        }
+    if subject is not None:
+        node["Subject"] = {
+            key: _scrub_value(value) if _certificates_withheld(key, person) else value
+            for key, value in subject.items()
+        }
+    return node
+
+
+def _certificates_key(link):
+    """'cert|<resource path>': the listed link with query, fragment and a trailing '/' dropped."""
+    return "cert|%s" % (str(link).partition("?")[0].partition("#")[0].rstrip("/"),)
+
+
+def _certificates_text(value):
+    """A served string leaf, stripped ('' reads None); None for a block or a list."""
+    if isinstance(value, (dict, list)):
+        return None
+    return _text(value)
+
+
+def _certificates_sorted(value):
+    """A served list's strings sorted (their order is not state); None when not served as a list."""
+    if not isinstance(value, list):
+        return None
+    return sorted(text for text in (_certificates_text(item) for item in value) if text is not None)
+
+
+def _certificates_instant(value):
+    """A Redfish date-time as an aware UTC datetime; None when unset, offset-less or unparsable."""
+
+    match = _CERTIFICATES_TIME.match(str(value or "").strip())
+    if match is None:
+        return None
+    day, clock, offset = match.groups()
+    offset = "+00:00" if offset in ("Z", "z") else offset
+    try:
+        stamp = datetime.datetime.fromisoformat("%sT%s%s" % (day, clock, offset))
+    except ValueError:
+        return None
+    return stamp.astimezone(datetime.timezone.utc)
+
+
+def _certificates_utc(value):
+    """A date-time as 'YYYY-MM-DDTHH:MM:SSZ' (the iosxe_pki spelling); verbatim when it does not
+    parse, None when unset.
+
+    The BMC renders a certificate's validity in its own offset (-05:00 on the
+    lab unit): in UTC the value is the certificate's, whatever the BMC's time
+    zone or daylight-saving setting.
+    """
+    stamp = _certificates_instant(value)
+    if stamp is None:
+        return _certificates_text(value)
+    return stamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _certificates_now():
+    """The capture's own clock, as an aware UTC datetime (days to expiry count from it)."""
+
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _certificates_identity(identifier):
+    """A Subject/Issuer block made comparable: annotations and unset leaves dropped, text
+    stripped, lists sorted."""
+    identity = {}
+    for key, value in (identifier if isinstance(identifier, dict) else {}).items():
+        if str(key).startswith("@"):
+            continue
+        if isinstance(value, list):
+            value = _certificates_sorted(value) or None
+        elif isinstance(value, dict):
+            value = value or None
+        else:
+            value = _text(value)
+        if value is not None:
+            identity[str(key)] = value
+    return identity
+
+
+def _certificates_self_signed(subject, issuer):
+    """True when the Subject and the Issuer name the same entity, leaf for leaf (as scrubbed);
+    None when either is unserved or empty."""
+    subject, issuer = _certificates_identity(subject), _certificates_identity(issuer)
+    if not subject or not issuer:
+        return None
+    return subject == issuer
+
+
+def _certificates_row(cert):
+    """One 'cert|<path>' row; every field present, None where the certificate serves no leaf."""
+    subject = cert.get("Subject") if isinstance(cert.get("Subject"), dict) else {}
+    issuer = cert.get("Issuer") if isinstance(cert.get("Issuer"), dict) else {}
+    return {
+        "certificate_type": _certificates_text(cert.get("CertificateType")),
+        "subject_cn": _certificates_text(subject.get("CommonName")),
+        "subject_o": _certificates_text(subject.get("Organization")),
+        "subject_ou": _certificates_text(subject.get("OrganizationalUnit")),
+        "issuer_cn": _certificates_text(issuer.get("CommonName")),
+        "issuer_o": _certificates_text(issuer.get("Organization")),
+        "valid_not_before": _certificates_utc(cert.get("ValidNotBefore")),
+        "valid_not_after": _certificates_utc(cert.get("ValidNotAfter")),
+        "key_usage": _certificates_sorted(cert.get("KeyUsage")),
+        "signature_algorithm": _certificates_text(cert.get("SignatureAlgorithm")),
+        "self_signed": _certificates_self_signed(subject, issuer),
+        "usage_types": _certificates_sorted(cert.get("CertificateUsageTypes")),
+    }
+
+
+def _normalize_certificates(certificates):
+    """'cert|<resource path>' rows from {key: Certificate resource} (see _certificates_row)."""
+    return {key: _certificates_row(certificates[key]) for key in sorted(certificates)}
+
+
+def _certificates_context(certificates, now):
+    """Per certificate what identifies it or counts down, and the expiry tallies against ``now``.
+
+    ``certificates`` maps a 'cert|' key to its (redacted) Certificate resource
+    and ``now`` is the capture's clock (an aware datetime). days_to_expiry is
+    whole days from ``now`` to ValidNotAfter, negative once past, None when
+    the bound is unset or does not parse; ``expired`` counts the negative
+    ones and ``expiring_within_30_days`` those at most
+    _CERTIFICATES_EXPIRING_DAYS ahead; ``soonest_expiry`` names the key that
+    expires (or expired) first.
+    """
+    facts, expired, expiring, soonest = {}, 0, 0, None
+    for key in sorted(certificates):
+        cert = certificates[key]
+        expires = _certificates_instant(cert.get("ValidNotAfter"))
+        days = None if expires is None else int((expires - now).total_seconds() // 86400)
+        facts[key] = {
+            "serial_number": _certificates_text(cert.get("SerialNumber")),
+            "fingerprint": _certificates_text(cert.get("Fingerprint")),
+            "fingerprint_hash_algorithm": _certificates_text(cert.get("FingerprintHashAlgorithm")),
+            "days_to_expiry": days,
+        }
+        if days is None:
+            continue
+        if days < 0:
+            expired += 1
+        elif days <= _CERTIFICATES_EXPIRING_DAYS:
+            expiring += 1
+        if soonest is None or days < soonest[1]:
+            soonest = (key, days)
+    return {
+        "certificates": facts,
+        "expired": expired,
+        "expiring_within_30_days": expiring,
+        "soonest_expiry": soonest[0] if soonest else None,
+        "as_of": _certificates_utc(now.isoformat()),
+    }
+
+
+def _certificates_links(locations, label):
+    """The fenced links of Links.Certificates in listed order, a link listed twice kept once.
+
+    An entry that is not a link fails the check: a listing this check cannot
+    read whole is never recorded partially.
+    """
+    links, keys = [], set()
+    for index, item in enumerate(_aslist(_dig(locations, "Links", "Certificates"))):
+        link = _fenced_link(item, label) if isinstance(item, dict) else None
+        if link is None:
+            raise CollectError(
+                "%s: Links.Certificates entry %d is not a link — the listing cannot be read whole"
+                % (label, index)
+            )
+        if _certificates_key(link) not in keys:
+            keys.add(_certificates_key(link))
+            links.append(link)
+    return links
+
+
+def _certificates_require_budget(budget, path, count):
+    """Refuse, before the first certificate is read, a listing this check cannot read whole."""
+    left = _budget_left(budget)
+    if count > _CERTIFICATES_MAX or (left is not None and count > left):
+        raise CollectError(
+            "bmc_certificates: %s lists %d certificate(s) and a capture reads at most %d (%s "
+            "GET(s) left in its budget) — refused rather than recorded partially"
+            % (path, count, _CERTIFICATES_MAX, "unknown" if left is None else left)
+        )
+
+
+def _collect_certificates(ctx):
+    raw = {}
+    certificates = {}
+    with ctx.budget("bmc_certificates", _BUDGET_CERTIFICATES) as budget:
+        targets = _targets(ctx)
+        system = _get(ctx, targets["system"])
+        service = _fenced_link(
+            _dig(_get(ctx, _ROOT), "CertificateService"), "bmc_certificates CertificateService"
+        )
+        if service is None:
+            raise SkipCheck(
+                "the service root links no CertificateService: no certificate listing to read"
+            )
+        path = _sub(service, "CertificateLocations")
+        locations = _get_optional(ctx, path)
+        if locations is None:
+            raise SkipCheck("%s is not served (404): no certificate listing to read" % (path,))
+        if not isinstance(locations, dict) or not locations:
+            raise CollectError("%s answered without a resource body" % (path,))
+        raw[path] = _curate(locations)
+        links = _certificates_links(locations, "bmc_certificates CertificateLocations")
+        _certificates_require_budget(budget, path, len(links))
+        for link in links:
+            cert = _get_optional(ctx, link, redact=_certificates_redact)
+            if cert is None:
+                raise CollectError(
+                    "bmc_certificates: %s lists %s, which answered 404" % (path, link)
+                )
+            if not isinstance(cert, dict) or not cert:
+                raise CollectError("%s answered without a resource body" % (link,))
+            raw[link] = _curate(cert)
+            certificates[_certificates_key(link)] = cert
+    context = _certificates_context(certificates, _certificates_now())
+    context.update(
+        {
+            "listed": len(links),
+            "certificate_service": service,
+            "certificate_locations": path,
+            # Certificates the host's UEFI or devices supply, where a vendor lists
+            # them (Secure Boot databases, SPDM), may be listed only after POST.
+            "host_power_state": _text(_dig(system, "PowerState")),
+        }
+    )
+    return {
+        "raw": raw,
+        "normalized": _normalize_certificates(certificates),
+        "context": _with_resolution(context, targets),
+    }
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -7366,5 +7687,28 @@ register(
         ),
         collector=_collect_alerting,
         tags=("platform", "management", "alerting"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_certificates",
+        platform="bmc",
+        description=(
+            "Certificates the BMC lists (CertificateLocations): type, subject, issuer, validity, "
+            "key and usage types, self-signed; serial, fingerprint and days to expiry in context."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A certificate was regenerated, replaced or renewed (its validity, issuer or subject "
+            "moved: a BMC reset to defaults regenerates the self-signed HTTPS certificate, and "
+            "every client that trusted or pinned the old one now warns or refuses), or a trust "
+            "certificate was added or removed (an LDAP-over-TLS, key-manager or update server "
+            "that relied on it stops connecting); context.expired and expiring_within_30_days "
+            "say whether one is about to break."
+        ),
+        collector=_collect_certificates,
+        tags=("platform", "security"),
     )
 )

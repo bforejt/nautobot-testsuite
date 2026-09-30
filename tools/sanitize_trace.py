@@ -256,7 +256,7 @@ PERSON_KEYS = frozenset(
     | {"CHAPUsername", "MutualCHAPUsername", "ClientDN", "RemoteUser"}
     | {"ContactName", "ContactPerson"}
 )
-EMAIL_KEYS = frozenset({"EmailAddress", "OneTimePasscodeDeliveryAddress"})
+EMAIL_KEYS = frozenset({"EmailAddress", "OneTimePasscodeDeliveryAddress", "Email"})
 PHONE_KEYS = frozenset({"PhoneNumber"})
 HOST_KEYS = frozenset({"HostName", "FQDN"})
 DOMAIN_KEYS = frozenset({"DomainName"})
