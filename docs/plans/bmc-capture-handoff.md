@@ -948,15 +948,18 @@ Recorded as they were found, each with how it was resolved.
       `AuthFailureLoggingThreshold` and `SupportedAccountTypes` are not served
       on XCC 6.10 (null there). The lab's 31 roles cannot be walked within the
       40-GET ceiling when `$expand` is refused: refused with the count, never
-      recorded partially. Resolved at merge: the plan kept the bind DN as a
-      service identity, but its DMTF twin is a user-name leaf the family
-      scrubs — both are now scrubbed (a bind can name a person); an absent
+      recorded partially. Resolved at merge: an absent
       AccountService is not-present like every family's absent resource; and
       the account service's own credential and person leaves (`Token`,
       `KerberosKeytab`, `SecretKey`, `RemoteUser`,
       `OneTimePasscodeDeliveryAddress`, `ClientDN`) moved from a check-local
       redactor into the family scrubber and the fixture sanitizer, so the
       shakedown's reads of the same resources are covered too.
+      The bind identity was scrubbed at first (its DMTF twin is a user-name
+      leaf); by the user's decision of 2026-09-30 (§11 item 10) it is kept — a
+      name without its password connects nothing — and bmc_accounts reads the
+      AccountService, its providers and the LDAP client with the names-kept
+      redactor (credentials and a role mapping's directory user still scrubbed).
     - `bmc_alerting`: §4b and the §5b lab note call the EventService SMTP
       block populated; on the lab unit its server is the `0.0.0.0`
       placeholder and its from-address null (the relay is unconfigured), so
@@ -1062,6 +1065,30 @@ Recorded as they were found, each with how it was resolved.
    user 2026-09-30, "if we have data, keep data". The hygiene rules still
    win over it (no person's name, secret or key material is kept for being
    served).
+10. The user's answers of 2026-09-30 to the build's open questions:
+    - **`bmc_manager_services`: skipped.** Its protocol and service half lives
+      in `bmc_manager_network`; what remains on the lab unit (USB port
+      forwarding, the serial port, the configuration-backup target and
+      status) is low-churn and partly visible already (the forwarded ports
+      appear in `open_ports`).
+    - **Names without credentials may be captured**: local BMC account names
+      (decision 5, confirmed) and a directory provider's bind name are kept;
+      passwords, tokens, keys and anything else that would let someone connect
+      never are ("if this is just a name then keep it, but if it is
+      connectable information then we don't want it").
+    - **Units, as the XCC interface shows them:** the OS and loader watchdogs,
+      the power-off delay, the account lockout period and the NTP sync
+      frequency are in minutes. The capture keys the lockout values and the
+      watchdog timers as served, without a unit in their names (the DMTF
+      schema says seconds for the lockout leaves; XCC 6.10 serves minutes),
+      `ntp_sync_interval_min` already says minutes, and XCC 6.10 serves no
+      power-off delay over Redfish at all (`bmc_system`'s DMTF
+      `power_off_delay_s` stays null there).
+    - LDAP service addresses stay sorted; the rollout risk (§10a item 9) needs
+      no action; the user checks the Relationship form on 2.4.40 and reports
+      back; `jobs/checks_bmc.py` stays one module while it is functionally
+      complete; the dev stack's `se350-lab-1`, its Secrets Group, the
+      Relationship and the deployed jobs stay for now.
 
 ## 12. Open questions the shakedown settles
 

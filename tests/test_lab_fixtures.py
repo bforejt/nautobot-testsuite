@@ -2954,8 +2954,8 @@ class TestBmcLabAccounts(unittest.TestCase):
             "min_password_length": 6,
             "max_password_length": 32,
             "lockout_threshold": 10,
-            "lockout_duration_s": 60,
-            "lockout_counter_reset_s": 60,
+            "lockout_duration": 60,  # minutes on XCC 6.10 (its interface's lockout period)
+            "lockout_counter_reset": 60,
             "lockout_counter_reset_enabled": True,
             "auth_failure_logging_threshold": None,  # not served on XCC 6.10
             "password_expiration_days": 365,

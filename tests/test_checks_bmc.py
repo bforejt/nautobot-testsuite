@@ -6973,8 +6973,8 @@ class TestAccounts(unittest.TestCase):
             "min_password_length": 10,
             "max_password_length": 32,
             "lockout_threshold": 5,
-            "lockout_duration_s": 300,
-            "lockout_counter_reset_s": 120,
+            "lockout_duration": 300,
+            "lockout_counter_reset": 120,
             "lockout_counter_reset_enabled": True,
             "auth_failure_logging_threshold": 3,
             "password_expiration_days": 90,  # the DMTF leaf wins over Lenovo's 180
@@ -7034,7 +7034,7 @@ class TestAccounts(unittest.TestCase):
                     "ldaps://ldap-b.example.net:636",
                 ],
                 authentication_type="UsernameAndPassword",
-                bind_dn=marker,  # the DMTF bind Username is a user-name leaf: set, never shown
+                bind_dn="cn=bmc-bind,ou=Services,dc=example,dc=net",  # a name: kept
                 bind_password_set=True,
                 base_dns=["ou=Admins,dc=example,dc=net", "ou=Staff,dc=example,dc=net"],
                 username_attribute="uid",
@@ -7110,7 +7110,7 @@ class TestAccounts(unittest.TestCase):
                 enabled=True,
                 service_addresses=["198.51.100.41:636", "ldap-b.example.net:636"],
                 authentication_type="Anonymously",
-                bind_dn=checks._SCRUBBED,  # a bind identity can name a person: set, never shown
+                bind_dn="cn=bmc-bind,ou=Services,dc=example,dc=net",  # a name: kept
                 base_dns=["dc=example,dc=net"],
                 username_attribute="uid",
                 group_name_attribute="memberOf",
@@ -7228,7 +7228,11 @@ class TestAccounts(unittest.TestCase):
         )
         service = raw[self.SERVICE]
         self.assertEqual(service["Oem"]["Lenovo"]["CurrentLoggedUsers"], [marker, marker])
-        self.assertEqual(service["LDAP"]["Authentication"]["Username"], marker)
+        # the bind name is kept (a name without its password connects nothing)
+        self.assertEqual(
+            service["LDAP"]["Authentication"]["Username"],
+            "cn=bmc-bind,ou=Services,dc=example,dc=net",
+        )
         self.assertEqual(service["LDAP"]["RemoteRoleMapping"][2]["RemoteUser"], marker)
         self.assertEqual(service["ActiveDirectory"]["Authentication"]["KerberosKeytab"], marker)
         self.assertEqual(service["TACACSplus"]["Authentication"]["EncryptionKey"], marker)
@@ -7238,7 +7242,9 @@ class TestAccounts(unittest.TestCase):
         self.assertEqual(provider["Authentication"]["Token"], marker)
         client = raw[self.LDAP_CLIENT]
         self.assertEqual(client["BindingMethod"]["ClientPassword"], marker)
-        self.assertEqual(client["BindingMethod"]["ClientDN"], marker)
+        self.assertEqual(
+            client["BindingMethod"]["ClientDN"], "cn=bmc-bind,ou=Services,dc=example,dc=net"
+        )
         self.assertNotIn("@odata.etag", json.dumps(raw))
 
     def test_the_redactors_scrub_what_the_family_rule_does_not_name(self):
@@ -7263,6 +7269,15 @@ class TestAccounts(unittest.TestCase):
         authentication = scrubbed["LDAP"]["Authentication"]
         self.assertEqual(
             [authentication[key] for key in ("Token", "KerberosKeytab", "Username")], [marker] * 3
+        )
+        # bmc_accounts' own reads keep the bind name, never the credentials beside it
+        kept = checks._scrub_accounts(service)["LDAP"]["Authentication"]
+        self.assertEqual(
+            [kept[key] for key in ("Token", "KerberosKeytab", "Username")],
+            [marker, marker, "cn=bind"],
+        )
+        self.assertEqual(
+            checks._scrub_accounts(service)["LDAP"]["RemoteRoleMapping"][0]["RemoteUser"], marker
         )
         self.assertEqual(authentication["AuthenticationType"], "Token")
         self.assertEqual(
@@ -7314,12 +7329,13 @@ class TestAccounts(unittest.TestCase):
                 "/redfish/v1/": "_scrub_payload",
                 "/redfish/v1/Systems": "_scrub_payload",
                 SYS: "_scrub_payload",
-                self.SERVICE: "_scrub_payload",
-                self.ACCOUNTS + EXPAND: "_scrub_accounts",  # names kept here only
+                # names kept (local accounts, bind names), credentials never
+                self.SERVICE: "_scrub_accounts",
+                self.ACCOUNTS + EXPAND: "_scrub_accounts",
                 self.ROLES + EXPAND: "_scrub_payload",
-                self.PROVIDERS + EXPAND: "_scrub_payload",
+                self.PROVIDERS + EXPAND: "_scrub_accounts",
                 self.PROTOCOL: "_scrub_payload",  # bmc_manager_network's read, shared
-                self.LDAP_CLIENT: "_scrub_payload",
+                self.LDAP_CLIENT: "_scrub_accounts",
             },
         )
         self.assertEqual(ctx.budgets, [("bmc_accounts", checks._BUDGET_ACCOUNTS)])

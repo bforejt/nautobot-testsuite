@@ -5687,13 +5687,16 @@ def _collect_pcie_slots(ctx):
 _BUDGET_ACCOUNTS = 35 + _TARGET_GETS
 _ACCOUNTS_SERVICE = "/redfish/v1/AccountService"
 
-# The AccountService's collections, read in this order with the redactor each
-# needs (account names are kept in the Accounts collection only). The
-# additional providers are read only where the service links them.
+# The AccountService's collections, read in this order. Every read of this
+# check keeps names — local account names (decision 5) and a directory
+# provider's bind identity: a name connects nothing without its password, and
+# every password, token, keytab and key is scrubbed as everywhere; a directory
+# user in a role mapping stays scrubbed. The additional providers are read
+# only where the service links them.
 _ACCOUNTS_COLLECTIONS = (
     ("accounts", "Accounts", _scrub_accounts),
     ("roles", "Roles", _scrub_payload),
-    ("additional_providers", "AdditionalExternalAccountProviders", _scrub_payload),
+    ("additional_providers", "AdditionalExternalAccountProviders", _scrub_accounts),
 )
 # The DMTF ExternalAccountProvider blocks the AccountService serves inline, by
 # the type their row is keyed with.
@@ -5869,10 +5872,10 @@ def _accounts_dmtf_provider(block):
     """The row of a DMTF ExternalAccountProvider (an AccountService block, or a member of its
     AdditionalExternalAccountProviders collection).
 
-    bind_dn is Authentication.Username — a user-name leaf, so the family's
-    redactor has made it the scrub marker when set; bind_password_set is the
-    provider's own PasswordSet; oauth2_mode / oauth2_issuer come from an OAuth2
-    provider's OAuth2Service block.
+    bind_dn is Authentication.Username, the name the BMC binds to the directory
+    with — kept (the check reads with _scrub_accounts; the password beside it is
+    scrubbed); bind_password_set is the provider's own PasswordSet; oauth2_mode /
+    oauth2_issuer come from an OAuth2 provider's OAuth2Service block.
     """
     search = _dig(block, "LDAPService", "SearchSettings")
     count, mappings = _accounts_role_mappings(block.get("RemoteRoleMapping"))
@@ -5910,7 +5913,7 @@ def _accounts_lenovo_ldap_client(client):
 
     The same directory settings the DMTF LDAP block carries, in Lenovo's
     vocabulary: the four server slots (unset ones dropped, sorted), the
-    binding method and its ClientDN (a user-name leaf, scrubbed; ClientPassword is
+    binding method and its ClientDN (the bind name, kept; ClientPassword is
     scrubbed before this sees it), RootDN, the search attributes, and the
     Active Directory role-based-security settings.
     """
@@ -5986,8 +5989,9 @@ def _normalize_accounts(service, accounts, roles, providers=None, ldap_client=No
         "min_password_length": _to_int(service.get("MinPasswordLength")),
         "max_password_length": _to_int(service.get("MaxPasswordLength")),
         "lockout_threshold": _to_int(service.get("AccountLockoutThreshold")),
-        "lockout_duration_s": _to_int(service.get("AccountLockoutDuration")),
-        "lockout_counter_reset_s": _to_int(service.get("AccountLockoutCounterResetAfter")),
+        # as served, no unit claimed: the DMTF schema says seconds, XCC 6.10 serves minutes
+        "lockout_duration": _to_int(service.get("AccountLockoutDuration")),
+        "lockout_counter_reset": _to_int(service.get("AccountLockoutCounterResetAfter")),
         "lockout_counter_reset_enabled": _to_bool(service.get("AccountLockoutCounterResetEnabled")),
         "auth_failure_logging_threshold": _to_int(service.get("AuthFailureLoggingThreshold")),
         "password_expiration_days": expiration_days,
@@ -6089,7 +6093,7 @@ def _collect_accounts(ctx):
         lenovo = _is_lenovo(targets)
         linked = _fenced_link(_dig(_get(ctx, _ROOT), "AccountService"), "bmc_accounts")
         service_path = linked or _ACCOUNTS_SERVICE
-        service = _get_optional(ctx, service_path, redact=_scrub_payload)
+        service = _get_optional(ctx, service_path, redact=_scrub_accounts)
         if service is None and linked is not None:
             raise CollectError("the service root links %s but it answered 404" % (service_path,))
         if service is None:
@@ -6124,7 +6128,7 @@ def _collect_accounts(ctx):
                 _dig(protocol, "Oem", "Lenovo", "LDAPClient"), "bmc_accounts LDAPClient"
             )
             if ldap_client_link is not None:
-                ldap_client = _get_optional(ctx, ldap_client_link, redact=_scrub_payload)
+                ldap_client = _get_optional(ctx, ldap_client_link, redact=_scrub_accounts)
     if service is not None:
         raw[service_path] = _curate(service)
     if ldap_client is not None:
