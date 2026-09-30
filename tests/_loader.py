@@ -87,7 +87,7 @@ context = load("context")
 checks_iosxe = load("checks_iosxe")
 checks_panos = load("checks_panos")
 checks_vmware = load("checks_vmware")
-checks_xcc = load("checks_xcc")
+checks_bmc = load("checks_bmc")
 
 # Every catalog module is loaded by file name, mirroring jobs/__init__.py, so
 # a platform branch that adds jobs/checks_<platform>.py needs no edit here

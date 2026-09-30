@@ -12,21 +12,32 @@ Usage (from the repository root; stdlib only, the login never printed):
 What it does, in order:
 
 1. Reads the mapping file (``tools/sanitize_trace.py``'s real -> invented
-   table: hosts, users, serials, MACs, networks, IPv6 addresses) so this run
-   invents the same values as the last one, and adds the ``--host`` / ``--net``
-   pairs to it. The file lives beside the raw payloads, outside the repository.
-2. Discovers the user names the device itself prints (``username`` lines in
-   the config texts, ``[user: ...]`` login lines, ``by <user>`` config headers)
-   and maps them, with ``--user`` names, to ``netops``.
-3. Sanitizes every payload the table below names (a harvest file -> a fixture
+   table: hosts, users, serials, asset tags, UUIDs, MACs, networks, IPv6
+   addresses) so this run invents the same values as the last one, and adds
+   the ``--host`` / ``--net`` pairs to it. The file lives beside the raw
+   payloads, outside the repository.
+2. Discovers the user names the device itself prints: on a switch the
+   ``username`` lines in the config texts, ``[user: ...]`` login lines and
+   ``by <user>`` config headers, mapped with ``--user`` names to ``netops``;
+   on a BMC the account names Lenovo log messages carry (``Login ID: <x>``,
+   ``by user <x>``, ``for user <x>``, ``User <x> ...``, ``Userid is <x>``) in
+   the log-entry pages and every other harvest JSON, each mapped to its own
+   ``user-lab-<n>`` (the BMC's own actors, ``system`` or ``LXPM``, are not
+   people; a harvest's ``***scrubbed***`` marker is not a user).
+3. Learns from EVERY ``*.json`` of the harvest before sanitizing anything: the
+   serials of any shape, asset tags, hostnames and account names the Redfish
+   leaves name, so a serial a log message or a boot entry mentions is replaced
+   wherever it appears, whichever file names it.
+4. Sanitizes every payload the table below names (a harvest file -> a fixture
    name) with the mapping, the discovered users and every value of the
-   ``--env`` credential file (the file's ``user`` value becomes ``netops``,
-   the rest ``REDACTED``); the values are never printed or written.
-4. Applies ``--replace OLD=NEW`` literals (kept in the mapping file under
+   ``--env`` credential file (the file's ``user`` / ``username`` value becomes
+   ``netops``, an address is invented like any other, the rest ``REDACTED``);
+   the values are never printed or written.
+5. Applies ``--replace OLD=NEW`` literals (kept in the mapping file under
    ``literals`` so a re-run repeats them): for a string that must not reach
    the repository although it identifies nobody — the version of an image
    left on flash from a release the environment does not run, for instance.
-5. Writes each fixture, then scans every written file for anything real the
+6. Writes each fixture, then scans every written file for anything real the
    mapping knows (counts only, never the values) and exits 1 on a hit.
 
 ``--suffix`` renames the fixtures for a variant capture (``_lab`` in a name is
@@ -187,18 +198,22 @@ TABLE = {
     "ssh__dir_crashinfo.txt": "iosxe_dir_crashinfo_lab.txt",
 }
 
-# The texts a device prints its own users in.
+# The texts a device prints its own users in (-> netops).
 _USER_SOURCES = (
     "ssh__show_running_config.txt",
     "ssh__show_startup_config.txt",
     "ssh__show_logging.txt",
 )
+# A BMC harvest: the log-entry pages first, then every other payload (an
+# expanded log service, the trace); Lenovo prints account names in each
+# entry's Message (-> user-lab-<n>, one per account).
+_LOG_USER_SOURCES = ("get__redfish_v1_*Entries*.json", "*.json")
 _USER_PATTERNS = (
     re.compile(r"^username (\S+)", re.M),
     re.compile(r"\[user: ([^\]\s]+)\]"),
     re.compile(r"Last configuration change at .* by (\S+)"),
     re.compile(r"NVRAM configuration last updated at .* by (\S+)"),
-)
+) + sanitize_trace.LOG_USER_PATTERNS
 
 
 def fixture_name(name, suffix=None):
@@ -218,13 +233,48 @@ def discover_users(texts):
     """Sorted user names a device names in its own config and log texts.
 
     Only account-shaped tokens count: a redaction marker the transport already
-    put in a login line (``[user: ***scrubbed***]``) is not a user.
+    put in a login line (``[user: ***scrubbed***]``) is not a user, and
+    neither is an actor a BMC names in its own messages (``by user system``).
     """
     found = set()
     for text in texts:
         for pattern in _USER_PATTERNS:
-            found.update(pattern.findall(text))
+            for name in pattern.findall(text):
+                if (
+                    pattern in sanitize_trace.LOG_USER_PATTERNS
+                    and name.lower() in sanitize_trace.SYSTEM_ACTORS
+                ):
+                    continue
+                found.add(name)
     return sorted(name for name in found if _ACCOUNT.match(name))
+
+
+def discover_log_users(payloads):
+    """Sorted account names the ``Message`` of any log entry in parsed JSON payloads carries."""
+    found = set()
+    stack = list(payloads)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "Message" and isinstance(value, str):
+                    found.update(sanitize_trace.log_user_names(value))
+                else:
+                    stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return sorted(found)
+
+
+def harvest_json(src):
+    """Every ``*.json`` of a harvest, log-entry pages first, each once, in a stable order."""
+    paths, seen = [], set()
+    for pattern in _LOG_USER_SOURCES:
+        for path in sorted(src.glob(pattern)):
+            if path not in seen:
+                seen.add(path)
+                paths.append(path)
+    return paths
 
 
 def apply_literals(text, literals):
@@ -235,8 +285,10 @@ def apply_literals(text, literals):
 
 
 def real_values(mapping):
-    """Every real value a mapping knows, in the spellings a payload may carry."""
-    values = set(mapping.get("hosts", {})) | set(mapping.get("serials", {}))
+    """Every real value a mapping knows, in the spellings a payload may carry (substrings)."""
+    values = {host for host in mapping.get("hosts", {}) if not sanitize_trace.is_word_host(host)}
+    values |= set(mapping.get("serials", {})) | set(mapping.get("assets", {}))
+    values |= set(mapping.get("uuids", {}))
     values |= set(mapping.get("ips", {})) | set(mapping.get("ipv6", {}))
     values |= set(mapping.get("literals", {}))
     for digits in mapping.get("macs", {}):
@@ -245,6 +297,13 @@ def real_values(mapping):
         values.add(":".join(digits[i : i + 2] for i in range(0, 12, 2)))
         values.add("-".join(digits[i : i + 2] for i in range(0, 12, 2)))
     return {value for value in values if value}
+
+
+def real_tokens(mapping, extra=()):
+    """Whole-token patterns for what the mapping knows as words: people and word-like hosts."""
+    words = (set(mapping.get("users", {})) | set(extra)) - sanitize_trace.ROLE_WORDS
+    words |= {host for host in mapping.get("hosts", {}) if sanitize_trace.is_word_host(host)}
+    return [re.compile(sanitize_trace._TOKEN_EDGE % re.escape(word)) for word in words if word]
 
 
 def leak_hits(text, values, tokens=()):
@@ -308,15 +367,27 @@ def main(argv=None):
         if (src / name).exists()
     ]
     users = sorted(set(discover_users(texts)) | set(args.user))
+    payloads = []
+    for path in harvest_json(src):
+        try:
+            payloads.append(json.loads(path.read_text(encoding="utf-8", errors="replace")))
+        except ValueError:
+            continue
     secrets = sanitize_trace.read_env(args.env) if args.env else {}
+    people = sorted(set(discover_log_users(payloads)) - set(users) - set(secrets.values()))
     sanitizer = sanitize_trace.Sanitizer(
         hosts=_pairs(args.host, "host"),
         users=users,
+        people=people,
         nets=_pairs(args.net, "net"),
         secrets=secrets,
         salt=args.salt,
         mapping={key: value for key, value in mapping.items() if key != "literals"},
     )
+    # learn from every payload before sanitizing the first: a serial a log line
+    # or a boot entry mentions may only be named by a leaf in another file
+    for payload in payloads:
+        sanitizer.learn(payload)
     written, missing = [], []
     for source, name in TABLE.items():
         if only is not None and name not in only:
@@ -328,18 +399,15 @@ def main(argv=None):
         target = dst / fixture_name(name, args.suffix)
         target.write_text(apply_literals(sanitizer.file(path), literals), encoding="utf-8")
         written.append(target.name)
-    mapping = dict(sanitizer.map)
+    mapping = sanitizer.export_map()
     mapping["literals"] = literals
     map_path.write_text(json.dumps(mapping, indent=1, sort_keys=True) + "\n", encoding="utf-8")
 
-    # The leak scan: counts only, never a value. Credentials and user names
-    # count as whole tokens (a user name that is also a leaf prefix is not leaked by the leaf).
+    # The leak scan: counts only, never a value. Credentials, user names and
+    # word-like hosts count as whole tokens (a user name that is also a leaf
+    # prefix is not leaked by the leaf; "xcc" is not leaked by "XCC Web").
     values = real_values(mapping)
-    tokens = [
-        re.compile(sanitize_trace._TOKEN_EDGE % re.escape(value))
-        for value in set(secrets.values()) | set(users)
-        if value
-    ]
+    tokens = real_tokens(mapping, set(secrets.values()) | set(users) | set(people))
     leaks = 0
     for name in written:
         hits = leak_hits((dst / name).read_text(encoding="utf-8"), values, tokens)
@@ -350,7 +418,8 @@ def main(argv=None):
         print("MISSING %s" % source)
     print(
         "wrote %d fixture(s) to %s; %d user name(s) mapped; %d missing payload(s); "
-        "%d file(s) with leaks" % (len(written), dst, len(users), len(missing), leaks)
+        "%d file(s) with leaks"
+        % (len(written), dst, len(set(users) | set(people)), len(missing), leaks)
     )
     for name in written:
         print("  " + name)

@@ -143,6 +143,16 @@ class TestFence(unittest.TestCase):
             fence.ALLOWED_QUERY_PARAMS, frozenset({"$expand", "$select", "$skip", "$skiptoken"})
         )
 
+    def test_the_expand_forms_the_bmc_family_sends_pass_and_filter_is_refused(self):
+        # $levels=1 inlines a collection's members; $levels=2 is what the shakedown
+        # probes (XCC 6.10 does not inline a member's own sub-collections with it).
+        for path in (
+            "/redfish/v1/Systems/1/Memory?$expand=.($levels=1)",
+            "/redfish/v1/Chassis/1/NetworkAdapters?$expand=.($levels=2)",
+        ):
+            self.assertEqual(fence.fence_path(path), path)
+        self.assertIn("$filter", fence.path_refusal("/redfish/v1/Systems/1/Memory?$filter=x"))
+
     def test_reason_names_the_offending_segment(self):
         self.assertIn("Actions", fence.path_refusal("/redfish/v1/Systems/1/Actions/x"))
         self.assertIn("$top", fence.path_refusal("/redfish/v1/Systems/1?$top=1"))

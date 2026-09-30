@@ -22,16 +22,16 @@ DEVICES block at the top of the prompt when you paste it.
 | VM-Series firewall pair | panos | recommended | recommended | HA, interfaces, ARP, routes, tunnels, and sessions: the only view of whether traffic is handled as before |
 | 5th-floor access stacks | iosxe | recommended | recommended | Their uplinks get re-patched to the moved core, and anything moved onto them is otherwise invisible |
 | Console server (Opengear) | none | none | none | The suite has no Opengear platform. Selecting it marks the run failed. It is judged from the switch side |
-| SE350 XClarity controllers | xcc | none | none | The platform exists but is switched off (`constants.XCC_ENABLED`) |
+| SE350 XClarity controllers | bmc, inside each NFV host's file | with the hosts | with the hosts | Not devices of their own: an XCC is captured as the `bmc` family inside its host's own snapshot when the host Device carries an `xcc` interface with the XCC's address, the Secrets Group the `bmc_secrets_group` Relationship associates with that interface, and an XCC the worker can reach. Until those are modelled at a site, the BMC view is absent there |
 
 Before the pre capture:
 
 - Run a `dryrun` capture of every device a day ahead. It proves platform
   mapping, credentials, and RESTCONF or SOAP login.
 - The ESXi hosts need a Nautobot platform whose `network_driver` contains
-  `vmware` or `esxi`. A bare `lenovo` token maps them to the disabled XCC
-  platform. They also need a Secrets Group holding a local ESXi Read-only
-  user.
+  `vmware` or `esxi`. A bare `lenovo` token maps no platform, so the host's
+  own checks would not run. They also need a Secrets Group holding a local
+  ESXi Read-only user.
 - Every IOS-XE device, the 9300s and the controller included, needs
   RESTCONF enabled.
 - Do the SE350 hands-on steps the suite cannot do for you
@@ -130,9 +130,12 @@ THE CHANGE: the office consolidates from two floors (6 and 5) to one (5).
   - The 5th-floor access stacks and their APs. The stacks have files only
     if someone captured them. Their expected disturbance: losing their
     uplinks while CORE was down, then getting them back.
-- NO FILES: OOB; the SE350s' XClarity controllers (XCC capture is switched
-  off); the firewalls and the 5th-floor stacks, unless captured. Judge
-  these from what their neighbors see, and name the evidence you used.
+- NO FILES: OOB; the firewalls and the 5th-floor stacks, unless captured.
+  Judge these from what their neighbors see, and name the evidence you used.
+  The SE350s' XClarity controllers have no files of their own either: where
+  a host's XCC is modelled in Nautobot, its bmc_* checks (target "bmc") are
+  inside that host's snapshot; where it is not, there is no BMC view of that
+  host.
 
 PLANNED CHANGES (engineer: edit before use; leave "none declared" where
 nothing applies):
@@ -211,8 +214,8 @@ B. Power and hardware.
   - New alarm keys: FIX, with the alarm decoded.
   - A temperature leaving Normal points at the new room's airflow or
     cooling: FIX.
-- NFV hosts (vmware_health_sensors, the only hardware view while XCC is
-  off):
+- NFV hosts (vmware_health_sensors, the only hardware view when a host's
+  file has no bmc_* checks):
   - A sensor green pre and yellow or red post: FIX, decoded by name:
     - power supply or adapter: feed unplugged or adapter failed
     - fan: SE350 fans are internal, so this is transit damage
@@ -564,8 +567,13 @@ iosxe_license, iosxe_pki and iosxe_tcam, each file's "describe" says how.)
   state ARE in iosxe_platform_health).
 - Anything inside OOB, and console-port mapping (open each console session
   once before leaving).
-- The SE350s' out-of-band view while XCC capture is off: power-adapter
-  redundancy, tamper/lockdown state, the BMC event log, and BIOS settings.
+- The SE350s' out-of-band view wherever a host's file has no bmc_* checks
+  (its XCC not modelled in Nautobot at this site) or has them failed
+  (unknown, never clean): the BMC event log, BIOS settings, and hardware
+  health as the XCC sees it. Even where they are present, they do not show
+  the external power adapters or the tamper/lockdown state: a gen-1 SE350
+  serves neither as a supply or a security field (only as sensors the suite
+  does not read yet), and its bmc_security is not-present.
 - Traffic itself. The suite proves state, not forwarding. A manual
   end-to-end test from a 5th-floor client through the firewalls to the
   internet and WAN is still required.

@@ -9,22 +9,31 @@ Two jobs, both under the **Test Suite** grouping:
 - **Test Suite Capture** — runs every read-only check the platform supports
   against one or more devices (mixed platforms in one run collect per device) and attaches a versioned snapshot envelope (plus a raw-evidence bundle)
   to the JobResult: `snapshot_<device>_<change_id>.json` / `raw_<device>_<change_id>.json`.
+  A server whose BMC is modelled as an interface on its Device gets the BMC's
+  checks in the same snapshot, beside the host's own: every check entry names
+  its `target` (`host` or `bmc`).
   A `debug` checkbox additionally attaches `debug_<device>_<change_id>.json`: the
-  full transport trace (every RESTCONF/Redfish path, SSH command and SOAP
-  operation with timing, outcome, and payload — configuration text only in
-  its redacted form), so even a FAILED check keeps its evidence.
+  full transport trace of both planes (every RESTCONF/Redfish path, SSH
+  command and SOAP operation with timing, outcome, and payload, each entry
+  labelled with its transport — configuration text only in its redacted form,
+  BMC payloads only after their redactor), so even a FAILED check keeps its
+  evidence.
 - *(analysis happens outside Nautobot: download the snapshot files and feed
   them, with your test-plan prompt, to the LLM your organization approves —
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
   index locally.)*
 - **Test Suite Shakedown (dev)** — hidden development job: runs *every* registered
-  check for one device's platform in debug mode and attaches per-check verdicts
+  check for one device's platform in debug mode (and, when a BMC is modelled
+  on the device, the `bmc` family through a second debug context) and
+  attaches per-check verdicts (each naming its `target`)
   with advisories ("parsed but empty — leaf names likely differ on this
   version"), a per-platform `discovery` block (yang-library module inventory,
   RIB/FIB naming and where crash files live in the q-filesystem model on
-  IOS-XE; Redfish version, `$expand` support, OEM links
-  and collection counts on an XCC; hostd build, lockdown mode, CDP hearing
-  and health-runtime population on ESXi), and the full payload trace. This is
+  IOS-XE; hostd build, lockdown mode, CDP hearing
+  and health-runtime population on ESXi; under `discovery.bmc` the BMC's
+  Redfish version and vendor, resolved ids, `$expand` depth, OEM links, log
+  services, collection counts and the platform log's sequence numbers before
+  and after the run), and the full payload trace of both planes. This is
   how collectors get validated
   against real devices *before* a change window, and how CI fixtures are
   harvested (sanitize captures before committing). Check failures do not fail
@@ -33,13 +42,16 @@ Two jobs, both under the **Test Suite** grouping:
 Platforms today: Catalyst 9500 StackWise Virtual pairs and Catalyst 9300 StackWise
 stacks on IOS-XE 17.x (RESTCONF plus allowlisted read-only SSH commands), PAN-OS
 firewalls (SSH, XML op-command output), standalone VMware ESXi 8.x hosts set up
-as NFV compute (vim25 SOAP, read-only operation allowlist) and — built, tested
-and currently **switched off** by `constants.XCC_ENABLED` because the BMCs are
-unreachable at the current sites — their Lenovo XClarity Controllers, the
-ThinkSystem SE350 BMC (Redfish, GET-only). The two NFV platforms are modelled
-as "ESXi set up as NFV compute" in general, never as a host for one particular
-change: every check is always-on, and a feature that is not in use records
-loudly as `not-present`.
+as NFV compute (vim25 SOAP, read-only operation allowlist), and a server's
+baseboard management controller: modelled as an Interface on its host Device,
+never as a Device of its own, and captured in the host's own snapshot by the
+vendor-neutral `bmc` check family over GET-only Redfish. The Lenovo XClarity
+Controller is the verified one (a gen-1 ThinkSystem SE350 with XCC 6.10); on
+other vendors the DMTF reads run unverified and the OEM-only reads record
+`not-present` naming the vendor. Both server-side families are general —
+`vmware` is "ESXi set up as NFV compute", `bmc` is any Redfish BMC — never a
+host for one particular change: every check is always-on, and a feature that
+is not in use records loudly as `not-present`.
 
 ## Installation
 
@@ -56,7 +68,9 @@ Worker requirements: `requests` and `netmiko`, both already present on any worke
 running Golden Config or Device Onboarding. Nothing else — every other import is
 stdlib or Nautobot core, and `pyproject.toml` carries dev tooling only. Device
 credentials come from the device's assigned Secrets Group (or a per-run override
-group), never from job inputs.
+group), never from job inputs; a server's BMC takes its credentials from the
+Secrets Group associated with its interface through the `bmc_secrets_group`
+Relationship (see *NFV compute* below).
 
 ## Usage: a firewall cutover
 
@@ -84,40 +98,91 @@ Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 
 ### NFV compute (ESXi + XCC)
 
-An SE350 running ESXi is **two `dcim.Device` records** in Nautobot, one per
-management plane, and both are selected for a capture:
+An SE350 running ESXi is **one `dcim.Device`** in Nautobot — the host — and
+its XClarity Controller is an **Interface on that Device**, never a Device of
+its own. Selecting the host captures both management planes into one
+snapshot (no separate BMC artifact exists): the host's `vmware_*` checks and
+the BMC's `bmc_*` checks, every entry naming its `target`, and the envelope's
+`device.bmc` block naming the interface, the address dialled and every
+address seen, the transport, the vendor and product the BMC reported,
+whether the BMC was captured and, when not, why. Detection does not
+depend on the host's platform — any Device carrying such an interface gets
+its BMC captured — and there is no switch: a modelled BMC is always captured,
+an unmodelled one never is.
 
-- `<site>-se350-N` — Platform "VMware ESXi" (`network_driver` containing
+- **The host** — Platform "VMware ESXi" (`network_driver` containing
   `vmware` or `esxi`), role `nfv-host`, `primary_ip` = the vmk0 management
   address, Secrets Group `esxi-readonly` holding an HTTP(S)/Generic-typed
   username + password for a **local ESXi user with the built-in Read-only
-  role** (hostd enforces the boundary server-side).
-- *(tabled — `constants.XCC_ENABLED` is False)* `<site>-se350-N-xcc` —
-  Platform "Lenovo XCC" (`network_driver` containing `xcc`, `redfish` or
-  `lenovo`), role `bmc`, `primary_ip` = the XCC address, Secrets Group
-  `xcc-readonly` holding a **ReadOnly-role XCC account** (Basic auth, no BMC
-  session is ever created). When revived, the BMC will also be detected as an
-  Interface on the host Device (names in `constants.XCC_INTERFACE_NAMES`, with
-  an assigned address) and captured into its own
-  `snapshot_<device>-xcc_<change_id>.json`.
-- A `bmc_of` Relationship links the pair. `vmnicN` Interfaces with Cables to
-  the switch ports document the planned uplink map — the collectors never read
-  the ORM, so this is for the analyst, not for capture.
+  role** (hostd enforces the boundary server-side). Nothing about it changes
+  for the BMC: `vmware_host_identity` already reports `bmc_ip`/`bmc_mac` from
+  the host's side, so the analyst can confirm that the modelled BMC is the one
+  the host itself points at.
+- **The BMC interface**, on the host Device: named `xcc`, or anything whose
+  first word is a BMC token — `xcc`, `xclarity`, `imm`, `idrac`, `ilo`,
+  `cimc`, `bmc` or `ipmi`, with words split on anything that is not a letter
+  or a digit and trailing digits dropped, so `xcc`, `XCC-mgmt`, `iLO 5`,
+  `idrac-1` and `bmc0` match while `mgmt-xcc` does not. Any type, `mgmt_only`
+  recommended, **exactly one per Device**. Assign the BMC's address to it as
+  an IP Address; with several, the lowest IPv4 (else the lowest IPv6) is
+  dialled and all of them are named in `device.bmc.addresses_seen`.
+- **A Secrets Group for the BMC**, e.g. `bmc-readonly`: a username and a
+  password Secret associated with access type HTTP(S) (Generic works too —
+  the lookup cascades RESTCONF → HTTP → REST → Generic).
+- **The Relationship, created once** (Extensibility → Relationships): key
+  `bmc_secrets_group`, label "BMC credentials", type *one-to-many*, source
+  `extras | secrets group`, destination `dcim | interface`; then associate
+  the group on each BMC interface. The job accepts the reverse orientation
+  too (interface as source). On Nautobot 2.4.40, open the Relationship form
+  and check that both models appear in its type dropdowns before relying on
+  it (so far verified on a 3.2.5 dev stack only).
+- **The BMC account**: a local BMC user with a **ReadOnly** privilege and
+  Redfish access enabled — on an XCC the built-in ReadOnly role, or a custom
+  role whose OEM privilege is ReadOnly; on XCC 6.10 ReadOnly reads everything
+  the catalog needs. **A human completes its first-login password change**
+  once in the BMC's web UI (the suite never writes to a BMC); until then every
+  authenticated GET is refused, and the probe hint names the pending change.
+- `vmnicN` Interfaces with Cables to the switch ports document the planned
+  uplink map — the collectors never read the ORM, so this is for the analyst,
+  not for capture.
 - The VM-Series (or any other VNF with its own platform) stays its own Device:
   a `virtualization.VirtualMachine` row with a `vm_uuid` custom field is
   documentation only.
 
+What the capture does with each modelled state:
+
+| Modelled | Capture |
+| --- | --- |
+| No interface matches | Host only; `device.bmc` is null. |
+| An interface matches but carries no address | Host only; `device.bmc` names the interface with `captured` false and the note "no address assigned"; a job-log warning. |
+| Two interfaces match | The device fails before any transport opens — an ambiguous model never picks one. |
+| The BMC's credentials unresolvable (no Relationship with the key, no association on the interface, several groups, no usable username/password) or the BMC unreachable (TLS, 401, 403, a pending password change, timeout) | Every `bmc_*` check recorded `failed` with the reason; the host checks still run; device FAILED. |
+| The host's credentials or transport failing, an addressed BMC modelled | The BMC is still captured; every host check recorded `failed` with the reason; device FAILED. |
+| The host's platform unsupported (it maps to none of iosxe, panos, vmware), an addressed BMC modelled | The BMC is captured alone: `device.host_captured` and `device.platform_supported` false, a job-log warning, and the device succeeds when its BMC checks do. Without an addressed BMC such a Device fails ("cannot map platform"). |
+
+The per-run `secrets_group` override applies to the host platforms only: a
+BMC always uses the group its interface's Relationship names. A dry run
+probes both planes, and `override_checks` filters both families. A Device
+whose own platform names a BMC (`xcc`, `redfish`, `lenovo`) maps no platform:
+model the BMC as an interface on its host instead (the "cannot map platform"
+error says so).
+
 Do not rename Devices across a change — `tools/diff_snapshots.py` pairs by
 `device.name`. Location may change (it is stringified into the envelope, never
-compared); if the management subnet is re-addressed, update `primary_ip`
-between captures and let `vmware_vmknics` / `vmware_host_routes` /
-`xcc_manager_network` document the before/after. Both platforms are HTTPS to
-the management plane only: nothing here proves forwarding through the VNFs.
+compared); if the management subnet is re-addressed, update `primary_ip` (and
+the BMC interface's IP address, which the capture dials) between captures
+and let `vmware_vmknics` / `vmware_host_routes` / `bmc_manager_network`
+document the before/after. Host and BMC are both HTTPS to the management
+plane only: nothing here proves forwarding through the VNFs.
 
 ## Check catalog
 
 Tiers: **1** keyed assertions, **2** full-table diffs, **3** context recorded for
-the humans reading the report.
+the humans reading the report. Platform `bmc` is not a Device platform: those
+checks run against the BMC modelled as an interface on a host Device (see
+*NFV compute* above), beside the host's own checks, and each records in
+`context.resolution` how the BMC's System, Manager and Chassis were found and
+which vendor the BMC reports.
 
 | Check id | Platform | Tier | Description |
 | --- | --- | --- | --- |
@@ -207,18 +272,18 @@ the humans reading the report.
 | `vmware_vms` | vmware | 1 | Registered VMs: identity, hardware, reservations, power state, snapshots |
 | `vmware_vm_nics` | vmware | 1 | VM network adapters and PCI passthrough devices: MAC, backing, slot, state |
 | `vmware_vm_tuning` | vmware | 1 | Per-VM NFV tuning: curated .vmx keys plus the modeled reservation fallbacks |
-| `xcc_system` | xcc | 1 | System identity, health, boot settings, SecureBoot and the XCC's own address |
-| `xcc_security_state` | xcc | 1 | ThinkEdge Security Pack state: lockdown, motion/intrusion detection, SED (not-present on non-ThinkEdge units) |
-| `xcc_thermal` | xcc | 1 | Chassis temperature sensors and fans: health/state, ambient-class readings banded |
-| `xcc_power` | xcc | 1 | Power supplies/adapters, redundancy and voltage rails from Chassis/1/Power |
-| `xcc_inventory` | xcc | 2 | DIMM, processor and PCIe device inventory with per-part identity and health (POST-populated) |
-| `xcc_host_nics` | xcc | 1 | Host network ports as the BMC sees them: link status and burned-in MAC (ToManager excluded) |
-| `xcc_firmware` | xcc | 2 | Firmware inventory: every component's version and SoftwareId |
-| `xcc_event_log` | xcc | 2 | BMC platform event log: Warning/Critical entries keyed `sel\|<CommonEventID>\|<Id>`, whole log, no query window |
-| `xcc_bios` | xcc | 2 | Curated UEFI settings: VT-d, SR-IOV, HT, power/turbo, boot mode, TPM (not-present when Bios is unserved) |
-| `xcc_storage` | xcc | 1 | Storage controllers, physical drives (health, SED status) and RAID volumes (not-present when none enumerate) |
-| `xcc_manager_network` | xcc | 2 | XCC network services: NTP, DNS, enabled protocols/ports, addressing origin |
-| `xcc_chassis_location` | xcc | 3 | Operator-maintained chassis Location record and the intrusion sensor state |
+| `bmc_system` | bmc | 1 | System identity, health, boot settings, SecureBoot and the BMC's own address |
+| `bmc_security` | bmc | 1 | ThinkEdge Security Pack state: lockdown, motion/intrusion detection, SED (not-present where the vendor security resource carries none of them — a gen-1 SE350 included — or the vendor has no mapping yet) |
+| `bmc_thermal` | bmc | 1 | Chassis temperature sensors and fans: health/state, ambient-class readings (within 8 °C) |
+| `bmc_power` | bmc | 1 | Power supplies/adapters, redundancy and voltage rails from Chassis Power (an SE350's external adapters are not modelled as supplies: rails only there) |
+| `bmc_inventory` | bmc | 2 | DIMM, processor and PCIe device inventory with per-part identity and health (POST-populated: an empty collection is a failed read, never zero parts) |
+| `bmc_host_nics` | bmc | 1 | Host network ports as the BMC sees them: link status and burned-in MAC (ToManager excluded) |
+| `bmc_firmware` | bmc | 2 | Firmware inventory: every component's version and SoftwareId (a version on a `-Pending` member is a staged update) |
+| `bmc_event_log` | bmc | 2 | BMC platform event log: Warning/Critical entries keyed `sel\|<CommonEventID>\|<Id>`, whole log, no query window; account names in messages scrubbed |
+| `bmc_bios` | bmc | 2 | Curated UEFI settings: VT-d, SR-IOV, HT, power/turbo, boot mode, TPM (not-present when Bios is unserved) |
+| `bmc_storage` | bmc | 1 | Storage controllers, physical drives (health, SED status) and RAID volumes (not-present when none enumerate) |
+| `bmc_manager_network` | bmc | 2 | BMC network services: NTP, DNS, enabled protocols/ports, addressing origin |
+| `bmc_chassis` | bmc | 3 | Operator-maintained chassis Location record and the intrusion sensor state |
 
 What this catalog captures per network layer, and the holes still open ranked
 by general value, is tracked in `docs/coverage.md` (the living coverage map).
@@ -312,7 +377,14 @@ can change device state; the Redfish client additionally fences every path
 would decode `%41ctions` to `Actions` after the check) before a request is
 formed, and uses Basic auth so no BMC session is ever created; a `Redfish
 fence guard` CI step pins that wiring (the fence call and the single
-`session.get` site in `_send`). The SSH runner (`jobs/transport_ssh.py`)
+`session.get` site in `_send`). BMC payloads also pass a redactor inside
+`CollectorContext.get` before the debug trace, the per-run cache or raw see
+them: key material and credentials are scrubbed by exact leaf name (so the
+password *policy* leaves survive), user-name leaves outside the local-accounts
+list keep only whether they are set and the logged-in-user list only its
+length, and the account names Lenovo writes into its log messages are
+scrubbed wherever the entry repeats them; a redactor that fails withholds the
+answer and fails the read. The SSH runner (`jobs/transport_ssh.py`)
 refuses any command that does not match a per-platform read-only allowlist
 (the `show ` prefix; the display-only `request license info` on PAN-OS; and on
 IOS-XE the crashinfo `dir` listings — `dir crashinfo-<N>:` per stack member
@@ -363,7 +435,8 @@ python -m unittest discover -s tests -t . -v
 ```
 
 The test battery is pure stdlib — `diffcore`, `envelope`, `panos_xml`, the
-registry, the Redfish path fence (`redfish_paths`), the vim25 envelope
+registry, the BMC interface rule (`bmc_target`), the Redfish path fence
+(`redfish_paths`), the vim25 envelope
 builder/parser (`vsphere_soap`, including its refusal corpus), and every
 `_normalize_*` / `_parse_*` function run against fixture captures without
 Nautobot, netmiko, requests, or a network. CI (`.github/workflows/ci.yml`)
@@ -395,15 +468,30 @@ the read-only grep guard and the SOAP operation guard.
      list never pushes the trace past the 10 MB artifact limit, and the
      summary plus the check's own narrowed read (also in the trace) still
      answer all three questions.
-   - On an **XCC** the `discovery` block answers the questions the Redfish
-     collectors were written around: `RedfishVersion`, whether the root
-     advertises `$expand` (`ProtocolFeaturesSupported` — this decides the
-     per-check GET budget strategy), which `Oem.Lenovo` links `Managers/1`
-     exposes (the Security Pack resource among them, on ThinkEdge units), which
-     `LogServices` branch `Systems/1` serves (`PlatformLog` vs `StandardLog`),
-     and the member count of every collection the inventory checks walk —
-     together with the host power state, because DIMM/PCIe/storage/host-NIC
-     views are populated at POST. Run it once with the host on and once off.
+   - On a device with a **BMC** modelled, `discovery.bmc` answers the
+     questions a first run against a new BMC vendor or firmware must
+     (`checks_bmc.DISCOVERY_PROBES`, run before the checks): the service root
+     (`RedfishVersion`, vendor and product, `ProtocolFeaturesSupported` —
+     whether `$expand` is advertised decides the per-check GET budget
+     strategy — and the root links) with how the System, Manager and Chassis
+     ids were resolved; which OEM links and scalars those three carry (the
+     vendor security resource among them); every log service with its entry
+     type, size, overwrite policy and sequence-number leaves; the member count
+     of every collection the family reads or will read, with the host power
+     state and (on Lenovo) `SystemStatus` — DIMM/PCIe/storage/host-NIC views
+     are populated at POST, so run it once with the host on and once off;
+     whether `$expand` inlines one level and whether `$levels=2` also inlines
+     a member's own sub-collections and their members; which environment and
+     hardware views the Chassis links (legacy `Thermal`/`Power` versus
+     `ThermalSubsystem`/`PowerSubsystem`, `Sensors`, `EnvironmentMetrics`,
+     `Controls`, `PCIeSlots`, `PCIeDevices`, `NetworkAdapters`, `Drives`); the vendor
+     security resource's property names; the capture account's own role and
+     privileges as the BMC reports them (no other account); and the platform
+     log's sequence numbers before the checks (`log_sequence_before`) and,
+     re-read past the cache, after them (`log_sequence_after`) — what the run
+     itself wrote to the log, which on XCC 6.10 is nothing. A BMC that cannot
+     be opened is reported under `bmc_error` while the host is still shaken
+     down.
    - On an **ESXi host** it records the hostd build and `apiType`, which vim25
      namespace versions the host advertised (or that the fallback SOAPAction
      was used), `config.lockdownMode` as the Read-only user sees it, whether
@@ -425,7 +513,7 @@ the read-only grep guard and the SOAP operation guard.
       fixture set wants — into a directory outside the repository (the raw
       harvest is unsanitized). The login comes from the environment only:
 
-      ```
+      ```sh
       set -a; . /path/to/device.env; set +a
       python3 tools/harvest_live.py --host 192.0.2.10 --platform iosxe \
           --tag baseline --out /path/outside/the/repo \
@@ -438,13 +526,50 @@ the read-only grep guard and the SOAP operation guard.
       `results.json`, `trace.json` and `manifest.json`, and exits 1 when a
       check FAILED. A capture of an anomaly (a loop, a root elsewhere, a
       native-VLAN mismatch) is just another `--tag`.
+
+      A server's BMC is harvested over Redfish with `--platform bmc`, through
+      the worker's own `RedfishClient` (GET only, fenced, paced, Basic auth):
+      every `bmc_*` check, then the reads a fixture set wants beyond them —
+      every collection the family walks, with and without `$expand`, the
+      pending BIOS settings object, the registries, every OEM link under the
+      System, Manager, Chassis and NetworkProtocol, and the resources the
+      planned checks will read. Each read passes the family's redactor
+      (secrets, people's names and logged-in users; local account names are
+      kept, they are configuration), but addresses, serials, MACs and UUIDs
+      are real: the harvest is as unsanitized as any other. `--host-env`
+      names the variable that holds the address, so it never appears on a
+      command line either:
+
+      ```sh
+      set -a; . /path/to/bmc.env; set +a
+      python3 tools/harvest_live.py --host-env host --platform bmc \
+          --user-env username --password-env password \
+          --tag baseline --out /path/outside/the/repo
+      ```
+
+      Against a new BMC vendor or firmware, the first thing to run — before
+      the shakedown or the harvest — is `tools/redfish_walk.py`: a crawl of
+      every resource the Redfish service serves to the capture account,
+      through the same client (so GET-only, fenced and paced), following every
+      link except `JsonSchemas`, registry files, single log entries and the
+      AuditLog's entries (those only with `--audit`), one JSON file per
+      resource plus `_index.json`, resumable from what is already on disk.
+      The collectors and the fixture set are designed against what it finds.
+      Its output is unsanitized too (log messages carry user names and client
+      addresses), and it refuses an `--out` inside the repository:
+
+      ```sh
+      set -a; . /path/to/bmc.env; set +a
+      python3 tools/redfish_walk.py --out /path/outside/the/repo/walk \
+          --host-env host --user-env username --password-env password
+      ```
    2. **Sanitize** one harvest into fixtures with `tools/make_fixtures.py`,
       which maps each harvest file to its fixture name (`--list` prints the
       table) and runs every one through the sanitizer with one mapping file
       kept beside the raw payloads, so a re-harvest invents the same values
       as the last one and diffs cleanly:
 
-      ```
+      ```sh
       python3 tools/make_fixtures.py --payloads /path/outside/the/repo/baseline \
           --map /path/outside/the/repo/sanitize-map.json --out tests/fixtures \
           --env /path/to/device.env \
@@ -461,7 +586,13 @@ the read-only grep guard and the SOAP operation guard.
       scans every written fixture for anything real the mapping knows and
       exits 1 on a hit (counts only, never a value). `--suffix` / `--only`
       produce an anomaly capture's fixtures (`*_lab_hairpin.*`) beside the
-      baseline set without overwriting it.
+      baseline set without overwriting it. On a BMC harvest it also runs a
+      learn pass over every harvest file before writing any (a drive serial
+      may appear first inside a boot-order string, a part serial only in a
+      maintenance-log message), and the account names Lenovo writes into its
+      log messages become distinct `user-lab-<n>` inventions like the local
+      account names they belong to (the capture account from `--env` stays
+      `netops`).
    3. **Grep** the written fixtures once more for the real hostnames,
       addresses, names and serials before committing;
       `tests/test_lab_fixtures.py` keeps a shape-based guard running in CI
@@ -471,7 +602,7 @@ the read-only grep guard and the SOAP operation guard.
    The sanitizer underneath, `tools/sanitize_trace.py`, also runs on its own
    over a `shakedown-trace_*.json` or any payload file:
 
-   ```
+   ```sh
    python3 tools/sanitize_trace.py \
        --env /path/to/device.env \
        --host sw-real-01=sw-lab-1 --host AP0000.1111.2222=ap-lab-1 \
@@ -504,7 +635,21 @@ the read-only grep guard and the SOAP operation guard.
    IPv6 addresses with an EUI-64 identifier rebuilt from the invented MAC
    (a neighbour's link-local is the same device as its MAC-table row), a
    global or unique-local /64 landing in 2001:db8::/32, link-local prefixes,
-   multicast and the documentation range untouched. JSON files are walked
+   multicast and the documentation range untouched. Redfish payloads add
+   rules by leaf name: UUIDs invented with their version nibble and variant
+   bits kept (before the MAC rules, so a UUID's 12-digit tail is never read
+   as a MAC); any leaf ending in `SerialNumber` — of any shape — invented with
+   the same letter/digit pattern, and the same invention wherever that serial
+   appears in text (`SN: …` in a log message, a default BMC hostname, a boot
+   order entry); asset tags and phone numbers invented; `EntitlementId` and
+   licence or feature-key `Identifier` leaves to `<id:N>`; `Fingerprint` and
+   an SNMP engine id to `<hex:N>`; `HostName`/`FQDN` leaves to
+   `bmc-lab-<n>`(`.lab.example`) unless a `--host` pair names them; account,
+   login and contact leaves to distinct `user-lab-<n>` names; and key material
+   by the same exact-name rule the `bmc` family scrubs with (password policy
+   leaves survive). An env file's `username` is the user; its address-shaped
+   values (`host`) are never `REDACTED` — the address rules invent them, so a
+   fixture keeps an address where the device had one. JSON files are walked
    (keys and values); everything else is treated as text. Fixtures harvested
    this way carry a `_lab` suffix when a richer hand-built fixture of the
    same name stays beside them; `tests/test_lab_fixtures.py` pins what every

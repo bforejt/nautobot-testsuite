@@ -1,6 +1,7 @@
-"""checks_xcc normalizers and collectors driven with hand-built XCC gen-1 Redfish fixtures."""
+"""checks_bmc normalizers and collectors driven with hand-built XCC gen-1 Redfish fixtures."""
 
 import copy
+import json
 import unittest
 
 if __package__:
@@ -8,13 +9,15 @@ if __package__:
 else:  # unittest discover -s tests imports test modules as top-level
     import _loader
 
-checks = _loader.checks_xcc
+checks = _loader.checks_bmc
 registry = _loader.registry
 
 SYS = "/redfish/v1/Systems/1"
 MGR = "/redfish/v1/Managers/1"
 CH = "/redfish/v1/Chassis/1"
 EXPAND = "?$expand=.($levels=1)"
+# The id resolution every check starts with (the first one pays, the rest hit the cache).
+RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", SYS]
 
 
 class _FakeRedfishError(Exception):
@@ -94,17 +97,19 @@ class _FakeCtx:
         self.errors = errors or {}
         self.opaque_budget = opaque_budget
         self.gets = []
+        self.redacted = []
         self.budgets = []
         self.active_budget = None
-        self.device_name = "se350-a-xcc"
+        self.device_name = "se350-a"
         self.logger = None
         self._cache = {}
 
-    def get(self, path, **kwargs):
+    def get(self, path, redact=None, **kwargs):
         ok_404 = bool(kwargs.get("ok_404", False))
-        key = (path, ok_404)
+        key = (path, ok_404) + tuple(sorted((k, v) for k, v in kwargs.items() if k != "ok_404"))
         if key in self._cache:
-            return self._cache[key]
+            cached = self._cache[key]
+            return redact(cached) if redact is not None and cached is not None else cached
         if self.active_budget is not None:
             self.active_budget.charge(path)
         self.gets.append(path)
@@ -118,6 +123,9 @@ class _FakeCtx:
                 return None
             raise _FakeRedfishError("GET %s: 404 not found" % (path,), status_code=404)
         payload = copy.deepcopy(self.payloads[path])
+        if redact is not None:
+            payload = redact(payload)
+        self.redacted.append((path, getattr(redact, "__name__", None)))
         self._cache[key] = payload
         return payload
 
@@ -147,6 +155,11 @@ def _base_payloads():
     """Every fixture at its documented path, $expand forms included."""
     payloads = {
         "/redfish/v1/": _fx("xcc_service_root.json"),
+        "/redfish/v1/Systems": {
+            "@odata.id": "/redfish/v1/Systems",
+            "Members": [{"@odata.id": SYS}],
+            "Members@odata.count": 1,
+        },
         SYS: _fx("xcc_system.json"),
         SYS + "/SecureBoot": _fx("xcc_secure_boot.json"),
         MGR: _fx("xcc_manager.json"),
@@ -189,34 +202,34 @@ def _without_expand(payloads):
 
 class TestRegistrations(unittest.TestCase):
     EXPECTED_IDS = {
-        "xcc_system",
-        "xcc_security_state",
-        "xcc_thermal",
-        "xcc_power",
-        "xcc_inventory",
-        "xcc_host_nics",
-        "xcc_firmware",
-        "xcc_event_log",
-        "xcc_bios",
-        "xcc_storage",
-        "xcc_manager_network",
-        "xcc_chassis_location",
+        "bmc_system",
+        "bmc_security",
+        "bmc_thermal",
+        "bmc_power",
+        "bmc_inventory",
+        "bmc_host_nics",
+        "bmc_firmware",
+        "bmc_event_log",
+        "bmc_bios",
+        "bmc_storage",
+        "bmc_manager_network",
+        "bmc_chassis",
     }
 
     def test_all_registered_once(self):
         registered = {
-            check_id for check_id, check in registry.CHECKS.items() if check.platform == "xcc"
+            check_id for check_id, check in registry.CHECKS.items() if check.platform == "bmc"
         }
         self.assertEqual(registered, self.EXPECTED_IDS)
 
     def test_checks_for_filters_by_platform(self):
-        ids = {check.id for check in registry.checks_for("xcc")}
+        ids = {check.id for check in registry.checks_for("bmc")}
         self.assertEqual(ids, self.EXPECTED_IDS)
 
     def test_every_check_has_collector_compare_and_tier(self):
         diffcore = _loader.diffcore
         for check in registry.CHECKS.values():
-            if check.platform != "xcc":
+            if check.platform != "bmc":
                 continue
             self.assertTrue(callable(check.collector), check.id)
             self.assertIn("mode", check.compare, check.id)
@@ -232,7 +245,7 @@ class TestRegistrations(unittest.TestCase):
                 self.assertTrue(1 <= value <= ceiling, name)
 
     def test_every_collector_declares_a_budget_named_after_its_check(self):
-        for check in registry.checks_for("xcc"):
+        for check in registry.checks_for("bmc"):
             ctx = _FakeCtx(_base_payloads())
             try:
                 check.collector(ctx)
@@ -292,26 +305,30 @@ class TestSystem(unittest.TestCase):
         self.assertEqual(view["secure_boot_current"], "Enabled")
         self.assertEqual(view["secure_boot_mode"], "DeployedMode")
         self.assertEqual(view["system_status"], "BootingOSOrInUndetectedOS")
-        self.assertEqual(view["xcc_firmware"], "TEI3E4D-4.12")
-        self.assertEqual(view["xcc_health"], "OK")
-        self.assertEqual(view["xcc_ip"], "192.0.2.21")
-        self.assertEqual(view["xcc_ip_origin"], "Static")
-        self.assertEqual(view["xcc_gateway"], "192.0.2.1")
-        self.assertIs(view["xcc_vlan_enabled"], False)
-        self.assertIsNone(view["xcc_vlan"])  # None when VLAN disabled
-        self.assertEqual(view["xcc_mac"], "08:94:ef:aa:bb:01")  # lower-cased
+        self.assertEqual(view["bmc_firmware"], "TEI3E4D-4.12")
+        self.assertEqual(view["bmc_health"], "OK")
+        self.assertEqual(view["bmc_state"], "Enabled")
+        self.assertEqual(view["bmc_ip"], "192.0.2.21")
+        self.assertEqual(view["bmc_ip_origin"], "Static")
+        self.assertEqual(view["bmc_gateway"], "192.0.2.1")
+        self.assertIs(view["bmc_vlan_enabled"], False)
+        self.assertIsNone(view["bmc_vlan"])  # None when VLAN disabled
+        self.assertEqual(view["bmc_mac"], "08:94:ef:aa:bb:01")  # lower-cased
+        self.assertFalse([key for key in view if key.startswith("xcc_")])
         self.assertEqual(view["eth_member_used"], "NIC")
         self.assertIsNone(view["asset_tag"])  # '' is unset, never ''
 
-    def test_secure_boot_404_gives_three_nones_and_xcc_health_falls_back_to_state(self):
+    def test_secure_boot_404_gives_three_nones_and_bmc_health_never_borrows_the_state(self):
+        # XCC 6.10 serves the Manager's Status with a State and no Health.
         manager = _fx("xcc_manager.json")
         manager["Status"] = {"State": "Enabled"}
         view = checks._normalize_system(_fx("xcc_system.json"), None, manager, None, None)
         self.assertIsNone(view["secure_boot_enabled"])
         self.assertIsNone(view["secure_boot_current"])
         self.assertIsNone(view["secure_boot_mode"])
-        self.assertEqual(view["xcc_health"], "Enabled")
-        self.assertIsNone(view["xcc_ip"])
+        self.assertIsNone(view["bmc_health"])
+        self.assertEqual(view["bmc_state"], "Enabled")
+        self.assertIsNone(view["bmc_ip"])
         self.assertIsNone(view["eth_member_used"])
 
     def test_collector_direct_nic_and_shared_fetches(self):
@@ -321,14 +338,16 @@ class TestSystem(unittest.TestCase):
         self.assertEqual(result["context"]["manager_nic"]["source"], "direct")
         self.assertEqual(result["context"]["reboot_count"], 27)
         self.assertEqual(result["context"]["power_on_hours"], 9137)
-        self.assertEqual(result["context"]["xcc_datetime"], "2026-09-24T14:02:11+00:00")
+        self.assertEqual(result["context"]["bmc_datetime"], "2026-09-24T14:02:11+00:00")
         self.assertEqual(result["context"]["trusted_modules"][0]["interface_type"], "TPM2_0")
-        self.assertEqual(ctx.gets, [SYS, SYS + "/SecureBoot", MGR, MGR + "/EthernetInterfaces/NIC"])
+        self.assertEqual(
+            ctx.gets, RESOLVE + [SYS + "/SecureBoot", MGR, MGR + "/EthernetInterfaces/NIC"]
+        )
         self.assertIn(MGR + "/EthernetInterfaces/NIC", result["raw"])
         self.assertNotIn("Actions", result["raw"][SYS])
         # The same GETs serve the sibling checks from the cache: no new wire requests.
         checks._collect_manager_network(ctx)
-        self.assertEqual(ctx.gets[4:], [MGR + "/NetworkProtocol"])
+        self.assertEqual(ctx.gets[6:], [MGR + "/NetworkProtocol"])
 
     def test_collector_nic_collection_fallback_never_takes_first_member(self):
         payloads = _base_payloads()
@@ -343,7 +362,7 @@ class TestSystem(unittest.TestCase):
         ctx = _FakeCtx(payloads)
         result = checks._collect_system(ctx)
         self.assertEqual(result["normalized"]["eth_member_used"], "eth0")
-        self.assertEqual(result["normalized"]["xcc_ip"], "192.0.2.21")
+        self.assertEqual(result["normalized"]["bmc_ip"], "192.0.2.21")
         self.assertEqual(result["context"]["manager_nic"]["source"], "collection")
         self.assertNotIn(MGR + "/EthernetInterfaces/ToHost", ctx.gets)
 
@@ -356,7 +375,7 @@ class TestSystem(unittest.TestCase):
         self.assertIsNone(result["normalized"]["secure_boot_enabled"])
         self.assertIsNone(result["raw"][SYS + "/SecureBoot"])
         self.assertEqual(result["context"]["manager_nic"]["source"], "absent")
-        self.assertIsNone(result["normalized"]["xcc_mac"])
+        self.assertIsNone(result["normalized"]["bmc_mac"])
 
     def test_missing_system_is_a_failed_read(self):
         payloads = _base_payloads()
@@ -433,7 +452,7 @@ class TestSecurityState(unittest.TestCase):
         ctx = _FakeCtx(payloads)
         with self.assertRaises(checks.CollectError):
             checks._collect_security_state(ctx)
-        self.assertEqual(ctx.gets, [MGR])
+        self.assertEqual(ctx.gets, RESOLVE + [MGR])
 
 
 class TestThermal(unittest.TestCase):
@@ -464,7 +483,7 @@ class TestThermal(unittest.TestCase):
     def test_collector_and_empty_temperatures_is_a_failed_read(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_thermal(ctx)
-        self.assertEqual(ctx.gets, [CH + "/Thermal"])
+        self.assertEqual(ctx.gets, RESOLVE + [CH + "/Thermal"])
         self.assertIn("temp|Ambient Temp", result["normalized"])
         payloads = _base_payloads()
         payloads[CH + "/Thermal"]["Temperatures"] = []
@@ -472,7 +491,7 @@ class TestThermal(unittest.TestCase):
             checks._collect_thermal(_FakeCtx(payloads))
 
     def test_bands_declared_as_the_plan_states(self):
-        compare = registry.CHECKS["xcc_thermal"].compare
+        compare = registry.CHECKS["bmc_thermal"].compare
         self.assertEqual(compare["fields"]["reading_c"]["tolerance"], {"abs": 8})
         self.assertEqual(compare["fields"]["reading"]["tolerance"], {"pct": 25})
 
@@ -514,10 +533,10 @@ class TestPower(unittest.TestCase):
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_power(ctx)
-        self.assertEqual(ctx.gets, [CH + "/Power"])
+        self.assertEqual(ctx.gets, RESOLVE + [CH + "/Power"])
         self.assertNotIn("Actions", result["raw"][CH + "/Power"])
         self.assertEqual(
-            registry.CHECKS["xcc_power"].compare["fields"]["line_input_voltage"]["tolerance"],
+            registry.CHECKS["bmc_power"].compare["fields"]["line_input_voltage"]["tolerance"],
             {"pct": 10},
         )
 
@@ -557,9 +576,8 @@ class TestInventory(unittest.TestCase):
         result = checks._collect_inventory(ctx)
         self.assertEqual(
             ctx.gets,
-            [
-                SYS,
-                "/redfish/v1/",
+            RESOLVE
+            + [
                 SYS + "/Memory" + EXPAND,
                 SYS + "/Processors" + EXPAND,
                 CH + "/PCIeDevices" + EXPAND,
@@ -762,7 +780,7 @@ class TestFirmware(unittest.TestCase):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_firmware(ctx)
         self.assertEqual(
-            ctx.gets, ["/redfish/v1/", "/redfish/v1/UpdateService/FirmwareInventory" + EXPAND]
+            ctx.gets, RESOLVE + ["/redfish/v1/UpdateService/FirmwareInventory" + EXPAND]
         )
         self.assertEqual(result["context"]["strategy"], "expand")
         self.assertEqual(result["context"]["members"], 15)
@@ -774,9 +792,8 @@ class TestFirmware(unittest.TestCase):
         result = checks._collect_firmware(ctx)
         self.assertEqual(result["context"]["strategy"], "members")
         self.assertEqual(len(result["normalized"]), 15)
-        self.assertEqual(
-            len(ctx.gets), 2 + 1 + 15
-        )  # root, expand attempt(404), collection, members
+        # resolution (root, Systems, System), expand attempt (404), collection, members
+        self.assertEqual(len(ctx.gets), 3 + 1 + 1 + 15)
 
     def test_collector_refuses_a_walk_the_budget_cannot_cover(self):
         payloads = _without_expand(_base_payloads())
@@ -872,13 +889,17 @@ class TestEventLog(unittest.TestCase):
         result = checks._collect_event_log(ctx)
         self.assertEqual(
             ctx.gets,
-            [
+            RESOLVE
+            + [
                 SYS + "/LogServices",
                 SYS + "/LogServices/PlatformLog",
                 SYS + "/LogServices/PlatformLog/Entries",
             ],
         )
         self.assertFalse([path for path in ctx.gets if "$top" in path or "?" in path])
+        # every Entries page passes the log redactor, every other read the scrubber
+        self.assertIn((SYS + "/LogServices/PlatformLog/Entries", "_redact_log_page"), ctx.redacted)
+        self.assertIn((SYS + "/LogServices", "_scrub_payload"), ctx.redacted)
         self.assertEqual(result["context"]["log_service_used"], "PlatformLog")
         self.assertEqual(result["context"]["pages"], 1)
         raw_entries = result["raw"][SYS + "/LogServices/PlatformLog/Entries"]["Members"]
@@ -992,7 +1013,7 @@ class TestBios(unittest.TestCase):
     def test_collector_raw_curated_and_capped(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_bios(ctx)
-        self.assertEqual(ctx.gets, [SYS + "/Bios"])
+        self.assertEqual(ctx.gets, RESOLVE + [SYS + "/Bios"])
         raw = result["raw"][SYS + "/Bios"]
         self.assertNotIn("Attributes", raw)
         self.assertNotIn("Actions", raw)
@@ -1049,9 +1070,8 @@ class TestStorage(unittest.TestCase):
         result = checks._collect_storage(ctx)
         self.assertEqual(
             ctx.gets,
-            [
-                SYS,
-                "/redfish/v1/",
+            RESOLVE
+            + [
                 SYS + "/Storage" + EXPAND,
                 SYS + "/Storage/RAID_Slot1/Drives/Disk.0",
                 SYS + "/Storage/RAID_Slot1/Drives/Disk.1",
@@ -1127,7 +1147,10 @@ class TestManagerNetwork(unittest.TestCase):
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_manager_network(ctx)
-        self.assertEqual(ctx.gets, [MGR + "/NetworkProtocol", MGR + "/EthernetInterfaces/NIC"])
+        self.assertEqual(
+            ctx.gets, RESOLVE + [MGR + "/NetworkProtocol", MGR + "/EthernetInterfaces/NIC"]
+        )
+        self.assertEqual(result["context"]["snmp_source"], "SNMP.ProtocolEnabled")
         self.assertEqual(result["context"]["manager_nic"]["member"], "NIC")
         self.assertEqual(result["context"]["nic_speed_mbps"], 1000)
         self.assertEqual(result["context"]["nic_link_status"], "LinkUp")
@@ -1163,7 +1186,7 @@ class TestChassisLocation(unittest.TestCase):
     def test_collector(self):
         ctx = _FakeCtx(_base_payloads())
         result = checks._collect_chassis_location(ctx)
-        self.assertEqual(ctx.gets, [CH])
+        self.assertEqual(ctx.gets, RESOLVE + [CH])
         self.assertIs(result["context"]["location_present"], True)
         self.assertIs(result["context"]["physical_security_present"], True)
         self.assertEqual(result["context"]["indicator_led"], "Off")
@@ -1173,7 +1196,7 @@ class TestChassisLocation(unittest.TestCase):
 class TestWholeFamily(unittest.TestCase):
     def test_every_check_succeeds_on_the_fixture_set_within_its_budget(self):
         ctx = _FakeCtx(_base_payloads())
-        for check in registry.checks_for("xcc"):
+        for check in registry.checks_for("bmc"):
             result = check.collector(ctx)
             self.assertEqual(set(result), {"raw", "normalized", "context"}, check.id)
             self.assertTrue(result["normalized"], check.id)
@@ -1184,7 +1207,8 @@ class TestWholeFamily(unittest.TestCase):
         self.assertEqual(ctx.gets.count(MGR), 1)
         self.assertEqual(ctx.gets.count("/redfish/v1/"), 1)
         self.assertEqual(ctx.gets.count(MGR + "/EthernetInterfaces/NIC"), 1)
-        self.assertLessEqual(len(ctx.gets), 30)
+        self.assertEqual(ctx.gets.count("/redfish/v1/Systems"), 1)
+        self.assertLessEqual(len(ctx.gets), 31)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -1193,10 +1217,638 @@ class TestWholeFamily(unittest.TestCase):
 
     def test_every_check_succeeds_without_expand_support(self):
         ctx = _FakeCtx(_without_expand(_base_payloads()))
-        for check in registry.checks_for("xcc"):
+        for check in registry.checks_for("bmc"):
             result = check.collector(ctx)
             self.assertTrue(result["normalized"], check.id)
-        self.assertLessEqual(len(ctx.gets), 60)
+        self.assertLessEqual(len(ctx.gets), 61)
+
+
+class TestResolution(unittest.TestCase):
+    """Member ids come from the collections and the System's links, never from '/1'."""
+
+    DELL_SYS = "/redfish/v1/Systems/System.Embedded.1"
+
+    def _dell(self):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads["/redfish/v1/Systems"]["Members"] = [{"@odata.id": self.DELL_SYS}]
+        system = copy.deepcopy(payloads[SYS])
+        system["@odata.id"] = self.DELL_SYS
+        system["Id"] = "System.Embedded.1"
+        system["Links"] = {
+            "ManagedBy": [{"@odata.id": "/redfish/v1/Managers/iDRAC.Embedded.1"}],
+            "Chassis": [{"@odata.id": self.DELL_SYS.replace("Systems", "Chassis")}],
+        }
+        payloads[self.DELL_SYS] = system
+        return payloads
+
+    def test_lenovo_lab_shape_resolves_to_the_linked_members(self):
+        targets = checks._targets(_FakeCtx(_base_payloads()))
+        self.assertEqual(
+            (targets["system"], targets["manager"], targets["chassis"]), (SYS, MGR, CH)
+        )
+        resolution = targets["resolution"]
+        self.assertEqual(resolution["system_found_by"], "only member")
+        self.assertEqual(resolution["manager_found_by"], "System Links.ManagedBy")
+        self.assertEqual(resolution["chassis_found_by"], "System Links.Chassis")
+        # the hand-built root predates ServiceRoot.Vendor: the System names the maker
+        self.assertEqual(resolution["vendor"], "Lenovo")
+        self.assertEqual(resolution["vendor_source"], "ComputerSystem.Manufacturer")
+
+    def test_dell_shaped_ids_are_resolved_not_assumed(self):
+        targets = checks._targets(_FakeCtx(self._dell()))
+        self.assertEqual(targets["system"], self.DELL_SYS)
+        self.assertEqual(targets["manager"], "/redfish/v1/Managers/iDRAC.Embedded.1")
+        self.assertEqual(targets["chassis"], "/redfish/v1/Chassis/System.Embedded.1")
+        self.assertEqual(targets["vendor"], "Dell")
+        self.assertEqual(targets["resolution"]["vendor_source"], "ServiceRoot.Vendor")
+
+    def test_unlinked_members_come_from_their_collections(self):
+        payloads = _base_payloads()
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {
+            "Members": [{"@odata.id": "/redfish/v1/Chassis/Enclosure"}, {"@odata.id": CH}]
+        }
+        ctx = _FakeCtx(payloads)
+        targets = checks._targets(ctx)
+        self.assertEqual(targets["manager"], MGR)
+        self.assertEqual(targets["resolution"]["manager_found_by"], "only member")
+        self.assertEqual(targets["chassis"], CH)
+        self.assertEqual(
+            targets["resolution"]["chassis_found_by"], "id 1 preferred among 2 members"
+        )
+        self.assertEqual(ctx.gets, RESOLVE + ["/redfish/v1/Managers", "/redfish/v1/Chassis"])
+
+    def test_several_systems_prefer_1_then_dell_then_first_sorted(self):
+        choose = checks._choose_member
+        make = lambda *ids: {"Members": [{"@odata.id": "/redfish/v1/Systems/" + i} for i in ids]}  # noqa: E731
+        self.assertEqual(choose(make("2", "1"), "Systems")[0], "/redfish/v1/Systems/1")
+        self.assertEqual(
+            choose(make("A", "System.Embedded.1"), "Systems")[0],
+            "/redfish/v1/Systems/System.Embedded.1",
+        )
+        path, how = choose(make("node-b", "node-a"), "Systems")
+        self.assertEqual(path, "/redfish/v1/Systems/node-a")
+        self.assertIn("first id of 2 members", how)
+        with self.assertRaises(checks.CollectError):
+            choose({"Members": []}, "Systems")
+
+    def test_a_systems_link_into_actions_is_refused(self):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/Systems"]["Members"] = [{"@odata.id": SYS + "/Actions/x"}]
+        with self.assertRaises(checks.CollectError):
+            checks._targets(_FakeCtx(payloads))
+
+    def test_the_dmtf_checks_run_on_dell_shaped_paths(self):
+        dell = {"system": "System.Embedded.1", "manager": "iDRAC.Embedded.1"}
+
+        def dellify(text):
+            text = text.replace(SYS, "/redfish/v1/Systems/" + dell["system"])
+            text = text.replace(MGR, "/redfish/v1/Managers/" + dell["manager"])
+            return text.replace(CH, "/redfish/v1/Chassis/" + dell["system"])
+
+        # the paths AND every link inside the payloads, as a Dell serves them
+        payloads = {
+            dellify(path): json.loads(dellify(json.dumps(payload)))
+            for path, payload in _base_payloads().items()
+        }
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads["/redfish/v1/Systems"] = {
+            "Members": [{"@odata.id": "/redfish/v1/Systems/" + dell["system"]}]
+        }
+        system = copy.deepcopy(payloads["/redfish/v1/Systems/" + dell["system"]])
+        system["Links"] = {
+            "ManagedBy": [{"@odata.id": "/redfish/v1/Managers/" + dell["manager"]}],
+            "Chassis": [{"@odata.id": "/redfish/v1/Chassis/" + dell["system"]}],
+        }
+        payloads["/redfish/v1/Systems/" + dell["system"]] = system
+        ctx = _FakeCtx(payloads)
+        for collector in (
+            checks._collect_thermal,
+            checks._collect_power,
+            checks._collect_inventory,
+            checks._collect_host_nics,
+            checks._collect_firmware,
+            checks._collect_storage,
+            checks._collect_bios,
+            checks._collect_chassis_location,
+            checks._collect_manager_network,
+            checks._collect_system,
+        ):
+            result = collector(ctx)
+            self.assertTrue(result["normalized"], collector.__name__)
+            self.assertEqual(
+                result["context"]["resolution"]["system"],
+                "/redfish/v1/Systems/System.Embedded.1",
+                collector.__name__,
+            )
+        self.assertFalse(
+            [path for path in ctx.gets if "/Systems/1" in path or "/Managers/1" in path]
+        )
+        # no Lenovo read was attempted on a Dell service; the manager port came from
+        # its collection's listed members (the vendor-neutral walk)
+        self.assertFalse([path for path in ctx.gets if "/Oem/Lenovo" in path])
+        self.assertEqual(result["context"]["manager_nic"]["source"], "collection")
+
+    def test_every_check_records_the_resolution(self):
+        ctx = _FakeCtx(_base_payloads())
+        for check in registry.checks_for("bmc"):
+            result = check.collector(ctx)
+            self.assertEqual(result["context"]["resolution"]["system"], SYS, check.id)
+
+
+class TestVendorBranch(unittest.TestCase):
+    """OEM reads are Lenovo's; another vendor gets the DMTF checks and a named not-present."""
+
+    def _other_vendor(self, vendor="Contoso"):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor=vendor)
+        return payloads
+
+    def test_oem_only_security_is_not_present_naming_the_vendor(self):
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_security_state(_FakeCtx(self._other_vendor()))
+        self.assertIn("no Contoso mapping", str(caught.exception))
+
+    def test_dmtf_checks_are_unaffected(self):
+        ctx = _FakeCtx(self._other_vendor())
+        for collector in (
+            checks._collect_thermal,
+            checks._collect_power,
+            checks._collect_inventory,
+            checks._collect_firmware,
+            checks._collect_storage,
+            checks._collect_chassis_location,
+            checks._collect_bios,
+        ):
+            self.assertTrue(collector(ctx)["normalized"], collector.__name__)
+
+    def test_manager_nic_is_found_through_the_collection_on_other_vendors(self):
+        payloads = self._other_vendor()
+        payloads[MGR + "/EthernetInterfaces"]["Members"] = [
+            {"@odata.id": MGR + "/EthernetInterfaces/ToHost"},
+            {"@odata.id": MGR + "/EthernetInterfaces/NIC"},
+        ]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_system(ctx)
+        self.assertEqual(result["context"]["manager_nic"]["source"], "collection")
+        self.assertEqual(result["normalized"]["bmc_ip"], "192.0.2.21")
+
+    def test_several_log_services_without_a_mapping_is_not_present(self):
+        payloads = self._other_vendor("Dell")
+        payloads[SYS + "/LogServices"] = {
+            "Members": [
+                {"@odata.id": SYS + "/LogServices/Sel"},
+                {"@odata.id": SYS + "/LogServices/Lclog"},
+            ]
+        }
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_event_log(_FakeCtx(payloads))
+        self.assertIn("no Dell mapping for the platform log service", str(caught.exception))
+        self.assertIn("Lclog, Sel", str(caught.exception))
+
+    def test_a_single_log_service_is_read_whatever_the_vendor(self):
+        payloads = self._other_vendor("Dell")
+        payloads[SYS + "/LogServices"] = {
+            "Members": [{"@odata.id": SYS + "/LogServices/PlatformLog"}]
+        }
+        result = checks._collect_event_log(_FakeCtx(payloads))
+        self.assertEqual(result["context"]["log_service_used"], "PlatformLog")
+
+
+class TestHygiene(unittest.TestCase):
+    """Secrets by exact leaf name, people's names, logged-in users — before trace and raw."""
+
+    def _seeded(self):
+        return {
+            "Password": "hunter2",
+            "ClientPassword": "x",
+            "BindPassword": "y",
+            "Passphrase": "p",
+            "Secret": "s",
+            "PrivateKey": "k",
+            "AuthenticationKey": "a",
+            "EncryptionKey": "e",
+            "CommunityNames": ["public", "private"],
+            "TrapCommunity": "t",
+            "LicenseString": "L-123",
+            "CertificateString": "-----BEGIN CERTIFICATE-----x-----END CERTIFICATE-----",
+            "SSHPublicKey": ["ssh-ed25519 AAAA", None],
+            "Keys": {"@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD/Keys"},
+            "Bytes": [1, 2, 3],
+            "SED_AK": "ak",
+            "BMU_Credential": {"RemoteID": "r", "Secret": "s"},
+            # policy leaves that must survive
+            "ComplexPassword": True,
+            "PasswordLength": 8,
+            "MinPasswordLength": 8,
+            "PasswordChangeOnFirstAccess": True,
+            "PasswordExpirationPeriodDays": 90,
+            "IsUefiAdminPasswordSet": False,
+            "EncryptionKeySet": False,
+            "PasswordSet": True,
+            "AuthenticationKey@Redfish.OptionalOnCreate": True,
+            # people
+            "UserName": "someone",
+            "Username": "",
+            "UserID": "other",
+            "CurrentLoggedUsers": [{"LoginID": "someone", "IP_Hostname": "192.0.2.9"}],
+            "Nested": {"Authentication": {"UserName": "smtp-user", "Password": None}},
+        }
+
+    def test_dmtf_community_strings_urls_and_job_owners(self):
+        payload = {
+            "SNMP": {
+                "CommunityStrings": [
+                    {"Name": "ro", "AccessMode": "Limited", "CommunityString": "s3cret"}
+                ]
+            },
+            "Image": "https://jane:pw@203.0.113.9/iso/installer.iso",
+            "Destination": "https://203.0.113.10:8443/events",
+            "CreatedBy": "jane",
+            "Owner": "jane",
+            "PostalAddress": {"Community": "Riverside"},
+        }
+        scrubbed = checks._scrub_payload(payload)
+        community = scrubbed["SNMP"]["CommunityStrings"][0]
+        self.assertEqual(community["CommunityString"], checks._SCRUBBED)
+        self.assertEqual((community["Name"], community["AccessMode"]), ("ro", "Limited"))
+        self.assertEqual(scrubbed["Image"], "https://***scrubbed***@203.0.113.9/iso/installer.iso")
+        self.assertEqual(scrubbed["Destination"], payload["Destination"])
+        self.assertEqual((scrubbed["CreatedBy"], scrubbed["Owner"]), (checks._SCRUBBED,) * 2)
+        # a locality is not a secret
+        self.assertEqual(scrubbed["PostalAddress"]["Community"], "Riverside")
+        self.assertNotIn("jane", json.dumps(scrubbed))
+
+    def test_people_are_scrubbed_even_where_account_names_are_kept(self):
+        payload = {
+            "Location": {
+                "Contacts": [{"ContactName": "Jane Roe", "EmailAddress": "", "PhoneNumber": "1"}]
+            },
+            "SNMPv3Agent": {"ContactPerson": "Jane Roe", "Location": "rack 1"},
+            "UserName": "netops",
+        }
+        for scrubbed in (checks._scrub_payload(payload), checks._scrub_accounts(payload)):
+            contact = scrubbed["Location"]["Contacts"][0]
+            self.assertEqual(contact["ContactName"], checks._SCRUBBED)
+            self.assertEqual(contact["EmailAddress"], "")  # emptiness kept
+            self.assertEqual(scrubbed["SNMPv3Agent"]["ContactPerson"], checks._SCRUBBED)
+            self.assertEqual(scrubbed["SNMPv3Agent"]["Location"], "rack 1")
+        self.assertEqual(checks._scrub_accounts(payload)["UserName"], "netops")
+        self.assertTrue(checks._is_secret("OAuthServiceSigningKeys", ["k"]))
+
+    def test_exact_name_rule(self):
+        for key, value in (
+            ("Password", "x"),
+            ("ClientPassword", None),
+            ("BindPassword", "x"),
+            ("communitynames", []),
+            ("SSHPublicKey", []),
+            ("Bytes", [1]),
+        ):
+            self.assertTrue(checks._is_secret(key, value), key)
+        for key, value in (
+            ("ComplexPassword", True),
+            ("PasswordLength", 8),
+            ("PasswordChangeOnFirstAccess", False),
+            ("IsUefiAdminPasswordSet", True),
+            ("EncryptionKeySet", False),
+            ("PasswordExpiration", "2027-01-01"),
+            ("KeyUsage", ["DigitalSignature"]),
+            ("Keys", {"@odata.id": "/x"}),
+            ("CredentialBootstrapping", {"Enabled": True}),
+            ("EnterCLIKeySequence", "ESC ("),
+            ("AuthenticationKey@Redfish.OptionalOnCreate", True),
+        ):
+            self.assertFalse(checks._is_secret(key, value), key)
+
+    def test_scrub_payload_and_raw(self):
+        scrubbed = checks._scrub_payload(self._seeded())
+        marker = checks._SCRUBBED
+        for key in (
+            "Password",
+            "ClientPassword",
+            "BindPassword",
+            "Passphrase",
+            "Secret",
+            "PrivateKey",
+            "AuthenticationKey",
+            "EncryptionKey",
+            "TrapCommunity",
+            "LicenseString",
+            "CertificateString",
+            "SED_AK",
+            "BMU_Credential",
+            "UserName",
+            "UserID",
+        ):
+            self.assertEqual(scrubbed[key], marker, key)
+        # element counts and emptiness survive, content never
+        self.assertEqual(scrubbed["CommunityNames"], [marker, marker])
+        self.assertEqual(scrubbed["SSHPublicKey"], [marker, None])
+        self.assertEqual(scrubbed["Bytes"], [marker, marker, marker])
+        self.assertEqual(scrubbed["Username"], "")
+        self.assertEqual(scrubbed["CurrentLoggedUsers"], [marker])
+        self.assertEqual(
+            scrubbed["Nested"]["Authentication"], {"UserName": marker, "Password": None}
+        )
+        for key in (
+            "ComplexPassword",
+            "PasswordLength",
+            "MinPasswordLength",
+            "PasswordChangeOnFirstAccess",
+            "PasswordExpirationPeriodDays",
+            "IsUefiAdminPasswordSet",
+            "EncryptionKeySet",
+            "PasswordSet",
+            "AuthenticationKey@Redfish.OptionalOnCreate",
+            "Keys",
+        ):
+            self.assertEqual(scrubbed[key], self._seeded()[key], key)
+        # idempotent, and the accounts variant keeps account names only
+        self.assertEqual(checks._scrub_payload(scrubbed), scrubbed)
+        kept = checks._scrub_accounts(self._seeded())
+        self.assertEqual(kept["UserName"], "someone")
+        self.assertEqual(kept["Password"], marker)
+        # raw curation keeps scrubbing on top of it
+        raw = json.dumps(checks._curate(self._seeded()))
+        for secret in ("hunter2", "public", "private", "L-123", "ssh-ed25519", "BEGIN CERT"):
+            self.assertNotIn(secret, raw)
+
+    def test_every_read_passes_the_scrubber(self):
+        ctx = _FakeCtx(_base_payloads())
+        for check in registry.checks_for("bmc"):
+            check.collector(ctx)
+        self.assertTrue(ctx.redacted)
+        for path, redactor in ctx.redacted:
+            self.assertIn(redactor, ("_scrub_payload", "_redact_log_page"), path)
+
+
+class TestStorageWalkBudget(unittest.TestCase):
+    """The lab layout (one AHCI controller per M.2 slot) walked without $expand."""
+
+    def test_four_controllers_without_expand_and_unlinked_members_fit_the_budget(self):
+        payloads = _without_expand(_base_payloads())
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        members = []
+        for slot in (2, 3, 4, 5):
+            base = SYS + "/Storage/M.2_Slot_%d" % slot
+            drive = base + "/Drives/Slot_%d" % slot
+            members.append({"@odata.id": base})
+            payloads[base] = {
+                "@odata.id": base,
+                "Id": "M.2_Slot_%d" % slot,
+                "StorageControllers": [{"MemberId": "0", "Name": "AHCI"}],
+                "Drives": [{"@odata.id": drive}],
+                "Volumes": {"@odata.id": base + "/Volumes"},
+                "Status": {"Health": "OK", "State": "Enabled"},
+            }
+            payloads[drive] = {"@odata.id": drive, "Id": "Slot_%d" % slot, "MediaType": "SSD"}
+            payloads[base + "/Volumes"] = {"Members": []}
+        payloads[SYS + "/Storage"] = {"Members": members}
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_storage(ctx)
+        self.assertEqual(len([k for k in result["normalized"] if k.startswith("drive|")]), 4)
+        # $expand was tried once (the Storage collection) and never again for the Volumes
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)], [SYS + "/Storage" + EXPAND]
+        )
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_STORAGE)
+
+
+class TestLogRedaction(unittest.TestCase):
+    """Lenovo audit rows in the platform log name people; the lab shapes, invented names."""
+
+    ROWS = (
+        (
+            "Remote Login Successful. Login ID: alice using WEB from webguis at IP address "
+            "192.0.2.50.",
+            ["alice", "WEB", "webguis", "192.0.2.50"],
+        ),
+        ("Login ID: alice from webguis at IP address 192.0.2.50 has logged off.", ["alice"]),
+        ("The Boot_Order setting has been changed to x by user bob.", ["Boot_Order", "x", "bob"]),
+        ("Flash of UEFI from web succeeded for user bob .", ["UEFI", "web", "bob"]),
+        ("User carol has mounted file pve_proxmox.iso from RDOC1.", ["carol", "mounted"]),
+        (
+            "User dave password modified by user erin from web at IP address 192.0.2.51.",
+            ["dave", "erin"],
+        ),
+        ("User dave created by user erin from web at IP address 192.0.2.51.", ["dave", "erin"]),
+        ("Date and Time set by user frank: Date=09/30/2026, Time-01:02:03.", ["frank"]),
+        ("Management Controller 1 reset was initiated by user USERID.", ["1", "USERID"]),
+    )
+
+    def _page(self):
+        members = []
+        for index, (message, args) in enumerate(self.ROWS, 1):
+            members.append(
+                {
+                    "Id": str(index),
+                    "Message": message,
+                    "MessageArgs": list(args),
+                    "Severity": "OK",
+                    "Oem": {"Lenovo": {"CommonEventID": "FQXSPSE4001I", "AuxiliaryData": args[0]}},
+                }
+            )
+        return {"Members": members, "Members@odata.count": len(members)}
+
+    def test_names_found_in_every_lab_phrasing(self):
+        found = set()
+        for message, _args in self.ROWS:
+            found |= checks._log_names(message)
+        self.assertEqual(found, {"alice", "bob", "carol", "dave", "erin", "frank", "USERID"})
+
+    def test_page_is_scrubbed_everywhere_and_addresses_stay(self):
+        page = checks._redact_log_page(self._page())
+        text = json.dumps(page)
+        for name in ("alice", "bob", "carol", "dave", "erin", "frank", "USERID"):
+            self.assertNotIn(name, text, name)
+        self.assertIn("192.0.2.50", text)
+        self.assertIn("Login ID: ***scrubbed*** using WEB", page["Members"][0]["Message"])
+        self.assertEqual(page["Members"][0]["MessageArgs"][0], checks._SCRUBBED)
+        self.assertIn("pve_proxmox.iso", page["Members"][4]["Message"])
+        self.assertEqual(checks._redact_log_page(page), page)  # idempotent
+
+    def test_the_free_text_contact_of_a_settings_message_is_scrubbed(self):
+        entry = {
+            "Message": "Server General Settings set by user dave: Name=SN#   X1, "
+            "Contact=Jane Roe, Location=, Room=, RackID=, Rack U-position=1, Address=.",
+            "MessageArgs": ["dave", "SN#   X1", "Jane Roe", "", "", "", "1", ""],
+        }
+        redacted = checks._redact_log_entry(entry)
+        self.assertNotIn("Jane", json.dumps(redacted))
+        self.assertNotIn("dave", json.dumps(redacted))
+        self.assertIn("Contact=***scrubbed***, Location=,", redacted["Message"])
+        self.assertIn("Name=SN#   X1", redacted["Message"])
+        # free text with a comma is taken whole from the message argument
+        comma = dict(
+            entry,
+            Message=entry["Message"].replace("Contact=Jane Roe", "Contact=Roe, Jane"),
+            MessageArgs=["dave", "SN#   X1", "Roe, Jane", "", "", "", "1", ""],
+        )
+        redacted = checks._redact_log_entry(comma)
+        self.assertNotIn("Jane", json.dumps(redacted))
+        self.assertIn("Contact=***scrubbed***, Location=,", redacted["Message"])
+        # an empty Contact= stays empty
+        empty = checks._redact_log_entry(dict(entry, Message="x: Contact=, Location=."))
+        self.assertIn("Contact=, Location=", empty["Message"])
+
+    def test_collector_raw_rows_carry_no_names(self):
+        payloads = _base_payloads()
+        payloads[SYS + "/LogServices/PlatformLog/Entries"] = self._page()
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_event_log(ctx)
+        raw = json.dumps(result["raw"])
+        for name in ("alice", "bob", "carol", "dave", "erin", "frank", "USERID"):
+            self.assertNotIn(name, raw)
+        self.assertEqual(result["context"]["entries_total"], len(self.ROWS))
+
+
+class TestLabNotes(unittest.TestCase):
+    """The normalizer fixes the live run on XCC 6.10 surfaced (handoff §4d / §5a)."""
+
+    def test_platform_sequence_numbers_are_read_in_the_6_10_spelling(self):
+        service = {
+            "Oem": {
+                "Lenovo": {
+                    "PlatformFirstSeqNum": 1,
+                    "PlatformLastSeqNum": 140,
+                    "AuditFirstSeqNum": 1,
+                    "AuditLastSeqNum": 176,
+                }
+            }
+        }
+        _view, context = checks._normalize_event_log([], service)
+        self.assertEqual((context["first_seq_num"], context["last_seq_num"]), (1, 140))
+        self.assertEqual(
+            context["seq_num_source"], "Oem.Lenovo.PlatformFirstSeqNum/PlatformLastSeqNum"
+        )
+        legacy = {"Oem": {"Lenovo": {"FirstSeqNum": 5, "LastSeqNum": 9}}}
+        _view, context = checks._normalize_event_log([], legacy)
+        self.assertEqual((context["first_seq_num"], context["last_seq_num"]), (5, 9))
+        _view, context = checks._normalize_event_log([], {})
+        self.assertIsNone(context["seq_num_source"])
+
+    def test_dns_placeholders_are_not_servers(self):
+        nic = dict(
+            _fx("xcc_manager_nic.json"),
+            NameServers=["", "", "", "::", "::", "::"],
+            StaticNameServers=["0.0.0.0", "198.51.100.53", "0.0.0.0", "::", "::", "::"],
+        )
+        view = checks._normalize_manager_network(_fx("xcc_network_protocol.json"), nic)
+        self.assertEqual(view["dns_servers"], [])
+        self.assertEqual(view["static_dns_servers"], ["198.51.100.53"])
+
+    def test_snmp_enablement_from_the_lenovo_agent_when_the_dmtf_block_is_silent(self):
+        payloads = _base_payloads()
+        protocol = payloads[MGR + "/NetworkProtocol"]
+        protocol["SNMP"] = {"EnableSNMPv3": False, "Port": 161}
+        protocol.setdefault("Oem", {})["Lenovo"] = {
+            "SNMP": {"@odata.id": MGR + "/NetworkProtocol/Oem/Lenovo/SNMP"}
+        }
+        payloads[MGR + "/NetworkProtocol/Oem/Lenovo/SNMP"] = {
+            "CommunityNames": ["public"],
+            "SNMPv3Agent": {"ProtocolEnabled": False, "Port": 161},
+            "SNMPTraps": {"ProtocolEnabled": False, "Port": 162},
+        }
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_manager_network(ctx)
+        self.assertIs(result["normalized"]["snmp_enabled"], False)
+        self.assertEqual(result["normalized"]["snmp_port"], 161)
+        self.assertEqual(result["context"]["snmp_source"], "Oem.Lenovo.SNMP.SNMPv3Agent")
+        self.assertNotIn("public", json.dumps(result["raw"]))
+        self.assertIn(MGR + "/NetworkProtocol/Oem/Lenovo/SNMP", ctx.gets)
+
+
+class TestDiscovery(unittest.TestCase):
+    """The shakedown's BMC discovery probes, on the hand-built set (the job is not in CI)."""
+
+    def test_every_probe_answers(self):
+        payloads = _base_payloads()
+        ctx = _FakeCtx(payloads)
+        ctx.restconf = type("Client", (), {"username": "netops"})()
+        report = {label: probe(ctx) for label, probe in checks.DISCOVERY_PROBES}
+        self.assertEqual(report["service_root"]["resolution"]["system"], SYS)
+        self.assertIn("Security", report["oem"]["manager"]["links"])
+        self.assertEqual(report["collections"]["collections"]["memory"], 4)
+        self.assertEqual(report["collections"]["collections"]["accounts"], "absent (404)")
+        self.assertIs(report["environment"]["Thermal"], True)
+        self.assertIs(report["environment"]["ThermalSubsystem"], False)
+        self.assertIn("PlatformLog", report["log_services"])
+        self.assertTrue(report["security"]["properties"])
+        self.assertEqual(
+            report["capture_account"],
+            {"found": False, "note": "/redfish/v1/AccountService answered 404"},
+        )
+        # the log's sequence numbers are the shakedown's first and last reads,
+        # never one of the state probes that run after the checks
+        self.assertNotIn("log_sequence_before", report)
+        self.assertEqual(checks._discover_log_sequence(ctx)["service"], "PlatformLog")
+
+    def test_expand_depth_tells_inlined_collections_from_inlined_members(self):
+        payloads = _base_payloads()
+        adapters = CH + "/NetworkAdapters?$expand=.($levels=2)"
+        link = {"@odata.id": CH + "/NetworkAdapters/ob-2/Ports/1"}
+        payloads[adapters] = {
+            "Members": [{"Id": "ob-2", "Ports": {"Members": [link], "Members@odata.count": 1}}]
+        }
+        report = checks._discover_expand(_FakeCtx(payloads))
+        self.assertEqual(
+            report["levels_2"],
+            {
+                "members": 1,
+                "members_inline": True,
+                "nested_collections_inline": True,
+                "nested_members_inline": False,
+            },
+        )
+        payloads[adapters]["Members"][0]["Ports"]["Members"] = [dict(link, LinkStatus="NoLink")]
+        self.assertIs(
+            checks._discover_expand(_FakeCtx(payloads))["levels_2"]["nested_members_inline"], True
+        )
+
+    def test_log_sequence_after_is_a_fresh_read(self):
+        ctx = _FakeCtx(_base_payloads())
+        checks._discover_log_sequence(ctx)
+        before = ctx.gets.count(SYS + "/LogServices/PlatformLog")
+        checks._discover_log_sequence(ctx, fresh=True)
+        self.assertEqual(ctx.gets.count(SYS + "/LogServices/PlatformLog"), before + 1)
+
+    def test_capture_account_role_without_naming_anyone(self):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/AccountService"] = {
+            "Accounts": {"@odata.id": "/redfish/v1/AccountService/Accounts"}
+        }
+        payloads["/redfish/v1/AccountService/Accounts" + EXPAND] = {
+            "Members": [
+                {"Id": "1", "UserName": "admin-person", "RoleId": "Administrator"},
+                {
+                    "Id": "3",
+                    "UserName": "netops",
+                    "RoleId": "CustomRole4",
+                    "Enabled": True,
+                    "AccountTypes": ["Redfish", "WebUI"],
+                    "Links": {
+                        "Role": {"@odata.id": "/redfish/v1/AccountService/Roles/CustomRole4"}
+                    },
+                },
+            ]
+        }
+        payloads["/redfish/v1/AccountService/Roles/CustomRole4"] = {
+            "AssignedPrivileges": ["Login"],
+            "OemPrivileges": ["ReadOnly"],
+        }
+        ctx = _FakeCtx(payloads)
+        ctx.restconf = type("Client", (), {"username": "netops"})()
+        report = checks._discover_account(ctx)
+        self.assertEqual(report["role_id"], "CustomRole4")
+        self.assertEqual(report["oem_privileges"], ["ReadOnly"])
+        self.assertEqual(report["account_types"], ["Redfish", "WebUI"])
+        self.assertNotIn("admin-person", json.dumps(report))
+        self.assertNotIn("netops", json.dumps(report))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 # Handoff: capture the BMC (XCC first) as part of the host's report
 
-Status: **plan only — nothing built; the lab walk is done.** Written
+Status: **being built on branch `feat/bmc-capture`** — §10 carries the
+per-step state and §10a what the build found wrong or missing in this plan.
+All §11 defaults were accepted by the user (2026-09-30). Written
 2026-09-30 against `main` after PR #12, the Nautobot 3.2.5 dev stack on this
 box, and the lab XClarity Controller at the address in `/opt/stacks/.xcc.env`,
 which was walked end to end the same day (425 resources, every existing
@@ -649,6 +651,23 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    the `bmc` harvest spec, README/docs skeleton. Battery green with the
    existing fixtures renamed. Dry-run against the dev stack with a fake
    device carrying an `xcc` interface proves the ORM glue.
+   **State (2026-09-30):** built, together with the §5a lab-note normalizer
+   fixes the user listed for this stage (platform sequence-number spelling,
+   DNS placeholders, SNMP enablement from the Lenovo agent block, log-message
+   user names redacted before the trace and raw, the exact-name secret rule,
+   `bmc_health`/`bmc_state` instead of the borrowed `xcc_health`). Proven on
+   the dev stack (3.2.5) against the lab unit through Nautobot: the lab SE350
+   modelled as `se350-lab-1` (platform Proxmox VE — unsupported, so decision
+   2), interface `xcc` with the BMC's address, text-file secrets in Secrets
+   Group `bmc-readonly`, the `bmc_secrets_group` Relationship; dry-run ok;
+   capture 11 ok + `bmc_security` not-present, 32 GETs, 33 s, schema 1.2,
+   `device.bmc` filled (vendor Lenovo), every entry `target: "bmc"`, no
+   account or person name in raw or the debug trace (107 of 316 log rows
+   and 113 message arguments redacted); shakedown 10/12 ok (the two
+   advisories are the expected not-present security resource and an event
+   log with no Warning/Critical entry), 63 GETs, and the platform/audit
+   sequence numbers read 140/176 before AND after the run — the footprint
+   finding of §6 re-measured through the job.
 2. **Shakedown 1** on the lab unit (host on): §7 items 2–3. The live run of
    the existing collectors is already green under both privileges (Appendix
    C), so this is the Nautobot-side run and the fixture harvest; fix the
@@ -670,6 +689,82 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
 
 Effort: PR A about a day, the widening about a day, the new checks two to
 three days with fixtures, plus three shakedown half-days.
+
+### 10a. What the build found (corrections to this plan)
+
+Recorded as they were found, each with how it was resolved.
+
+1. **`jobs/context.py` did need a change.** §3 said none, but §5a asks for
+   the log-message user names to be redacted *before the trace*, and the
+   debug trace is written inside `CollectorContext.get` — so `get` gained a
+   `redact` callable (the `run_ssh` pattern: applied before the trace copy,
+   the cache and the return; fail-closed; never passed to the transport; not
+   part of the cache key). Every `bmc_*` read passes one: the family's
+   exact-name scrubber by default (key material, credentials, user-name
+   leaves, logged-in users reduced to counts), the log redactor for
+   `Entries` pages, the accounts variant (account names kept) for the
+   local-accounts collection. The plan never said what keeps SNMP
+   communities or passwords out of the *trace*; this does.
+2. **`bmc_manager_services` is in the §5b table but not in the "ten new
+   ones" of §0** (nor in the user's PR C list). §5a's "split" of
+   `bmc_manager_network` into addressing-and-time would drop the protocol
+   and service keys unless that check exists, so the build keeps the
+   protocols in `bmc_manager_network` (no split) and adds the Lenovo SNMP
+   enablement there (the lab note asks for it on this check). Whether a
+   separate `bmc_manager_services` is wanted is a question for the user.
+3. **`$expand=.($levels=2)`** was re-measured through the shakedown: it
+   inlines each adapter's `Ports`/`NetworkPorts`/`NetworkDeviceFunctions`
+   collection *resource*, whose `Members` are still bare links — §4a is
+   right in effect; `discovery.bmc.expand` reports both facts
+   (`nested_collections_inline`, `nested_members_inline`).
+4. **The service root's `Product` is null on XCC 6.10** (§0 implied a
+   product name); `device.bmc.product` records what the root says.
+5. **Appendix A's Python block failed CI** (`ruff format --check .` formats
+   code blocks inside Markdown): the plan branch as committed would not
+   have passed. The appendix now points at `tools/redfish_walk.py`.
+6. **Not in the §1c table: the host's own transport failing while a BMC is
+   modelled.** The build records every host check failed with the host's
+   reason and still captures the BMC (its view is valid whatever the host's
+   state); a host-only device keeps today's behaviour (no envelope).
+7. Lenovo logs some actions as done `by user system` / `by user LXPM`
+   (service pseudo-users); the redactor scrubs those words in those rows
+   too — harmless, noted so a masked `LXPM` is not mistaken for a person.
+8. **An adversarially verified review of PR A** (three reviewers — the job
+   glue against a stubbed Nautobot, the catalog against the real walk, the
+   doctrine and the tests — each finding re-checked by a verifier) found
+   defects the plan's design had left open; all are fixed on the branch:
+   the host transport opened before the BMC probe could leak a vSphere
+   session on a soft time limit (the BMC is now opened first — Basic auth
+   leaves nothing behind — and the whole open phase closes what it opened
+   on any exception; an unexpected probe exception becomes the BMC's error);
+   an IPv6-only BMC address was never reachable (the client brackets IPv6
+   literals); a refused host login lost its footprint from the envelope that
+   is now attached anyway; `device.bmc.captured` was set before the run (now
+   after it, with a note when the soft limit skipped the BMC); the guide's
+   `host_captured` sentence was wrong for a failed host transport; the probe
+   hint could name the wrong probe (the client keeps `last_probe`);
+   interfaces on installed modules were not searched (`all_interfaces`); a
+   link-local address could win the address pick; `bmc_storage`'s per-member
+   fallback could exhaust its budget on the lab layout (an `$expand` refusal
+   is now remembered for the check, budget 18 + resolution); the DMTF
+   `CommunityString`, URL userinfo, `CreatedBy`/`Owner` and contact names
+   were not scrubbed (the plain `Community` name was dropped: it would have
+   scrubbed a postal locality); the free-text `Contact=` of a settings log
+   message kept a person's name; one harvest error could lose the whole
+   harvest and print the BMC's address; the walk tool's resume marked every
+   file 200 and could write the address into its index.
+   Two deviations from §3 are deliberate: `device.bmc.addresses_seen` lists
+   every usable address in preference order (the chosen one first), and a
+   user-name leaf becomes the scrub marker with its emptiness kept rather
+   than a `…_set` boolean (the marker already says "set").
+9. **Rollout risk, for the user to weigh:** detection runs on every captured
+   device. A production Device that already carries an interface whose first
+   word is a BMC token (`ilo`, `idrac`, `ipmi` ... documenting a BMC's address
+   is common) with an IP starts BMC capture on the first run after deploy —
+   and FAILS (fail-closed) until the `bmc_secrets_group` Relationship and a
+   Secrets Group exist for it, or while the BMC is unreachable from the
+   worker. Query production for such interfaces before deploying (the dry run
+   also names them per device).
 
 ## 11. Decisions still open (default assumed in parentheses)
 
@@ -724,158 +819,28 @@ de-powered external adapter does to the `Power Adapter N` sensors; whether
 an update is staged; and, on a unit that has them, the shapes of populated
 `Subscriptions`, `Recipients`, `Licenses`, `Tasks` and `PhysicalSecurity`.
 
-## Appendix A — `tools/redfish_walk.py` (planning aid used on 2026-09-30)
+## Appendix A — `tools/redfish_walk.py` (planning aid, promoted in PR A)
 
-GET-only, fenced, paced; credentials from the environment; one JSON file per
-resource plus `_index.json`; a resource whose file already exists is read
-from disk, so an interrupted walk resumes without touching the BMC; per-entry
-log resources are skipped because the `Entries` collection already inlines
-them (the first attempt fetched 318 of them one by one). Promote into
-`tools/` in PR A (add `--out` outside-the-repo enforcement and the
-`--user-env/--password-env` convention of `harvest_live.py`).
+The crawl used at plan time is now `tools/redfish_walk.py` (PR A). It is
+GET-only, fenced and paced **through the worker's own `RedfishClient`**
+(the path fence, the 1 s `REDFISH_MIN_INTERVAL`, Basic auth, no session —
+the planning aid had its own mini-fence and pacing); credentials and the
+address come from the environment only (`--host-env`, `--user-env`,
+`--password-env`) and are never printed (a connection error is shown with
+`<host>` in place of the address); `--out` must lie outside the repository;
+one JSON file per resource plus `_index.json`; a resource whose file already
+exists is read from disk, so an interrupted walk resumes without touching the
+BMC; `JsonSchemas`, `$metadata`/`odata`, registry files, single log entries
+(the `Entries` collection inlines them) and AuditLog entries (unless
+`--audit`) are skipped. `tests/test_redfish_walk.py` pins the link
+classification and the file naming.
 
-```python
-#!/usr/bin/env python3
-"""GET-only Redfish crawl of one BMC into a directory of JSON files (planning aid).
+Run (the build session re-walked the lab unit this way on 2026-09-30: 425
+resources, all HTTP 200, 427 GETs including the two probes):
 
-Never sends anything but GET. Follows every @odata.id / nextLink found in any
-payload, fenced to /redfish/v1/, skipping Actions, SessionService, JsonSchemas,
-$metadata, registry files and individual log entries (the Entries collection
-already inlines them). AuditLog entries are skipped unless AUDIT=1. A resource
-whose file already exists in the output directory is read from disk, so a
-crawl can be resumed without touching the BMC again. Paced PACE seconds apart
-(default 1.0). Credentials from the environment only.
-"""
-
-import collections
-import json
-import os
-import re
-import sys
-import time
-
-import requests
-import urllib3
-
-urllib3.disable_warnings()
-
-host = os.environ["host"]
-user = os.environ["username"]
-password = os.environ["password"]
-out = sys.argv[1]
-pace = float(os.environ.get("PACE", "1.0"))
-max_resources = int(os.environ.get("MAX", "2500"))
-os.makedirs(out, exist_ok=True)
-
-session = requests.Session()
-session.auth = (user, password)
-session.verify = False
-session.headers.update({"Accept": "application/json", "OData-Version": "4.0"})
-
-BANNED = ("actions", "sessionservice", "jsonschemas", "$metadata", "odata")
-SKIP_RE = re.compile(r"\.json$|/Registries/[^/]+/.+|/LogServices/[^/]+/Entries/[^/?]+$")
-
-
-def ok_path(path):
-    if not path.startswith("/redfish/v1"):
-        return False
-    if "%" in path:
-        return False
-    segments = path.split("?")[0].split("#")[0].split("/")
-    return not any(segment.lower() in BANNED for segment in segments)
-
-
-def find_links(node, acc):
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key in ("@odata.id", "Members@odata.nextLink") and isinstance(value, str):
-                acc.append(value)
-            else:
-                find_links(value, acc)
-    elif isinstance(node, list):
-        for value in node:
-            find_links(value, acc)
-
-
-def file_name(path):
-    name = re.sub(r"[^A-Za-z0-9._-]+", "_", path.replace("/redfish/v1", "root")).strip("_")
-    return (name or "root") + ".json"
-
-
-queue = collections.deque(["/redfish/v1/"])
-seen = set(queue)
-index = []
-last = 0.0
-fetched = 0
-while queue and len(index) < max_resources:
-    path = queue.popleft()
-    target = os.path.join(out, file_name(path))
-    entry = {"path": path, "file": file_name(path)}
-    if os.path.exists(target):
-        with open(target) as handle:
-            payload = json.load(handle)
-        entry.update(status=200, from_disk=True, ms=0, bytes=os.path.getsize(target))
-    else:
-        wait = last + pace - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        last = time.monotonic()
-        started = time.monotonic()
-        try:
-            resp = session.get("https://%s%s" % (host, path), timeout=(10, 120))
-            status, body = resp.status_code, resp.content
-        except Exception as exc:  # noqa: BLE001 - planning aid
-            index.append({"path": path, "status": None, "error": str(exc)})
-            print("ERR %s %s" % (path, exc), flush=True)
-            continue
-        fetched += 1
-        entry.update(status=status, ms=int((time.monotonic() - started) * 1000), bytes=len(body))
-        try:
-            payload = resp.json()
-        except Exception:  # noqa: BLE001
-            payload = None
-            entry["nonjson"] = True
-        with open(target, "w") as handle:
-            json.dump(
-                payload if payload is not None else {"_text": body.decode("utf-8", "replace")[:20000]},
-                handle,
-                indent=1,
-                sort_keys=True,
-            )
-    if isinstance(payload, dict):
-        entry["odata_type"] = payload.get("@odata.type")
-        members = payload.get("Members")
-        entry["members"] = len(members) if isinstance(members, list) else None
-        links = []
-        find_links(payload, links)
-        for link in links:
-            link = link.split("#")[0]
-            if link.rstrip("/") == path.rstrip("/"):
-                continue
-            if not ok_path(link):
-                entry.setdefault("refused", []).append(link)
-                continue
-            if SKIP_RE.search(link):
-                entry.setdefault("skipped", []).append(link)
-                continue
-            if "AuditLog/Entries" in link and not os.environ.get("AUDIT"):
-                entry.setdefault("skipped", []).append(link)
-                continue
-            if link not in seen:
-                seen.add(link)
-                queue.append(link)
-    index.append(entry)
-    print(
-        "%s %s %s %s" % (entry.get("status"), path, "disk" if entry.get("from_disk") else "%dms" % entry.get("ms", 0), entry.get("odata_type") or ""),
-        flush=True,
-    )
-
-with open(os.path.join(out, "_index.json"), "w") as handle:
-    json.dump({"index": index, "queued_unvisited": list(queue), "fetched_this_run": fetched}, handle, indent=1)
-print("done: %d resources (%d fetched this run), %d unvisited" % (len(index), fetched, len(queue)), flush=True)
-```
-
-Run: `set -a; . /opt/stacks/.xcc.env; set +a; PACE=1.0 python3 tools/redfish_walk.py /path/outside/repo/xcc-crawl`.
+    set -a; . /opt/stacks/.xcc.env; set +a
+    python3 tools/redfish_walk.py --out /path/outside/the/repo/walk \
+        --host-env host --user-env username --password-env password
 
 ## Appendix B — Lenovo OEM vocabulary served by the lab firmware
 

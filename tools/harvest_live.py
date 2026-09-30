@@ -17,6 +17,24 @@ from the command line, and is never printed or written):
         [--interface TenGigabitEthernet1/0/48 ...] [--device-name sw-lab-1] \\
         [--user-env HARVEST_USER] [--password-env HARVEST_PASSWORD]
 
+    set -a; . /path/to/bmc.env; set +a
+    python3 tools/harvest_live.py --host-env host --platform bmc --tag baseline \\
+        --out /path/outside/the/repo --user-env username --password-env password
+
+``--platform bmc`` harvests a server's BMC over Redfish (GET only, fenced,
+paced, Basic auth — the worker's own RedfishClient): every ``bmc_*`` check,
+then the reads a fixture set wants beyond them — every collection the family
+walks with and without ``$expand``, the pending BIOS settings object, the
+registries collection, every OEM link under the System, Manager, Chassis and
+NetworkProtocol, and the resources the next checks read (sensors, boot
+settings, virtual media, controls, watchdogs, PCIe slots, network-adapter
+ports and functions, accounts and roles, event service and subscriptions,
+certificates, licences, tasks and jobs). Each read passes the family's own
+redactor, so secrets, people's names and logged-in users never reach the
+harvest (local account names are kept: they are configuration). ``--host-env``
+names an environment variable holding the address instead of ``--host``, so
+the address never appears on a command line either.
+
 ``--user-env`` / ``--password-env`` name the environment variables that hold
 the login (defaults ``HARVEST_USER`` and ``HARVEST_PASSWORD``); an env file
 that exports ``user`` and ``pass`` is used with ``--user-env user
@@ -172,6 +190,9 @@ PLATFORMS = {
         "interface_show": "show interfaces %s",
         "port_show": "show power inline %s detail",
     },
+    # A server's BMC over Redfish: no SSH, no --interface reads; the extra
+    # reads are BMC_COLLECTIONS / BMC_SINGLETONS and the links they carry.
+    "bmc": {"transport": "redfish"},
 }
 
 
@@ -202,6 +223,70 @@ def describe(payload):
     return type(payload).__name__
 
 
+# --platform bmc: the reads beyond the checks, as paths under the resolved
+# System ({system}), Manager ({manager}) and Chassis ({chassis}). Collections
+# are read twice (plain and $expand), singletons once; links found in the
+# payloads (OEM blocks, per-member sub-collections) are followed by
+# bmc_link_reads(). TelemetryService is deliberately absent (decision 7).
+BMC_COLLECTIONS = (
+    "{system}/Memory",
+    "{system}/Processors",
+    "{system}/EthernetInterfaces",
+    "{system}/NetworkInterfaces",
+    "{system}/Storage",
+    "{system}/LogServices",
+    "{system}/VirtualMedia",
+    "{system}/BootOptions",
+    "{system}/PCIeDevices",
+    "{system}/PCIeFunctions",
+    "{chassis}/PCIeDevices",
+    "{chassis}/NetworkAdapters",
+    "{chassis}/Sensors",
+    "{chassis}/Controls",
+    "{chassis}/Drives",
+    "{chassis}/ThermalSubsystem/Fans",
+    "{chassis}/PowerSubsystem/PowerSupplies",
+    "{manager}/EthernetInterfaces",
+    "{manager}/HostInterfaces",
+    "{manager}/SerialInterfaces",
+    "{manager}/VirtualMedia",
+    "{manager}/NetworkProtocol/HTTPS/Certificates",
+    "/redfish/v1/UpdateService/FirmwareInventory",
+    "/redfish/v1/UpdateService/SoftwareInventory",
+    "/redfish/v1/AccountService/Accounts",
+    "/redfish/v1/AccountService/Roles",
+    "/redfish/v1/EventService/Subscriptions",
+    "/redfish/v1/TaskService/Tasks",
+    "/redfish/v1/JobService/Jobs",
+    "/redfish/v1/LicenseService/Licenses",
+    "/redfish/v1/CertificateService/CertificateLocations",
+    "/redfish/v1/Registries",
+    "/redfish/v1/Systems",
+    "/redfish/v1/Managers",
+    "/redfish/v1/Chassis",
+)
+BMC_SINGLETONS = (
+    "{system}/SecureBoot",
+    "{system}/Bios",
+    "{chassis}/Thermal",
+    "{chassis}/Power",
+    "{chassis}/PCIeSlots",
+    "{chassis}/EnvironmentMetrics",
+    "{chassis}/ThermalSubsystem",
+    "{chassis}/ThermalSubsystem/ThermalMetrics",
+    "{chassis}/PowerSubsystem",
+    "{manager}/NetworkProtocol",
+    "{manager}/SecurityPolicy",
+    "/redfish/v1/UpdateService",
+    "/redfish/v1/AccountService",
+    "/redfish/v1/EventService",
+    "/redfish/v1/TaskService",
+    "/redfish/v1/JobService",
+    "/redfish/v1/LicenseService",
+    "/redfish/v1/CertificateService",
+)
+
+
 def load_jobs():
     """Import the pure jobs modules through a synthetic package (no Nautobot)."""
     if "jobs" not in sys.modules:
@@ -215,8 +300,11 @@ def load_jobs():
     return registry, context
 
 
-def run_checks(ctx, registry, platform):
-    """Every registered check of the platform, in catalog order; nothing raises past here."""
+def run_checks(ctx, registry, platform, host=None):
+    """Every registered check of the platform, in catalog order; nothing raises past here.
+
+    ``host`` is replaced by ``<host>`` in what is printed (a connection error names it).
+    """
     results, summary = {}, {}
     for check in registry.checks_for(platform):
         status, note, out, first, started = "ok", None, {}, len(ctx.trace), time.monotonic()
@@ -245,7 +333,8 @@ def run_checks(ctx, registry, platform):
             "elapsed_ms": int((time.monotonic() - started) * 1000),
             "requests": [entry.get("target") for entry in ctx.trace[first:]],
         }
-        print("%-28s %-12s keys=%-4d %s" % (check.id, status, len(normalized), (note or "")[:90]))
+        shown = (note or "").replace(host, "<host>") if host else (note or "")
+        print("%-28s %-12s keys=%-4d %s" % (check.id, status, len(normalized), shown[:90]))
     return results, summary
 
 
@@ -272,6 +361,146 @@ def run_extras(ctx, spec, interfaces):
             print("SSH %-70s ok" % command)
         except Exception as exc:  # noqa: BLE001
             print("SSH %-70s ERROR %s" % (command, exc))
+
+
+def _bmc_redactor(checks_bmc, path):
+    """The family's redactor for one path: log pages, account collections, else the scrubber."""
+    resource = path.split("?", 1)[0]
+    if resource.endswith("/Entries"):
+        return checks_bmc._redact_log_page
+    if "/AccountService/Accounts" in resource:
+        return checks_bmc._scrub_accounts
+    return checks_bmc._scrub_payload
+
+
+def _bmc_read(ctx, checks_bmc, path, seen):
+    """One extra read (404 tolerated, errors printed by type only, each path once).
+
+    The payload, or None when the path was read already, is absent or failed.
+    """
+    if path in seen:
+        return None
+    seen.add(path)
+    try:
+        payload = ctx.get(path, ok_404=True, redact=_bmc_redactor(checks_bmc, path))
+        outcome = "ok" if payload is not None else "not-found"
+    except Exception as exc:  # noqa: BLE001 - a harvest records failures, it does not stop
+        payload, outcome = None, "error: %s" % (type(exc).__name__,)
+    print("GET %-78s %s" % (path[:78], outcome[:40]))
+    return payload
+
+
+def _bmc_cached(ctx, checks_bmc, path):
+    """A resource the checks read already, from the per-run cache (their spelling); or None."""
+    try:
+        return ctx.get(path, redact=_bmc_redactor(checks_bmc, path))
+    except Exception as exc:  # noqa: BLE001
+        print("GET %-78s error: %s" % (path[:78], type(exc).__name__))
+        return None
+
+
+def _bmc_link(checks_bmc, node):
+    """The fenced @odata.id of a link object; None when absent or refused (never sent)."""
+    link = node.get("@odata.id") if isinstance(node, dict) else None
+    if not isinstance(link, str) or not link:
+        return None
+    try:
+        return checks_bmc.fence_path(link)
+    except ValueError:
+        print("LINK refused by the fence: %s" % (link[:78],))
+        return None
+
+
+def bmc_link_reads(checks_bmc, payload, keys):
+    """Fenced links found under ``keys`` of a payload's Oem.<vendor> block and top level."""
+    links = []
+    vendor = checks_bmc._oem_key(payload)
+    blocks = [payload]
+    if vendor:
+        blocks.append(checks_bmc._dig(payload, "Oem", vendor))
+    for block in blocks:
+        for key, value in sorted((block or {}).items()):
+            if keys is not None and key not in keys:
+                continue
+            link = _bmc_link(checks_bmc, value)
+            if link is not None:
+                links.append(link)
+    return links
+
+
+def run_bmc_extras(ctx):
+    """The bmc spec's reads beyond the checks (see BMC_COLLECTIONS / BMC_SINGLETONS)."""
+    checks_bmc = importlib.import_module("jobs.checks_bmc")
+    expand = checks_bmc._EXPAND
+    try:
+        targets = checks_bmc._targets(ctx)
+    except Exception as exc:  # noqa: BLE001
+        print("the id resolution failed (%s): no extra reads" % (type(exc).__name__,))
+        return
+    fill = dict(system=targets["system"], manager=targets["manager"], chassis=targets["chassis"])
+    seen = set()
+    collections = [template.format(**fill) for template in BMC_COLLECTIONS]
+    for path in [template.format(**fill) for template in BMC_SINGLETONS]:
+        payload = _bmc_read(ctx, checks_bmc, path, seen)
+        settings = checks_bmc._dig(payload, "@Redfish.Settings", "SettingsObject")
+        link = _bmc_link(checks_bmc, settings)
+        if link is not None:
+            _bmc_read(ctx, checks_bmc, link, seen)
+    # every OEM link of the System, Manager, Chassis and NetworkProtocol (read by
+    # the checks already: the cache answers); a link that answers as a
+    # collection is read expanded as well
+    parents = [targets["system"], targets["manager"], targets["chassis"]]
+    parents.append(fill["manager"] + "/NetworkProtocol")
+    oem_links = []
+    for parent in parents:
+        payload = _bmc_cached(ctx, checks_bmc, parent)
+        vendor = checks_bmc._oem_key(payload)
+        block = checks_bmc._dig(payload, "Oem", vendor) if vendor else None
+        for _key, value in sorted((block or {}).items()):
+            link = _bmc_link(checks_bmc, value)
+            if link is not None:
+                oem_links.append(link)
+    for path in oem_links:
+        payload = _bmc_read(ctx, checks_bmc, path, seen)
+        if isinstance(payload, dict) and isinstance(payload.get("Members"), list):
+            collections.append(path)
+        for nested in bmc_link_reads(checks_bmc, payload or {}, None):
+            if nested.startswith(path + "/"):
+                _bmc_read(ctx, checks_bmc, nested, seen)
+    for path in collections:
+        if path in seen:
+            # read already (an OEM link that answered as a collection): the
+            # cache serves it again, and only the expanded form is new
+            plain = ctx.get(path, ok_404=True, redact=_bmc_redactor(checks_bmc, path))
+        else:
+            plain = _bmc_read(ctx, checks_bmc, path, seen)
+        if plain is None:
+            continue
+        expanded = _bmc_read(ctx, checks_bmc, path + expand, seen)
+        members = checks_bmc._dicts((expanded or plain).get("Members"))
+        # per-member sub-collections $levels=2 does not inline (adapters, PCIe
+        # devices, storage, log services), read expanded
+        for member in members:
+            for key in (
+                "Ports",
+                "NetworkPorts",
+                "NetworkDeviceFunctions",
+                "PCIeFunctions",
+                "Volumes",
+                "StoragePools",
+                "Controllers",
+                "Entries",
+                "Certificates",
+            ):
+                link = _bmc_link(checks_bmc, member.get(key))
+                if link is None:
+                    link = _bmc_link(checks_bmc, checks_bmc._dig(member, "Links", key))
+                if link is None:
+                    continue
+                if key == "Entries":
+                    _bmc_read(ctx, checks_bmc, link, seen)
+                else:
+                    _bmc_read(ctx, checks_bmc, link + expand, seen)
 
 
 def save_trace(ctx, out_dir):
@@ -318,7 +547,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--host", required=True, help="device address or name to connect to")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--host", help="device address or name to connect to")
+    target.add_argument("--host-env", help="env var holding the address (never printed)")
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
     parser.add_argument("--tag", required=True, help="name of this harvest (OUT/TAG/)")
     parser.add_argument("--out", required=True, help="directory OUTSIDE the repository")
@@ -339,6 +570,9 @@ def main(argv=None):
             "set %s and %s in the environment (never on the command line)"
             % (args.user_env, args.password_env)
         )
+    host = args.host or os.environ.get(args.host_env or "")
+    if not host:
+        parser.error("set %s in the environment" % (args.host_env,))
     out_dir = pathlib.Path(args.out) / args.tag
     if ROOT in out_dir.resolve().parents or out_dir.resolve() == ROOT:
         parser.error("--out must be outside the repository (the harvest is unsanitized)")
@@ -347,31 +581,57 @@ def main(argv=None):
     logging.basicConfig(level=logging.ERROR)
     log = logging.getLogger("harvest")
     registry, context = load_jobs()
-    restconf = importlib.import_module("jobs.transport_restconf")
-    ssh = importlib.import_module("jobs.transport_ssh")
     spec = PLATFORMS[args.platform]
-    client = restconf.RestconfClient(args.host, username, password, logger=log)
-    if not client.ping():
-        raise SystemExit("RESTCONF ping to %s failed" % (args.host,))
-    runner = ssh.SshRunner(spec["device_type"], args.host, username, password, logger=log)
-    ctx = context.CollectorContext(
-        args.device_name or args.host,
-        args.platform,
-        restconf=client,
-        ssh=runner,
-        logger=log,
-        debug=True,
-    )
+    if spec.get("transport") == "redfish":
+        redfish = importlib.import_module("jobs.transport_redfish")
+        client = redfish.RedfishClient(host, username, password, logger=log)
+        if not client.ping():
+            record = client.probe_get(redfish.C.REDFISH_PROBE_SYSTEMS, timeout=30)
+            client.close()
+            # A connection error names the address; the harvest never prints it.
+            hint = str(redfish.probe_hint(record)).replace(host, "<host>")
+            raise SystemExit("Redfish probe failed: %s" % (hint,))
+        ctx = context.CollectorContext(
+            args.device_name or "bmc-lab-1", args.platform, restconf=client, logger=log, debug=True
+        )
+    else:
+        restconf = importlib.import_module("jobs.transport_restconf")
+        ssh = importlib.import_module("jobs.transport_ssh")
+        client = restconf.RestconfClient(host, username, password, logger=log)
+        if not client.ping():
+            raise SystemExit("RESTCONF ping to %s failed" % (host,))
+        runner = ssh.SshRunner(spec["device_type"], host, username, password, logger=log)
+        ctx = context.CollectorContext(
+            args.device_name or host,
+            args.platform,
+            restconf=client,
+            ssh=runner,
+            logger=log,
+            debug=True,
+        )
     manifest = {
         "tag": args.tag,
         "platform": args.platform,
         "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     try:
-        results, manifest["checks"] = run_checks(ctx, registry, args.platform)
-        run_extras(ctx, spec, args.interface)
+        results, manifest["checks"] = run_checks(ctx, registry, args.platform, host=host)
+        try:
+            if spec.get("transport") == "redfish":
+                run_bmc_extras(ctx)
+            else:
+                run_extras(ctx, spec, args.interface)
+        except Exception as exc:  # noqa: BLE001 - what was read is still saved below
+            manifest["extras_stopped"] = type(exc).__name__
+            print(
+                "extra reads stopped early: %s (everything read so far is saved)"
+                % (type(exc).__name__,)
+            )
     finally:
         ctx.close()
+    if getattr(client, "footprint", None) is not None:
+        manifest["footprint"] = client.footprint()
+        manifest["footprint"].pop("account", None)
     manifest["requests"] = save_trace(ctx, out_dir)
     (out_dir / "results.json").write_text(
         json.dumps(results, indent=1, default=str), encoding="utf-8"

@@ -64,6 +64,17 @@ INTERPRETATION_GUIDE = [
     "account used, login/logout outcome, API call or GET counts — so the tool's "
     "own session events in the device's logs are attributable to the capture "
     "and never mistaken for an operator's.",
+    "checks.<id>.target says which management plane answered: 'host' for the "
+    "device's own platform, 'bmc' for checks read out of band from the server's "
+    "baseboard management controller at device.bmc.address; they describe the "
+    "same physical server as the host checks, from the BMC's own view, and are "
+    "valid whatever the host's power state unless the check's describe says "
+    "otherwise. device.bmc is null when no BMC is modelled for the device, and "
+    "device.bmc.captured says whether the BMC's checks ran. device.host_captured "
+    "false means the host's own platform produced no data in this capture: "
+    "device.platform_supported is false when the suite does not support that "
+    "platform yet; otherwise the host checks' errors (or an override_checks "
+    "selection) say why.",
 ]
 
 
@@ -106,6 +117,7 @@ def record_check(
     collector_meta=None,
     describe=None,
     context=None,
+    target="host",
 ):
     """Record one check's outcome into the envelope.
 
@@ -114,9 +126,12 @@ def record_check(
     to compare. ``describe`` (description/semantics/miss_meaning) makes the
     entry self-describing; ``context`` carries the collector's small curated
     facts (never bulk data — that is what normalized and raw are for).
+    ``target`` (schema 1.2) names the management plane that answered:
+    ``host`` for the device's own platform, ``bmc`` for its modelled BMC.
     """
     envelope["checks"][check.id] = {
         "status": status,
+        "target": target,
         "error": error,
         "duration_s": round(duration_s, 2) if duration_s is not None else None,
         "tier": check.tier,

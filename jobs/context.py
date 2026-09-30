@@ -9,7 +9,7 @@ rollups; ``config.network`` feeds every vSwitch/portgroup/vmknic check).
 Three transport slots, all optional:
 
 - ``restconf`` — any GET-shaped client: ``get(path, timeout=, ok_404=)``.
-  The IOS-XE RestconfClient and the XCC RedfishClient both live here; the
+  The IOS-XE RestconfClient and the BMC's RedfishClient both live here; the
   trace labels each entry with the client's ``transport_label`` (defaulting
   to ``restconf`` for the original client, which predates the attribute).
 - ``ssh`` — an SshRunner (opened lazily on first use).
@@ -26,7 +26,9 @@ output holds secrets or usernames (the configuration text, the logging
 buffer) passes ``run_ssh`` a ``redact`` callable: it is applied to the output
 BEFORE the copy the debug trace keeps and before the output is returned, the
 callable never reaches the transport, and the SSH library's own DEBUG echo of
-the channel is held back while the read runs. A caller that needs the
+the channel is held back while the read runs. ``get`` takes the same kind of
+callable for a JSON payload (the BMC family scrubs key material, user names
+and the account names its log messages carry this way). A caller that needs the
 verbatim text for a comparison it never stores (the config check's
 verbatim_in_sync) passes ``return_verbatim=True`` and owns redacting whatever
 it stores; the trace is redacted either way.
@@ -84,6 +86,19 @@ def _traced(redact, text):
     return _redacted(redact, text)[0]
 
 
+def _redact_payload(redact, payload):
+    """(``redact(payload)``, None) or (None, the failure's type name) — fail-closed.
+
+    The Celery soft-time-limit signal still propagates.
+    """
+    try:
+        return redact(payload), None
+    except Exception as exc:
+        if type(exc).__name__ == "SoftTimeLimitExceeded":
+            raise
+        return None, type(exc).__name__
+
+
 class _ChannelEchoGuard:
     """Holds the SSH library's loggers at INFO while any redacted read is in flight.
 
@@ -137,7 +152,7 @@ class CollectorContext:
         debug=False,
     ):
         self.device_name = device_name
-        self.platform = platform  # "iosxe" | "panos" | "vmware" | "xcc"
+        self.platform = platform  # "iosxe" | "panos" | "vmware" | "bmc"
         self.restconf = restconf  # RestconfClient / RedfishClient or None
         self.ssh = ssh  # SshRunner or None (opened lazily)
         self.api = api  # VsphereClient or None
@@ -146,15 +161,38 @@ class CollectorContext:
         self.trace = []  # transport trace, one dict per interaction
         self._cache = {}
 
-    def get(self, path, **kwargs):
-        """HTTP GET through the restconf-slot client, cached per run by (path, kwargs)."""
+    def get(self, path, *, redact=None, **kwargs):
+        """HTTP GET through the restconf-slot client, cached per run by (path, kwargs).
+
+        ``redact`` (payload -> payload) is for a read whose answer may carry
+        secrets or user names: it is applied before the copy the debug trace
+        keeps, before the answer is cached and before it is returned, so
+        nothing downstream can store what it strips. It never reaches the
+        transport and is not part of the cache key, so it must be idempotent
+        (a cache hit passes through the caller's redactor again, and a path
+        read once without one keeps what it cached). Fail-closed: a redactor
+        that raises withholds the payload from the trace, caches nothing and
+        fails the read with a RuntimeError naming the exception type.
+        """
         if self.restconf is None:
             raise RuntimeError("no HTTP GET transport for %s" % (self.device_name,))
         label = getattr(self.restconf, "transport_label", "restconf")
         key = (label, path, canonical_kwargs(kwargs))
         if key in self._cache:
             self.trace.append({"transport": label, "target": path, "outcome": "cache-hit"})
-            return self._cache[key]
+            cached = self._cache[key]
+            if redact is None or cached is None:
+                return cached
+            payload, failure = _redact_payload(redact, cached)
+            if failure is not None:
+                raise RuntimeError(
+                    "GET %s: answer withheld, its redactor failed with %s"
+                    % (
+                        path,
+                        failure,
+                    )
+                )
+            return payload
         entry = {"transport": label, "target": path}
         if kwargs:
             entry["kwargs"] = dict(kwargs)
@@ -168,6 +206,15 @@ class CollectorContext:
             self.trace.append(entry)
             raise
         entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
+        if redact is not None and payload is not None:
+            payload, failure = _redact_payload(redact, payload)
+            if failure is not None:
+                entry["outcome"] = "error"
+                entry["error"] = "answer withheld: its redactor failed with %s" % (failure,)
+                self.trace.append(entry)
+                raise RuntimeError(
+                    "GET %s: answer withheld, its redactor failed with %s" % (path, failure)
+                )
         # None is the ok_404 "path absent" result — cached like any other answer.
         entry["outcome"] = "ok" if payload is not None else "not-found"
         if self.debug:

@@ -57,7 +57,7 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
         self.assertEqual(env["checks"], {})
         # captured_at is our own ISO format and must round-trip through parse_iso.
         self.assertIsNotNone(envelope.parse_iso(env["captured_at"]))
-        # Self-description contract (schema 1.1): the interpretation guide
+        # Self-description contract (schema 1.1+): the interpretation guide
         # ships INSIDE every snapshot, and the change intent field exists.
         self.assertIs(env["guide"], envelope.INTERPRETATION_GUIDE)
         self.assertGreaterEqual(len(env["guide"]), 5)
@@ -119,6 +119,41 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
             envelope.envelope_summary(env),
             {"success": 2, "failed": 2, "skipped": 1, "not-present": 1},
         )
+
+
+class TestSchema12Targets(unittest.TestCase):
+    """Schema 1.2 (additive): per-check target and the device.bmc block."""
+
+    def test_schema_version_is_1_2(self):
+        self.assertEqual(C.SCHEMA_VERSION, "1.2")
+
+    def test_every_entry_carries_its_target(self):
+        env = envelope.new_envelope(
+            device_info={
+                "name": "nfvhost-1",
+                "platform": "vmware-esxi",
+                "host_captured": True,
+                "bmc": {"interface": "xcc", "address": "192.0.2.4", "captured": True},
+            },
+            change_id="CHG2",
+            kind="pre",
+            package="full",
+            check_ids=["vmware_pnics", "bmc_system"],
+            job_info={},
+        )
+        envelope.record_check(env, _checkdef("vmware_pnics"), "success")
+        envelope.record_check(env, _checkdef("bmc_system"), "failed", error="x", target="bmc")
+        self.assertEqual(env["checks"]["vmware_pnics"]["target"], "host")
+        self.assertEqual(env["checks"]["bmc_system"]["target"], "bmc")
+        # device_info passes through unchanged: the job builds the bmc block.
+        self.assertEqual(env["device"]["bmc"]["address"], "192.0.2.4")
+        self.assertTrue(env["device"]["host_captured"])
+
+    def test_guide_explains_target_and_the_bmc_block(self):
+        text = " ".join(envelope.INTERPRETATION_GUIDE)
+        self.assertIn("target", text)
+        self.assertIn("device.bmc.address", text)
+        self.assertIn("host_captured", text)
 
 
 class TestTransportFootprint(unittest.TestCase):

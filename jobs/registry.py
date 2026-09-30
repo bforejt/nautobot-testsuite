@@ -25,7 +25,7 @@ class SkipCheck(Exception):
 @dataclass(frozen=True)
 class CheckDef:
     id: str
-    platform: str  # "iosxe" | "panos" | "vmware" | "xcc"
+    platform: str  # "iosxe" | "panos" | "vmware" | "bmc" (a server's BMC, run beside its host)
     description: str
     tier: int  # 1 keyed assertions, 2 full-table diffs, 3 context
     compare: dict
@@ -71,6 +71,12 @@ def checks_for(platform, check_ids=None):
 # and what was deliberately excluded. This text ships inside the snapshot
 # envelope so each artifact is self-describing: an engineer's test-plan prompt
 # never needs to explain the data format — the file does.
+
+# The sentence every bmc_* SEMANTICS entry ends with (context.resolution).
+_BMC_RESOLUTION = (
+    "context.resolution records how the BMC's System, Manager and Chassis were found (ids "
+    "resolved per run, never assumed) and the vendor the service root names."
+)
 
 SEMANTICS = {
     "iosxe_routes_rib": (
@@ -988,58 +994,69 @@ SEMANTICS = {
         "(numa.autosize.cookie rewrites at every power-on). A host with no NFV-tuned VMs "
         "legitimately shows only the api: rows and the affinity default."
     ),
-    # --- xcc: Lenovo XClarity Controller, the SE350 BMC (Redfish) --------------
-    "xcc_system": (
+    # --- bmc: a server's baseboard management controller over Redfish ---------
+    # Read out of band from the BMC modelled as an Interface on the host
+    # Device; every entry carries target "bmc". Lenovo XCC is verified live.
+    "bmc_system": (
         "Flat scalars from the BMC: system identity (serial, uuid, model, sku, BIOS version), "
         "power_state, health/health_rollup, boot_override (a STRING: Disabled | Once | "
         "Continuous — anything but Disabled means a one-shot or persistent boot override is "
-        "armed), boot_override_target, the three SecureBoot fields (all null together when the "
-        "firmware has no SecureBoot resource), system_status (BootingOSOrInUndetectedOS is the "
-        "steady state under a hypervisor with no Lenovo agent — it is not a fault), and the "
-        "XCC's own firmware, health and management address "
-        "(xcc_ip/xcc_ip_origin/xcc_gateway/xcc_vlan/xcc_mac, from the member named in "
-        "eth_member_used; a DHCP re-lease is not a reconfiguration). Reboot count, power-on "
-        "hours, XCC clock and TPM module facts ride in context as volatile/informational. MACs "
-        "are lower-cased."
+        "armed), boot_override_target/_mode, the three SecureBoot fields (all null together when "
+        "the firmware has no SecureBoot resource), system_status (Lenovo's own word for what the "
+        "host is doing, verbatim — OSBooted on a booted host, BootingOSOrInUndetectedOS under an "
+        "OS the BMC cannot see — never a fault by itself), and the BMC's own firmware, model, "
+        "uuid, bmc_health (the Manager's Status.Health; null where the firmware serves only a "
+        "state, as XCC 6.10 does) and bmc_state (its Status.State), and its management address "
+        "(bmc_ip/bmc_ip_origin/bmc_subnet_mask/bmc_gateway/bmc_vlan/bmc_mac, from the member named "
+        "in eth_member_used; a DHCP re-lease is not a reconfiguration). Reboot count, power-on "
+        "hours, the BMC clock and TPM module facts ride in context as volatile/informational. "
+        "MACs are lower-cased. " + _BMC_RESOLUTION
     ),
-    "xcc_security_state": (
+    "bmc_security": (
         "ThinkEdge Security Pack state as flat scalars, every field nullable: lockdown_mode "
         "(Active/Inactive), lockdown_control, motion_detection_enabled, "
         "motion_threshold/motion_orientation (spelled differently per generation, so either may "
         "be null), chassis_intrusion_enabled, host_shutdown_on_tamper, sed_encryption_enabled. "
-        "Recorded as not-present when the Security resource carries none of these (mainstream "
-        "ThinkSystem, or firmware that hides them) — the resource's mere existence never "
-        "decides. context.property_sources names the real property behind each field; "
-        "key_management summarises the external key-manager (SKLM/KMIP) configuration, which is "
-        "escrow, not SED state. Key material (SED_AK, certificates) is never read or echoed. "
-        "Read motion_detection_enabled true->false TOGETHER with lockdown_mode Active as the "
-        "lockdown itself (the BMC disables motion detection on entering lockdown), not as an "
-        "operator edit."
+        "Recorded as not-present when the vendor security resource carries none of these "
+        "(mainstream ThinkSystem — XCC 6.10 on a gen-1 SE350 serves TLS, HTTPS/LDAPS/CIM, "
+        "firmware-rollback and encapsulation settings there and no ThinkEdge leaf; its "
+        "lockdown and chassis-movement facts are discrete sensors), or when the BMC's vendor has "
+        "no mapping yet (Lenovo only) — the resource's mere existence never decides. "
+        "context.property_sources names the real property behind each field; key_management "
+        "summarises the external key-manager (SKLM/KMIP) configuration, which is escrow, not SED "
+        "state. Key material (SED_AK, certificates) is never read or echoed. Read "
+        "motion_detection_enabled true->false TOGETHER with lockdown_mode Active as the lockdown "
+        "itself (the BMC disables motion detection on entering lockdown), not as an operator "
+        "edit. " + _BMC_RESOLUTION
     ),
-    "xcc_thermal": (
+    "bmc_thermal": (
         "Keys 'temp|<Name>' (with '|<MemberId>' appended only when a Name repeats) -> health, "
         "state, physical_context and reading_c; 'fan|<Name>' -> health, state, reading, "
         "reading_units. reading_c is populated ONLY for ambient/intake/inlet/exhaust-class "
         "sensors (compared within 8 °C); CPU/DIMM/PCH readings are load-driven and live in "
-        "context.readings_c, as do every published threshold and fan redundancy group. Fan "
-        "reading is banded at 25 % — a fan reading 0 pre is itself a finding. A sensor with "
-        "State Absent has no key (listed in context.absent), so a vanished key means the sensor "
-        "disappeared, and health/state strings are verbatim, never pinned."
+        "context.readings_c, as do every published threshold and fan redundancy group. A 'CPU "
+        "DTS' sensor reads the CPU's distance to its thermal limit (a negative margin), not a "
+        "temperature. Fan reading is banded at 25 % — a fan reading 0 pre is itself a finding. A "
+        "sensor with State Absent has no key (listed in context.absent), so a vanished key means "
+        "the sensor disappeared, and health/state strings are verbatim, never pinned. "
+        + _BMC_RESOLUTION
     ),
-    "xcc_power": (
-        "Keys 'psu|<MemberId>' (Name is often null on this BMC) -> state and health VERBATIM "
-        "(the DMTF values are Enabled/Absent/UnavailableOffline; input loss on an external "
-        "adapter most likely reads Enabled + Critical), line_input_voltage (banded 10 % as a "
-        "change signal), input_in_range (true/false against the supply's own InputRanges; null "
-        "when either is unpublished — a 120 V to 208 V feed change is legitimate when still in "
-        "range), capacity_w and identity strings (null, never ''). 'redundancy|<MemberId>' "
-        "exists only when the firmware publishes a Redundancy group (Disabled + OK is a single "
-        "feed); 'voltage|<MemberId>' -> state, in_threshold (against the rail's critical/fatal "
-        "thresholds; null without them) and health (usually null). Consumption, output watts "
-        "and rail readings are context. Read-only by transport: this resource accepts changes "
-        "on the BMC, the suite only ever GETs it."
+    "bmc_power": (
+        "Keys 'psu|<MemberId>' (Name is often null) -> state and health VERBATIM (the DMTF "
+        "values are Enabled/Absent/UnavailableOffline; input loss on an external adapter most "
+        "likely reads Enabled + Critical), line_input_voltage (banded 10 % as a change signal), "
+        "input_in_range (true/false against the supply's own InputRanges; null when either is "
+        "unpublished — a 120 V to 208 V feed change is legitimate when still in range), "
+        "capacity_w and identity strings (null, never ''). 'redundancy|<MemberId>' exists only "
+        "when the firmware publishes a Redundancy group (Disabled + OK is a single feed); "
+        "'voltage|<MemberId>' -> state, in_threshold (against the rail's critical/fatal "
+        "thresholds; null without them) and health (usually null). An SE350's external power "
+        "adapters are not modelled as supplies at all (XCC 6.10 serves no PowerSupplies), so "
+        "the psu family is legitimately empty there. Consumption, output watts and rail "
+        "readings are context. Read-only by transport: this resource accepts changes on the "
+        "BMC, the suite only ever GETs it. " + _BMC_RESOLUTION
     ),
-    "xcc_inventory": (
+    "bmc_inventory": (
         "Keys 'dimm|<Id>' (slot, socket, service_label, capacity_mib, type, speed_mhz as the "
         "firmware scales it — never banded — serial, part_number, manufacturer, health, state), "
         "'cpu|<Id>' (model, cores, enabled_cores, threads, health, state — a soldered CPU "
@@ -1048,36 +1065,40 @@ SEMANTICS = {
         "'pcie|<Id>' (manufacturer, model, device_type, firmware, serial, part_number, health, "
         "state, best-effort location). An unseated part most likely shows as a MISSING key, not "
         "a state change; unpopulated DIMM slots, when listed, appear identically on both sides "
-        "with null serial/capacity. Inventory is populated at POST: a collection that answers "
-        "empty is unmeasured whatever the power state (the host reads On throughout POST), so "
-        "the check refuses (failed, never zero rows) and names the family and the power state; "
-        "context.host_power_state / context.collections record the power state and whether each "
-        "collection answered via $expand, a per-member walk, or was absent (404)."
+        "with null serial/capacity (state Absent). Inventory is populated at POST: a collection "
+        "that answers empty is unmeasured whatever the power state (the host reads On "
+        "throughout POST), so the check refuses (failed, never zero rows) and names the family "
+        "and the power state; context.host_power_state / context.collections record the power "
+        "state and whether each collection answered via $expand, a per-member walk, or was "
+        "absent (404). " + _BMC_RESOLUTION
     ),
-    "xcc_host_nics": (
-        "Keys 'nic|<Id>' (the BMC's port ids, e.g. ob-1) -> link_status verbatim (LinkUp; "
-        "NoLink = no cable/transceiver; LinkDown = cable present, no link), permanent_mac "
-        "(burned-in, lower-cased — it joins to the hypervisor's physical-NIC MAC since ESXi "
-        "never overrides it), interface_enabled, health, state. The ToManager member (the USB "
-        "Redfish host interface, not a port) is excluded before any request. speed_mbps is "
-        "context only (null or 0 on this firmware family, both read as null); the constant "
-        "vendor Description is dropped. Not-present when the collection is absent, empty, "
-        "carries only ToManager, or reports null LinkStatus on every port. Link state is read "
-        "via sideband and may not reflect a cable with the host off: compare captures taken in "
-        "the same host power state (context.host_power_state)."
+    "bmc_host_nics": (
+        "Keys 'nic|<Id>' (the BMC's port ids, e.g. NIC1 or ob-1) -> link_status verbatim "
+        "(LinkUp; NoLink = no cable/transceiver; LinkDown = cable present, no link), "
+        "permanent_mac (burned-in, lower-cased — it joins to a hypervisor's physical-NIC MAC), "
+        "interface_enabled, health, state. The ToManager member (the USB Redfish host interface, "
+        "not a port) is excluded before any request. speed_mbps is context only (null or 0 on "
+        "this firmware family, both read as null); the constant vendor Description is dropped. "
+        "Not-present when the collection is absent, empty, carries only ToManager, or reports "
+        "null LinkStatus on every port. Link state is read via sideband: every port can read "
+        "NoLink with the host up when the OS runs on an adapter the BMC has no sideband to (an "
+        "add-in NIC in a PCIe slot with no NC-SI link to the BMC), and it may not follow a cable "
+        "with the host off — compare "
+        "captures taken in the same host power state (context.host_power_state). " + _BMC_RESOLUTION
     ),
-    "xcc_firmware": (
-        "Keys 'fw|<Id>' (BMC-Primary, BMC-Backup, UEFI, LXPM*, Ob_N.M, Slot_N.M, *.Bundle ...) "
-        "-> name, version verbatim (<BUILDID>-<ver>; the BMC notes this string can differ from "
-        "the web UI's rendering — compare pairs case-insensitively), software_id (stable; tells "
-        "two adapters sharing a Name apart), updateable, health (null when no Status). "
-        "Status.State is deliberately NOT emitted: the backup BMC bank toggles between "
-        "StandbyOffline and Enabled after a BMC restart. ReleaseDate, etags, "
-        "LowestSupportedVersion, Description and Oem blocks are excluded. External power "
-        "adapters carry no firmware entry; whether the LOM appears here depends on the "
-        "firmware. context records whether one $expand GET or a per-member walk answered."
+    "bmc_firmware": (
+        "Keys 'fw|<Id>' (BMC-Primary, BMC-Backup, UEFI, LXPM*, Ob_N.M, Slot_N.M, Disk*, *-Pending "
+        "...) -> name, version verbatim (<BUILDID>-<ver>; the BMC notes this string can differ "
+        "from the web UI's rendering — compare pairs case-insensitively), software_id (stable; "
+        "tells two adapters sharing a Name apart), updateable, health (null when no Status). A "
+        "'-Pending' member with a version is a staged update not yet activated. Status.State is "
+        "deliberately NOT emitted: the backup BMC bank toggles between StandbyOffline and "
+        "Enabled after a BMC restart. ReleaseDate, etags, LowestSupportedVersion, Description "
+        "and Oem blocks are excluded. External power adapters carry no firmware entry; whether "
+        "the LOM appears here depends on the firmware. context records whether one $expand GET "
+        "or a per-member walk answered. " + _BMC_RESOLUTION
     ),
-    "xcc_event_log": (
+    "bmc_event_log": (
         "Keys 'sel|<CommonEventID>|<Id>' for entries of Severity Warning or Critical ONLY, from "
         "the whole platform event log read without any query window (no $top, no paging "
         "shortcuts): the FQXSP event code is in the key so a reader can group or filter "
@@ -1087,57 +1108,66 @@ SEMANTICS = {
         "cleared — which one is a cross-capture reading of context: a post newest_id below the "
         "pre newest_id (or first_id jumping while last_seq_num falls) means the log was "
         "cleared; first_id advancing while newest_id keeps growing on a log whose at_capacity "
-        "is true means it wrapped. A first_id above 1 on its own says nothing (the BMC's own "
-        "samples start at 5). A firmware that pages the log is followed through its own "
+        "is true means it wrapped. first_seq_num/last_seq_num are the log service's own platform "
+        "counters (seq_num_source names the spelling the firmware served). A first_id above 1 on "
+        "its own says nothing. A firmware that pages the log is followed through its own "
         "continuation links (context.pages); one that pages with a window is refused, never "
-        "read partially. OK/Informational entries are "
-        "counted per event code in context.informational_by_code and never keyed; per-entry "
-        "Created and Message text is in raw (newest first, capped). The log records what the "
-        "BMC saw while powered — with AC removed it is not a live record of transit. "
-        "context.log_service_used names PlatformLog or StandardLog. The BMC's AuditLog (where "
-        "this tool's own logins land) is never read."
+        "read partially. OK/Informational entries are counted per event code in "
+        "context.informational_by_code and never keyed; per-entry Created and Message text is in "
+        "raw (newest first, capped), with every account name a message carries (Lenovo writes "
+        "logins, logoffs, password changes and configuration edits into this log with the "
+        "account in the text) replaced by ***scrubbed*** before the trace or raw keep a copy; "
+        "client addresses are kept. The log records what the BMC saw while powered — with AC "
+        "removed it is not a live record of transit. context.log_service_used names PlatformLog "
+        "or StandardLog. A separate AuditLog service, where one exists, is never read. "
+        + _BMC_RESOLUTION
     ),
-    "xcc_bios": (
+    "bmc_bios": (
         "Keys 'bios|<Attribute>' -> the current UEFI setting value verbatim, for the curated "
         "attribute families matched by name: hyper-threading, turbo, C-states/C1E, operating "
         "mode / power-performance bias, VT-d/IOMMU and virtualisation, SR-IOV, boot mode, MMIO "
         "above 4G, TPM/TCM and Secure Boot, NUMA/SNC, prefetchers, SpeedStep/P-states. "
         "Attribute names are the vendor's and are not renamed. Every other attribute is in raw "
-        "as sorted key=value text (password-like attributes scrubbed) and counted in context. A "
-        "changed value is a defaults load, a CMOS/RTC reset or an operator edit — the "
-        "hypervisor sees only the effects (HT active, Secure Boot)."
+        "as sorted key=value text (password-valued attributes scrubbed) and counted in context. "
+        "A changed value is a defaults load, a CMOS/RTC reset or an operator edit — the host OS "
+        "sees only the effects (HT active, Secure Boot). " + _BMC_RESOLUTION
     ),
-    "xcc_storage": (
+    "bmc_storage": (
         "Keys 'controller|<Id>' (model, firmware, serial, health, state, drive/volume counts), "
         "'drive|<Id>' (serial, model, revision, capacity_bytes, media_type, protocol, health, "
         "state, failure_predicted, encryption_ability/encryption_status, location) and "
         "'volume|<Id>' (raid_type, capacity_bytes, health, state, encrypted, member drive ids); "
-        "an id that repeats across controllers is prefixed with the controller id. Predicted "
-        "media life is context (it only decreases). This is the only view of a mirror's "
-        "individual members and of the SED encryption flags — the hypervisor's LUN stays 'ok' "
-        "with one mirror half failed. Not-present when the BMC serves no Storage members "
-        "(non-RAID M.2 may not enumerate at all)."
+        "an id that repeats across controllers is prefixed with the controller id. Non-RAID M.2 "
+        "SATA drives enumerate as one Storage member per slot with one AHCI controller (identity "
+        "null) and one drive. Predicted media life is context (it only decreases). This is the "
+        "only view of a mirror's individual members and of the SED encryption flags — the host "
+        "OS's LUN stays 'ok' with one mirror half failed. Not-present when the BMC serves no "
+        "Storage members. " + _BMC_RESOLUTION
     ),
-    "xcc_manager_network": (
+    "bmc_manager_network": (
         "Flat scalars for the BMC's own services and addressing: hostname/fqdn, ntp_enabled and "
         "ntp_servers (ordered as configured), <protocol>_enabled/<protocol>_port for HTTP, "
-        "HTTPS, SSH, IPMI, SNMP, VirtualMedia, KVMIP, SSDP and Telnet, then the management "
-        "port's ipv4_address/ipv4_origin/subnet/gateway, dhcpv4_enabled, dns_servers, "
-        "static_dns_servers, ipv6_address_count, mtu, autoneg, vlan and interface_enabled. "
-        "Community strings and certificates are scrubbed from raw. Link speed/state of the BMC "
-        "port is context. NTP and DNS here timestamp every event-log entry and are what any "
-        "outbound key-management or portal reactivation path needs."
+        "HTTPS, SSH, IPMI, SNMP, VirtualMedia, KVMIP, SSDP and Telnet — snmp_enabled is the "
+        "DMTF SNMP.ProtocolEnabled where served, else (XCC 6.10) the Lenovo SNMPv3 agent's "
+        "enablement, context.snmp_source naming which — then the management port's "
+        "ipv4_address/ipv4_origin/subnet/gateway, dhcpv4_enabled, dns_servers and "
+        "static_dns_servers (the unset-slot placeholders '', '::' and '0.0.0.0' dropped), "
+        "ipv6_address_count, mtu, autoneg, vlan and interface_enabled. Community strings and "
+        "certificates are scrubbed before the trace or raw keep a copy. Link speed/state of "
+        "the BMC port is context. NTP and DNS here timestamp every event-log entry and are what "
+        "any outbound key-management or portal reactivation path needs. " + _BMC_RESOLUTION
     ),
-    "xcc_chassis_location": (
-        "Flat scalars from Chassis/1: chassis identity (type, model, serial, part_number, "
-        "asset_tag), health/state/power_state, the operator-maintained Location record passed "
-        "through generically as location_info plus 'postal_<field>' and 'placement_<field>' "
-        "leaves (rack, rack_offset, row ... whichever this firmware fills), and the DMTF "
+    "bmc_chassis": (
+        "Flat scalars from the Chassis: identity (type, model, serial, part_number, asset_tag), "
+        "health/state/power_state, the operator-maintained Location record passed through "
+        "generically as location_info plus 'postal_<field>' and 'placement_<field>' leaves "
+        "(rack, rack_offset, row ... whichever this firmware fills), and the DMTF "
         "intrusion_sensor state (Normal / HardwareIntrusion / TamperingDetected) with its "
-        "re-arm policy. The Location record only changes when someone edits it: after a "
-        "physical relocation an UNCHANGED record means nobody updated it, so declare the "
-        "expected edit; an intrusion_sensor leaving Normal is a hardware finding. Indicator LED "
-        "state is context."
+        "re-arm policy (null where the firmware serves no PhysicalSecurity — XCC 6.10 on an "
+        "SE350 reports chassis intrusion and movement as discrete sensors instead). The Location "
+        "record only changes when someone edits it: after a physical relocation an UNCHANGED "
+        "record means nobody updated it, so declare the expected edit; an intrusion_sensor "
+        "leaving Normal is a hardware finding. Indicator LED state is context. " + _BMC_RESOLUTION
     ),
 }
 

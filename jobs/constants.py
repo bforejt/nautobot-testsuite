@@ -15,8 +15,11 @@ UI_GROUP = "Test Suite"
 
 # --- snapshot envelope ------------------------------------------------------
 # 1.1: additive — embedded interpretation guide, per-check describe/context,
-# change_description, device role/location. 1.x readers remain compatible.
-SCHEMA_VERSION = "1.1"
+# change_description, device role/location. 1.2: additive — per-check
+# ``target`` ("host" | "bmc") and the ``device.bmc`` block, so one envelope
+# carries a server's host checks and its BMC checks. 1.x readers remain
+# compatible.
+SCHEMA_VERSION = "1.2"
 FRAMEWORK_NAME = "nautobot-testsuite"
 
 # Artifact filenames attached to the JobResult, one set per device.
@@ -46,24 +49,27 @@ DATA_DEVICE_SYSTEM = (
 # serving data at all — not a single quirky model.
 DATA_YANG_LIBRARY = "/data/ietf-yang-library:modules-state?depth=1"
 
-# --- Redfish (Lenovo XClarity Controller on the SE350) ----------------------
-# Tabled 2026-09-24: the XCCs at the current NFV sites are unreachable from the
-# worker, so the platform is switched off here rather than removed — the
-# transport, checks, fixtures and tests all stay green and ready. Flip to True
-# to re-enable; both jobs refuse an xcc device with an operator-facing message
-# while this is False. When revived, detection should also accept a BMC
-# modelled as an Interface on the host Device (name from XCC_INTERFACE_NAMES,
-# with an assigned address) and attach its evidence as a separate
-# snapshot_<device>-xcc_<change_id>.json artifact.
-XCC_ENABLED = False
-XCC_INTERFACE_NAMES = ("xcc", "xclarity", "bmc", "ilo", "idrac", "imm")
+# --- BMC (baseboard management controller) over Redfish ---------------------
+# A BMC is modelled as an Interface on its host Device, never as a Device of
+# its own: an interface whose name's first word (split on anything that is not
+# a letter or digit, lower-cased, trailing digits dropped) is one of these
+# tokens and that carries an assigned IP address IS the server's BMC, and its
+# checks run in the host's own capture. ``mgmt-xcc`` does not match (its first
+# word is ``mgmt``); ``xcc``, ``XCC-mgmt``, ``iLO 5``, ``idrac-1`` and ``bmc0`` do.
+BMC_INTERFACE_NAMES = ("xcc", "xclarity", "imm", "idrac", "ilo", "cimc", "bmc", "ipmi")
+# The Relationship (Extensibility -> Relationships) that associates a Secrets
+# Group with a BMC interface: one group to many interfaces, source the Secrets
+# Group, destination the Interface (the reverse orientation is accepted too).
+BMC_SECRETS_RELATIONSHIP_KEY = "bmc_secrets_group"
 # GET-only over HTTPS with Basic auth on every request: no SessionService
-# login, so nothing is ever created on the BMC. Every Basic-auth GET is an
-# XCC login and an AuditLog entry — the budgets below keep that footprint
-# proportionate.
+# login, so nothing is ever created on the BMC. Measured on XCC 6.10
+# (2026-09-30): 779 Basic-auth GETs wrote no entry to any BMC log and created
+# no session; the pacing and budgets below stay as prudence, and the
+# shakedown records the log sequence numbers before and after its run so
+# another firmware can be re-measured.
 REDFISH_PORT = 443
-REDFISH_GET_TIMEOUT = 60  # XCC answers most resources in < 2 s; $expand walks take longer
-# Minimum spacing between two GETs to one XCC. Lenovo tip HT512365 reports the
+REDFISH_GET_TIMEOUT = 60  # most resources answer in < 1 s; an 89-sensor $expand took ~11 s
+# Minimum spacing between two GETs to one BMC. Lenovo tip HT512365 reports the
 # Redfish service on SE350 going out of service under request stress; the
 # number is prudent, not verified (the tip returned 403 during research).
 REDFISH_MIN_INTERVAL = 1.0
@@ -72,9 +78,11 @@ REDFISH_MIN_INTERVAL = 1.0
 # is complete-or-refused, never silently partial (session-matrix lesson).
 REDFISH_MAX_CHECK_BUDGET = 40
 REDFISH_SERVICE_ROOT = "/redfish/v1/"
-# Reachability/authorization probe target: the one ComputerSystem an SE350
-# serves. Answering 2xx here proves HTTPS, Basic auth and the role at once.
-REDFISH_PROBE_SYSTEM = "/redfish/v1/Systems/1"
+# Reachability/authorization probe target: the Systems collection, which every
+# Redfish BMC serves whatever its member ids (``1`` on Lenovo and HPE,
+# ``System.Embedded.1`` on Dell). Answering 2xx here proves HTTPS, Basic auth
+# and the account's role at once.
+REDFISH_PROBE_SYSTEMS = "/redfish/v1/Systems"
 
 # --- vSphere SOAP (standalone ESXi 8.x hostd, /sdk) --------------------------
 # POST by protocol, read-only by operation allowlist (jobs/vsphere_soap.py
@@ -98,8 +106,10 @@ VSPHERE_MAX_PAGES = 50
 
 # Which credential access type each platform resolves from its Secrets Group.
 # creds._access_types cascades any non-ssh label through RESTCONF/HTTP/REST/
-# GENERIC, so the two HTTPS platforms need no creds.py change.
-TRANSPORT_FOR = {"iosxe": "restconf", "panos": "ssh", "vmware": "https", "xcc": "https"}
+# GENERIC, so the HTTPS platforms need no creds.py change. ``bmc`` is the
+# check family a modelled BMC interface runs (its credentials come from the
+# bmc_secrets_group Relationship, never from the host's own Secrets Group).
+TRANSPORT_FOR = {"iosxe": "restconf", "panos": "ssh", "vmware": "https", "bmc": "https"}
 # --- wireless (Catalyst 9800 controllers) -----------------------------------
 # Per-client rows kept in the NORMALIZED client table. Clients that are not
 # in the run state (stuck in auth / IP-learn / webauth — the migration
