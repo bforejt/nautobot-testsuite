@@ -611,7 +611,9 @@ collector through a real `CollectorContext` (Appendix C). What remains:
    checks (`bmc_tasks` is informational, never compared). After the review
    fixes, captures at 10:06 and 10:11 UTC diff to nothing again, and 06:28
    against 10:11 (3.7 hours) differs only where the fixes changed
-   `bmc_power_policy`'s keys (the job rows added, the watchdog fields renamed).
+   `bmc_power_policy`'s keys (the job rows added, the watchdog fields renamed);
+   on the branch's final code, captures at 10:47 and 10:52 UTC diff to nothing
+   on all 21 compared checks.
 
 ## 8. Tests
 
