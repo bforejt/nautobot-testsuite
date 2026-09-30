@@ -1,0 +1,20 @@
+{
+ "LicenseExpirationWarningDays": 0,
+ "@odata.context": "/redfish/v1/$metadata#LicenseService.LicenseService",
+ "Name": "License Service",
+ "@odata.type": "#LicenseService.v1_0_0.LicenseService",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoLicenseService.v1_0_0.LenovoLicenseService",
+   "Tier": "Tier1"
+  }
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "ServiceEnabled": true,
+ "Description": "This resource is used to represent a License service for a Redfish implementation.",
+ "@odata.id": "/redfish/v1/LicenseService",
+ "Id": "LicenseService",
+ "Licenses": {
+  "@odata.id": "/redfish/v1/LicenseService/Licenses"
+ }
+}

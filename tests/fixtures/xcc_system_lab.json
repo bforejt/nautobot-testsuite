@@ -1,0 +1,241 @@
+{
+ "Boot": {
+  "BootSourceOverrideMode": "UEFI",
+  "UefiTargetBootSourceOverride": null,
+  "BootSourceOverrideEnabled@Redfish.AllowableValues": [
+   "Once",
+   "Disabled"
+  ],
+  "BootSourceOverrideEnabled": "Disabled",
+  "BootSourceOverrideTarget@Redfish.AllowableValues": [
+   "None",
+   "Pxe",
+   "Cd",
+   "Usb",
+   "Hdd",
+   "BiosSetup",
+   "Diags",
+   "UefiTarget"
+  ],
+  "AutomaticRetryConfig": "RetryAlways",
+  "BootSourceOverrideTarget": "None"
+ },
+ "VirtualMedia": {
+  "@odata.id": "/redfish/v1/Systems/1/VirtualMedia"
+ },
+ "Actions": {
+  "#ComputerSystem.Reset": {
+   "@Redfish.ActionInfo": "/redfish/v1/Systems/1/ResetActionInfo",
+   "ResetType@Redfish.AllowableValues": [
+    "On",
+    "Nmi",
+    "GracefulShutdown",
+    "GracefulRestart",
+    "ForceOn",
+    "ForceOff",
+    "ForceRestart"
+   ],
+   "title": "Reset",
+   "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset"
+  },
+  "Oem": {
+   "#LenovoComputerSystem.BootToBIOSSetup": {
+    "title": "BootToBIOSSetup",
+    "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.BootToBIOSSetup"
+   },
+   "#LenovoComputerSystem.CustomizedReset": {
+    "ResetType@Redfish.AllowableValues": [
+     "On"
+    ],
+    "title": "CustomizedReset",
+    "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.CustomizedReset"
+   }
+  }
+ },
+ "@odata.etag": "\"<hex:22>\"",
+ "AssetTag": "",
+ "ProcessorSummary": {
+  "LogicalProcessorCount": 8,
+  "Count": 1,
+  "Status": {
+   "HealthRollup": "OK",
+   "State": "Enabled",
+   "Health": "OK"
+  },
+  "Model": "Intel(R) Xeon(R) D-2123IT CPU @ 2.20GHz",
+  "Metrics": {
+   "@odata.id": "/redfish/v1/Systems/1/ProcessorSummary/ProcessorMetrics"
+  }
+ },
+ "Status": {
+  "HealthRollup": "OK",
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "Oem": {
+  "Lenovo": {
+   "HistorySysPerf": {
+    "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/HistorySysPerf"
+   },
+   "ScheduledPowerActions": {
+    "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions"
+   },
+   "@odata.type": "#LenovoComputerSystem.v1_0_0.LenovoSystemProperties",
+   "NumberOfReboots": 46,
+   "SystemStatus": "OSBooted",
+   "TotalPowerOnHours": 40199,
+   "TPMSettings": {
+    "EnableRPP": true,
+    "AssertDurationMins": 30,
+    "AssertRPP": false
+   },
+   "BootSettings": {
+    "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings"
+   },
+   "FrontPanelUSB": {
+    "PortEnabled": true
+   },
+   "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/Metrics"
+   }
+  }
+ },
+ "Model": "ThinkSystem SE350",
+ "SecureBoot": {
+  "@odata.id": "/redfish/v1/Systems/1/SecureBoot"
+ },
+ "PartNumber": null,
+ "SubModel": "7Z46",
+ "SystemType": "Physical",
+ "Description": "This resource is used to represent a computing system for a Redfish implementation.",
+ "Bios": {
+  "@odata.id": "/redfish/v1/Systems/1/Bios"
+ },
+ "Processors": {
+  "@odata.id": "/redfish/v1/Systems/1/Processors"
+ },
+ "MemorySummary": {
+  "Status": {
+   "HealthRollup": "OK",
+   "State": "Enabled",
+   "Health": "OK"
+  },
+  "Metrics": {
+   "@odata.id": "/redfish/v1/Systems/1/MemorySummary/MemoryMetrics"
+  },
+  "TotalSystemMemoryGiB": 64
+ },
+ "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
+ "LogServices": {
+  "@odata.id": "/redfish/v1/Systems/1/LogServices"
+ },
+ "SerialNumber": "L261500J",
+ "HostName": "bmc-lab-1",
+ "BiosVersion": "HYE140C",
+ "PCIeDevices": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+  }
+ ],
+ "PCIeFunctions@odata.count": 6,
+ "EthernetInterfaces": {
+  "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces"
+ },
+ "Links": {
+  "ManagedBy": [
+   {
+    "@odata.id": "/redfish/v1/Managers/1"
+   }
+  ],
+  "CooledBy": [
+   {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0"
+   },
+   {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1"
+   },
+   {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2"
+   }
+  ],
+  "Chassis": [
+   {
+    "@odata.id": "/redfish/v1/Chassis/1"
+   }
+  ],
+  "PoweredBy": []
+ },
+ "PCIeDevices@odata.count": 4,
+ "IndicatorLED": "Off",
+ "Id": "1",
+ "Name": "ComputerSystem",
+ "@odata.type": "#ComputerSystem.v1_17_0.ComputerSystem",
+ "@odata.id": "/redfish/v1/Systems/1",
+ "PowerState": "On",
+ "TrustedModules": [
+  {
+   "FirmwareVersion": null,
+   "InterfaceType": "TPM2_0",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "InterfaceTypeSelection": "BiosSetting"
+  }
+ ],
+ "Memory": {
+  "@odata.id": "/redfish/v1/Systems/1/Memory"
+ },
+ "Manufacturer": "Lenovo",
+ "NetworkInterfaces": {
+  "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces"
+ },
+ "PCIeFunctions": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.00"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.01"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.00"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1/PCIeFunctions/ob_1.00"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.01"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6/PCIeFunctions/slot_6.00"
+  }
+ ],
+ "Storage": {
+  "@odata.id": "/redfish/v1/Systems/1/Storage"
+ },
+ "SKU": "7Z46CTO1WW",
+ "HostWatchdogTimer": {
+  "TimeoutAction@Redfish.AllowableValues": [
+   "PowerCycle"
+  ],
+  "WarningAction@Redfish.AllowableValues": [
+   "None"
+  ],
+  "Status": {
+   "State": "Disabled"
+  },
+  "TimeoutAction": "PowerCycle",
+  "FunctionEnabled": false,
+  "WarningAction": "None"
+ },
+ "UUID": "7fa59b17-2c3c-1cc6-b740-167c4fea6c9f"
+}

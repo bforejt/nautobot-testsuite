@@ -1,0 +1,112 @@
+{
+ "HTTP": {
+  "ProtocolEnabled": true,
+  "Port": 80
+ },
+ "@odata.context": "/redfish/v1/$metadata#ManagerNetworkProtocol.ManagerNetworkProtocol",
+ "FQDN": "bmc-lab-1",
+ "DHCPv6": {
+  "ProtocolEnabled": false
+ },
+ "DHCP": {
+  "ProtocolEnabled": false
+ },
+ "@odata.etag": "\"<hex:21>\"",
+ "IPMI": {
+  "ProtocolEnabled": false,
+  "Port": 623
+ },
+ "HostName": "bmc-lab-1",
+ "SSDP": {
+  "NotifyMulticastIntervalSeconds": 60,
+  "Port": 1900,
+  "NotifyTTL": 2,
+  "ProtocolEnabled": false,
+  "NotifyIPv6Scope": "Organization"
+ },
+ "Id": "NetworkProtocol",
+ "Name": "Manager Network Protocol",
+ "@odata.type": "#ManagerNetworkProtocol.v1_8_0.ManagerNetworkProtocol",
+ "Oem": {
+  "Lenovo": {
+   "CimOverHTTPS": {
+    "BackendEnabled": false,
+    "Port": 5989,
+    "ProtocolEnabled": false
+   },
+   "@odata.type": "#LenovoManagerNetworkProtocol.v1_0_0.LenovoManagerNetworkProtocolProperties",
+   "SMTPClient": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SMTPClient"
+   },
+   "OpenPorts": [
+    "22",
+    "80",
+    "443",
+    "3389",
+    "3900",
+    "5900"
+   ],
+   "SNMP": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP"
+   },
+   "SFTP": {
+    "ProtocolEnabled": false,
+    "Port": 115
+   },
+   "LDAPClient": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient"
+   },
+   "WebOverHTTPS": {
+    "ProtocolEnabled": true
+   },
+   "SLP": {
+    "Port": 427,
+    "MulticastAddress": "239.255.255.253",
+    "ProtocolEnabled": false,
+    "AddressType": "Multicast"
+   },
+   "DNS": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/DNS"
+   }
+  }
+ },
+ "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol",
+ "NTP": {
+  "ProtocolEnabled": true,
+  "NTPServers": [
+   "192.0.2.1"
+  ]
+ },
+ "VirtualMedia": {
+  "ProtocolEnabled": true,
+  "Port": 3900
+ },
+ "SNMP": {
+  "Port": 161,
+  "EngineId": {
+   "PrivateEnterpriseId": "80 00 1f 88",
+   "ArchitectureId": "<hex:18>"
+  },
+  "EnableSNMPv3": false
+ },
+ "KVMIP": {
+  "ProtocolEnabled": true,
+  "Port": 3900
+ },
+ "Description": "The resource is used to represent the network service settings for the manager for a Redfish implementation.",
+ "SSH": {
+  "ProtocolEnabled": true,
+  "Port": 22
+ },
+ "HTTPS": {
+  "Port": 443,
+  "ProtocolEnabled": true,
+  "Certificates": {
+   "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates"
+  }
+ },
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ }
+}

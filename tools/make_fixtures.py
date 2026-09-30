@@ -61,6 +61,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import sanitize_trace  # noqa: E402
 
 _G = "get__data_"
+_R = "get__redfish_v1_"
 
 # Harvest file -> fixture name. The fixture name is what the tests read; the
 # harvest name is what tools/harvest_live.py wrote (``__f<hash>`` marks a
@@ -196,6 +197,280 @@ TABLE = {
     ),
     "ssh__show_logging_include_4_5.txt": "iosxe_show_logging_sev45_lab.txt",
     "ssh__dir_crashinfo.txt": "iosxe_dir_crashinfo_lab.txt",
+    # --- a server's BMC (tools/harvest_live.py --platform bmc; the lab unit is
+    # a gen-1 ThinkSystem SE350 on XCC 6.10, so the fixtures keep the xcc_
+    # prefix): every Redfish payload the bmc family and the next checks read,
+    # plain and $expand forms of each collection; the history containers
+    # (HistorySysPerf, Metrics) and ServiceData are volatile and not mapped.
+    "get__redfish_v1.json": "xcc_service_root_lab.json",
+    _R + "AccountService.json": "xcc_accountservice_lab.json",
+    _R + "AccountService_Accounts.json": "xcc_accountservice_accounts_lab.json",
+    _R + "AccountService_Accounts__f2e3cd0.json": "xcc_accountservice_accounts_expanded_lab.json",
+    _R + "AccountService_Roles.json": "xcc_accountservice_roles_lab.json",
+    _R + "AccountService_Roles__f4e85b2.json": "xcc_accountservice_roles_expanded_lab.json",
+    _R + "CertificateService.json": "xcc_certificateservice_lab.json",
+    _R + "CertificateService_CertificateLocations.json": (
+        "xcc_certificateservice_certificatelocations_lab.json"
+    ),
+    _R + "CertificateService_CertificateLocations__f5b1010.json": (
+        "xcc_certificateservice_certificatelocations_expanded_lab.json"
+    ),
+    _R + "Chassis.json": "xcc_chassis_collection_lab.json",
+    _R + "Chassis_1.json": "xcc_chassis_lab.json",
+    _R + "Chassis_1_Controls.json": "xcc_chassis_controls_lab.json",
+    _R + "Chassis_1_Controls__f3d74d1.json": "xcc_chassis_controls_expanded_lab.json",
+    _R + "Chassis_1_EnvironmentMetrics.json": "xcc_chassis_environmentmetrics_lab.json",
+    _R + "Chassis_1_NetworkAdapters.json": "xcc_chassis_networkadapters_lab.json",
+    _R + "Chassis_1_NetworkAdapters_ob_2_NetworkDeviceFunctions__fb4bb08.json": (
+        "xcc_chassis_networkadapters_ob_2_networkdevicefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_ob_2_NetworkPorts__f19aafa.json": (
+        "xcc_chassis_networkadapters_ob_2_networkports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_ob_2_Ports__f6ca55d.json": (
+        "xcc_chassis_networkadapters_ob_2_ports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_ob_4_NetworkDeviceFunctions__fbf7ccb.json": (
+        "xcc_chassis_networkadapters_ob_4_networkdevicefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_ob_4_NetworkPorts__fb65d55.json": (
+        "xcc_chassis_networkadapters_ob_4_networkports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_ob_4_Ports__fee2a9c.json": (
+        "xcc_chassis_networkadapters_ob_4_ports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_slot_6_NetworkDeviceFunctions__f24aca5.json": (
+        "xcc_chassis_networkadapters_slot_6_networkdevicefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_slot_6_NetworkPorts__f69824b.json": (
+        "xcc_chassis_networkadapters_slot_6_networkports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters_slot_6_Ports__f9378c1.json": (
+        "xcc_chassis_networkadapters_slot_6_ports_expanded_lab.json"
+    ),
+    _R + "Chassis_1_NetworkAdapters__f374aa8.json": "xcc_chassis_networkadapters_expanded_lab.json",
+    _R + "Chassis_1_Oem_Lenovo_LEDs.json": "xcc_chassis_lenovo_leds_lab.json",
+    _R + "Chassis_1_Oem_Lenovo_LEDs__f1618aa.json": "xcc_chassis_lenovo_leds_expanded_lab.json",
+    _R + "Chassis_1_Oem_Lenovo_Slots.json": "xcc_chassis_lenovo_slots_lab.json",
+    _R + "Chassis_1_Oem_Lenovo_Slots__f3f8efe.json": "xcc_chassis_lenovo_slots_expanded_lab.json",
+    _R + "Chassis_1_PCIeDevices.json": "xcc_chassis_pciedevices_lab.json",
+    _R + "Chassis_1_PCIeDevices_ob_1_PCIeFunctions__f81e088.json": (
+        "xcc_chassis_pciedevices_ob_1_pciefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_PCIeDevices_ob_2_PCIeFunctions__f5ddc49.json": (
+        "xcc_chassis_pciedevices_ob_2_pciefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_PCIeDevices_ob_4_PCIeFunctions__ff74ec2.json": (
+        "xcc_chassis_pciedevices_ob_4_pciefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_PCIeDevices_slot_6_PCIeFunctions__f08cb0f.json": (
+        "xcc_chassis_pciedevices_slot_6_pciefunctions_expanded_lab.json"
+    ),
+    _R + "Chassis_1_PCIeDevices__f6bb6e1.json": "xcc_chassis_pciedevices_expanded_lab.json",
+    _R + "Chassis_1_PCIeSlots.json": "xcc_chassis_pcieslots_lab.json",
+    _R + "Chassis_1_Power.json": "xcc_chassis_power_lab.json",
+    _R + "Chassis_1_PowerSubsystem.json": "xcc_chassis_powersubsystem_lab.json",
+    _R + "Chassis_1_Sensors.json": "xcc_chassis_sensors_lab.json",
+    _R + "Chassis_1_Sensors__f1131f3.json": "xcc_chassis_sensors_expanded_lab.json",
+    _R + "Chassis_1_Thermal.json": "xcc_chassis_thermal_lab.json",
+    _R + "Chassis_1_ThermalSubsystem.json": "xcc_chassis_thermalsubsystem_lab.json",
+    _R + "Chassis_1_ThermalSubsystem_Fans.json": "xcc_chassis_thermalsubsystem_fans_lab.json",
+    _R + "Chassis_1_ThermalSubsystem_Fans__f6ad276.json": (
+        "xcc_chassis_thermalsubsystem_fans_expanded_lab.json"
+    ),
+    _R + "Chassis_1_ThermalSubsystem_ThermalMetrics.json": (
+        "xcc_chassis_thermalsubsystem_thermalmetrics_lab.json"
+    ),
+    _R + "Chassis__f91f03b.json": "xcc_chassis_collection_expanded_lab.json",
+    _R + "EventService.json": "xcc_eventservice_lab.json",
+    _R + "EventService_Subscriptions.json": "xcc_eventservice_subscriptions_lab.json",
+    _R + "EventService_Subscriptions__f12f73b.json": (
+        "xcc_eventservice_subscriptions_expanded_lab.json"
+    ),
+    _R + "JobService.json": "xcc_jobservice_lab.json",
+    _R + "JobService_Jobs.json": "xcc_jobservice_jobs_lab.json",
+    _R + "JobService_Jobs__fd3a9f0.json": "xcc_jobservice_jobs_expanded_lab.json",
+    _R + "LicenseService.json": "xcc_licenseservice_lab.json",
+    _R + "LicenseService_Licenses.json": "xcc_licenseservice_licenses_lab.json",
+    _R + "LicenseService_Licenses__fb27284.json": "xcc_licenseservice_licenses_expanded_lab.json",
+    _R + "Managers.json": "xcc_managers_collection_lab.json",
+    _R + "Managers_1.json": "xcc_manager_lab.json",
+    _R + "Managers_1_EthernetInterfaces.json": "xcc_manager_ethernetinterfaces_lab.json",
+    _R + "Managers_1_EthernetInterfaces_NIC.json": "xcc_manager_ethernetinterfaces_nic_lab.json",
+    _R + "Managers_1_EthernetInterfaces__f89a8ea.json": (
+        "xcc_manager_ethernetinterfaces_expanded_lab.json"
+    ),
+    _R + "Managers_1_HostInterfaces.json": "xcc_manager_hostinterfaces_lab.json",
+    _R + "Managers_1_HostInterfaces__f05d94c.json": "xcc_manager_hostinterfaces_expanded_lab.json",
+    _R + "Managers_1_NetworkProtocol.json": "xcc_manager_networkprotocol_lab.json",
+    _R + "Managers_1_NetworkProtocol_HTTPS_Certificates.json": (
+        "xcc_manager_networkprotocol_https_certificates_lab.json"
+    ),
+    _R + "Managers_1_NetworkProtocol_HTTPS_Certificates__fc61cc5.json": (
+        "xcc_manager_networkprotocol_https_certificates_expanded_lab.json"
+    ),
+    _R + "Managers_1_NetworkProtocol_Oem_Lenovo_DNS.json": (
+        "xcc_manager_networkprotocol_lenovo_dns_lab.json"
+    ),
+    _R + "Managers_1_NetworkProtocol_Oem_Lenovo_LDAPClient.json": (
+        "xcc_manager_networkprotocol_lenovo_ldapclient_lab.json"
+    ),
+    _R + "Managers_1_NetworkProtocol_Oem_Lenovo_SMTPClient.json": (
+        "xcc_manager_networkprotocol_lenovo_smtpclient_lab.json"
+    ),
+    _R + "Managers_1_NetworkProtocol_Oem_Lenovo_SNMP.json": (
+        "xcc_manager_networkprotocol_lenovo_snmp_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_Configuration.json": "xcc_manager_lenovo_configuration_lab.json",
+    _R + "Managers_1_Oem_Lenovo_DateTimeService.json": (
+        "xcc_manager_lenovo_datetimeservice_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_FoD.json": "xcc_manager_lenovo_fod_lab.json",
+    _R + "Managers_1_Oem_Lenovo_FoD_Keys.json": "xcc_manager_lenovo_fod_keys_lab.json",
+    _R + "Managers_1_Oem_Lenovo_Recipients.json": "xcc_manager_lenovo_recipients_lab.json",
+    _R + "Managers_1_Oem_Lenovo_Recipients__f634034.json": (
+        "xcc_manager_lenovo_recipients_expanded_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_RemoteControl.json": "xcc_manager_lenovo_remotecontrol_lab.json",
+    _R + "Managers_1_Oem_Lenovo_RemoteControl_MountImages.json": (
+        "xcc_manager_lenovo_remotecontrol_mountimages_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_RemoteControl_Sessions.json": (
+        "xcc_manager_lenovo_remotecontrol_sessions_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_SecureKeyLifecycleService.json": (
+        "xcc_manager_lenovo_securekeylifecycleservice_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_SecureKeyLifecycleService_ClientCertificate.json": (
+        "xcc_manager_lenovo_securekeylifecycleservice_clientcertificate_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_SecureKeyLifecycleService_ServerCertificate.json": (
+        "xcc_manager_lenovo_securekeylifecycleservice_servercertificate_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_Security.json": "xcc_manager_lenovo_security_lab.json",
+    _R + "Managers_1_Oem_Lenovo_ServerProfile.json": "xcc_manager_lenovo_serverprofile_lab.json",
+    _R + "Managers_1_Oem_Lenovo_ServerProfile_Certificates.json": (
+        "xcc_manager_lenovo_serverprofile_certificates_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_SsoCertificates.json": (
+        "xcc_manager_lenovo_ssocertificates_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_SsoCertificates__f827509.json": (
+        "xcc_manager_lenovo_ssocertificates_expanded_lab.json"
+    ),
+    _R + "Managers_1_Oem_Lenovo_Watchdogs.json": "xcc_manager_lenovo_watchdogs_lab.json",
+    _R + "Managers_1_Oem_Lenovo_Watchdogs__f476772.json": (
+        "xcc_manager_lenovo_watchdogs_expanded_lab.json"
+    ),
+    _R + "Managers_1_SerialInterfaces.json": "xcc_manager_serialinterfaces_lab.json",
+    _R + "Managers_1_SerialInterfaces__f0464b0.json": (
+        "xcc_manager_serialinterfaces_expanded_lab.json"
+    ),
+    _R + "Managers_1_VirtualMedia.json": "xcc_manager_virtualmedia_lab.json",
+    _R + "Managers_1_VirtualMedia__f459621.json": "xcc_manager_virtualmedia_expanded_lab.json",
+    _R + "Managers__f14b9c8.json": "xcc_managers_collection_expanded_lab.json",
+    _R + "Registries.json": "xcc_registries_lab.json",
+    _R + "Registries__f33d968.json": "xcc_registries_expanded_lab.json",
+    _R + "Systems.json": "xcc_systems_collection_lab.json",
+    _R + "Systems_1.json": "xcc_system_lab.json",
+    _R + "Systems_1_Bios.json": "xcc_system_bios_lab.json",
+    _R + "Systems_1_Bios_Pending.json": "xcc_system_bios_pending_lab.json",
+    _R + "Systems_1_EthernetInterfaces.json": "xcc_system_ethernetinterfaces_lab.json",
+    _R + "Systems_1_EthernetInterfaces__f03ed08.json": (
+        "xcc_system_ethernetinterfaces_expanded_lab.json"
+    ),
+    _R + "Systems_1_LogServices.json": "xcc_system_logservices_lab.json",
+    _R + "Systems_1_LogServices_ActiveLog_Entries.json": (
+        "xcc_system_logservices_activelog_entries_lab.json"
+    ),
+    _R + "Systems_1_LogServices_DiagnosticLog_Entries.json": (
+        "xcc_system_logservices_diagnosticlog_entries_lab.json"
+    ),
+    _R + "Systems_1_LogServices_MaintenanceLog_Entries.json": (
+        "xcc_system_logservices_maintenancelog_entries_lab.json"
+    ),
+    _R + "Systems_1_LogServices_SaLog_Entries.json": (
+        "xcc_system_logservices_salog_entries_lab.json"
+    ),
+    _R + "Systems_1_LogServices_StandardLog.json": "xcc_system_logservices_standardlog_lab.json",
+    _R + "Systems_1_LogServices_StandardLog_Entries.json": (
+        "xcc_system_logservices_standardlog_entries_lab.json"
+    ),
+    _R + "Systems_1_LogServices__faefcb8.json": "xcc_system_logservices_expanded_lab.json",
+    _R + "Systems_1_Memory.json": "xcc_system_memory_lab.json",
+    _R + "Systems_1_Memory__f67bb1a.json": "xcc_system_memory_expanded_lab.json",
+    _R + "Systems_1_NetworkInterfaces.json": "xcc_system_networkinterfaces_lab.json",
+    _R + "Systems_1_NetworkInterfaces__fa2913a.json": (
+        "xcc_system_networkinterfaces_expanded_lab.json"
+    ),
+    _R + "Systems_1_Oem_Lenovo_BootSettings.json": "xcc_system_lenovo_bootsettings_lab.json",
+    _R + "Systems_1_Oem_Lenovo_BootSettings__f360875.json": (
+        "xcc_system_lenovo_bootsettings_expanded_lab.json"
+    ),
+    _R + "Systems_1_Oem_Lenovo_ScheduledPowerActions.json": (
+        "xcc_system_lenovo_scheduledpoweractions_lab.json"
+    ),
+    _R + "Systems_1_Oem_Lenovo_ScheduledPowerActions__f7407e8.json": (
+        "xcc_system_lenovo_scheduledpoweractions_expanded_lab.json"
+    ),
+    _R + "Systems_1_Processors.json": "xcc_system_processors_lab.json",
+    _R + "Systems_1_Processors__f114b65.json": "xcc_system_processors_expanded_lab.json",
+    _R + "Systems_1_SecureBoot.json": "xcc_system_secureboot_lab.json",
+    _R + "Systems_1_Storage.json": "xcc_system_storage_lab.json",
+    _R + "Systems_1_Storage_M_2_Slot_2_Drives_Slot_2.json": (
+        "xcc_system_storage_m_2_slot_2_drives_slot_2_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_2_StoragePools__ff8612e.json": (
+        "xcc_system_storage_m_2_slot_2_storagepools_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_2_Volumes__f0f5a6f.json": (
+        "xcc_system_storage_m_2_slot_2_volumes_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_3_Drives_Slot_3.json": (
+        "xcc_system_storage_m_2_slot_3_drives_slot_3_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_3_StoragePools__fcb1d0e.json": (
+        "xcc_system_storage_m_2_slot_3_storagepools_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_3_Volumes__f9054a5.json": (
+        "xcc_system_storage_m_2_slot_3_volumes_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_4_Drives_Slot_4.json": (
+        "xcc_system_storage_m_2_slot_4_drives_slot_4_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_4_StoragePools__f3bff6f.json": (
+        "xcc_system_storage_m_2_slot_4_storagepools_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_4_Volumes__f4d63df.json": (
+        "xcc_system_storage_m_2_slot_4_volumes_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_5_Drives_Slot_5.json": (
+        "xcc_system_storage_m_2_slot_5_drives_slot_5_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_5_StoragePools__f651818.json": (
+        "xcc_system_storage_m_2_slot_5_storagepools_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage_M_2_Slot_5_Volumes__f299faf.json": (
+        "xcc_system_storage_m_2_slot_5_volumes_expanded_lab.json"
+    ),
+    _R + "Systems_1_Storage__f98d110.json": "xcc_system_storage_expanded_lab.json",
+    _R + "Systems_1_VirtualMedia.json": "xcc_system_virtualmedia_lab.json",
+    _R + "Systems_1_VirtualMedia_RDOC1_Certificates__f5b0116.json": (
+        "xcc_system_virtualmedia_rdoc1_certificates_expanded_lab.json"
+    ),
+    _R + "Systems_1_VirtualMedia_RDOC2_Certificates__f76c15f.json": (
+        "xcc_system_virtualmedia_rdoc2_certificates_expanded_lab.json"
+    ),
+    _R + "Systems_1_VirtualMedia__f5722c9.json": "xcc_system_virtualmedia_expanded_lab.json",
+    _R + "Systems__f7fe427.json": "xcc_systems_collection_expanded_lab.json",
+    _R + "TaskService.json": "xcc_taskservice_lab.json",
+    _R + "TaskService_Tasks.json": "xcc_taskservice_tasks_lab.json",
+    _R + "TaskService_Tasks__ff5b330.json": "xcc_taskservice_tasks_expanded_lab.json",
+    _R + "UpdateService.json": "xcc_updateservice_lab.json",
+    _R + "UpdateService_FirmwareInventory.json": "xcc_updateservice_firmwareinventory_lab.json",
+    _R + "UpdateService_FirmwareInventory__fac59e1.json": (
+        "xcc_updateservice_firmwareinventory_expanded_lab.json"
+    ),
 }
 
 # The texts a device prints its own users in (-> netops).

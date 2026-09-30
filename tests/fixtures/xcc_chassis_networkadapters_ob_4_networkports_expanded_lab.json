@@ -1,0 +1,99 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "ActiveLinkTechnology": "Ethernet",
+   "@odata.context": "/redfish/v1/$metadata#NetworkPort.NetworkPort",
+   "@odata.etag": "\"<hex:19>\"",
+   "PortMaximumMTU": 12000,
+   "PhysicalPortNumber": "1",
+   "Id": "1",
+   "Name": "Phyical Port 1",
+   "@odata.type": "#NetworkPort.v1_4_1.NetworkPort",
+   "CurrentLinkSpeedMbps": null,
+   "SupportedLinkCapabilities": [
+    {
+     "CapableLinkSpeedMbps": [
+      1073741824
+     ]
+    }
+   ],
+   "AssociatedNetworkAddresses": [
+    "907CCCC381CE"
+   ],
+   "LinkStatus": "Down",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/1",
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "NetDevFuncMaxBWAlloc": [
+    {
+     "MaxBWAllocPercent": null,
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/1.1"
+     }
+    }
+   ],
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoNetworkPort.v1_0_0.LenovoNetworkPortProperties",
+     "PhysicalPortMacAddress": "907CCCC381CE",
+     "PortMaxSpeedbps": 1073741824
+    }
+   }
+  },
+  {
+   "ActiveLinkTechnology": "Ethernet",
+   "@odata.context": "/redfish/v1/$metadata#NetworkPort.NetworkPort",
+   "@odata.etag": "\"<hex:19>\"",
+   "PortMaximumMTU": 12000,
+   "PhysicalPortNumber": "2",
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "Name": "Phyical Port 2",
+   "@odata.type": "#NetworkPort.v1_4_1.NetworkPort",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/2",
+   "SupportedLinkCapabilities": [
+    {
+     "CapableLinkSpeedMbps": [
+      1073741824
+     ]
+    }
+   ],
+   "AssociatedNetworkAddresses": [
+    "80431E80A871"
+   ],
+   "LinkStatus": "Down",
+   "CurrentLinkSpeedMbps": null,
+   "Description": "A Network Port represents a discrete physical port capable of connecting to a network.",
+   "Id": "2",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoNetworkPort.v1_0_0.LenovoNetworkPortProperties",
+     "PhysicalPortMacAddress": "80431E80A871",
+     "PortMaxSpeedbps": 1073741824
+    }
+   },
+   "NetDevFuncMaxBWAlloc": [
+    {
+     "MaxBWAllocPercent": null,
+     "NetworkDeviceFunction": {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/2.1"
+     }
+    }
+   ]
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#NetworkPortCollection.NetworkPortCollection",
+ "Name": "NetworkPortCollection",
+ "@odata.type": "#NetworkPortCollection.NetworkPortCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts",
+ "Members@odata.count": 2,
+ "Description": "A collection of NetworkPort resource instances."
+}

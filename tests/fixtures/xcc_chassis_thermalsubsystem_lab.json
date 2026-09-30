@@ -1,0 +1,19 @@
+{
+ "Id": "ThermalSubsystem",
+ "Name": "Thermal Subsystem",
+ "@odata.type": "#ThermalSubsystem.v1_0_0.ThermalSubsystem",
+ "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem",
+ "@odata.etag": "\"<hex:19>\"",
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "Description": "This resource shall represent a thermal subsystem for a Redfish implementation.",
+ "Fans": {
+  "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans"
+ },
+ "ThermalMetrics": {
+  "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/ThermalMetrics"
+ },
+ "@odata.context": "/redfish/v1/$metadata#ThermalSubsystem.ThermalSubsystem"
+}

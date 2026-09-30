@@ -1,0 +1,34 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#LenovoRemoteControlService.LenovoRemoteControlService",
+ "Name": "Remote Control Service",
+ "@odata.type": "#LenovoRemoteControlService.v1_0_0.LenovoRemoteControlService",
+ "Actions": {
+  "#LenovoRemoteControlService.GetRemoteConsoleToken": {
+   "title": "GetRemoteConsoleToken",
+   "target": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/Actions/LenovoRemoteControlService.GetRemoteConsoleToken"
+  },
+  "#LenovoRemoteControlService.UploadFromURL": {
+   "target": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/Actions/LenovoRemoteControlService.UploadFromURL",
+   "title": "UploadFromURL",
+   "Type@Redfish.AllowableValues": [
+    "Samba",
+    "NFS",
+    "HTTP",
+    "HTTPS",
+    "SFTP",
+    "FTP"
+   ]
+  }
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "MountImages": {
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/MountImages"
+ },
+ "ServiceEnabled": true,
+ "Description": "This resource is used to represent remote control service for a Redfish implementation.",
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl",
+ "Id": "RemoteControl",
+ "Sessions": {
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl/Sessions"
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "PartNumber": "WDS200T2B0B-00YS70",
+ "RotationSpeedRPM": 0,
+ "@odata.context": "/redfish/v1/$metadata#Drive.Drive",
+ "CapacityBytes": 2000000000000,
+ "PhysicalLocation": {
+  "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+  "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+  "PartLocation": {
+   "ServiceLabel": "M.2 - Slot 4",
+   "LocationType": "Slot",
+   "LocationOrdinalValue": 4
+  },
+  "Info": "Slot 4",
+  "InfoFormat": "Slot Number"
+ },
+ "Protocol": "SATA",
+ "StatusIndicator": null,
+ "PredictedMediaLifeLeftPercent": null,
+ "@odata.etag": "\"<hex:21>\"",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoDrive.v1_0_0.LenovoDrive"
+  }
+ },
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "Manufacturer": "ATA",
+ "Id": "Drive.Slot_4",
+ "HotspareType": "None",
+ "AssetTag": "",
+ "Identifiers": [
+  {
+   "DurableNameFormat": "UUID",
+   "DurableName": "N/A"
+  }
+ ],
+ "BlockSizeBytes": null,
+ "Model": "WDC  WDS200T2B0B-00YS70",
+ "EncryptionAbility": null,
+ "MediaType": "SSD",
+ "@odata.type": "#Drive.v1_14_0.Drive",
+ "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_4/Drives/Slot_4",
+ "SerialNumber": "2190G9896651",
+ "Name": "2.0TB M.2 SATA SSD",
+ "CapableSpeedGbs": null,
+ "Links": {
+  "Volumes": [],
+  "PCIeFunctions": [],
+  "Chassis": {
+   "@odata.id": "/redfish/v1/Chassis/1"
+  }
+ },
+ "Revision": "411040WD",
+ "SKU": "2190G9896651",
+ "Description": "This resource is used to represent a drive for a Redfish implementation.",
+ "NegotiatedSpeedGbs": null,
+ "EncryptionStatus": null,
+ "FailurePredicted": false
+}

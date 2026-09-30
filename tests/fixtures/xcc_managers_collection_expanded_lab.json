@@ -1,0 +1,176 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "Status": {
+    "State": "Enabled"
+   },
+   "@odata.context": "/redfish/v1/$metadata#Manager.Manager",
+   "VirtualMedia": {
+    "@odata.id": "/redfish/v1/Managers/1/VirtualMedia"
+   },
+   "GraphicalConsole": {
+    "MaxConcurrentSessions": 6,
+    "ServiceEnabled": false,
+    "ConnectTypesSupported": [
+     "KVMIP"
+    ]
+   },
+   "Actions": {
+    "#Manager.Reset": {
+     "@Redfish.ActionInfo": "/redfish/v1/Managers/1/ResetActionInfo",
+     "ResetType@Redfish.AllowableValues": [
+      "GracefulRestart",
+      "ForceRestart"
+     ],
+     "title": "Reset",
+     "target": "/redfish/v1/Managers/1/Actions/Manager.Reset"
+    },
+    "#Manager.ResetToDefaults": {
+     "@Redfish.ActionInfo": "/redfish/v1/Managers/1/ResetToDefaultsActionInfo",
+     "ResetType@Redfish.AllowableValues": [
+      "ResetAll"
+     ],
+     "title": "ResetToDefaults",
+     "target": "/redfish/v1/Managers/1/Actions/Manager.ResetToDefaults"
+    }
+   },
+   "Links": {
+    "ManagerForChassis@odata.count": 1,
+    "SoftwareImages@odata.count": 2,
+    "SoftwareImages": [
+     {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+     },
+     {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Backup"
+     }
+    ],
+    "ManagerForServers@odata.count": 1,
+    "ManagerForServers": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1"
+     }
+    ],
+    "ActiveSoftwareImage": {
+     "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+    },
+    "ManagerForChassis": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1"
+     }
+    ]
+   },
+   "@odata.etag": "\"<hex:22>\"",
+   "Id": "1",
+   "SerialInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/SerialInterfaces"
+   },
+   "Description": "This resource is used to represent a management subsystem for a Redfish implementation.",
+   "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+   },
+   "PowerState": "On",
+   "ServiceEntryPointUUID": "7FA59B17-2C3C-1CC6-B740-167C4FEA6C9F",
+   "HostInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/HostInterfaces"
+   },
+   "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces"
+   },
+   "FirmwareVersion": "TEI3G4D 6.10 2025-08-08",
+   "Name": "Manager",
+   "@odata.type": "#Manager.v1_14_0.Manager",
+   "Oem": {
+    "Lenovo": {
+     "DateTimeService": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService"
+     },
+     "Watchdogs": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs"
+     },
+     "ServiceAdvisor": "/redfish/v1/Managers/1/Oem/Lenovo/ServiceAdvisor",
+     "RecipientsSettings": {
+      "RetryInterval": 0.5,
+      "RntryRetryInterval": 0.5,
+      "RetryCount": 5
+     },
+     "Security": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Security"
+     },
+     "AgentlessCapabilities": [
+      "RaidLink",
+      "OOB_PCIe",
+      "RaidLinkConfig",
+      "RaidLinkAlert",
+      "OOB_PCIe_Config",
+      "OOB_Option_Firmware_Update",
+      "PreStandardPLDM",
+      "StandardPLDM",
+      "Storlib",
+      "M2"
+     ],
+     "FoD": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/FoD"
+     },
+     "ServiceData": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/ServiceData"
+     },
+     "release_name": "purley_gp_23-2",
+     "SecureKeyLifecycleService": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService"
+     },
+     "@odata.type": "#LenovoManager.v1_0_0.LenovoManagerProperties",
+     "TrespassMessage": "",
+     "RemoteControl": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl"
+     },
+     "KCSEnabled": false,
+     "SsoCertificates": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SsoCertificates"
+     },
+     "Configuration": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Configuration"
+     },
+     "Recipients": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Recipients"
+     },
+     "ServerProfile": {
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/ServerProfile"
+     }
+    }
+   },
+   "DateTimeLocalOffset": "-05:00",
+   "CommandShell": {
+    "MaxConcurrentSessions": 2,
+    "ServiceEnabled": true,
+    "ConnectTypesSupported": [
+     "SSH"
+    ]
+   },
+   "UUID": "7FA59B17-2C3C-1CC6-B740-167C4FEA6C9F",
+   "DateTime": "2026-09-29T22:32:13-05:00",
+   "SerialConsole": {
+    "MaxConcurrentSessions": 2,
+    "ConnectTypesSupported": [
+     "IPMI",
+     "SSH"
+    ],
+    "ServiceEnabled": true
+   },
+   "@odata.id": "/redfish/v1/Managers/1",
+   "AutoDSTEnabled": true,
+   "Model": "Lenovo XClarity Controller",
+   "NetworkProtocol": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol"
+   },
+   "ManagerType": "BMC"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#ManagerCollection.ManagerCollection",
+ "Name": "ManagerCollection",
+ "@odata.type": "#ManagerCollection.ManagerCollection",
+ "@odata.id": "/redfish/v1/Managers",
+ "Description": "A collection of Manager resource instances.",
+ "Members@odata.count": 1
+}

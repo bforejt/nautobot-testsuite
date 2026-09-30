@@ -1,0 +1,36 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Id": "PCIeSlots",
+ "@odata.context": "/redfish/v1/$metadata#PCIeSlots.PCIeSlots",
+ "Name": "PCIe Slots",
+ "@odata.type": "#PCIeSlots.v1_5_0.PCIeSlots",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots",
+ "Description": "This resource shall be used to represent an set of PCIe slot  information for a Redfish implementation.",
+ "Slots": [
+  {
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Location": {
+    "InfoFormat": "Slot X",
+    "PartLocation": {
+     "ServiceLabel": "PCIe 6",
+     "LocationOrdinalValue": 6,
+     "LocationType": "Slot"
+    },
+    "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+    "Info": "Slot 6",
+    "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+   },
+   "HotPluggable": false,
+   "Links": {
+    "PCIeDevice": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+     }
+    ]
+   }
+  }
+ ]
+}

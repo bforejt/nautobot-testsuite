@@ -1,0 +1,31 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#EnvironmentMetrics.EnvironmentMetrics",
+ "FanSpeedsPercent": [
+  {
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/53L0",
+   "Reading": 6014
+  },
+  {
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/54L0",
+   "Reading": 6014
+  },
+  {
+   "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/55L0",
+   "Reading": 6208
+  }
+ ],
+ "@odata.type": "#EnvironmentMetrics.v1_2_0.EnvironmentMetrics",
+ "@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics",
+ "@odata.etag": "\"<hex:19>\"",
+ "PowerWatts": {
+  "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/204L0",
+  "Reading": 40
+ },
+ "Description": "This resource shall represent an environment metrics for a Redfish implementation.",
+ "TemperatureCelsius": {
+  "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/208L0",
+  "Reading": 21
+ },
+ "Name": "Chassis Environment Metrics",
+ "Id": "EnvironmentMetrics"
+}

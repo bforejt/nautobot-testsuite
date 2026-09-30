@@ -1,0 +1,42 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.context": "/redfish/v1/$metadata#Control.Control",
+   "ControlType": "Power",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "System Power Limit",
+   "@odata.type": "#Control.v1_1_0.Control",
+   "@odata.id": "/redfish/v1/Chassis/1/Controls/PowerLimit",
+   "SetPointUnits": "Watt",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ],
+   "@odata.etag": "\"<hex:19>\"",
+   "Implementation": "Programmable",
+   "Sensor": {
+    "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/204L0",
+    "Reading": 50
+   },
+   "PhysicalContext": "Chassis",
+   "Description": "This resource shall represent system power limit of a chassis for a Redfish implementation.",
+   "Id": "PowerLimit",
+   "Increment": 1,
+   "SetPointType": "Single"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#ControlCollection.ControlCollection",
+ "Name": "Chassis Controls",
+ "@odata.type": "#ControlCollection.ControlCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/Controls",
+ "Members@odata.count": 1,
+ "Description": "This resource shall represent controls of a chassis for a Redfish implementation."
+}

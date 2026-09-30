@@ -1,0 +1,56 @@
+{
+ "@odata.etag": "\"<hex:21>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary-Pending"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Backup"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/UEFI"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/UEFI-Pending"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPM"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPMWindowsDriver"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/LXPMLinuxDriver"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Ob_2.1"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Ob_2.2"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Ob_4.1"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Disk1"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Disk2"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Disk3"
+  },
+  {
+   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Disk4"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#SoftwareInventoryCollection.SoftwareInventoryCollection",
+ "Name": "SoftwareInventoryCollection",
+ "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+ "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+ "Members@odata.count": 15,
+ "Description": "Firmware Inventory Collection."
+}

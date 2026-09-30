@@ -1,0 +1,885 @@
+{
+ "@odata.etag": "\"<hex:21>\"",
+ "Members": [
+  {
+   "IsPredefined": true,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "Administrator",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/Administrator",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "Administrator",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login",
+    "ConfigureManager",
+    "ConfigureUsers",
+    "ConfigureSelf",
+    "ConfigureComponents"
+   ],
+   "OemPrivileges": [
+    "Supervisor"
+   ],
+   "Id": "Administrator"
+  },
+  {
+   "IsPredefined": true,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "Operator",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/Operator",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "Operator",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login",
+    "ConfigureSelf",
+    "ConfigureComponents"
+   ],
+   "OemPrivileges": [
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Id": "Operator"
+  },
+  {
+   "IsPredefined": true,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "ReadOnly",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/ReadOnly",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "ReadOnly",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login",
+    "ConfigureSelf"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "ReadOnly"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole1",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole1",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole1",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "Supervisor"
+   ],
+   "Id": "CustomRole1"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole2",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole2",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole2",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "Supervisor"
+   ],
+   "Id": "CustomRole2"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole3",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole3",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole3",
+   "Id": "CustomRole3",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole4",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole4",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "RoleId": "CustomRole4",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole4"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole5",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole5",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole5",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole5"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole6",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole6",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "RoleId": "CustomRole6",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole6"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole7",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole7",
+   "@odata.etag": "\"<hex:19>\"",
+   "Id": "CustomRole7",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "RoleId": "CustomRole7"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole8",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole8",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole8",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole8"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole9",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole9",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole9",
+   "Id": "CustomRole9",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole10",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole10",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole10",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole10"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole11",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole11",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole11",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "CustomRole11"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "CustomRole12",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/CustomRole12",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "CustomRole12",
+   "Id": "CustomRole12",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole1",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole1",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "RoleId": "GroupRole1",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole1"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole2",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole2",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole2",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole2"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole3",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole3",
+   "@odata.etag": "\"<hex:19>\"",
+   "Id": "GroupRole3",
+   "RoleId": "GroupRole3",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole4",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole4",
+   "@odata.etag": "\"<hex:19>\"",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "RoleId": "GroupRole4",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole4"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole5",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole5",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole5",
+   "Id": "GroupRole5",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole6",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole6",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole6",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole6"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole7",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole7",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole7",
+   "Id": "GroupRole7",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole8",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole8",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole8",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole8"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole9",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole9",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole9",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole9"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole10",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole10",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole10",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole10"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole11",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole11",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole11",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole11"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole12",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole12",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole12",
+   "Id": "GroupRole12",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole13",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole13",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole13",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole13"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole14",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole14",
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole14",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole14"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole15",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole15",
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ],
+   "@odata.etag": "\"<hex:19>\"",
+   "RoleId": "GroupRole15",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "Id": "GroupRole15"
+  },
+  {
+   "IsPredefined": false,
+   "@odata.context": "/redfish/v1/$metadata#Role.Role",
+   "Name": "GroupRole16",
+   "@odata.type": "#Role.v1_3_1.Role",
+   "@odata.id": "/redfish/v1/AccountService/Roles/GroupRole16",
+   "@odata.etag": "\"<hex:19>\"",
+   "Id": "GroupRole16",
+   "RoleId": "GroupRole16",
+   "Description": "This resource is used to represent a user role for the user account for a Redfish implementation.",
+   "AssignedPrivileges": [
+    "Login"
+   ],
+   "OemPrivileges": [
+    "ReadOnly"
+   ],
+   "OemPrivileges@Redfish.AllowableValues": [
+    "Supervisor",
+    "ReadOnly",
+    "UserAccountManagement",
+    "RemoteConsoleAccess",
+    "RemoteConsoleAndVirtualMediaAccess",
+    "RemoteServerPowerRestartAccess",
+    "AbilityClearEventLogs",
+    "AdapterConfiguration_Basic",
+    "AdapterConfiguration_NetworkingAndSecurity",
+    "AdapterConfiguration_Advanced"
+   ]
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#RoleCollection.RoleCollection",
+ "Name": "RoleCollection",
+ "@odata.type": "#RoleCollection.RoleCollection",
+ "@odata.id": "/redfish/v1/AccountService/Roles",
+ "Description": "A collection of Role resource instances.",
+ "Members@odata.count": 31
+}

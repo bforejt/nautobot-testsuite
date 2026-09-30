@@ -1,0 +1,20 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_1_Tach"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_2_Tach"
+  },
+  {
+   "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_3_Tach"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#FanCollection.FanCollection",
+ "Name": "FanCollection",
+ "@odata.type": "#FanCollection.FanCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans",
+ "Members@odata.count": 3,
+ "Description": "A collection of fan resource instances."
+}

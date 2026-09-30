@@ -27,10 +27,15 @@ FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
 
 
 class TestTable(unittest.TestCase):
-    def test_every_harvest_file_maps_to_one_iosxe_fixture(self):
+    def test_every_harvest_file_maps_to_one_fixture_of_its_family(self):
         names = list(make_fixtures.TABLE.values())
         self.assertEqual(len(names), len(set(names)))
         for source, name in make_fixtures.TABLE.items():
+            if source.startswith("get__redfish_v1"):
+                # a BMC harvest: Redfish JSON only, lab fixtures in the xcc_ family
+                self.assertTrue(name.startswith("xcc_") and name.endswith("_lab.json"), name)
+                self.assertTrue(source.endswith(".json"), source)
+                continue
             self.assertTrue(source.startswith(("get__data_", "ssh__")), source)
             self.assertTrue(name.startswith("iosxe_"), name)
             self.assertEqual(source.rsplit(".", 1)[1], name.rsplit(".", 1)[1], source)

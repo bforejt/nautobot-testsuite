@@ -1,0 +1,19 @@
+{
+ "Id": "SMTPClient",
+ "Name": "SMTP Client",
+ "@odata.type": "#LenovoSMTPClient.v1_0_0.LenovoSMTPClient",
+ "AccessPort": 25,
+ "Reverse-path": null,
+ "@odata.etag": "\"<hex:19>\"",
+ "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SMTPClient",
+ "AccessInfo": "0.0.0.0",
+ "Description": "The resource is used to represent a SMTP client for the manager for a Redfish implementation.",
+ "Authentication": {
+  "Password": null,
+  "Method": "CRAM_MD5",
+  "Required": false,
+  "UserName": null
+ },
+ "ProtocolEnabled": true,
+ "@odata.context": "/redfish/v1/$metadata#LenovoSMTPClient.LenovoSMTPClient"
+}

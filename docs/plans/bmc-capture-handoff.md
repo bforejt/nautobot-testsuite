@@ -674,6 +674,16 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    normalizer items listed under §5a (sequence-number names, DNS
    placeholders, SNMP enablement, log-message redaction); commit the `_lab`
    fixtures.
+   **State (2026-09-30):** done. The Nautobot-side run is recorded under
+   step 1; the harvest (`tools/harvest_live.py --platform bmc`, 12 checks
+   plus 146 extra reads, 159 GETs) was sanitized by `tools/make_fixtures.py`
+   into 145 `tests/fixtures/xcc_*_lab.json` fixtures (plain and `$expand`
+   forms of every collection, every OEM link, the log services' entries;
+   the history containers and ServiceData excluded), with the lab subnet on
+   192.0.2.0/24 and the mapping kept beside the raw harvest outside the
+   repository. `tests/test_lab_fixtures.py` guards them (every serial, UUID,
+   host name, account, address and log name an invention) and pins what the
+   family reads from them, one class per widening group of PR B.
 3. **PR B — widen the existing checks** (§5a) on the lab fixtures.
 4. **PR C — new checks** (§5b, `bmc_telemetry` optional), coverage-map
    section, prompt updates.

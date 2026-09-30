@@ -1,0 +1,2599 @@
+{
+ "@odata.etag": "\"<hex:22>\"",
+ "Members": [
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "CPUs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/10L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "10L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Drv 0 Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/112L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "112L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Drv 2 Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "Id": "114L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/114L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Drv 3 Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/115L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "115L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Drv 4 Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/116L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "116L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Drv 5 Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/117L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "117L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMMs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/11L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "11L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "All Drvs Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/122L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "122L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "One of Drvs Key",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/123L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "123L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Drive 0",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/128L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": null,
+   "Status": {
+    "State": "Disabled",
+    "Health": null
+   },
+   "Id": "128L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Firmware Error",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/12L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "12L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Drive 2",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/130L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "130L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Drive 3",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/131L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "131L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Drive 4",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/132L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "132L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Drive 5",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/133L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "133L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "GPT Status",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/13L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "13L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Bios"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "CPU",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "CPU Status",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/144L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "144L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "CPU",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "CPU PECI",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/148L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "148L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "XCC FW Corrupted",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/14L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "14L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "CPU",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "CPU Overtemp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Temperature",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/156L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "156L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "XCC Switchover",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/15L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "15L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "VoltageType": "DC",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/160L0",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": 3.6348
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 2.964
+    }
+   },
+   "Id": "160L0",
+   "Name": "SysBrd 3.3V",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Voltage",
+   "MinAllowableOperatingValue": 0,
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 3.978,
+   "Reading": 3.354,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "V",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "VoltageType": "DC",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": 5.497
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 4.508
+    }
+   },
+   "ReadingType": "Voltage",
+   "Id": "161L0",
+   "Name": "SysBrd 5V",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/161L0",
+   "ReadingRangeMax": 0,
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 5.865,
+   "Reading": 4.945,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "MinAllowableOperatingValue": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "V",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "VoltageType": "DC",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/162L0",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": 13.2
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 10.615
+    }
+   },
+   "Precision": 0,
+   "Name": "SysBrd 12V",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Voltage",
+   "MinAllowableOperatingValue": 0,
+   "Id": "162L0",
+   "MaxAllowableOperatingValue": 14.025,
+   "Reading": 11.77,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "V",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "SysBrd Vol Fault",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Voltage",
+   "VoltageType": "DC",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/163L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "163L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Precision": 0,
+   "Name": "Sys Utilization",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/164L0",
+   "ReadingType": null,
+   "Id": "164L0",
+   "MaxAllowableOperatingValue": 0,
+   "Reading": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Precision": 0,
+   "ReadingRangeMax": 0,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/165L0",
+   "ReadingType": null,
+   "Id": "165L0",
+   "MaxAllowableOperatingValue": 0,
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "CPU Utilization",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/ProcessorSummary/ProcessorMetrics"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/166L0",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "Precision": 0,
+   "Name": "Mem Utilization",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "MinAllowableOperatingValue": 0,
+   "ReadingType": null,
+   "Id": "166L0",
+   "MaxAllowableOperatingValue": 0,
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/MemorySummary/MemoryMetrics"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Precision": 0,
+   "Name": "IO Utilization",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/167L0",
+   "ReadingType": null,
+   "Id": "167L0",
+   "MaxAllowableOperatingValue": 0,
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "ME Error",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/168L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "168L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Bios"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Lane Failover",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/16L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "16L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Low Security Jmp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/17L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "17L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Riser Detect",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/181L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "181L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Chassis",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/189L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "189L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Memory Resized",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/18L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "18L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Chassis Movement",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/190L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "190L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Power Resource",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Power",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/195L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "195L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Power Adapter 1",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Power",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/196L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "196L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Power Adapter 2",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Power",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/197L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "197L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "NMI State",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/19L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "19L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Host Power",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Power",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/1L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "1L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 2550,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "ReadingType": "Current",
+   "Id": "204L0",
+   "ReadingRangeMax": 2550,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/204L0",
+   "MinAllowableOperatingValue": 2550,
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 2550,
+   "Reading": 50,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Sys Power",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "Watts",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 2550,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "ReadingType": "Current",
+   "Precision": 0,
+   "ReadingRangeMax": 2550,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/205L0",
+   "MinAllowableOperatingValue": 2550,
+   "Id": "205L0",
+   "MaxAllowableOperatingValue": 2550,
+   "Reading": 20,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "CPU Power",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "Watts",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 255,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "MinAllowableOperatingValue": 255,
+   "Id": "206L0",
+   "ReadingRangeMax": 255,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/206L0",
+   "ReadingType": "Current",
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 255,
+   "Reading": 1,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Mem Power",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "Watts",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "Intake",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": 61
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": 59
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": 57
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "ReadingType": "Temperature",
+   "Id": "208L0",
+   "ReadingRangeMax": 50,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/208L0",
+   "MinAllowableOperatingValue": 0,
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 255,
+   "Reading": 21,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Ambient Temp",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "C",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Thermal"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Lom link state",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/218L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "218L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "No I/O Resources",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/21L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "21L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "CPU",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 43,
+   "MinAllowableOperatingValue": 0,
+   "Id": "228L0",
+   "Name": "CPU Temp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/228L0",
+   "ReadingType": "Temperature",
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 255,
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 255,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "C",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "No Op ROM Space",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "Id": "22L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/22L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Bios"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "PCH Overtemp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Temperature",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/232L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "232L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "CPU",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": -51,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": null
+    }
+   },
+   "MinAllowableOperatingValue": -51,
+   "Precision": 0,
+   "Name": "CPU DTS",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/235L0",
+   "ReadingType": "Temperature",
+   "Id": "235L0",
+   "MaxAllowableOperatingValue": 0,
+   "Reading": -51,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 0,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Non-Auth DIMMs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/23L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "23L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "PCIe",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/240L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "240L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Left Card",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/243L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "243L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "M2 Boot Card",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/245L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "245L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Lockdown Mode",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/246L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "246L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Network Board",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/250L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "250L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 0,
+   "RelatedItem": []
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "SEL Fullness",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/254L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "254L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/LogServices/SEL"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "One of DIMMs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/25L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "25L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "One of PCIs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/26L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "26L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "PCIs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/27L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "27L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Phy Presence Jmp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/28L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "28L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Progress",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/29L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": null,
+   "Status": {
+    "State": "Disabled",
+    "Health": null
+   },
+   "Id": "29L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Bios"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "IPMI Watchdog",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/2L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "2L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "SMM Mode",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/30L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "30L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "SMM Monitor",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/31L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "31L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Sec Rollback Err",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/32L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "32L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Secure Boot Err",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/33L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "33L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "SMI Lane Failed",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/35L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "35L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Sys Boot Status",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/36L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "36L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "TPM_TCM Init Err",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/38L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "38L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "TPM_TCM Lock",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/39L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "39L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "VoltageType": "DC",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/3L0",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": 2.392
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 2.249
+    }
+   },
+   "Precision": 0,
+   "Name": "CMOS Battery",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "MinAllowableOperatingValue": 0,
+   "ReadingType": "Voltage",
+   "ReadingRangeMax": 0,
+   "MaxAllowableOperatingValue": 3.315,
+   "Reading": 2.964,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "3L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "V",
+   "RelatedItem@odata.count": 2,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/Power"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Phy Pres Set",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/40L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "40L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "TXT ACM Module",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/41L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "41L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "XCC DB Status",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/42L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "42L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Managers/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMMs Disabled",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/43L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "43L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 1552
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Id": "53L0",
+   "Name": "Fan 1 Tach",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/53L0",
+   "ReadingType": "AirFlow",
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 24735,
+   "Reading": 6014,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 24735,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "RPM",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_1_Tach"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 1552
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Id": "54L0",
+   "ReadingRangeMax": 24735,
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/54L0",
+   "ReadingType": "AirFlow",
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 24735,
+   "Reading": 6014,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Name": "Fan 2 Tach",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "RPM",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_2_Tach"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "ReadingRangeMin": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "Thresholds": {
+    "LowerFatal": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperFatal": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "UpperCaution": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCaution": {
+     "Activation": "Decreasing",
+     "Reading": null
+    },
+    "UpperCritical": {
+     "Activation": "Increasing",
+     "Reading": null
+    },
+    "LowerCritical": {
+     "Activation": "Decreasing",
+     "Reading": 1552
+    }
+   },
+   "MinAllowableOperatingValue": 0,
+   "Id": "55L0",
+   "Name": "Fan 3 Tach",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/55L0",
+   "ReadingType": "AirFlow",
+   "Precision": 0,
+   "MaxAllowableOperatingValue": 24735,
+   "Reading": 6208,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingRangeMax": 24735,
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "RPM",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/Fan_3_Tach"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "All DIMMs",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/5L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "5L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "ComputeBay",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "PCIe Temp",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": "Temperature",
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/65L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "65L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "All PCI Error",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/6L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "6L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": null,
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Aux Log",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/7L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "7L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "Memory",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMM 1",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/80L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "80L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Memory/1"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "Memory",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMM 2",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/81L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "81L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Memory/2"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "Memory",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMM 3",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/82L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "82L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Memory/3"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "Memory",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "DIMM 4",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/83L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "83L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Memory/4"
+    }
+   ]
+  },
+  {
+   "PhysicalContext": "StorageDevice",
+   "@odata.context": "/redfish/v1/$metadata#Sensor.Sensor",
+   "Name": "Backup Memory",
+   "@odata.type": "#Sensor.v1_5_0.Sensor",
+   "ReadingType": null,
+   "@odata.id": "/redfish/v1/Chassis/1/Sensors/8L0",
+   "@odata.etag": "\"<hex:19>\"",
+   "Reading": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Id": "8L0",
+   "Description": "This resource is used to represent a sensor for a Redfish implementation.",
+   "ReadingUnits": "",
+   "RelatedItem@odata.count": 1,
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    }
+   ]
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#SensorCollection.SensorCollection",
+ "Name": "SensorCollection",
+ "@odata.type": "#SensorCollection.SensorCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/Sensors",
+ "Description": "A collection of Sensor resource instances.",
+ "Members@odata.count": 89
+}

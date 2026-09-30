@@ -13,6 +13,15 @@ from what a switch fills in. The ``*_lab_hairpin`` fixtures are the same
 switch with one port hairpinned into the LAN its uplink sits on — the one
 capture where the anomaly shapes (a root port, a MAC table seen twice, a
 switch that is its own CDP neighbour) are real, used only in TestHairpin.
+
+The ``xcc_*_lab.json`` fixtures are the same for a server's BMC: every
+Redfish payload a gen-1 ThinkSystem SE350 on XCC 6.10 served to a ReadOnly
+account (tools/harvest_live.py --platform bmc, which already passes each read
+through the bmc family's redactors, then tools/make_fixtures.py: invented
+serials, UUIDs and MACs, ``192.0.2.0/24`` for the management subnet,
+``bmc-lab-1`` for the BMC's host name, ``netops`` for the capture account and
+``user-lab-<n>`` for the other local accounts). The Bmc* classes below guard
+them and pin what the bmc family reads from them.
 No Nautobot, no network.
 """
 
@@ -23,8 +32,10 @@ import unittest
 
 if __package__:
     from . import _loader
+    from .test_checks_bmc import _FakeCtx
 else:  # unittest discover -s tests imports test modules as top-level
     import _loader
+    from test_checks_bmc import _FakeCtx
 
 checks = _loader.checks_iosxe
 l2 = _loader.CHECK_MODULES["checks_iosxe_layer2"]
@@ -894,6 +905,258 @@ class TestStability(unittest.TestCase):
                 json.dumps(pre)
                 compare = _loader.registry.CHECKS[check_id].compare
                 self.assertEqual(diffcore.diff_check(pre, post, compare)["result"], "pass")
+
+
+# --- BMC: a gen-1 ThinkSystem SE350 on XCC 6.10 (Redfish) --------------------
+# Every xcc_*_lab.json is a payload the lab XCC served (tools/harvest_live.py
+# --platform bmc, through the family's own redactors, then tools/make_fixtures.py);
+# the hand-built xcc_*.json fixtures stay beside them. The lab context below
+# serves each fixture at the path the XCC served it from — the resource's own
+# @odata.id, with the $expand query for an *_expanded_lab fixture — so a
+# collector runs against the real payload set exactly as it would live.
+
+bmc = _loader.checks_bmc
+XCC_LAB_FIXTURES = sorted(
+    path.name
+    for path in _loader.FIXTURES.iterdir()
+    if path.name.startswith("xcc_") and path.name.endswith("_lab.json")
+)
+_XCC_EXPAND = "?$expand=.($levels=1)"
+
+
+def _xcc_lab_payloads():
+    """{request path: payload} for every xcc lab fixture."""
+    payloads = {}
+    for name in XCC_LAB_FIXTURES:
+        payload = J(name)
+        path = payload.get("@odata.id") if isinstance(payload, dict) else None
+        if not path:
+            continue
+        if name.endswith("_expanded_lab.json"):
+            path += _XCC_EXPAND
+        payloads[path] = payload
+    return payloads
+
+
+def _xcc_lab_ctx():
+    return _FakeCtx(_xcc_lab_payloads())
+
+
+def _xcc_leaves(node, key=None):
+    """(key, value) for every scalar leaf of a JSON value."""
+    if isinstance(node, dict):
+        for name, value in node.items():
+            yield from _xcc_leaves(value, name)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _xcc_leaves(value, key)
+    else:
+        yield key, node
+
+
+# The inventions the sanitizer produced for the lab harvest (its mapping file
+# lives beside the raw harvest, outside the repository): an allow-list, so a
+# re-harvest of another unit is caught rather than waved through.
+XCC_INVENTED_SERIALS = frozenset(
+    {
+        "176878677394",
+        "2190G9896651",
+        "4696K2804906",
+        "54NY63974089W45DM1",
+        "58QY20254747L42JKZ",
+        "C1ME31X334E",
+        "H9CS5AS72LA",
+        "L261500J",
+        "Q1054325",
+        "S2AQ3W89896",
+        "08B11RU4",
+        "54P01SKA",
+        "P2PW9G3282Y",
+        "Z0HT09B249M",
+        "Z5KB45U71HV",
+    }
+)
+XCC_INVENTED_UUIDS = frozenset({"7fa59b17-2c3c-1cc6-b740-167c4fea6c9f", "<hex:32>"})
+XCC_INVENTED_HOSTS = frozenset({"bmc-lab-1", "bmc-lab-1.lab.example"})
+XCC_INVENTED_ACCOUNTS = frozenset({"", "netops", "user-lab-1", "user-lab-2"})
+# Lenovo logs some actions as done by these service pseudo-users; the family's
+# redactor scrubs the word in those rows anyway, and neither names a person.
+_XCC_SERVICE_ACTORS = frozenset({"system", "LXPM"})
+_XCC_LOG_NAME = re.compile(r"(?:Login ID:|[Bb]y user|[Ff]or user)\s+(\S+?)(?=[.,:;]?(?:\s|$))")
+
+
+class TestBmcNothingRealSurvives(unittest.TestCase):
+    """The leak guard for the BMC fixtures: every identifier is one the sanitizer invents."""
+
+    def test_lab_fixtures_exist(self):
+        self.assertGreaterEqual(len(XCC_LAB_FIXTURES), 140)
+        self.assertIn("/redfish/v1/", _xcc_lab_payloads())
+
+    def test_every_identifier_is_an_invented_one(self):
+        for name in XCC_LAB_FIXTURES:
+            payload = J(name)
+            for key, value in _xcc_leaves(payload):
+                if not isinstance(value, str) or not value:
+                    continue
+                if key and key.endswith("SerialNumber") and value != "N/A":
+                    self.assertIn(value, XCC_INVENTED_SERIALS, "%s: %s" % (name, key))
+                if key == "UUID":
+                    self.assertIn(value.lower(), XCC_INVENTED_UUIDS, name)
+                if key in ("HostName", "FQDN"):
+                    self.assertIn(value, XCC_INVENTED_HOSTS, name)
+                if key == "UserName":
+                    self.assertIn(value, XCC_INVENTED_ACCOUNTS, name)
+                for token in re.findall(r"SN[#:]\s*([A-Za-z0-9-]+)", value):
+                    self.assertIn(token, XCC_INVENTED_SERIALS, "%s: SN token" % (name,))
+                for login in _XCC_LOG_NAME.findall(value) if key == "Message" else ():
+                    self.assertIn(
+                        login, _XCC_SERVICE_ACTORS | {"***scrubbed***"}, "%s: log name" % (name,)
+                    )
+            text = T(name)
+            for quad in _QUAD.findall(text):
+                self.assertTrue(_loader.allowed_lab_address(quad), "%s: %s" % (name, quad))
+            for address in _IPV6.findall(text):
+                if address.count(":") >= 2 and "::" in address or address.count(":") == 7:
+                    self.assertRegex(address, _IPV6_ALLOWED, "%s: %s" % (name, address))
+            self.assertNotIn("-----BEGIN", text, name)
+
+
+class TestBmcLabIdentity(unittest.TestCase):
+    """bmc_system, bmc_chassis and bmc_security on the lab payloads."""
+
+    def test_system(self):
+        result = bmc._collect_system(_xcc_lab_ctx())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(view["manufacturer"], "Lenovo")
+        self.assertEqual(view["serial"], "L261500J")
+        self.assertEqual(view["power_state"], "On")
+        self.assertEqual(view["system_status"], "OSBooted")
+        self.assertIsNone(view["bmc_health"])  # the Manager serves a State only
+        self.assertEqual(view["bmc_state"], "Enabled")
+        self.assertEqual(view["eth_member_used"], "NIC")
+        self.assertEqual(view["bmc_ip"], "192.0.2.39")
+        self.assertEqual(view["bmc_hostname"], "bmc-lab-1")
+        self.assertEqual(context["resolution"]["vendor_source"], "ServiceRoot.Vendor")
+        self.assertIsNone(context["resolution"]["product"])  # XCC 6.10 serves none
+
+    def test_chassis(self):
+        view = bmc._collect_chassis_location(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(view["chassis_type"], "StandAlone")
+        self.assertIsNone(view["intrusion_sensor"])  # no PhysicalSecurity on this unit
+        self.assertEqual(view["placement_rack_offset"], 1)
+
+    def test_security_resource_without_thinkedge_leaves(self):
+        with self.assertRaises(_loader.registry.SkipCheck):
+            bmc._collect_security_state(_xcc_lab_ctx())
+
+
+class TestBmcLabInventory(unittest.TestCase):
+    """bmc_inventory, bmc_storage and bmc_firmware on the lab payloads."""
+
+    def test_inventory(self):
+        view = bmc._collect_inventory(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(
+            sorted(view),
+            sorted(
+                ["dimm|1", "dimm|2", "dimm|3", "dimm|4", "cpu|1"]
+                + ["pcie|ob_1", "pcie|ob_2", "pcie|ob_4", "pcie|slot_6"]
+            ),
+        )
+        absent = [key for key, row in view.items() if row.get("state") == "Absent"]
+        self.assertEqual(len(absent), 2)  # two empty DIMM slots are listed, identity null
+        self.assertTrue(all(view[key]["serial"] is None for key in absent))
+
+    def test_storage_one_ahci_controller_per_m2_slot(self):
+        view = bmc._collect_storage(_xcc_lab_ctx())["normalized"]
+        controllers = [key for key in view if key.startswith("controller|")]
+        drives = [key for key in view if key.startswith("drive|")]
+        self.assertEqual(len(controllers), 4)
+        self.assertEqual(len(drives), 4)
+        self.assertFalse([key for key in view if key.startswith("volume|")])
+
+    def test_firmware_keeps_the_pending_members(self):
+        view = bmc._collect_firmware(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(len(view), 15)
+        self.assertIn("fw|BMC-Primary-Pending", view)
+        self.assertIsNone(view["fw|BMC-Primary-Pending"]["version"])
+
+
+class TestBmcLabLogsBios(unittest.TestCase):
+    """bmc_event_log and bmc_bios on the lab payloads."""
+
+    def test_event_log(self):
+        result = bmc._collect_event_log(_xcc_lab_ctx())
+        context = result["context"]
+        self.assertEqual(result["normalized"], {})  # nothing Warning or Critical
+        self.assertEqual(context["entries_total"], 316)
+        self.assertEqual(context["log_service_used"], "StandardLog")
+        self.assertEqual((context["first_seq_num"], context["last_seq_num"]), (1, 140))
+        rows = next(iter(v for k, v in result["raw"].items() if k.endswith("/Entries")))
+        self.assertEqual(
+            sum("***scrubbed***" in (row["Message"] or "") for row in rows["Members"]), 107
+        )
+
+    def test_bios(self):
+        result = bmc._collect_bios(_xcc_lab_ctx())
+        self.assertEqual(result["context"]["attributes_total"], 126)
+        self.assertEqual(result["context"]["attribute_registry"], "BiosAttributeRegistry.1.0.0")
+
+
+class TestBmcLabEnvironmentNetwork(unittest.TestCase):
+    """bmc_thermal, bmc_power, bmc_host_nics and bmc_manager_network on the lab payloads."""
+
+    def test_thermal(self):
+        view = bmc._collect_thermal(_xcc_lab_ctx())["normalized"]
+        self.assertIn("temp|CPU DTS", view)
+        self.assertEqual(len([key for key in view if key.startswith("fan|")]), 3)
+
+    def test_power_rails_only(self):
+        view = bmc._collect_power(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(len(view), 4)
+        self.assertTrue(all(key.startswith("voltage|") for key in view))  # no supplies
+
+    def test_host_nics_all_nolink(self):
+        view = bmc._collect_host_nics(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(sorted(view), ["nic|NIC1", "nic|NIC2", "nic|NIC3", "nic|NIC4"])
+        self.assertEqual({row["link_status"] for row in view.values()}, {"NoLink"})
+
+    def test_manager_network(self):
+        result = bmc._collect_manager_network(_xcc_lab_ctx())
+        view = result["normalized"]
+        self.assertEqual(view["ipv4_address"], "192.0.2.39")
+        self.assertEqual((view["dns_servers"], view["static_dns_servers"]), ([], []))
+        self.assertIs(view["snmp_enabled"], False)
+        self.assertEqual(result["context"]["snmp_source"], "Oem.Lenovo.SNMP.SNMPv3Agent")
+
+
+class TestBmcLabFamily(unittest.TestCase):
+    """The whole bmc family on the lab payloads: statuses, GETs, hygiene, stability."""
+
+    def test_every_check_reads_the_real_shapes(self):
+        ctx = _xcc_lab_ctx()
+        statuses = {}
+        for check in _loader.registry.checks_for("bmc"):
+            try:
+                result = check.collector(ctx)
+                statuses[check.id] = "ok" if result["normalized"] else "empty"
+            except _loader.registry.SkipCheck:
+                statuses[check.id] = "not-present"
+        self.assertEqual(statuses.pop("bmc_security"), "not-present")
+        self.assertEqual(statuses.pop("bmc_event_log"), "empty")  # healthy: nothing keyed
+        self.assertEqual(set(statuses.values()), {"ok"}, statuses)
+        self.assertLessEqual(len(ctx.gets), 40)
+
+    def test_normalizers_are_deterministic_and_diff_to_nothing(self):
+        for check in _loader.registry.checks_for("bmc"):
+            with self.subTest(check.id):
+                try:
+                    pre = check.collector(_xcc_lab_ctx())["normalized"]
+                    post = check.collector(_xcc_lab_ctx())["normalized"]
+                except _loader.registry.SkipCheck:
+                    continue
+                self.assertEqual(pre, post)
+                json.dumps(pre)
+                self.assertEqual(diffcore.diff_check(pre, post, check.compare)["result"], "pass")
 
 
 if __name__ == "__main__":

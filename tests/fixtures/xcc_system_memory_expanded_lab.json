@@ -1,0 +1,344 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#MemoryCollection.MemoryCollection",
+ "Name": "Memory Collection",
+ "@odata.type": "#MemoryCollection.MemoryCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Memory",
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "MemoryDeviceType": "DDR4",
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 0,
+     "LocationType": "Slot",
+     "ServiceLabel": "DIMM 1"
+    }
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "MemoryLocation": {
+    "MemoryController": 0,
+    "Channel": 1,
+    "Slot": 1,
+    "Socket": 1
+   },
+   "SecurityCapabilities": {},
+   "OperatingMemoryModes": [
+    "Volatile"
+   ],
+   "SubsystemVendorID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerManufacturerID instead.",
+   "DeviceLocator@Redfish.Deprecated": "The property is deprecated since v4_1_0. Please use Location/PartLocation/ServiceLabel instead.",
+   "SubsystemDeviceID": "0x0000",
+   "MemoryMedia": [
+    "DRAM"
+   ],
+   "Manufacturer": "Samsung",
+   "SubsystemVendorID": "0x0000",
+   "AllowedSpeedsMHz": [
+    2933
+   ],
+   "BaseModuleType": "RDIMM",
+   "ModuleManufacturerID": "0xce80",
+   "RankCount": 1,
+   "FunctionClasses": [
+    "Volatile"
+   ],
+   "VendorID": "Samsung",
+   "VolatileSizeMiB": 32768,
+   "@odata.context": "/redfish/v1/$metadata#Memory.Memory",
+   "VendorID@Redfish.Deprecated": "The property is deprecated. Please use ModuleManufacturerID instead.",
+   "SerialNumber": "58QY20254747L42JKZ",
+   "VolatileRegionSizeLimitMiB": null,
+   "Regions": [],
+   "BusWidthBits": 72,
+   "OperatingSpeedMhz": 2400,
+   "CapacityMiB": 32768,
+   "DeviceID": "DIMM_1",
+   "MemorySubsystemControllerManufacturerID": "0x0000",
+   "DeviceLocator": "DIMM 1",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Description": "This resource is used to represent a memory for a Redfish implementation.",
+   "Id": "1",
+   "Name": "DIMM 1",
+   "@odata.type": "#Memory.v1_14_0.Memory",
+   "@odata.id": "/redfish/v1/Systems/1/Memory/1",
+   "MemorySubsystemControllerProductID": "0x0000",
+   "ModuleProductID": "0x0000",
+   "PersistentRegionSizeLimitMiB": null,
+   "MemoryType": "DRAM",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoMemory.v1_0_0.LenovoMemory",
+     "ManufactureDate": "year 2020 week 07",
+     "FruPartNumber": "01DE974"
+    }
+   },
+   "DataWidthBits": 64,
+   "SubsystemDeviceID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerProductID instead.",
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "PartNumber": "M393A4K40CB2-CVF",
+   "DeviceID@Redfish.Deprecated": "The property is deprecated. Please use ModuleProductID instead."
+  },
+  {
+   "MemoryDeviceType": null,
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 1,
+     "LocationType": "Slot",
+     "ServiceLabel": "DIMM 2"
+    }
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "MemoryLocation": {
+    "MemoryController": 0,
+    "Channel": 0,
+    "Slot": 2,
+    "Socket": 1
+   },
+   "SecurityCapabilities": {},
+   "OperatingMemoryModes": [],
+   "SubsystemVendorID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerManufacturerID instead.",
+   "DeviceLocator@Redfish.Deprecated": "The property is deprecated since v4_1_0. Please use Location/PartLocation/ServiceLabel instead.",
+   "SubsystemDeviceID": null,
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoMemory.v1_0_0.LenovoMemory",
+     "ManufactureDate": null,
+     "FruPartNumber": null
+    }
+   },
+   "Manufacturer": null,
+   "SubsystemVendorID": null,
+   "AllowedSpeedsMHz": [],
+   "BaseModuleType": null,
+   "ModuleManufacturerID": null,
+   "RankCount": null,
+   "FunctionClasses": [],
+   "VendorID": null,
+   "VolatileSizeMiB": null,
+   "@odata.context": "/redfish/v1/$metadata#Memory.Memory",
+   "VendorID@Redfish.Deprecated": "The property is deprecated. Please use ModuleManufacturerID instead.",
+   "SerialNumber": null,
+   "VolatileRegionSizeLimitMiB": null,
+   "Regions": [],
+   "BusWidthBits": null,
+   "OperatingSpeedMhz": null,
+   "CapacityMiB": null,
+   "DeviceID": null,
+   "@odata.id": "/redfish/v1/Systems/1/Memory/2",
+   "DeviceLocator": null,
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "Description": "This resource is used to represent a memory for a Redfish implementation.",
+   "Id": "2",
+   "Name": "DIMM 2",
+   "@odata.type": "#Memory.v1_14_0.Memory",
+   "Status": {
+    "State": "Absent",
+    "Health": null
+   },
+   "MemorySubsystemControllerManufacturerID": null,
+   "ModuleProductID": null,
+   "PersistentRegionSizeLimitMiB": null,
+   "MemoryType": null,
+   "MemorySubsystemControllerProductID": null,
+   "DataWidthBits": null,
+   "SubsystemDeviceID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerProductID instead.",
+   "MemoryMedia": [],
+   "PartNumber": null,
+   "DeviceID@Redfish.Deprecated": "The property is deprecated. Please use ModuleProductID instead."
+  },
+  {
+   "MemoryDeviceType": null,
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 2,
+     "LocationType": "Slot",
+     "ServiceLabel": "DIMM 3"
+    }
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "MemoryLocation": {
+    "MemoryController": 0,
+    "Channel": 3,
+    "Slot": 3,
+    "Socket": 1
+   },
+   "SecurityCapabilities": {},
+   "OperatingMemoryModes": [],
+   "SubsystemVendorID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerManufacturerID instead.",
+   "DeviceLocator@Redfish.Deprecated": "The property is deprecated since v4_1_0. Please use Location/PartLocation/ServiceLabel instead.",
+   "SubsystemDeviceID": null,
+   "MemoryMedia": [],
+   "Manufacturer": null,
+   "SubsystemVendorID": null,
+   "AllowedSpeedsMHz": [],
+   "BaseModuleType": null,
+   "Description": "This resource is used to represent a memory for a Redfish implementation.",
+   "RankCount": null,
+   "FunctionClasses": [],
+   "VendorID": null,
+   "VolatileSizeMiB": null,
+   "@odata.context": "/redfish/v1/$metadata#Memory.Memory",
+   "VendorID@Redfish.Deprecated": "The property is deprecated. Please use ModuleManufacturerID instead.",
+   "SerialNumber": null,
+   "VolatileRegionSizeLimitMiB": null,
+   "Regions": [],
+   "BusWidthBits": null,
+   "OperatingSpeedMhz": null,
+   "CapacityMiB": null,
+   "DeviceID": null,
+   "@odata.id": "/redfish/v1/Systems/1/Memory/3",
+   "DeviceLocator": null,
+   "MemorySubsystemControllerProductID": null,
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "Id": "3",
+   "Name": "DIMM 3",
+   "@odata.type": "#Memory.v1_14_0.Memory",
+   "Status": {
+    "State": "Absent",
+    "Health": null
+   },
+   "ModuleManufacturerID": null,
+   "ModuleProductID": null,
+   "PersistentRegionSizeLimitMiB": null,
+   "MemoryType": null,
+   "MemorySubsystemControllerManufacturerID": null,
+   "DataWidthBits": null,
+   "SubsystemDeviceID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerProductID instead.",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoMemory.v1_0_0.LenovoMemory",
+     "ManufactureDate": null,
+     "FruPartNumber": null
+    }
+   },
+   "PartNumber": null,
+   "DeviceID@Redfish.Deprecated": "The property is deprecated. Please use ModuleProductID instead."
+  },
+  {
+   "MemoryDeviceType": "DDR4",
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 3,
+     "LocationType": "Slot",
+     "ServiceLabel": "DIMM 4"
+    }
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "MemoryLocation": {
+    "MemoryController": 0,
+    "Channel": 4,
+    "Slot": 4,
+    "Socket": 1
+   },
+   "SecurityCapabilities": {},
+   "OperatingMemoryModes": [
+    "Volatile"
+   ],
+   "SubsystemVendorID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerManufacturerID instead.",
+   "DeviceLocator@Redfish.Deprecated": "The property is deprecated since v4_1_0. Please use Location/PartLocation/ServiceLabel instead.",
+   "SubsystemDeviceID": "0x0000",
+   "MemoryMedia": [
+    "DRAM"
+   ],
+   "Manufacturer": "Samsung",
+   "SubsystemVendorID": "0x0000",
+   "AllowedSpeedsMHz": [
+    2933
+   ],
+   "BaseModuleType": "RDIMM",
+   "ModuleManufacturerID": "0xce80",
+   "RankCount": 1,
+   "FunctionClasses": [
+    "Volatile"
+   ],
+   "VendorID": "Samsung",
+   "VolatileSizeMiB": 32768,
+   "@odata.context": "/redfish/v1/$metadata#Memory.Memory",
+   "VendorID@Redfish.Deprecated": "The property is deprecated. Please use ModuleManufacturerID instead.",
+   "SerialNumber": "54NY63974089W45DM1",
+   "VolatileRegionSizeLimitMiB": null,
+   "Regions": [],
+   "BusWidthBits": 72,
+   "OperatingSpeedMhz": 2400,
+   "CapacityMiB": 32768,
+   "DeviceID": "DIMM_4",
+   "MemorySubsystemControllerManufacturerID": "0x0000",
+   "DeviceLocator": "DIMM 4",
+   "Links": {
+    "Chassis": {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   },
+   "@odata.id": "/redfish/v1/Systems/1/Memory/4",
+   "Id": "4",
+   "Name": "DIMM 4",
+   "@odata.type": "#Memory.v1_14_0.Memory",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoMemory.v1_0_0.LenovoMemory",
+     "ManufactureDate": "year 2020 week 07",
+     "FruPartNumber": "01DE974"
+    }
+   },
+   "ModuleProductID": "0x0000",
+   "PersistentRegionSizeLimitMiB": null,
+   "MemoryType": "DRAM",
+   "MemorySubsystemControllerProductID": "0x0000",
+   "DataWidthBits": 64,
+   "SubsystemDeviceID@Redfish.Deprecated": "The property is deprecated. Please use MemorySubsystemControllerProductID instead.",
+   "Description": "This resource is used to represent a memory for a Redfish implementation.",
+   "PartNumber": "M393A4K40CB2-CVF",
+   "DeviceID@Redfish.Deprecated": "The property is deprecated. Please use ModuleProductID instead."
+  }
+ ],
+ "Description": "A collection of memory resource instances.",
+ "Oem": {
+  "Lenovo": {
+   "HistoryMemRecovery": {
+    "Id": "HistoryMemRecovery",
+    "HistoryRecoveryValues": [],
+    "@odata.type": "#LenovoHistoryMemRecovery.v1_0_0.LenovoHistoryMemRecovery",
+    "@odata.id": "/redfish/v1/Systems/1/Memory/Oem/Lenovo/HistoryMemRecovery",
+    "@odata.etag": "\"<hex:19>\"",
+    "Name": "History Memory Recovery",
+    "Description": "This resource is used to represent an array of history recovery values",
+    "Count": 0,
+    "Status": {
+     "State": "Enabled",
+     "Health": "OK"
+    },
+    "@odata.context": "/redfish/v1/$metadata#LenovoHistoryMemRecovery.LenovoHistoryMemRecovery"
+   },
+   "HistoryMemMetric": {
+    "@odata.etag": "\"<hex:19>\"",
+    "Description": "This resource is used to represent an array of history metric value containers which are categorized by ContainerName.",
+    "@odata.context": "/redfish/v1/$metadata#LenovoHistoryMetricValue.LenovoHistoryMetricValue",
+    "Name": "Metric Value",
+    "@odata.type": "#LenovoHistoryMetricValue.v1_0_0.LenovoHistoryMetricValue",
+    "@odata.id": "/redfish/v1/Systems/1/Memory/Oem/Lenovo/HistoryMemMetric",
+    "Id": "HistoryMemMetric",
+    "HistoryMetricValue": []
+   }
+  }
+ },
+ "Members@odata.count": 4
+}

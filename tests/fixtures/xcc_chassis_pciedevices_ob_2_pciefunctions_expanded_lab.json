@@ -1,0 +1,87 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "SubsystemVendorId": "0x17aa",
+   "Links": {
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+    },
+    "EthernetInterfaces": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC1"
+     }
+    ],
+    "NetworkDeviceFunctions": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/1.1"
+     }
+    ]
+   },
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "RevisionId": "0x04",
+   "FunctionId": 0,
+   "VendorId": "0x8086",
+   "ClassCode": "0x020000",
+   "Id": "ob_2.00",
+   "Name": "Intel X722 LOM b5:00:00",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.00",
+   "SubsystemId": "0x4025",
+   "FunctionType": "Physical",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System.",
+   "DeviceClass": "NetworkController",
+   "@odata.etag": "\"<hex:19>\"",
+   "DeviceId": "0x37d3"
+  },
+  {
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "SubsystemVendorId": "0x17aa",
+   "Links": {
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+    },
+    "EthernetInterfaces": [
+     {
+      "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC2"
+     }
+    ],
+    "NetworkDeviceFunctions": [
+     {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-2/NetworkDeviceFunctions/2.1"
+     }
+    ]
+   },
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "RevisionId": "0x04",
+   "FunctionId": 1,
+   "VendorId": "0x8086",
+   "ClassCode": "0x020000",
+   "Id": "ob_2.01",
+   "Name": "Intel X722 LOM b5:00:01",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.01",
+   "SubsystemId": "0x4025",
+   "FunctionType": "Physical",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System.",
+   "DeviceClass": "NetworkController",
+   "@odata.etag": "\"<hex:19>\"",
+   "DeviceId": "0x37d3"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PCIeFunctionCollection.PCIeFunctionCollection",
+ "Name": "PCIeFunctionCollection",
+ "@odata.type": "#PCIeFunctionCollection.PCIeFunctionCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions",
+ "Members@odata.count": 2,
+ "Description": "A collection of PCIeFunction resource instances."
+}

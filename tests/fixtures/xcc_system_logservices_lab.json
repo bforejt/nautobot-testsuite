@@ -1,0 +1,29 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/StandardLog"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/MaintenanceLog"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/SaLog"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/SEL"
+  },
+  {
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LogServiceCollection.LogServiceCollection",
+ "Name": "LogServiceCollection",
+ "@odata.type": "#LogServiceCollection.LogServiceCollection",
+ "@odata.id": "/redfish/v1/Systems/1/LogServices",
+ "Members@odata.count": 6,
+ "Description": "A collection of LogService resource instances."
+}

@@ -1,0 +1,15 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#LenovoSecureKeyLifecycle.LenovoSecureKeyLifecycle",
+ "Name": "SecureKeyLifecycleService",
+ "@odata.type": "#LenovoSecureKeyLifecycle.v1_0_0.LenovoSecureKeyLifecycle",
+ "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService",
+ "ClientCertificate": {
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ClientCertificate"
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "ServerCertificate": {
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ServerCertificate"
+ },
+ "Description": "This resource is used to represent a secure key lifecycle service for a Redfish implementation.",
+ "Id": "SecureKeyLifecycleService"
+}

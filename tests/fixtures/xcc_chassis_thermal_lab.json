@@ -1,0 +1,252 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#Thermal.Thermal",
+ "Name": "Thermal",
+ "@odata.type": "#Thermal.v1_7_1.Thermal",
+ "Temperatures@odata.count": 3,
+ "Status": {
+  "State": "Enabled",
+  "HealthRollup": "OK"
+ },
+ "@odata.etag": "\"<hex:22>\"",
+ "Fans": [
+  {
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "Reading": 6014,
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 1,
+     "ServiceLabel": "Fan 1 Tach",
+     "LocationType": "Slot"
+    }
+   },
+   "ReadingUnits": "RPM",
+   "UpperThresholdFatal": null,
+   "LowerThresholdCritical": 1552,
+   "MaxReadingRange": 24735,
+   "FanName": "Fan 1 Tach",
+   "MemberId": "0",
+   "Name": "Fan 1 Tach",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoThermal.v1_0_0.LenovoFan",
+     "Location": {
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot X",
+      "Info": "Slot 1",
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     }
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0",
+   "PhysicalContext": "Fan",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "HotPluggable": true,
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": null,
+   "MinReadingRange": 0,
+   "SensorNumber": 53,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": null
+  },
+  {
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "Reading": 6014,
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 2,
+     "ServiceLabel": "Fan 2 Tach",
+     "LocationType": "Slot"
+    }
+   },
+   "ReadingUnits": "RPM",
+   "UpperThresholdFatal": null,
+   "LowerThresholdCritical": 1552,
+   "MaxReadingRange": 24735,
+   "FanName": "Fan 2 Tach",
+   "MemberId": "1",
+   "Name": "Fan 2 Tach",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoThermal.v1_0_0.LenovoFan",
+     "Location": {
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot X",
+      "Info": "Slot 2",
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     }
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1",
+   "PhysicalContext": "Fan",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "HotPluggable": true,
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": null,
+   "MinReadingRange": 0,
+   "SensorNumber": 54,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": null
+  },
+  {
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "Reading": 6208,
+   "HotPluggable": true,
+   "ReadingUnits": "RPM",
+   "UpperThresholdFatal": null,
+   "LowerThresholdCritical": 1552,
+   "MaxReadingRange": 24735,
+   "FanName": "Fan 3 Tach",
+   "MemberId": "2",
+   "Name": "Fan 3 Tach",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoThermal.v1_0_0.LenovoFan",
+     "Location": {
+      "Info@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead.",
+      "InfoFormat": "Slot X",
+      "Info": "Slot 3",
+      "InfoFormat@Redfish.Deprecated": "The property is deprecated. Please use PartLocation instead."
+     }
+    }
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2",
+   "PhysicalContext": "Fan",
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "Location": {
+    "PartLocation": {
+     "LocationOrdinalValue": 3,
+     "ServiceLabel": "Fan 3 Tach",
+     "LocationType": "Slot"
+    }
+   },
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": null,
+   "MinReadingRange": 0,
+   "SensorNumber": 55,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": null
+  }
+ ],
+ "@odata.id": "/redfish/v1/Chassis/1/Thermal",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoThermal.v1_0_0.LenovoThermal",
+   "HistoryTempMetric": {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal/Oem/Lenovo/HistoryTempMetric"
+   }
+  }
+ },
+ "Description": "It represents the properties for Temperature and Cooling.",
+ "Temperatures": [
+  {
+   "PhysicalContext": "Intake",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1"
+    }
+   ],
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/0",
+   "Name": "Ambient Temp",
+   "MemberId": "0",
+   "MinReadingRangeTemp": 0,
+   "MaxReadingRangeTemp": 50,
+   "ReadingCelsius": 21,
+   "UpperThresholdFatal": 61,
+   "LowerThresholdCritical": null,
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": 57,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "SensorNumber": 208,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": 59
+  },
+  {
+   "PhysicalContext": "CPU",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ],
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/1",
+   "Name": "CPU Temp",
+   "MemberId": "1",
+   "MinReadingRangeTemp": 0,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingCelsius": 43,
+   "UpperThresholdFatal": null,
+   "LowerThresholdCritical": null,
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": null,
+   "MaxReadingRangeTemp": null,
+   "SensorNumber": 228,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": null
+  },
+  {
+   "PhysicalContext": "CPU",
+   "RelatedItem": [
+    {
+     "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+    }
+   ],
+   "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Temperatures/2",
+   "Name": "CPU DTS",
+   "MemberId": "2",
+   "MinReadingRangeTemp": -51,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+   },
+   "ReadingCelsius": -51,
+   "UpperThresholdFatal": null,
+   "LowerThresholdCritical": null,
+   "LowerThresholdFatal": null,
+   "UpperThresholdNonCritical": null,
+   "MaxReadingRangeTemp": 0,
+   "SensorNumber": 235,
+   "LowerThresholdNonCritical": null,
+   "UpperThresholdCritical": null
+  }
+ ],
+ "Id": "1",
+ "Fans@odata.count": 3
+}

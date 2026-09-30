@@ -1,0 +1,41 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "SubsystemId": "0x0123",
+   "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
+   "FunctionType": "Physical",
+   "FunctionId": 0,
+   "@odata.etag": "\"<hex:19>\"",
+   "SubsystemVendorId": "0x10ec",
+   "Name": "Slot 6 17:00:00",
+   "Status": {
+    "State": "Enabled",
+    "HealthRollup": "OK",
+    "Health": "OK"
+   },
+   "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6/PCIeFunctions/slot_6.00",
+   "@odata.type": "#PCIeFunction.v1_3_0.PCIeFunction",
+   "RevisionId": "0x04",
+   "Links": {
+    "PCIeDevice": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6"
+    },
+    "EthernetInterfaces": [],
+    "NetworkDeviceFunctions": []
+   },
+   "VendorId": "0x10ec",
+   "ClassCode": "0x020000",
+   "Description": "This resource represents the properties of a PCIeFunction attached to a System.",
+   "DeviceId": "0x8125",
+   "Id": "slot_6.00",
+   "DeviceClass": "NetworkController"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#PCIeFunctionCollection.PCIeFunctionCollection",
+ "Name": "PCIeFunctionCollection",
+ "@odata.type": "#PCIeFunctionCollection.PCIeFunctionCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_6/PCIeFunctions",
+ "Members@odata.count": 1,
+ "Description": "A collection of PCIeFunction resource instances."
+}

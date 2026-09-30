@@ -1,0 +1,182 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "Id": "StandardLog",
+   "Oem": {
+    "Lenovo": {
+     "SupportedCategories": 3087007935,
+     "PlatformHiddenFirstSeqNum": 1,
+     "AuditHiddenFirstSeqNum": 1,
+     "VMMoveCategory": [
+      {
+       "VMMoveCategoryName": "RAS event VM movement support",
+       "VMMoveCategoryBit": 0,
+       "VMMoveCategoryType": "VMEFlag"
+      }
+     ],
+     "@odata.type": "#LenovoLogService.v1_0_0.LenovoLogServiceProperties",
+     "AuditFirstSeqNum": 1,
+     "PlatformLastSeqNum": 140,
+     "AuditHiddenLastSeqNum": 40,
+     "AuditLastSeqNum": 176,
+     "AuditLogCapabilities": [
+      "None"
+     ],
+     "PlatformFirstSeqNum": 1,
+     "PlatformHiddenLastSeqNum": 45,
+     "DesiredCategories": 2147483684
+    }
+   },
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/StandardLog",
+   "DateTimeLocalOffset": "-05:00",
+   "MaxNumberOfRecords": 2048,
+   "@odata.etag": "\"<hex:21>\"",
+   "DateTime": "2026-09-29T22:31:02-05:00",
+   "ServiceEnabled": true,
+   "OverWritePolicy": "WrapsWhenFull",
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/StandardLog/Entries"
+   },
+   "Actions": {
+    "#LogService.ClearLog": {
+     "title": "ClearLog",
+     "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/LogService.ClearLog"
+    },
+    "Oem": {
+     "#LenovoLogService.ClearSpecifiedLog": {
+      "title": "ClearSpecifiedLog",
+      "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.ClearSpecifiedLog"
+     },
+     "#LenovoLogService.GetLogEntriesBySequenceNumber": {
+      "title": "GetLogEntriesBySequenceNumber",
+      "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.GetLogEntriesBySequenceNumber"
+     },
+     "#LenovoLogService.GetLogEntriesByTotalSequenceNumber": {
+      "title": "GetLogEntriesByTotalSequenceNumber",
+      "target": "/redfish/v1/Systems/1/LogServices/StandardLog/Actions/Oem/LenovoLogService.GetLogEntriesByTotalSequenceNumber"
+     }
+    }
+   },
+   "LogEntryType": "Multiple"
+  },
+  {
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog",
+   "DateTimeLocalOffset": "-05:00",
+   "@odata.etag": "\"<hex:19>\"",
+   "DateTime": "2026-09-29T22:31:02-05:00",
+   "ServiceEnabled": true,
+   "MaxNumberOfRecords": 1024,
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries"
+   },
+   "Id": "ActiveLog",
+   "LogEntryType": "Multiple"
+  },
+  {
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/MaintenanceLog",
+   "DateTimeLocalOffset": "-05:00",
+   "@odata.etag": "\"<hex:19>\"",
+   "DateTime": "2026-09-29T22:31:02-05:00",
+   "ServiceEnabled": true,
+   "MaxNumberOfRecords": 750,
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/MaintenanceLog/Entries"
+   },
+   "Id": "MaintenanceLog",
+   "LogEntryType": "Multiple"
+  },
+  {
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/SaLog",
+   "DateTimeLocalOffset": "-05:00",
+   "@odata.etag": "\"<hex:19>\"",
+   "DateTime": "2026-09-29T22:31:02-05:00",
+   "ServiceEnabled": true,
+   "MaxNumberOfRecords": 5,
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/SaLog/Entries"
+   },
+   "Id": "SaLog",
+   "LogEntryType": "Multiple"
+  },
+  {
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoLogService.v1_0_0.LenovoLogServiceProperties",
+     "EnableSELWrapping": false
+    }
+   },
+   "DateTimeLocalOffset": "-05:00",
+   "Id": "SEL",
+   "@odata.etag": "\"<hex:19>\"",
+   "DateTime": "2026-09-29T22:31:03-05:00",
+   "ServiceEnabled": true,
+   "Actions": {
+    "#LogService.ClearLog": {
+     "title": "ClearLog",
+     "target": "/redfish/v1/Systems/1/LogServices/SEL/Actions/LogService.ClearLog"
+    }
+   },
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "MaxNumberOfRecords": 511,
+   "OverWritePolicy": "NeverOverWrites",
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/SEL"
+  },
+  {
+   "Actions": {
+    "#LogService.CollectDiagnosticData": {
+     "title": "CollectDiagnosticData",
+     "target": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Actions/LogService.CollectDiagnosticData"
+    }
+   },
+   "ServiceEnabled": true,
+   "@odata.context": "/redfish/v1/$metadata#LogService.LogService",
+   "Name": "LogService",
+   "@odata.type": "#LogService.v1_3_0.LogService",
+   "Oem": {
+    "Lenovo": {
+     "@odata.type": "#LenovoLogService.v1_0_0.LenovoLogServiceProperties",
+     "MPFA_FirstSeqNum": null,
+     "MPFA_LastSeqNum": null
+    }
+   },
+   "DateTimeLocalOffset": "-05:00",
+   "Id": "DiagnosticLog",
+   "@odata.etag": "\"<hex:19>\"",
+   "MaxNumberOfRecords": 3,
+   "OverWritePolicy": "WrapsWhenFull",
+   "DateTime": "2026-09-29T22:31:03-05:00",
+   "Description": "This resource is used to represent a log service for a Redfish implementation.",
+   "Entries": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries"
+   },
+   "@odata.id": "/redfish/v1/Systems/1/LogServices/DiagnosticLog",
+   "LogEntryType": "Multiple"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LogServiceCollection.LogServiceCollection",
+ "Name": "LogServiceCollection",
+ "@odata.type": "#LogServiceCollection.LogServiceCollection",
+ "@odata.id": "/redfish/v1/Systems/1/LogServices",
+ "Members@odata.count": 6,
+ "Description": "A collection of LogService resource instances."
+}

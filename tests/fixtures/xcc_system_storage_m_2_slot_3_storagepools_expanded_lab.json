@@ -1,0 +1,10 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [],
+ "@odata.context": "/redfish/v1/$metadata#StoragePoolCollection.StoragePoolCollection",
+ "Name": "StoragePoolCollection",
+ "@odata.type": "#StoragePoolCollection.StoragePoolCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Storage/M.2_Slot_3/StoragePools",
+ "Members@odata.count": 0,
+ "Description": "A collection of StoragePool resource instances."
+}

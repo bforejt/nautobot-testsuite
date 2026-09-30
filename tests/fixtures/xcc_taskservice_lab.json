@@ -1,0 +1,20 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#TaskService.TaskService",
+ "Name": "Task Service",
+ "@odata.type": "#TaskService.v1_2_0.TaskService",
+ "@odata.id": "/redfish/v1/TaskService",
+ "Tasks": {
+  "@odata.id": "/redfish/v1/TaskService/Tasks"
+ },
+ "Status": {
+  "Health": "OK",
+  "HealthRollup": "OK",
+  "State": "Enabled"
+ },
+ "@odata.etag": "W/\"<hex:32>\"",
+ "DateTime": "2026-09-29T22:30:10-04:00",
+ "ServiceEnabled": true,
+ "CompletedTaskOverWritePolicy": "Oldest",
+ "Description": "This resource represents a task service for a Redfish implementation.",
+ "Id": "TaskService"
+}

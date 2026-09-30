@@ -1,0 +1,90 @@
+{
+ "@odata.context": "/redfish/v1/$metadata#EventDestinationCollection.EventDestinationCollection",
+ "Name": "Subscriptions",
+ "@odata.type": "#EventDestinationCollection.EventDestinationCollection",
+ "@odata.id": "/redfish/v1/EventService/Subscriptions",
+ "@Redfish.CollectionCapabilities": {
+  "@odata.type": "#CollectionCapabilities.v1_3_0.CollectionCapabilities",
+  "Capabilities": [
+   {
+    "Links": {
+     "TargetCollection": {
+      "@odata.id": "/redfish/v1/EventService/Subscriptions"
+     }
+    },
+    "CapabilitiesObject": {
+     "HttpHeaders@Redfish.OptionalOnCreate": true,
+     "@odata.etag": "\"4d020ba2f461\"",
+     "IncludeOriginOfCondition@Redfish.OptionalOnCreate": true,
+     "IncludeOriginOfCondition@Redfish.SetOnlyOnCreate": true,
+     "Destination@Redfish.SetOnlyOnCreate": true,
+     "ResourceTypes@Redfish.SetOnlyOnCreate": true,
+     "DeliveryRetryPolicy@Redfish.AllowableValues": [
+      "TerminateAfterRetries",
+      "SuspendRetries",
+      "RetryForever",
+      "RetryForeverWithBackoff"
+     ],
+     "SubordinateResources@Redfish.SetOnlyOnCreate": true,
+     "@odata.context": "/redfish/v1/$metadata#EventDestination.EventDestination",
+     "Context@Redfish.UpdatableAfterCreate": true,
+     "Protocol@Redfish.AllowableValues": [
+      "Redfish",
+      "SNMPv1",
+      "SNMPv2c",
+      "SNMPv3",
+      "SMTP"
+     ],
+     "ResourceTypes@Redfish.OptionalOnCreate": true,
+     "Id": "Capabilities",
+     "Protocol@Redfish.RequiredOnCreate": true,
+     "RegistryPrefixes@Redfish.OptionalOnCreate": true,
+     "MetricReportDefinitions@Redfish.SetOnlyOnCreate": true,
+     "DeliveryRetryPolicy@Redfish.OptionalOnCreate": true,
+     "EventFormatType@Redfish.AllowableValues": [
+      "Event",
+      "MetricReport"
+     ],
+     "RegistryPrefixes@Redfish.SetOnlyOnCreate": true,
+     "Protocol@Redfish.SetOnlyOnCreate": true,
+     "EventFormatType@Redfish.OptionalOnCreate": true,
+     "OriginResources@Redfish.SetOnlyOnCreate": true,
+     "DeliveryRetryPolicy@Redfish.UpdatableAfterCreate": true,
+     "SubscriptionType@Redfish.AllowableValues": [
+      "RedfishEvent",
+      "SNMPTrap",
+      "SNMPInform"
+     ],
+     "Name": "Capabilities for the EventDestination collection",
+     "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+     "@odata.id": "/redfish/v1/EventService/Subscriptions/Capabilities",
+     "Destination@Redfish.RequiredOnCreate": true,
+     "EventFormatType@Redfish.SetOnlyOnCreate": true,
+     "SubscriptionType@Redfish.OptionalOnCreate": true,
+     "Context@Redfish.OptionalOnCreate": true,
+     "SNMP": {
+      "AuthenticationKey@Redfish.OptionalOnCreate": true,
+      "AuthenticationKey@Redfish.UpdatableAfterCreate": true,
+      "AuthenticationProtocol@Redfish.OptionalOnCreate": true,
+      "AuthenticationProtocol@Redfish.UpdatableAfterCreate": true,
+      "EncryptionKey@Redfish.OptionalOnCreate": true,
+      "EncryptionKey@Redfish.UpdatableAfterCreate": true,
+      "EncryptionProtocol@Redfish.OptionalOnCreate": true,
+      "EncryptionProtocol@Redfish.UpdatableAfterCreate": true,
+      "TrapCommunity@Redfish.OptionalOnCreate": true,
+      "TrapCommunity@Redfish.UpdatableAfterCreate": true
+     },
+     "OriginResources@Redfish.OptionalOnCreate": true,
+     "SubordinateResources@Redfish.OptionalOnCreate": true,
+     "MetricReportDefinitions@Redfish.OptionalOnCreate": true,
+     "SubscriptionType@Redfish.SetOnlyOnCreate": true,
+     "HttpHeaders@Redfish.UpdatableAfterCreate": true
+    }
+   }
+  ]
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [],
+ "Description": "This resource represents a Resource Collection of EventDestination instances for a Redfish implementation.",
+ "Members@odata.count": 0
+}

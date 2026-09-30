@@ -1,0 +1,153 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "BootOrderCurrent": [
+    "TrueNAS-0",
+    "proxmox",
+    "Linux Boot Manager",
+    "CD/DVD Rom",
+    "Hard Disk",
+    "Network"
+   ],
+   "BootOrderNext": [
+    "TrueNAS-0",
+    "proxmox",
+    "Linux Boot Manager",
+    "CD/DVD Rom",
+    "Hard Disk",
+    "Network"
+   ],
+   "@odata.context": "/redfish/v1/$metadata#LenovoBootManager.LenovoBootManager",
+   "Name": "BootOrder.BootOrder",
+   "@odata.type": "#LenovoBootManager.v1_0_0.LenovoBootManager",
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings/BootOrder.BootOrder",
+   "@odata.etag": "\"<hex:19>\"",
+   "BootOrderNext@odata.count": 6,
+   "BootOrderSupported": [
+    "TrueNAS-0",
+    "proxmox",
+    "Linux Boot Manager",
+    "CD/DVD Rom",
+    "Hard Disk",
+    "Network",
+    "USB Storage"
+   ],
+   "Description": "This resource is used to represent settings for user to select the boot source when the manager is powered on.",
+   "Id": "BootOrder.BootOrder",
+   "BootOrderSupported@odata.count": 7,
+   "BootOrderCurrent@odata.count": 6
+  },
+  {
+   "BootOrderCurrent": [],
+   "BootOrderNext": [],
+   "@odata.context": "/redfish/v1/$metadata#LenovoBootManager.LenovoBootManager",
+   "Name": "BootOrder.CDDVDROMBootOrder",
+   "@odata.type": "#LenovoBootManager.v1_0_0.LenovoBootManager",
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings/BootOrder.CDDVDROMBootOrder",
+   "@odata.etag": "\"<hex:19>\"",
+   "BootOrderNext@odata.count": 0,
+   "BootOrderSupported": [],
+   "Description": "This resource is used to represent settings for user to select the boot source when the manager is powered on.",
+   "Id": "BootOrder.CDDVDROMBootOrder",
+   "BootOrderSupported@odata.count": 0,
+   "BootOrderCurrent@odata.count": 0
+  },
+  {
+   "BootOrderCurrent": [
+    "LEGACY: ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0003",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0004",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0005",
+    "UEFI:   ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN, GPT (CD0A7DFC-6F5D-43C3-B38E-DF3092495482)"
+   ],
+   "BootOrderNext": [
+    "LEGACY: ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0003",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0004",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0005",
+    "UEFI:   ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN, GPT (CD0A7DFC-6F5D-43C3-B38E-DF3092495482)"
+   ],
+   "@odata.context": "/redfish/v1/$metadata#LenovoBootManager.LenovoBootManager",
+   "Name": "BootOrder.HardDiskBootOrder",
+   "@odata.type": "#LenovoBootManager.v1_0_0.LenovoBootManager",
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings/BootOrder.HardDiskBootOrder",
+   "@odata.etag": "\"<hex:21>\"",
+   "BootOrderNext@odata.count": 5,
+   "Id": "BootOrder.HardDiskBootOrder",
+   "Description": "This resource is used to represent settings for user to select the boot source when the manager is powered on.",
+   "BootOrderSupported": [
+    "LEGACY: ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0003",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0004",
+    "LEGACY: WDC  WDS200T2B0B-00YS70 - Dev0005",
+    "UEFI:   ATPAF480GSTIC-LV2    61DP455Y6L93096 LEN, GPT (CD0A7DFC-6F5D-43C3-B38E-DF3092495482)"
+   ],
+   "BootOrderSupported@odata.count": 5,
+   "BootOrderCurrent@odata.count": 5
+  },
+  {
+   "BootOrderCurrent": [
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1"
+   ],
+   "BootOrderNext": [
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1"
+   ],
+   "@odata.context": "/redfish/v1/$metadata#LenovoBootManager.LenovoBootManager",
+   "Name": "BootOrder.NetworkBootOrder",
+   "@odata.type": "#LenovoBootManager.v1_0_0.LenovoBootManager",
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings/BootOrder.NetworkBootOrder",
+   "@odata.etag": "\"<hex:22>\"",
+   "BootOrderNext@odata.count": 8,
+   "BootOrderSupported": [
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/0",
+    "UEFI:   PXE IP4 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP6 Intel(R) I350 Gigabit Network Connection OnBoard:4/0/1",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/0",
+    "UEFI:   PXE IP4 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1",
+    "UEFI:   PXE IP6 Intel(R) Ethernet Connection X722 for 10G SFP+ OnBoard:B5/0/1"
+   ],
+   "Description": "This resource is used to represent settings for user to select the boot source when the manager is powered on.",
+   "Id": "BootOrder.NetworkBootOrder",
+   "BootOrderSupported@odata.count": 8,
+   "BootOrderCurrent@odata.count": 8
+  },
+  {
+   "BootOrderCurrent": [],
+   "BootOrderNext": [],
+   "@odata.context": "/redfish/v1/$metadata#LenovoBootManager.LenovoBootManager",
+   "Name": "BootOrder.USBBootOrder",
+   "@odata.type": "#LenovoBootManager.v1_0_0.LenovoBootManager",
+   "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings/BootOrder.USBBootOrder",
+   "@odata.etag": "\"<hex:19>\"",
+   "BootOrderNext@odata.count": 0,
+   "Description": "This resource is used to represent settings for user to select the boot source when the manager is powered on.",
+   "BootOrderSupported": [],
+   "Id": "BootOrder.USBBootOrder",
+   "BootOrderSupported@odata.count": 0,
+   "BootOrderCurrent@odata.count": 0
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#LenovoBootManagerCollection.LenovoBootManagerCollection",
+ "Name": "BootSettings",
+ "@odata.type": "#LenovoBootManagerCollection.LenovoBootManagerCollection",
+ "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings",
+ "Members@odata.count": 5,
+ "Description": "A collection of BootSetting resource instances."
+}

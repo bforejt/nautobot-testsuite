@@ -1,0 +1,113 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "PhysicalNetworkPortAssignment": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+   },
+   "@odata.context": "/redfish/v1/$metadata#NetworkDeviceFunction.NetworkDeviceFunction",
+   "AssignablePhysicalPorts@odata.count": 2,
+   "NetDevFuncType": "Ethernet",
+   "Ethernet": {
+    "PermanentMACAddress": "90:7c:cc:c3:81:ce",
+    "MTUSize": 12000,
+    "MACAddress": "90:7c:cc:c3:81:ce"
+   },
+   "Links": {
+    "PhysicalPortAssignment": {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/1"
+    },
+    "PhysicalNetworkPortAssignment": {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+    },
+    "EthernetInterface": {
+     "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC3"
+    },
+    "PCIeFunction": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.00"
+    }
+   },
+   "AssignablePhysicalPorts": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+    }
+   ],
+   "DeviceEnabled": true,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "1.1",
+   "Name": "Logical Port 1",
+   "@odata.type": "#NetworkDeviceFunction.v1_8_0.NetworkDeviceFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/1.1",
+   "PhysicalPortAssignment@Redfish.Deprecated": "The property is deprecated. Please use Links/PhysicalPortAssignment instead.",
+   "Description": "A Network Device Function represents a logical interface exposed by the network adapter.",
+   "PhysicalPortAssignment": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/1"
+   },
+   "@odata.etag": "\"<hex:21>\""
+  },
+  {
+   "PhysicalNetworkPortAssignment": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+   },
+   "@odata.context": "/redfish/v1/$metadata#NetworkDeviceFunction.NetworkDeviceFunction",
+   "AssignablePhysicalPorts@odata.count": 2,
+   "NetDevFuncType": "Ethernet",
+   "Ethernet": {
+    "PermanentMACAddress": "80:43:1e:80:a8:71",
+    "MTUSize": 12000,
+    "MACAddress": "80:43:1e:80:a8:71"
+   },
+   "@odata.etag": "\"<hex:21>\"",
+   "AssignablePhysicalPorts": [
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/1"
+    },
+    {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+    }
+   ],
+   "DeviceEnabled": true,
+   "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+   },
+   "Id": "2.1",
+   "Name": "Logical Port 1",
+   "@odata.type": "#NetworkDeviceFunction.v1_8_0.NetworkDeviceFunction",
+   "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions/2.1",
+   "PhysicalPortAssignment@Redfish.Deprecated": "The property is deprecated. Please use Links/PhysicalPortAssignment instead.",
+   "Description": "A Network Device Function represents a logical interface exposed by the network adapter.",
+   "PhysicalPortAssignment": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/2"
+   },
+   "Links": {
+    "PhysicalPortAssignment": {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkPorts/2"
+    },
+    "PhysicalNetworkPortAssignment": {
+     "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/Ports/2"
+    },
+    "EthernetInterface": {
+     "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/NIC4"
+    },
+    "PCIeFunction": {
+     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.01"
+    }
+   }
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#NetworkDeviceFunctionCollection.NetworkDeviceFunctionCollection",
+ "Name": "NetworkDeviceFunctionCollection",
+ "@odata.type": "#NetworkDeviceFunctionCollection.NetworkDeviceFunctionCollection",
+ "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-4/NetworkDeviceFunctions",
+ "Members@odata.count": 2,
+ "Description": "A collection of NetworkDeviceFunction resource instances."
+}

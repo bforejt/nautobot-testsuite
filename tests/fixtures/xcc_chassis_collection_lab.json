@@ -1,0 +1,14 @@
+{
+ "@odata.etag": "\"<hex:19>\"",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Chassis/1"
+  }
+ ],
+ "@odata.context": "/redfish/v1/$metadata#ChassisCollection.ChassisCollection",
+ "Name": "ChassisCollection",
+ "@odata.type": "#ChassisCollection.ChassisCollection",
+ "@odata.id": "/redfish/v1/Chassis",
+ "Description": "A collection of Chassis resource instances.",
+ "Members@odata.count": 1
+}

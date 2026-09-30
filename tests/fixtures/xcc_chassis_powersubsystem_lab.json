@@ -1,0 +1,26 @@
+{
+ "Id": "PowerSubsystem",
+ "Name": "Power Subsystem",
+ "@odata.type": "#PowerSubsystem.v1_1_0.PowerSubsystem",
+ "Allocation": {
+  "AllocatedWatts": null,
+  "RequestedWatts": null
+ },
+ "@odata.etag": "\"<hex:19>\"",
+ "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem",
+ "Oem": {
+  "Lenovo": {
+   "@odata.type": "#LenovoPowerSubsystem.v1_0_0.LenovoPowerSubsystem",
+   "WakeOnLANEnabled": true,
+   "PowerOnPermissionEnabled": true,
+   "LocalPowerControlEnabled": true
+  }
+ },
+ "Description": "This resource shall represent a power subsystem for a Redfish implementation.",
+ "CapacityWatts": null,
+ "Status": {
+  "State": "Enabled",
+  "Health": "OK"
+ },
+ "@odata.context": "/redfish/v1/$metadata#PowerSubsystem.PowerSubsystem"
+}
