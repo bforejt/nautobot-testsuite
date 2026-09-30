@@ -7292,6 +7292,342 @@ def _collect_licenses(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_tasks ---------------------------------------------------------------
+# GETs, the lab SE350 (a TaskService whose Tasks collection is empty, a
+# JobService holding three Suspended jobs — the scheduled power actions'
+# twins): the service root, the id resolution's first read (cached), links
+# both services; one GET each for the TaskService and the JobService, then one
+# $expand GET each for their Tasks and Jobs — 4 beyond the id resolution (the
+# Jobs page is the read bmc_power_policy makes: one cached answer serves both).
+# The per-member fallback, $expand advertised but refused (the attempt is paid
+# once, on the Tasks, and never again): the two services 2, the Tasks 1 + 1 + 0
+# members, the Jobs 1 + 3 — 8 beyond the id resolution on the lab layout.
+# _BUDGET_TASKS = 24 + _TARGET_GETS leaves room for 16 more members walked; a
+# walk the rest of the budget cannot cover is refused loudly, with the counts,
+# before its first member is read.
+_BUDGET_TASKS = 24 + _TARGET_GETS
+# DMTF Task.TaskState values the schema calls complete — the four a
+# TaskService's TaskAutoDeleteTimeoutMinutes deletes: Completed, Killed
+# (deprecated in favour of Cancelled), Cancelled and Exception. Every other
+# value is unfinished: Interrupted and Suspended are "expected to restart and
+# therefore not complete"; New, Pending, Starting, Running, Stopping,
+# Cancelling and Service still wait or run; a task serving no state is not
+# known to be done.
+_TASKS_TASK_TERMINAL = frozenset({"Completed", "Killed", "Cancelled", "Exception"})
+# DMTF Job.JobState: Completed, Cancelled and Exception complete a job;
+# Suspended and Interrupted (expected to restart), UserIntervention (waiting
+# for someone to continue, stop or cancel it) and the waiting and running
+# states do not.
+_TASKS_JOB_TERMINAL = frozenset({"Completed", "Cancelled", "Exception"})
+# A served DateTimeOffset (XCC 6.10: '2026-09-29T22:30:10-04:00'), read only to
+# order the times of a collection; the context records the served string.
+_TASKS_TIME = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:?\d{2})?",
+    re.IGNORECASE,
+)
+
+
+def _tasks_instant(value):
+    """A served date-time as an aware UTC datetime, for ordering only; None when unreadable.
+
+    Redfish serves DateTimeOffset values with their offset; one without is read
+    as UTC. The served string, never this, is what the context records.
+    """
+    text = _text(value)
+    match = _TASKS_TIME.fullmatch(text) if text else None
+    if match is None:
+        return None
+    year, month, day, hour, minute, second, fraction, offset = match.groups()
+    try:
+        instant = datetime.datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            int(second or 0),
+            int((fraction or "0")[:6].ljust(6, "0")),
+            tzinfo=datetime.timezone.utc,
+        )
+        if offset and offset.upper() != "Z":
+            digits = offset[1:].replace(":", "")
+            shift = datetime.timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+            instant = instant - shift if offset.startswith("+") else instant + shift
+    except (ValueError, OverflowError):
+        return None
+    return instant
+
+
+def _tasks_newest(members, leaf):
+    """The served ``leaf`` (StartTime / EndTime) latest in time; None when none reads."""
+    newest = None
+    for member in _dicts(members):
+        instant = _tasks_instant(member.get(leaf))
+        if instant is not None and (newest is None or instant > newest[0]):
+            newest = (instant, _text(member.get(leaf)))
+    return newest[1] if newest else None
+
+
+def _tasks_list(value):
+    """A served list of scalars, sorted (these schema arrays are sets); None when not a list."""
+    if not isinstance(value, list):
+        return None
+    items = [
+        _text(item) if isinstance(item, str) else item
+        for item in value
+        if not isinstance(item, (dict, list))
+    ]
+    return sorted(items, key=lambda item: (item is None, isinstance(item, str), item or 0))
+
+
+def _tasks_schedule(schedule):
+    """A job's DMTF Schedule as the recurrence it repeats on; None when the job serves none.
+
+    InitialStartTime — when the first occurrence fires — is a time: it rides in
+    context beside the job's own start and end times, never in the row.
+    """
+    if not isinstance(schedule, dict):
+        return None
+    return {
+        "name": _text(schedule.get("Name")),
+        "recurrence_interval": _text(schedule.get("RecurrenceInterval")),
+        "enabled_days_of_week": _tasks_list(schedule.get("EnabledDaysOfWeek")),
+        "enabled_days_of_month": _tasks_list(schedule.get("EnabledDaysOfMonth")),
+        "enabled_months_of_year": _tasks_list(schedule.get("EnabledMonthsOfYear")),
+        "enabled_intervals": _tasks_list(schedule.get("EnabledIntervals")),
+        "lifetime": _text(schedule.get("Lifetime")),
+        "max_occurrences": _to_int(schedule.get("MaxOccurrences")),
+    }
+
+
+def _tasks_row(member, state_leaf, status_leaf):
+    """One 'task|' or 'job|' row: name, state and status verbatim, progress, the request carried.
+
+    ``http_operation`` / ``target_uri`` are the Payload's HttpOperation and
+    TargetUri (null where the entry hides its payload or serves none).
+    """
+    payload = member.get("Payload")
+    return {
+        "name": _text(member.get("Name")),
+        "state": _text(member.get(state_leaf)),
+        "status": _text(member.get(status_leaf)),
+        "percent_complete": _to_int(member.get("PercentComplete")),
+        "http_operation": _text(_dig(payload, "HttpOperation")),
+        "target_uri": _text(_dig(payload, "TargetUri")),
+    }
+
+
+def _tasks_counts(members, state_leaf, terminal):
+    """Counts by state (finished or not) and the newest start/end times; None when unread."""
+    if members is None:
+        return None
+    by_state = {}
+    for member in _dicts(members):
+        state = _text(member.get(state_leaf)) or "unserved"
+        by_state[state] = by_state.get(state, 0) + 1
+    total = sum(by_state.values())
+    finished = sum(count for state, count in by_state.items() if state in terminal)
+    return {
+        "total": total,
+        "by_state": dict(sorted(by_state.items())),
+        "terminal": finished,
+        "non_terminal": total - finished,
+        "newest_start_time": _tasks_newest(members, "StartTime"),
+        "newest_end_time": _tasks_newest(members, "EndTime"),
+    }
+
+
+def _tasks_service_facts(service, capabilities=False):
+    """A task or job service's Status and clock for context (+ a JobService's capabilities)."""
+    if not isinstance(service, dict):
+        return None
+    health, state = _status(service)
+    facts = {"health": health, "state": state, "datetime": _text(service.get("DateTime"))}
+    if capabilities:
+        served = _dig(service, "ServiceCapabilities")
+        facts.update(
+            {
+                "max_jobs": _to_int(_dig(served, "MaxJobs")),
+                "max_steps": _to_int(_dig(served, "MaxSteps")),
+                "scheduling": _to_bool(_dig(served, "Scheduling")),
+            }
+        )
+    return facts
+
+
+def _normalize_tasks(task_service=None, tasks=None, job_service=None, jobs=None):
+    """(normalized, context) of the BMC's task and job services.
+
+    ``task_service`` / ``job_service`` are the TaskService and JobService
+    resources (None where the service root links none), ``tasks`` / ``jobs``
+    the members of their collections (None where not read). The scalars are
+    always present — None when unserved, never ''. Rows only for entries not
+    yet finished: 'task|<Id>' whose TaskState is outside _TASKS_TASK_TERMINAL
+    and 'job|<Id>' whose JobState is outside _TASKS_JOB_TERMINAL (a state not
+    served counts as unfinished); every row of a family carries every field.
+    The counts by state and every time — each keyed entry's StartTime and
+    EndTime, a schedule's InitialStartTime, the newest of each collection —
+    ride in context, never in a key.
+    """
+    normalized = {
+        "task_service_enabled": _to_bool(_dig(task_service, "ServiceEnabled")),
+        "completed_task_overwrite_policy": _text(
+            _dig(task_service, "CompletedTaskOverWritePolicy")
+        ),
+        "task_auto_delete_minutes": _to_int(_dig(task_service, "TaskAutoDeleteTimeoutMinutes")),
+        "lifecycle_event_on_task_state_change": _to_bool(
+            _dig(task_service, "LifeCycleEventOnTaskStateChange")
+        ),
+        "job_service_enabled": _to_bool(_dig(job_service, "ServiceEnabled")),
+    }
+    rows, times = {}, {}
+    for member in _dicts(tasks):
+        if _text(member.get("TaskState")) in _TASKS_TASK_TERMINAL:
+            continue
+        key = "task|%s" % (_member_id(member) or "?",)
+        rows[key] = _tasks_row(member, "TaskState", "TaskStatus")
+        times[key] = {
+            "start_time": _text(member.get("StartTime")),
+            "end_time": _text(member.get("EndTime")),
+        }
+    for member in _dicts(jobs):
+        if _text(member.get("JobState")) in _TASKS_JOB_TERMINAL:
+            continue
+        key = "job|%s" % (_member_id(member) or "?",)
+        rows[key] = dict(
+            _tasks_row(member, "JobState", "JobStatus"),
+            schedule=_tasks_schedule(member.get("Schedule")),
+        )
+        times[key] = {
+            "start_time": _text(member.get("StartTime")),
+            "end_time": _text(member.get("EndTime")),
+            "schedule_initial_start_time": _text(_dig(member, "Schedule", "InitialStartTime")),
+        }
+    for key in sorted(rows):
+        normalized[key] = rows[key]
+    context = {
+        "task_service": _tasks_service_facts(task_service),
+        "job_service": _tasks_service_facts(job_service, capabilities=True),
+        "tasks": _tasks_counts(tasks, "TaskState", _TASKS_TASK_TERMINAL),
+        "jobs": _tasks_counts(jobs, "JobState", _TASKS_JOB_TERMINAL),
+        "row_times": {key: times[key] for key in sorted(times)},
+    }
+    return normalized, context
+
+
+def _tasks_require_whole(raw, meta, path):
+    """Refuse a Tasks or Jobs answer that is not the whole collection: one page of it, or short.
+
+    ``raw`` and ``meta`` are _fetch_collection's; the payload that listed the
+    members is the $expand answer or the plain collection, whichever answered.
+    """
+    listing = raw.get(path + _EXPAND) if meta["strategy"] == "expand" else raw.get(path)
+    if not isinstance(listing, dict):
+        return
+    if _text(listing.get("Members@odata.nextLink")):
+        raise CollectError(
+            "%s answered one page of the collection (Members@odata.nextLink) — the view would "
+            "be partial; refused, never recorded partially" % (path,)
+        )
+    count = listing.get("Members@odata.count")
+    listed = meta["members_total"]
+    if isinstance(count, int) and not isinstance(count, bool) and count > listed:
+        raise CollectError(
+            "%s counts %d members but listed %d — refused, never recorded partially"
+            % (path, count, listed)
+        )
+
+
+def _tasks_collection(ctx, service, service_path, family, budget, try_expand):
+    """(members, report, raw, try_expand) of a service's Tasks or Jobs collection.
+
+    The collection the service links, else its DMTF-mandated child path
+    (TaskService/Tasks, JobService/Jobs). A linked collection that answers 404
+    fails the check (a broken tree); the unlinked child answering 404 is a
+    collection not served (members None). Both are the BMC's own services:
+    an empty answer is the quiescent state, never unmeasured. ``try_expand``
+    turns off at the first $expand refusal and stays off for the rest of the
+    check.
+    """
+    label = "bmc_tasks %s" % (family,)
+    link = _fenced_link(_dig(service, family), label)
+    path = link or _sub(service_path, family)
+    members, meta, raw = _fetch_collection(
+        ctx,
+        path,
+        label,
+        ok_404=True,
+        budget=budget,
+        redact=_redact_task_page,
+        try_expand=try_expand,
+    )
+    if meta.get("expand_refused"):
+        try_expand = False
+    if members is None and link is not None:
+        raise CollectError("%s links %s but it answered 404" % (service_path, path))
+    if members is not None:
+        _tasks_require_whole(raw, meta, path)
+    report = {
+        "resource": path,
+        "linked": link is not None,
+        "strategy": meta["strategy"],
+        "members": len(members) if members is not None else None,
+        "expand_refused": meta.get("expand_refused"),
+    }
+    return members, report, raw, try_expand
+
+
+def _collect_tasks(ctx):
+    raw = {}
+    services = {"TaskService": (None, None), "JobService": (None, None)}
+    members = {"Tasks": None, "Jobs": None}
+    reports = {"Tasks": None, "Jobs": None}
+    try_expand = True
+    with ctx.budget("bmc_tasks", _BUDGET_TASKS) as budget:
+        targets = _targets(ctx)
+        root = _get(ctx, _ROOT)
+        # Both services as the service root links them (DMTF ServiceRoot.Tasks and
+        # ServiceRoot.JobService, every vendor). The two single reads come first:
+        # the member walks, each pre-checked against what is left, are the last spent.
+        for name, leaf in (("TaskService", "Tasks"), ("JobService", "JobService")):
+            link = _fenced_link(_dig(root, leaf), "bmc_tasks %s" % (name,))
+            if link is None:
+                continue
+            service = _get_optional(ctx, link)
+            if service is None:
+                raise CollectError("the service root links %s but it answered 404" % (link,))
+            if not isinstance(service, dict) or not service:
+                raise CollectError("%s answered without a resource body" % (link,))
+            services[name] = (link, service)
+            raw[link] = _curate(service)
+        if all(link is None for link, _service in services.values()):
+            raise SkipCheck(
+                "the service root links neither a TaskService (Tasks) nor a JobService: the BMC "
+                "serves no task or job to report"
+            )
+        for name, family in (("TaskService", "Tasks"), ("JobService", "Jobs")):
+            link, service = services[name]
+            if service is None:
+                continue
+            members[family], reports[family], family_raw, try_expand = _tasks_collection(
+                ctx, service, link, family, budget, try_expand
+            )
+            raw.update(family_raw)
+    normalized, context = _normalize_tasks(
+        services["TaskService"][1], members["Tasks"], services["JobService"][1], members["Jobs"]
+    )
+    context.update(
+        {
+            "services": {
+                "task_service": services["TaskService"][0],
+                "job_service": services["JobService"][0],
+            },
+            "collections": {"tasks": reports["Tasks"], "jobs": reports["Jobs"]},
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -8042,5 +8378,22 @@ register(
         ),
         collector=_collect_licenses,
         tags=("platform", "licensing"),
+    )
+)
+
+
+register(
+    CheckDef(
+        id="bmc_tasks",
+        platform="bmc",
+        description=(
+            "Unfinished BMC tasks and jobs (Suspended scheduled jobs included) and the task and "
+            "job services' enablement and retention policy (quiescence evidence)."
+        ),
+        tier=3,
+        compare={"mode": "info_only"},
+        miss_meaning="",
+        collector=_collect_tasks,
+        tags=("platform", "tasks"),
     )
 )

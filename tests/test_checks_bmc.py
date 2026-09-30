@@ -231,6 +231,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_alerting",
         "bmc_certificates",
         "bmc_licenses",
+        "bmc_tasks",
     }
 
     def test_all_registered_once(self):
@@ -8970,6 +8971,552 @@ class TestLicenses(unittest.TestCase):
             "Not-present",
         ):
             self.assertIn(phrase, text)
+
+
+class TestTasks(unittest.TestCase):
+    """bmc_tasks. HAND-BUILT for what the lab unit lacks: tasks and jobs in every kind of state
+    with their payloads and messages (xcc_tasks_tasks_expanded.json, xcc_tasks_jobs_expanded.json),
+    weekday and monthly schedules, and task/job services serving the optional leaves XCC 6.10
+    does not (xcc_tasks_taskservice.json, xcc_tasks_jobservice.json) — spelled as the DMTF
+    TaskService, Task, JobService, Job and Schedule schemas name them, every value an invention.
+    The lab unit's own payloads (an empty Tasks collection, three Suspended scheduled jobs) are
+    pinned in test_lab_fixtures.TestBmcLabTasks."""
+
+    TS = "/redfish/v1/TaskService"
+    JS = "/redfish/v1/JobService"
+    TASKS = TS + "/Tasks"
+    JOBS = JS + "/Jobs"
+    SIMPLE_UPDATE = "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate"
+    SCALARS = (
+        "task_service_enabled",
+        "completed_task_overwrite_policy",
+        "task_auto_delete_minutes",
+        "lifecycle_event_on_task_state_change",
+        "job_service_enabled",
+    )
+
+    def _payloads(self, expand=True):
+        """The hand-built set with both services linked from the service root."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"]["Tasks"] = {"@odata.id": self.TS}
+        payloads["/redfish/v1/"]["JobService"] = {"@odata.id": self.JS}
+        payloads[self.TS] = _fx("xcc_tasks_taskservice.json")
+        payloads[self.JS] = _fx("xcc_tasks_jobservice.json")
+        for path, name in (
+            (self.TASKS, "xcc_tasks_tasks_expanded.json"),
+            (self.JOBS, "xcc_tasks_jobs_expanded.json"),
+        ):
+            expanded = _fx(name)
+            plain, members = _split_collection(expanded)
+            payloads[path] = plain
+            payloads.update(members)
+            if expand:
+                payloads[path + EXPAND] = expanded
+        return payloads
+
+    def _collect(self, payloads, **kwargs):
+        ctx = _FakeCtx(payloads, **kwargs)
+        return ctx, checks._collect_tasks(ctx)
+
+    def test_every_scalar_is_read_from_its_own_leaf(self):
+        _ctx, result = self._collect(self._payloads())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            {key: value for key, value in view.items() if "|" not in key},
+            {
+                "task_service_enabled": True,
+                "completed_task_overwrite_policy": "Manual",
+                "task_auto_delete_minutes": 1440,
+                "lifecycle_event_on_task_state_change": True,
+                "job_service_enabled": True,
+            },
+        )
+        # the services' status, own clocks and capabilities ride in context
+        self.assertEqual(
+            context["task_service"],
+            {"health": "OK", "state": "Enabled", "datetime": "2026-09-30T04:40:00-04:00"},
+        )
+        self.assertEqual(
+            context["job_service"],
+            {
+                "health": "OK",
+                "state": "Enabled",
+                "datetime": "2026-09-30T04:40:01-04:00",
+                "max_jobs": 32,
+                "max_steps": 4,
+                "scheduling": True,
+            },
+        )
+        self.assertEqual(context["services"], {"task_service": self.TS, "job_service": self.JS})
+        self.assertEqual(context["resolution"]["system"], SYS)
+        # the lab's TaskService serves neither optional leaf: null, never assumed
+        payloads = self._payloads()
+        payloads[self.TS] = _fx("xcc_taskservice_lab.json")
+        view = self._collect(payloads)[1]["normalized"]
+        self.assertEqual([view[name] for name in self.SCALARS], [True, "Oldest", None, None, True])
+
+    def test_only_unfinished_entries_are_keyed_and_every_row_carries_every_field(self):
+        _ctx, result = self._collect(self._payloads())
+        view = result["normalized"]
+        self.assertEqual(
+            [key for key in view if "|" in key],
+            ["job|Collect", "job|FirmwareUpdate", "job|PowerOff", "job|PowerOn", "job|Restart"]
+            + ["task|5", "task|6", "task|7", "task|8"],
+        )
+        self.assertEqual(
+            view["task|5"],
+            {
+                "name": "Firmware update",
+                "state": "Running",
+                "status": "OK",
+                "percent_complete": 40,
+                "http_operation": "POST",
+                "target_uri": self.SIMPLE_UPDATE,
+            },
+        )
+        # Interrupted is "expected to restart and therefore not complete" (DMTF): keyed
+        self.assertEqual(
+            (view["task|6"]["state"], view["task|6"]["percent_complete"]), ("Interrupted", 70)
+        )
+        self.assertEqual(view["task|7"]["state"], "New")
+        # a task that serves no state is not known to be done: keyed, every field null but its name
+        self.assertEqual(
+            view["task|8"],
+            {
+                "name": "Task 8",
+                "state": None,
+                "status": None,
+                "percent_complete": None,
+                "http_operation": None,
+                "target_uri": None,
+            },
+        )
+        self.assertEqual(
+            view["job|FirmwareUpdate"],
+            {
+                "name": "Firmware update",
+                "state": "Running",
+                "status": "OK",
+                "percent_complete": 55,
+                "http_operation": "POST",
+                "target_uri": self.SIMPLE_UPDATE,
+                "schedule": None,  # a one-shot job serves no Schedule
+            },
+        )
+        # waiting for someone to continue, stop or cancel it is not finished either
+        self.assertEqual(
+            (view["job|Collect"]["state"], view["job|Collect"]["status"]),
+            ("UserIntervention", "Warning"),
+        )
+        self.assertEqual(
+            (view["job|PowerOff"]["state"], view["job|PowerOff"]["percent_complete"]),
+            ("Pending", 0),
+        )
+        self.assertEqual(view["job|PowerOn"]["state"], "Suspended")  # standing configuration
+        self.assertEqual(view["job|Restart"]["state"], "Interrupted")
+        # the complete states never key a row: Completed, Killed, Cancelled, Exception (tasks);
+        # Completed, Cancelled, Exception (jobs)
+        for finished in ("task|1", "task|2", "task|3", "task|4", "job|Backup", "job|Reset"):
+            self.assertNotIn(finished, view)
+        self.assertNotIn("job|Restore", view)
+        for prefix in ("task|", "job|"):
+            shapes = {tuple(sorted(row)) for key, row in view.items() if key.startswith(prefix)}
+            self.assertEqual(len(shapes), 1, prefix)
+
+    def test_the_schedule_is_the_recurrence_and_its_start_time_rides_in_context(self):
+        _ctx, result = self._collect(self._payloads())
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            view["job|PowerOff"]["schedule"],
+            {
+                "name": "Lenovo:Power Off",
+                "recurrence_interval": "P1D",
+                "enabled_days_of_week": ["Monday", "Saturday"],  # a set: sorted
+                "enabled_days_of_month": None,
+                "enabled_months_of_year": None,
+                "enabled_intervals": None,
+                "lifetime": None,
+                "max_occurrences": None,
+            },
+        )
+        self.assertEqual(
+            view["job|Restart"]["schedule"],
+            {
+                "name": "Lenovo:Restart",
+                "recurrence_interval": "P1M",
+                "enabled_days_of_week": None,
+                "enabled_days_of_month": [1, 15],
+                "enabled_months_of_year": ["January", "July"],
+                "enabled_intervals": ["2026-10-01T00:00:00Z/2027-09-30T00:00:00Z"],
+                "lifetime": "P365D",
+                "max_occurrences": 12,
+            },
+        )
+        # served as an empty list: no day enabled (null would mean "not served")
+        self.assertEqual(view["job|PowerOn"]["schedule"]["enabled_days_of_week"], [])
+        self.assertEqual(
+            context["row_times"]["job|PowerOff"],
+            {
+                "start_time": None,
+                "end_time": None,
+                "schedule_initial_start_time": "2026-10-03T22:00:00-04:00",
+            },
+        )
+        # a reordered set is no change
+        payloads = self._payloads()
+        schedule = payloads[self.JOBS + EXPAND]["Members"][0]["Schedule"]
+        schedule["EnabledDaysOfWeek"].reverse()
+        self.assertEqual(self._collect(payloads)[1]["normalized"], view)
+
+    def test_counts_by_state_and_the_newest_times_ride_in_context(self):
+        _ctx, result = self._collect(self._payloads())
+        context = result["context"]
+        self.assertEqual(
+            context["tasks"],
+            {
+                "total": 8,
+                "by_state": {
+                    "Cancelled": 1,
+                    "Completed": 1,
+                    "Exception": 1,
+                    "Interrupted": 1,
+                    "Killed": 1,
+                    "New": 1,
+                    "Running": 1,
+                    "unserved": 1,
+                },
+                "terminal": 4,
+                "non_terminal": 4,
+                # the latest by instant, as served: 04:30Z, although the Running task's
+                # 06:10+02:00 (04:10Z) sorts last as text
+                "newest_start_time": "2026-09-29T23:30:00-05:00",
+                "newest_end_time": "2026-09-29T23:31:30-05:00",
+            },
+        )
+        self.assertEqual(
+            context["jobs"],
+            {
+                "total": 8,
+                "by_state": {
+                    "Cancelled": 1,
+                    "Completed": 1,
+                    "Exception": 1,
+                    "Interrupted": 1,
+                    "Pending": 1,
+                    "Running": 1,
+                    "Suspended": 1,
+                    "UserIntervention": 1,
+                },
+                "terminal": 3,
+                "non_terminal": 5,
+                "newest_start_time": "2026-09-30T02:30:00-06:00",  # 08:30Z beats 08:00+00:00
+                "newest_end_time": "2026-09-30T02:31:00-06:00",
+            },
+        )
+        # every keyed entry's own times, never a row field
+        self.assertEqual(
+            context["row_times"]["task|5"],
+            {"start_time": "2026-09-30T06:10:00+02:00", "end_time": None},
+        )
+        self.assertEqual(
+            sorted(context["row_times"]), sorted(key for key in result["normalized"] if "|" in key)
+        )
+        # no point in time in any row, nor in a job's schedule (its lifetime is a duration)
+        for key, row in result["normalized"].items():
+            if "|" in key:
+                fields = list(row) + list(row.get("schedule") or {})
+                self.assertFalse([field for field in fields if field.endswith("_time")], key)
+
+    def test_times_are_ordered_by_instant_whatever_their_offset(self):
+        instant = checks._tasks_instant
+        self.assertEqual(instant("2026-09-29T22:30:10-04:00"), instant("2026-09-30T02:30:10Z"))
+        self.assertEqual(instant("2026-09-30T02:30:10+00:00"), instant("2026-09-30T02:30:10z"))
+        self.assertEqual(instant("2026-09-30T08:00:00+0530"), instant("2026-09-30T02:30:00Z"))
+        self.assertEqual(instant("2026-09-30T02:30Z"), instant("2026-09-30T02:30:00Z"))
+        self.assertLess(instant("2026-09-30T02:30:10.1Z"), instant("2026-09-30T02:30:10.25Z"))
+        # an offset-less value reads as UTC (ordering only: the served string is what is kept)
+        self.assertEqual(instant("2026-09-30T02:30:10"), instant("2026-09-30T02:30:10Z"))
+        for bad in (None, "", "soon", "2026-09-30", "2026-13-01T00:00:00Z", 20260930, True):
+            self.assertIsNone(instant(bad), bad)
+        newest = checks._tasks_newest
+        self.assertIsNone(newest([{"StartTime": "soon"}, {}, "not a member"], "StartTime"))
+        self.assertEqual(
+            newest([{"EndTime": "2026-09-30T01:00:00Z"}, {"EndTime": "x"}], "EndTime"),
+            "2026-09-30T01:00:00Z",
+        )
+
+    def test_one_get_per_service_and_one_expand_get_per_collection(self):
+        ctx, result = self._collect(self._payloads())
+        collections = [self.TASKS + EXPAND, self.JOBS + EXPAND]
+        self.assertEqual(ctx.gets, RESOLVE + [self.TS, self.JS] + collections)
+        self.assertEqual(ctx.budgets, [("bmc_tasks", checks._BUDGET_TASKS)])
+        self.assertEqual(set(result["raw"]), {self.TS, self.JS} | set(collections))
+        self.assertNotIn("@odata.etag", json.dumps(result["raw"]))
+        report = {"linked": True, "strategy": "expand", "members": 8, "expand_refused": None}
+        self.assertEqual(
+            result["context"]["collections"],
+            {
+                "tasks": dict(report, resource=self.TASKS),
+                "jobs": dict(report, resource=self.JOBS),
+            },
+        )
+        # nothing a task names is ever followed: never its monitor, never a Payload target
+        self.assertFalse([path for path in ctx.gets if "TaskMonitors" in path])
+        self.assertFalse([path for path in ctx.gets if "Actions" in path])
+
+    def test_the_expand_refusal_is_remembered_and_the_worst_walk_fits_the_budget(self):
+        payloads = self._payloads(expand=False)
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        ctx, result = self._collect(payloads, errors={self.TASKS + EXPAND: 501})
+        # $expand is tried once, on the first collection read, and never again
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.TASKS + EXPAND])
+        collections = result["context"]["collections"]
+        self.assertEqual(collections["tasks"]["expand_refused"], "HTTP 501")
+        self.assertEqual({report["strategy"] for report in collections.values()}, {"members"})
+        # resolution 5, the two services, the Tasks 1 + 1 + 8, the Jobs 1 + 8
+        self.assertEqual(len(ctx.gets), 5 + 2 + 10 + 9)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_TASKS)
+        expanded = self._collect(self._payloads())[1]
+        self.assertEqual(result["normalized"], expanded["normalized"])
+        for part in ("tasks", "jobs", "row_times", "task_service", "job_service"):
+            self.assertEqual(result["context"][part], expanded["context"][part], part)
+        # every member read passes the same redactor as the pages
+        self.assertEqual(
+            {name for path, name in ctx.redacted if path.startswith((self.TASKS, self.JOBS))},
+            {"_redact_task_page"},
+        )
+
+    def test_a_walk_the_budget_cannot_cover_is_refused_before_its_first_member(self):
+        payloads = self._payloads(expand=False)
+        payloads[self.JOBS]["Members"] = [
+            {"@odata.id": "%s/%d" % (self.JOBS, n)} for n in range(1, 41)
+        ]
+        payloads[self.JOBS]["Members@odata.count"] = 40
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_tasks(ctx)
+        self.assertIn("bmc_tasks Jobs: 40 members to fetch", str(caught.exception))
+        self.assertEqual(ctx.gets[-1], self.JOBS)  # the collection, and no member of it
+
+    def test_a_paged_or_short_answer_is_refused_never_read_partially(self):
+        payloads = self._payloads()
+        payloads[self.TASKS + EXPAND]["Members@odata.nextLink"] = self.TASKS + "?$skip=8"
+        with self.assertRaises(checks.CollectError) as caught:
+            self._collect(payloads)
+        self.assertIn("Members@odata.nextLink", str(caught.exception))
+        payloads = self._payloads()
+        payloads[self.JOBS + EXPAND]["Members@odata.count"] = 12
+        with self.assertRaises(checks.CollectError) as caught:
+            self._collect(payloads)
+        self.assertIn("counts 12 members but listed 8", str(caught.exception))
+        # the member walk too
+        payloads = self._payloads(expand=False)
+        payloads[self.TASKS]["Members@odata.count"] = 9
+        with self.assertRaises(checks.CollectError) as caught:
+            self._collect(payloads)
+        self.assertIn("%s counts 9 members but listed 8" % (self.TASKS,), str(caught.exception))
+
+    def test_payload_text_and_account_names_never_reach_the_cache_or_raw(self):
+        ctx, result = self._collect(self._payloads())
+        secrets = ("bm90LWEtcmVhbC1zZWNyZXQ", "bm90LWEtcmVhbC10b2tlbg", "not-a-real-password")
+        secrets += ("203.0.113.2", "jane")
+        # the per-run cache holds what the trace copies: redacted before either keeps it
+        for text in (json.dumps(result), json.dumps(list(ctx._cache.values()))):
+            for secret in secrets:
+                self.assertNotIn(secret, text, secret)
+        raw_tasks = {row["Id"]: row for row in result["raw"][self.TASKS + EXPAND]["Members"]}
+        payload = raw_tasks["5"]["Payload"]
+        self.assertEqual(payload["HttpHeaders"], [checks._SCRUBBED, checks._SCRUBBED])
+        self.assertEqual(payload["JsonBody"], checks._SCRUBBED)
+        self.assertEqual(
+            (payload["HttpOperation"], payload["TargetUri"]), ("POST", self.SIMPLE_UPDATE)
+        )
+        self.assertEqual(
+            raw_tasks["5"]["Messages"][0]["Message"],
+            "Firmware update requested by user ***scrubbed***.",
+        )
+        self.assertEqual(raw_tasks["5"]["Messages"][0]["MessageArgs"], [checks._SCRUBBED])
+        raw_jobs = {row["Id"]: row for row in result["raw"][self.JOBS + EXPAND]["Members"]}
+        self.assertEqual(raw_jobs["FirmwareUpdate"]["CreatedBy"], checks._SCRUBBED)
+        self.assertEqual(
+            raw_jobs["FirmwareUpdate"]["Messages"][0]["MessageArgs"],
+            ["FirmwareUpdate", checks._SCRUBBED],
+        )
+        # the collections pass the tasks redactor, the service resources the family's scrubber
+        self.assertEqual(
+            [entry for entry in ctx.redacted if entry[0].startswith((self.TASKS, self.JOBS))],
+            [
+                (self.TASKS + EXPAND, "_redact_task_page"),
+                (self.JOBS + EXPAND, "_redact_task_page"),
+            ],
+        )
+        self.assertEqual(
+            {name for path, name in ctx.redacted if not path.startswith((self.TASKS, self.JOBS))},
+            {"_scrub_payload"},
+        )
+        # a page and a member read alone alike, idempotent; annotations and the target stay
+        redact = checks._redact_task_page
+        page = redact(_fx("xcc_tasks_tasks_expanded.json"))
+        self.assertEqual(redact(page), page)
+        member = _fx("xcc_tasks_tasks_expanded.json")["Members"][4]
+        member["Payload"]["HttpHeaders@odata.count"] = 2
+        alone = redact(member)
+        self.assertEqual(alone, redact(alone))
+        self.assertEqual(alone["Payload"]["JsonBody"], checks._SCRUBBED)
+        self.assertEqual(alone["Payload"]["HttpHeaders@odata.count"], 2)
+        self.assertEqual(alone["Messages"][0]["MessageArgs"], [checks._SCRUBBED])
+        self.assertEqual(alone["Payload"]["TargetUri"], self.SIMPLE_UPDATE)
+        # emptiness survives the scrub
+        empty = redact({"Payload": {"HttpHeaders": [], "JsonBody": ""}})
+        self.assertEqual(empty["Payload"], {"HttpHeaders": [], "JsonBody": ""})
+
+    def test_empty_collections_are_the_quiescent_state_never_absence(self):
+        payloads = self._payloads()
+        for path in (self.TASKS, self.JOBS):
+            payloads[path + EXPAND] = {"@odata.id": path, "Members": [], "Members@odata.count": 0}
+        _ctx, result = self._collect(payloads)
+        view, context = result["normalized"], result["context"]
+        # the scalars stand: an ok view is never empty (no empty-ok tag needed)
+        self.assertEqual(sorted(view), sorted(self.SCALARS))
+        empty = {
+            "total": 0,
+            "by_state": {},
+            "terminal": 0,
+            "non_terminal": 0,
+            "newest_start_time": None,
+            "newest_end_time": None,
+        }
+        self.assertEqual((context["tasks"], context["jobs"]), (empty, empty))
+        self.assertEqual(context["row_times"], {})
+        self.assertEqual({report["members"] for report in context["collections"].values()}, {0})
+        self.assertNotIn(registry.EMPTY_OK_TAG, registry.CHECKS["bmc_tasks"].tags)
+
+    def test_not_present_only_when_the_service_root_links_neither_service(self):
+        ctx = _FakeCtx(_base_payloads())  # the hand-built root links neither
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_tasks(ctx)
+        self.assertIn("links neither a TaskService (Tasks) nor a JobService", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE)  # nothing the root does not link is probed
+        self.assertEqual(ctx.budgets, [("bmc_tasks", checks._BUDGET_TASKS)])
+        # one service alone: the other's scalars null, its context null, nothing of it read
+        payloads = self._payloads()
+        del payloads["/redfish/v1/"]["JobService"]
+        ctx, result = self._collect(payloads)
+        view, context = result["normalized"], result["context"]
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.JS)])
+        self.assertIsNone(view["job_service_enabled"])
+        self.assertFalse([key for key in view if key.startswith("job|")])
+        self.assertEqual(len([key for key in view if key.startswith("task|")]), 4)
+        self.assertEqual(
+            (context["job_service"], context["jobs"], context["collections"]["jobs"]),
+            (None, None, None),
+        )
+        self.assertIsNone(context["services"]["job_service"])
+        payloads = self._payloads()
+        del payloads["/redfish/v1/"]["Tasks"]
+        ctx, result = self._collect(payloads)
+        view = result["normalized"]
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.TS)])
+        self.assertEqual([view[name] for name in self.SCALARS], [None, None, None, None, True])
+        self.assertEqual(len([key for key in view if key.startswith("job|")]), 5)
+        self.assertIsNone(result["context"]["tasks"])
+
+    def test_a_linked_resource_that_answers_404_fails_and_an_unlinked_child_is_not_served(self):
+        for path in (self.TS, self.JS):
+            payloads = self._payloads()
+            del payloads[path]
+            with self.assertRaises(checks.CollectError) as caught:
+                self._collect(payloads)
+            self.assertIn(
+                "the service root links %s but it answered 404" % (path,), str(caught.exception)
+            )
+        for service, path in ((self.TS, self.TASKS), (self.JS, self.JOBS)):
+            payloads = self._payloads(expand=False)
+            del payloads[path]
+            with self.assertRaises(checks.CollectError) as caught:
+                self._collect(payloads)
+            self.assertIn(
+                "%s links %s but it answered 404" % (service, path), str(caught.exception)
+            )
+        payloads = self._payloads()
+        payloads[self.JS] = {}
+        with self.assertRaises(checks.CollectError) as caught:
+            self._collect(payloads)
+        self.assertIn("answered without a resource body", str(caught.exception))
+        # the service links no collection: its DMTF child path is read, and a 404 there is
+        # a collection not served
+        payloads = self._payloads(expand=False)
+        del payloads[self.TS]["Tasks"]
+        del payloads[self.TASKS]
+        _ctx, result = self._collect(payloads)
+        context = result["context"]
+        self.assertIsNone(context["tasks"])
+        self.assertEqual(
+            context["collections"]["tasks"],
+            {
+                "resource": self.TASKS,
+                "linked": False,
+                "strategy": "absent",
+                "members": None,
+                "expand_refused": None,
+            },
+        )
+        self.assertFalse([key for key in result["normalized"] if key.startswith("task|")])
+        self.assertEqual(result["normalized"]["task_service_enabled"], True)
+        payloads = self._payloads()
+        del payloads[self.TS]["Tasks"]
+        _ctx, result = self._collect(payloads)
+        self.assertEqual(result["context"]["collections"]["tasks"]["linked"], False)
+        self.assertEqual(result["context"]["collections"]["tasks"]["members"], 8)
+
+    def test_links_into_actions_are_refused(self):
+        for mutate in (
+            lambda p: p["/redfish/v1/"].update(Tasks={"@odata.id": self.TS + "/Actions/Oem"}),
+            lambda p: p["/redfish/v1/"].update(JobService={"@odata.id": self.JS + "/Actions/Oem"}),
+            lambda p: p[self.TS].update(Tasks={"@odata.id": self.TS + "/Actions/Oem"}),
+            lambda p: p[self.JS].update(Jobs={"@odata.id": self.JS + "/Actions/Oem"}),
+        ):
+            payloads = self._payloads()
+            mutate(payloads)
+            ctx = _FakeCtx(payloads)
+            with self.assertRaises(checks.CollectError) as caught:
+                checks._collect_tasks(ctx)
+            self.assertIn("server-supplied link refused", str(caught.exception))
+            self.assertFalse([path for path in ctx.gets if "Actions" in path])
+        payloads = self._payloads(expand=False)
+        payloads[self.JOBS]["Members"].append({"@odata.id": self.JOBS + "/Actions/Oem"})
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError):
+            checks._collect_tasks(ctx)
+        self.assertFalse([path for path in ctx.gets if "Actions" in path])
+
+    def test_every_vendor_reads_the_same_dmtf_services(self):
+        expected = self._collect(self._payloads())[1]
+        for vendor in ("Contoso", "Dell"):
+            payloads = self._payloads()
+            payloads["/redfish/v1/"]["Vendor"] = vendor
+            ctx, result = self._collect(payloads)
+            self.assertEqual(result["normalized"], expected["normalized"], vendor)
+            self.assertEqual(
+                ctx.gets, RESOLVE + [self.TS, self.JS, self.TASKS + EXPAND, self.JOBS + EXPAND]
+            )
+            self.assertEqual(result["context"]["resolution"]["vendor"], vendor)
+
+    def test_the_same_capture_twice_is_identical_and_never_compared(self):
+        pre = self._collect(self._payloads())[1]["normalized"]
+        post = self._collect(self._payloads())[1]["normalized"]
+        self.assertEqual(pre, post)
+        json.dumps(pre)
+        check = registry.CHECKS["bmc_tasks"]
+        self.assertEqual((check.tier, check.compare), (3, {"mode": "info_only"}))
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, check.compare), {"result": "info"})
+        # a task that finished between captures leaves the view: information, never a finding
+        post = {key: value for key, value in post.items() if key != "task|5"}
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, check.compare)["result"], "info")
+        self.assertIn("bmc_power_policy", registry.SEMANTICS["bmc_tasks"])
+        self.assertTrue(registry.SEMANTICS["bmc_tasks"].startswith("Informational"))
 
 
 if __name__ == "__main__":

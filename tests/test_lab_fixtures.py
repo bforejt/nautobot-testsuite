@@ -1760,7 +1760,9 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_certificates' 2: CertificateLocations and the one certificate it lists)
         # (+ bmc_licenses' 5: the LicenseService, FoD, Licenses and FoD Keys twice — the
         # harvest kept that collection's plain form only)
-        self.assertLessEqual(len(ctx.gets), 84)
+        # (+ bmc_tasks' 3: the TaskService, the JobService and Tasks; the Jobs read is
+        # bmc_power_policy's, answered by the cache)
+        self.assertLessEqual(len(ctx.gets), 87)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -1772,7 +1774,157 @@ class TestBmcLabFamily(unittest.TestCase):
                     continue
                 self.assertEqual(pre, post)
                 json.dumps(pre)
-                self.assertEqual(diffcore.diff_check(pre, post, check.compare)["result"], "pass")
+                # an info_only check (bmc_tasks) is never compared: its verdict is "info"
+                expected = "info" if check.compare["mode"] == "info_only" else "pass"
+                self.assertEqual(diffcore.diff_check(pre, post, check.compare)["result"], expected)
+
+
+class TestBmcLabTasks(unittest.TestCase):
+    """bmc_tasks on the lab payloads: XCC 6.10's TaskService with an empty Tasks collection
+    (the quiescent state — an empty keyed view, never not-present) and its JobService with
+    three Suspended jobs, the twins of the scheduled power actions bmc_power_policy keys."""
+
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    TS = "/redfish/v1/TaskService"
+    JS = "/redfish/v1/JobService"
+    TASKS = TS + "/Tasks"
+    JOBS = JS + "/Jobs"
+
+    def test_every_key_the_lab_unit_serves(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_tasks(ctx)
+        view, context = result["normalized"], result["context"]
+        job = {
+            "state": "Suspended",
+            "status": "OK",
+            "percent_complete": None,  # served null
+            "http_operation": None,  # HidePayload true: no Payload served
+            "target_uri": None,
+        }
+        schedule = {
+            "recurrence_interval": None,
+            "enabled_days_of_week": [],  # served empty: no day enabled
+            "enabled_days_of_month": None,
+            "enabled_months_of_year": None,
+            "enabled_intervals": None,
+            "lifetime": None,
+            "max_occurrences": None,
+        }
+        self.assertEqual(
+            view,
+            {
+                "task_service_enabled": True,
+                "completed_task_overwrite_policy": "Oldest",
+                # TaskService v1_2_0 as XCC 6.10 serves it: neither optional leaf
+                "task_auto_delete_minutes": None,
+                "lifecycle_event_on_task_state_change": None,
+                "job_service_enabled": True,
+                # standing configuration, keyed on every capture: Suspended is not finished
+                "job|PowerOff": dict(
+                    job, name="Power Off", schedule=dict(schedule, name="Lenovo:Power Off")
+                ),
+                "job|PowerOn": dict(
+                    job, name="Power On", schedule=dict(schedule, name="Lenovo:Power On")
+                ),
+                "job|Restart": dict(
+                    job, name="Restart", schedule=dict(schedule, name="Lenovo:Restart")
+                ),
+            },
+        )
+        self.assertEqual(
+            context["task_service"],
+            {"health": "OK", "state": "Enabled", "datetime": "2026-09-29T22:30:10-04:00"},
+        )
+        self.assertEqual(
+            context["job_service"],
+            {
+                "health": "OK",
+                "state": "Enabled",
+                "datetime": "2026-09-29T22:30:11-05:00",
+                "max_jobs": 3,  # exactly the three scheduled power actions
+                "max_steps": None,
+                "scheduling": True,
+            },
+        )
+        self.assertEqual(
+            context["jobs"],
+            {
+                "total": 3,
+                "by_state": {"Suspended": 3},
+                "terminal": 0,
+                "non_terminal": 3,
+                "newest_start_time": None,  # a job that never ran serves no StartTime
+                "newest_end_time": None,
+            },
+        )
+        self.assertEqual(
+            context["row_times"],
+            {
+                key: {"start_time": None, "end_time": None, "schedule_initial_start_time": None}
+                for key in ("job|PowerOff", "job|PowerOn", "job|Restart")
+            },
+        )
+        self.assertEqual(context["services"], {"task_service": self.TS, "job_service": self.JS})
+        self.assertEqual(context["resolution"]["vendor"], "Lenovo")
+        # both services as the service root links them (its Tasks and JobService), then one
+        # $expand GET per collection, each through the tasks redactor
+        expanded = [self.TASKS + _XCC_EXPAND, self.JOBS + _XCC_EXPAND]
+        self.assertEqual(ctx.gets, self.RESOLVE + [self.TS, self.JS] + expanded)
+        self.assertEqual(
+            [entry for entry in ctx.redacted if entry[0] in expanded],
+            [(path, "_redact_task_page") for path in expanded],
+        )
+        self.assertEqual(set(result["raw"]), {self.TS, self.JS} | set(expanded))
+
+    def test_the_empty_task_list_is_the_quiescent_state_never_absence(self):
+        result = bmc._collect_tasks(_xcc_lab_ctx())
+        context = result["context"]
+        self.assertFalse([key for key in result["normalized"] if key.startswith("task|")])
+        self.assertEqual(
+            context["tasks"],
+            {
+                "total": 0,
+                "by_state": {},
+                "terminal": 0,
+                "non_terminal": 0,
+                "newest_start_time": None,
+                "newest_end_time": None,
+            },
+        )
+        self.assertEqual(
+            context["collections"],
+            {
+                "tasks": {
+                    "resource": self.TASKS,
+                    "linked": True,
+                    "strategy": "expand",
+                    "members": 0,
+                    "expand_refused": None,
+                },
+                "jobs": {
+                    "resource": self.JOBS,
+                    "linked": True,
+                    "strategy": "expand",
+                    "members": 3,
+                    "expand_refused": None,
+                },
+            },
+        )
+
+    def test_the_budget_covers_the_lab_layout_without_expand(self):
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_tasks(ctx)
+        # resolution 5, the two services, the Tasks 1 + 1 (the $expand refusal is paid there,
+        # once) + 0 members, the Jobs 1 + 3
+        self.assertEqual(len(ctx.gets), 5 + 2 + 2 + 4)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_TASKS)
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.TASKS + _XCC_EXPAND])
+        self.assertEqual(
+            {report["strategy"] for report in result["context"]["collections"].values()},
+            {"members"},
+        )
+        self.assertEqual(result["normalized"], bmc._collect_tasks(_xcc_lab_ctx())["normalized"])
 
 
 class TestBmcLabSensors(unittest.TestCase):

@@ -1,0 +1,21 @@
+{
+  "@odata.type": "#TaskService.v1_2_0.TaskService",
+  "@odata.id": "/redfish/v1/TaskService",
+  "@odata.etag": "\"a1b2c3d4\"",
+  "Id": "TaskService",
+  "Name": "Task Service",
+  "Description": "Hand-built from the DMTF TaskService schema: the optional v1_1/v1_2 leaves the lab XCC 6.10 does not serve.",
+  "CompletedTaskOverWritePolicy": "Manual",
+  "DateTime": "2026-09-30T04:40:00-04:00",
+  "LifeCycleEventOnTaskStateChange": true,
+  "ServiceEnabled": true,
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "TaskAutoDeleteTimeoutMinutes": 1440,
+  "Tasks": {
+    "@odata.id": "/redfish/v1/TaskService/Tasks"
+  }
+}

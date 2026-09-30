@@ -713,8 +713,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
    `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
-   `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting`, `bmc_certificates` and
-   `bmc_licenses` landed. The first four ran live through the dev
+   `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting`, `bmc_certificates`,
+   `bmc_licenses` and `bmc_tasks` landed — all ten. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -977,6 +977,14 @@ Recorded as they were found, each with how it was resolved.
       FoD key as a DMTF licence (one entitlement keyed twice) is open. The
       check scrubs a licence's `EntitlementId` and a key's `Identifier` on
       top of the family's `LicenseString`/`Bytes`, before the trace sees them.
+    - `bmc_tasks`: the DMTF Task schema calls `Interrupted` (like
+      `Suspended`) a state expected to restart, so it is keyed as unfinished,
+      not counted as terminal as the brief had it. `percent_complete` stays
+      in the rows: the check is `info_only` (never compared) and a row lives
+      only while its entry runs. The Tasks and Jobs pages go through the
+      family's `_redact_task_page` (the same redactor `bmc_power_policy` uses
+      for Jobs, so the per-run cache keeps one redaction whichever reads
+      first). A paged answer is refused, as in `bmc_sensors`.
 
 ## 11. Decisions still open (default assumed in parentheses)
 
