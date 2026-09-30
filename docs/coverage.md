@@ -228,8 +228,9 @@ stack against the same unit: eleven ok and `bmc_security` not-present again,
 32 GETs in 33 s, no account or person name in raw or the debug trace. Widened
 per `docs/plans/bmc-capture-handoff.md` §5a (PR B), all twelve are ok there
 (48 GETs in 49 s; the shakedown 12/12 ok in 80 GETs, the log's sequence
-numbers unchanged across it). *Captured today* is what the checks carry now;
-the new checks of §5b are holes until they land.
+numbers unchanged across it). With PR C's ten new checks the family of 22
+is ok there too (87 GETs in 100 s; the shakedown 22/22 in 117 GETs).
+*Captured today* is what the checks carry now.
 
 | Layer | Captured today | Holes remaining | General value of closing each hole |
 | --- | --- | --- | --- |
@@ -246,14 +247,26 @@ the new checks of §5b are holes until they land.
 
 ### BMC open items, ranked by general value
 
-1. ~~`bmc_sensors`~~ — landed (PR C).
-2. ~~Boot order and virtual media (`bmc_boot`)~~ — landed (PR C).
-3. ~~`bmc_power_policy`~~ — landed (PR C); the AC-restore leaf itself is unserved on XCC 6.10.
-4. ~~`bmc_accounts` and `bmc_certificates`~~ — landed (PR C).
-5. ~~Hardware depth: `bmc_pcie_slots`, `bmc_network_adapters`~~ — landed (PR C).
-6. **The remaining manager services** (an open question: a `bmc_manager_services` check of its own; `bmc_alerting` landed in PR C). BMC-network, hardening and management-tool changes.
-7. ~~`bmc_licenses`, `bmc_tasks`~~ — landed (PR C).
-8. **Verification on units that have what the lab lacks**: RAID depth in `bmc_storage`, a populated `ActiveLog`, SR-IOV virtual functions, a ThinkEdge security resource, a firmware that serves only the Subsystem resources.
+The ten checks of the plan's §5b landed in PR C; what stays open:
+
+1. **The shakedowns the lab unit can still run** (plan §7 items 4–5): the
+   host off (which POST-populated views empty, and whether a port's link
+   state or a slot's occupancy survives), a cable pull, an unplugged power
+   adapter (how an asserted discrete sensor reads), a card pull. Each settles
+   a rule the checks now assume; none is a new check.
+2. **The remaining manager services** — remote control and remote map,
+   server profile, USB port forwarding, the serial interfaces, the SNMP
+   agent's contact and location, configuration backup status: whether they
+   become a `bmc_manager_services` check of their own is the user's call.
+   BMC-network, hardening and management-tool changes.
+3. **Verification on units that have what the lab lacks**: RAID depth in
+   `bmc_storage`, a populated `ActiveLog`, SR-IOV virtual functions, a
+   ThinkEdge security resource, a firmware serving only the Subsystem
+   resources, a configured subscription, recipient, licence, trust
+   certificate or running task — every one coded from the schemas and
+   pinned on hand-built payloads until a capture shows the real shape.
+4. **`bmc_telemetry`** — deferred by decision (metric report definitions;
+   never the values).
 
 **Closed by doctrine or not observable here:** AuditLog entries (never read,
 by doctrine: the capture's own logins would land there; audit sequence

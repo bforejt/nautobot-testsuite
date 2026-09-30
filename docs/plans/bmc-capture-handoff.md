@@ -714,7 +714,12 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    order, each with its fixtures, tests, SEMANTICS and README row:
    `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
    `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting`, `bmc_certificates`,
-   `bmc_licenses` and `bmc_tasks` landed — all ten. The first four ran live through the dev
+   `bmc_licenses` and `bmc_tasks` landed — all ten. The whole family of 22
+   then ran live on the lab unit through the dev stack: capture 22/22 ok
+   (87 GETs in 100 s), shakedown 22/22 ok (117 GETs) with the log's
+   sequence numbers 140/176 before and after; local account names appear
+   only where decision 5 puts them (`bmc_accounts`' keys, its raw Accounts
+   read and that read's trace entry), nowhere else in any artifact. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
