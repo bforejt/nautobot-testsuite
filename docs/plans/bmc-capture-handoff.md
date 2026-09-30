@@ -1,9 +1,11 @@
 # Handoff: capture the BMC (XCC first) as part of the host's report
 
-Status: **plan only — nothing built.** Written 2026-09-30 against `main` after
-PR #12, the Nautobot 3.2.5 dev stack on this box, and the lab XClarity
-Controller at the address in `/opt/stacks/.xcc.env`. It supersedes the XCC
-decisions recorded in `docs/plans/nfv-core-move.md` §0 (a separate
+Status: **plan only — nothing built; the lab walk is done.** Written
+2026-09-30 against `main` after PR #12, the Nautobot 3.2.5 dev stack on this
+box, and the lab XClarity Controller at the address in `/opt/stacks/.xcc.env`,
+which was walked end to end the same day (425 resources, every existing
+collector run live — §4 and Appendix C). It supersedes the XCC decisions
+recorded in `docs/plans/nfv-core-move.md` §0 (a separate
 `snapshot_<device>-xcc` artifact, a second Device per SE350, the
 `constants.XCC_ENABLED` tabling) and the `xcc-tabled` memory. The next
 session builds from this document; §10 is the order of work, §11 the decisions
@@ -31,21 +33,24 @@ still open (each with the default the plan assumes).
   The DMTF-standard reads are the family; vendor OEM reads branch on the
   service root's `Vendor` and record `not-present` elsewhere. Lenovo is the
   only vendor verified here.
-- **What the lab XCC answered.** Redfish 1.15.0, `$expand` to two levels,
-  `$select`, and every service root link the catalog wants (Systems, Chassis,
-  Managers, UpdateService, AccountService, EventService, TaskService,
-  JobService, TelemetryService, LicenseService, CertificateService). Its 204
-  schema files are readable anonymously and give the exact property
-  vocabulary (§4, Appendix B). **Nothing below the service root could be read:
-  the account in `/opt/stacks/.xcc.env` answers every authenticated GET with HTTP 403
-  `Base.1.12.PasswordChangeRequired`** (first-login password change pending).
-  Clearing that is a human step in the XCC web UI and is item 0 of §10; the
-  suite never writes to a BMC.
+- **What the lab XCC answered.** A gen-1 ThinkSystem SE350 (machine type
+  7Z46) on XCC firmware 6.10 of August 2025, Redfish 1.15.0. The whole tree
+  was walked GET-only (425 resources, all HTTP 200) and **all twelve existing
+  collectors ran live: eleven `ok`, one `not-present` by its own rule, zero
+  failures, 30 GETs in ~30 s** (Appendix C). The walk settled the plan's
+  open questions (§4, §12) and measured the footprint: **779 Basic-auth GETs
+  wrote no entry to any BMC log**, so the risk raised in the first draft is
+  closed. The 204 schema files give the exact property vocabulary (Appendix
+  B). The account's first-login password change, which blocked the first
+  attempt, is done; it holds an OEM *Supervisor* privilege, so what a
+  ReadOnly-privilege account may read is the one thing still unverified.
 - **Catalog**: the twelve existing checks are renamed and widened, and ten
-  new ones close the layers a BMC uniquely sees (boot order, power-restore
-  policy and watchdogs, the Sensors collection, PCIe slots, network adapters,
-  local accounts and providers, alerting destinations, certificates,
-  licences, tasks). §5 has the table; roughly 60–100 paced GETs per BMC.
+  new ones close the layers a BMC uniquely sees (boot order, power policy and
+  watchdogs, the Sensors collection — which on this unit is the only view of
+  the external power adapters, the chassis-movement and lockdown states —
+  PCIe slots, network adapters, local accounts and providers, alerting
+  destinations, certificates, licences, tasks). §5 has the table with the
+  lab findings folded in; roughly 60–90 paced GETs per BMC.
 
 ## 1. Decisions taken and what follows from them
 
@@ -150,13 +155,17 @@ dropped.
    appear in the type dropdowns before relying on it (`SecretsGroup` is not
    decorated with the `relationships` feature explicitly; the capability
    comes from the model mixin, which 2.4 also has).
-5. **The BMC account**: a local XCC user with the built-in **ReadOnly** role
-   and Redfish/REST access enabled. **Its first-login password change must be
-   completed by a human** (XCC web UI → log in as the account → set the new
-   password, or as an administrator clear "change password on first access"
-   for it). Until then every authenticated GET is refused with
-   `Base.1.12.PasswordChangeRequired` (found on the lab unit 2026-09-30) and
-   the capture's probe hint will say exactly this.
+5. **The BMC account**: a local XCC user with a **ReadOnly** privilege (the
+   built-in ReadOnly role, or a custom role whose OEM privilege is ReadOnly —
+   on the lab unit roles CustomRole4–12 are such) and Redfish access
+   enabled. **Its first-login password change must be completed by a human**
+   (XCC web UI → log in as the account → set the new password, or as an
+   administrator clear "change password on first access" for it); until
+   then every authenticated GET is refused with
+   `Base.1.12.PasswordChangeRequired` (seen on the lab unit 2026-09-30 before
+   the user cleared it) and the capture's probe hint says exactly this. The
+   lab account walked the tree with the OEM *Supervisor* privilege; §7 item
+   1 repeats the walk with a ReadOnly-privilege account before production.
 6. Nothing changes for the ESXi record: platform `vmware`, `primary_ip` =
    vmk0, its own Secrets Group. `vmware_host_identity` already records
    `bmc_ip`/`bmc_mac` from `config.ipmi`, so the analyst can confirm the
@@ -176,7 +185,7 @@ dropped.
 | `jobs/creds.py` | `resolve_bmc_credentials(interface, device)`: find the `RelationshipAssociation` whose `relationship.key == BMC_SECRETS_RELATIONSHIP_KEY` and whose source *or* destination is the interface; the other end must be a `SecretsGroup`; then the existing `_secret(group, device, TYPE_USERNAME/TYPE_PASSWORD, "https")` cascade (pass the host Device as `obj` so templated secret providers keep working). Distinct messages for "no Relationship with that key exists" (operator must create it), "no association on interface X" and provider failures. The per-run `secrets_group` override stays host-only (documented). |
 | `jobs/context.py` | No change. The BMC runs in a **second `CollectorContext`** (`restconf=RedfishClient`, platform `"bmc"`), so `ctx.get`, the per-run cache, budgets and the trace all work unchanged and nothing is shared with the host's SOAP cache. |
 | `jobs/envelope.py` | `new_envelope` passes `device_info` through unchanged (the job builds the `bmc` block). `record_check(..., target="host")` writes `"target"` into every entry. One guide sentence: "checks whose target is 'bmc' were read out of band from the server's baseboard management controller at device.bmc.address; they describe the same physical server as the host checks, from the BMC's own view, and are valid whatever the host's power state unless the check's describe says otherwise." Schema 1.2. |
-| `jobs/transport_redfish.py` | `ping()`: anonymous root, then the authenticated **Systems collection**. `probe_get`: when the body is JSON, record `message_id` (`error.@Message.ExtendedInfo[0].MessageId`) and `message`. `probe_hint`: HTTP 403 with a `PasswordChangeRequired` message id → "the account's first-login password change is pending; complete it once in the BMC web UI (the suite never writes to a BMC), then re-run"; plain 403 keeps today's role hint. Nothing else changes; the CI fence guard (one `session.get` site, `fence_path` before send) stays as is. |
+| `jobs/transport_redfish.py` | `ping()`: anonymous root, then the authenticated **Systems collection**. `probe_get`: when the body is JSON, record `message_id` (`error.@Message.ExtendedInfo[0].MessageId`) and `message`. `probe_hint`: HTTP 403 with a `PasswordChangeRequired` message id → "the account's first-login password change is pending; complete it once in the BMC web UI (the suite never writes to a BMC), then re-run"; plain 403 keeps today's role hint. The docstring's claim that every Basic-auth GET is an audit-log entry is corrected: on XCC 6.10 the walk's 779 GETs wrote nothing to any log (§6); the pacing stays as prudence. Nothing else changes; the CI fence guard (one `session.get` site, `fence_path` before send) stays as is. |
 | `jobs/redfish_paths.py` | No change needed: `?$expand=.($levels=2)` already passes the query grammar; `$filter` stays refused (unused). Add a test pin for the `$levels=2` form. |
 | `jobs/checks_bmc.py` (rename of `checks_xcc.py`) | Ids `bmc_*` (§5). New shared helper `_targets(ctx)`: GET `/redfish/v1/` (vendor, product, features), `Systems`, and resolve `system_id`; then `Links.ManagedBy[0]` / `Links.Chassis[0]` from the system resource, falling back to the single member of `Managers` / `Chassis` (record `resolution` in every check's context via a small `_target_context`). A collection with several members and no link: prefer `1`, else `System.Embedded.1`, else the first sorted, and say so. All `_SYSTEM`/`_MANAGER`/`_CHASSIS` constants become functions of the resolved ids; the shakedown's imports of those names change accordingly. OEM branches: `vendor = root.Vendor`; Lenovo paths only under `vendor == "Lenovo"`; other vendors → `SkipCheck("no <vendor> mapping for …")` for OEM-only reads, DMTF reads unchanged. |
 | `jobs/registry.py` | `CheckDef.platform` comment; SEMANTICS keys renamed; new entries (> 40 chars, contract-tested). |
@@ -212,91 +221,127 @@ if bmc_checks:
 record_transport for every transport with a footprint; attach the same three artifacts as today
 ```
 
-## 4. What the lab XCC told us on 2026-09-30
+## 4. What the lab XCC told us (walk of 2026-09-30)
 
-Facts, so the builder does not have to rediscover them:
+Facts the builder can rely on. The unit: ThinkSystem SE350, machine type
+7Z46 (gen-1), one Xeon D-2123IT (4 cores / 8 threads), 64 GiB in two of four
+DIMM slots, four SATA M.2 drives, onboard X722 (2×10G SFP+) and I350 (2×1G)
+LOMs plus a Realtek RTL8125 2.5G NIC in the PCIe x16 slot, UEFI HYE140C, XCC
+firmware `TEI3G4D 6.10 2025-08-08` (release `purley_gp_23-2`). The host was
+powered on and booted; its UEFI boot order names Proxmox and TrueNAS entries,
+so the lab box is exactly the future host platform this plan must not
+preclude. Everything below was read with the account in
+`/opt/stacks/.xcc.env` (OEM privilege *Supervisor*).
 
-- Reachable over HTTPS; the service root answers anonymously in ~150 ms.
-  `RedfishVersion 1.15.0`, `ServiceRoot.v1_13_0`, `Vendor Lenovo`,
+### 4a. Service, account, footprint
+
+- Service root anonymous in ~150 ms; `RedfishVersion 1.15.0`;
   `ProtocolFeaturesSupported`: ExpandQuery (ExpandAll, Links, Levels, NoLinks,
-  MaxLevels 2), SelectQuery, FilterQuery, ExcerptQuery, OnlyMemberQuery,
-  DeepOperations (irrelevant: never used). Root links: Systems, Chassis,
-  Managers, UpdateService, AccountService, EventService, TaskService,
-  JobService, TelemetryService, LicenseService, CertificateService,
-  Registries, JsonSchemas, SessionService. So the `$expand` strategy the
-  collectors already prefer is the right one, and `$levels=2` can inline
-  `PCIeDevices → PCIeFunctions` and `NetworkAdapters → Ports/DeviceFunctions`.
-- The account in `/opt/stacks/.xcc.env` is blocked, not the device: every authenticated GET (Systems,
-  Chassis, Managers, UpdateService, AccountService, …) returned HTTP 403 with
-  `Base.1.12.PasswordChangeRequired` pointing at
-  `/redfish/v1/AccountService/Accounts/3`. Only a PATCH of the password
-  clears it, which the suite must never do. Human step (§2 item 5), then
-  everything in §7 becomes possible. Until then the unit's model, generation,
-  host power state, member ids and collection sizes are **unknown**.
-- `/redfish/v1/$metadata` and its 204 referenced schema files under
-  `/redfish/v1/metadata/` are anonymous. They are the authoritative list of
-  resource types and properties this firmware implements (a service only
-  references what it serves). Highlights, with the schema version served:
-  ComputerSystem 1.17 (PowerRestorePolicy, HostWatchdogTimer, Boot.BootOrder,
-  BootOptions, LastResetTime, BootProgress, PowerOn/Off/CycleDelaySeconds,
-  SerialConsole/GraphicalConsole/VirtualMediaConfig, TrustedModules,
-  PowerMode, IdlePowerSaver, KeyManagement), Chassis 1.19 (Sensors,
-  PCIeSlots, NetworkAdapters, PowerSubsystem, ThermalSubsystem,
-  EnvironmentMetrics, Controls, Drives, PhysicalSecurity, Location,
-  LocationIndicatorActive, Certificates), Manager 1.14, ManagerNetworkProtocol
-  1.8 (HTTP/HTTPS/SSH/SNMP/IPMI/VirtualMedia/KVMIP/SSDP/NTP/DHCP/DHCPv6/RDP/RFB/Proxy),
-  Sensor 1.5 with Thresholds, PowerSupply 1.3 + PowerSupplyMetrics, Fan 1.1,
-  ThermalMetrics (TemperatureSummaryCelsius Intake/Exhaust/Ambient/Internal),
-  Power 1.7 and Thermal 1.7 (the legacy resources the current checks read
-  are still served), PCIeSlots 1.5, PCIeDevice 1.9, PCIeFunction 1.3,
-  NetworkAdapter 1.9 (Controllers[].FirmwarePackageVersion, LLDPEnabled),
-  NetworkPort 1.4, NetworkDeviceFunction 1.8, Port 1.6, Memory 1.14 +
-  MemoryMetrics, Processor 1.14 (ProcessorId.MicrocodeInfo, TDPWatts,
-  TurboState) + ProcessorMetrics, Storage 1.14, Drive 1.14, Volume 1.7,
-  StoragePool, Bios 1.2 (ResetBiosToDefaultsPending) + AttributeRegistry +
-  Settings (pending), SecureBoot 1.1 (**no** SecureBootDatabases schema:
-  not served), BootOption 1.0, Certificate 1.5 + CertificateLocations,
-  License 1.0 + LicenseService, EventService 1.7 (SMTP block) +
-  EventDestination 1.11 (SNMP, Syslog filters), LogService 1.3 + LogEntry
-  1.11, Job/JobService, Task/TaskService, TelemetryService +
-  MetricReportDefinition/MetricReport/Triggers, AccountService 1.10 +
-  ManagerAccount 1.8 (PasswordChangeRequired, AccountTypes) + Role +
-  ExternalAccountProvider 1.3, HostInterface 1.3, SerialInterface,
-  VirtualMedia 1.5, SoftwareInventory 1.6, UpdateService 1.11, Assembly,
-  Redundancy, Endpoint/Fabric/CompositionService (rarely populated).
-- Lenovo OEM types (Appendix B has every property): `LenovoSecurityService`
-  on this firmware carries **TLS/crypto mode, SSL enablement, firmware
-  rollback and encapsulation settings — no ThinkEdge lockdown, motion,
-  intrusion or SED properties**. So on this unit `xcc_security_state` would
-  read not-present by its own rule, which is why §5 turns it into a generic
-  "flatten every leaf" security check with the ThinkEdge fields as optional
-  named extras. Also served: `LenovoAlertRecipient` (email/syslog recipients
-  with per-severity event filters), `LenovoSNMPProtocol` (agent, traps,
-  targets, community names), `LenovoDNS`, `LenovoSMTPClient`,
-  `LenovoLDAPClient`, `LenovoDateTimeService`, `LenovoScheduledPowerAction`,
-  `LenovoWatchdog`, `LenovoBootManager` (BootOrderCurrent/Next/Supported),
-  `LenovoFoDService`/`LenovoFoDKey` (feature tier and keys),
-  `LenovoLED`/`LenovoSlot` under Chassis, `LenovoPortForwarding`,
-  `LenovoRemoteControlService`/`RemoteMap`, `LenovoConfigurationService`
-  (backup/restore status), `LenovoServerProfileService`, `LenovoUpdateService`
-  (XCCBackupAutoPromote), `LenovoAccountService` (password policy incl.
-  `PasswordChangeOnFirstAccess`, `CurrentLoggedUsers`), `LenovoLogService`
-  (Platform/Audit first and last sequence numbers, `EnableSELWrapping`),
-  `LenovoLogEntry` (CommonEventID, FailingFRU, EventSequenceNumber),
-  `LenovoMemory` (FRU part number, manufacture date, MPFA health),
-  `LenovoProcessor`, `LenovoNetworkPort` (PhysicalPortMacAddress),
-  `LenovoEthernetInterface` (NIC mode dedicated/shared, failover mode,
-  OSIPv4Address), `LenovoPower` (Capabilities.PowerRestorePolicy,
-  WakeOnLAN, PowerUtilization capping), `LenovoRedundancy`
-  (PowerRedundancySettings), `LenovoStorage` (controller battery, RAID
-  levels), `LenovoVolume`, `LenovoDrive` (temperature, SMART), `LenovoBios`
-  (admin/power-on password *set* flags), `LenovoComputerSystem`
-  (NumberOfReboots, TotalPowerOnHours, SystemStatus, TPMSettings,
-  FrontPanelUSB, ScheduledPowerActions, BootSettings),
-  `LenovoManager` (KCSEnabled, TrespassMessage, AgentlessCapabilities,
-  release_name, links to every OEM service above).
-- The raw crawl output (`xcc-crawl/`), the schema files and the property
-  dump live only in this session's scratchpad; Appendix B keeps what matters.
+  MaxLevels 2), SelectQuery, FilterQuery, ExcerptQuery, OnlyMemberQuery. Root
+  links: Systems, Chassis, Managers, UpdateService, AccountService,
+  EventService, TaskService, JobService, TelemetryService, LicenseService,
+  CertificateService, Registries, JsonSchemas, SessionService. One member
+  each in Systems (`1`), Managers (`1`), Chassis (`1`).
+- **`$expand=.($levels=1)` inlines a collection's members; `$levels=2` does
+  not inline a member's own sub-collections** (PCIeDevices → PCIeFunctions
+  and NetworkAdapters → Ports/NetworkDeviceFunctions come back as links), so
+  those are read with one `$expand` GET per sub-collection. `$expand` on the
+  89-member Sensors collection is one 55 KB answer that takes ~11 s (well
+  inside `REDFISH_GET_TIMEOUT`; the per-member fallback would exceed the
+  40-GET budget, so `$expand` is mandatory there).
+- 425 resources, every one HTTP 200 for this account; typical answer 100–250
+  ms. The one first-attempt failure was the account's pending first-login
+  password change (`Base.1.12.PasswordChangeRequired`), cleared by the user.
+- **Footprint: 779 Basic-auth GETs (the walk) plus the 30 of the live
+  collector run added no entry to the StandardLog** — its platform sequence
+  number stayed at 140 and its audit sequence number moved by one, which
+  was the user's own web-UI logoff. Redfish Basic auth creates no session
+  either (`AccountService.Oem.Lenovo.CurrentLoggedUsers` listed only the
+  web session). The first draft's worry about log churn (old §6) is closed
+  for this firmware; the pacing stays as prudence.
+- Registries served: Base 1.12.1, ResourceEvent, ExtendedError, TaskEvent,
+  EventRegistry, LenovoPrivilegeRegistry, LenovoFirmwareUpdateRegistry,
+  LenovoExtendedWarning, BiosAttributeRegistry 1.0.0, License, LogService.
+
+### 4b. What is served, what is not
+
+| Area | Served on this firmware | Absent or empty (record as such, never fail on it) |
+| --- | --- | --- |
+| System | `Systems/1`: identity, `PowerState`, `Boot` (override enabled/target/mode, `AutomaticRetryConfig`), `HostWatchdogTimer`, `TrustedModules` (TPM2_0, firmware null), `ProcessorSummary`/`MemorySummary` with `Metrics` links, `Oem.Lenovo` (`NumberOfReboots`, `TotalPowerOnHours`, `SystemStatus` = `OSBooted` on this Proxmox host, `TPMSettings`, `FrontPanelUSB`, links `BootSettings`, `ScheduledPowerActions`, `Metrics`, `HistorySysPerf`), `PCIeDevices`/`PCIeFunctions` as link arrays, `NetworkInterfaces` (3, one per adapter), `VirtualMedia` | `PowerRestorePolicy`, `PowerMode`, `LastResetTime`, `BootProgress`, `PowerOn/Off/CycleDelaySeconds`, `SerialConsole`/`GraphicalConsole`/`VirtualMediaConfig`, `Boot.BootOrder`, `Boot.BootOptions` (no BootOptions collection at all), `SecureBootDatabases`, `Systems/1/PCIeDevices` collection |
+| Boot | Lenovo `Oem/Lenovo/BootSettings`: five members (`BootOrder.BootOrder` with `BootOrderCurrent`/`BootOrderNext`/`BootOrderSupported` naming the OS entries, plus HardDisk, Network, CD/DVD and USB sub-orders whose strings embed device model and serial); `SecureBoot` (`SecureBootEnable`, `CurrentBoot`, `Mode`); VirtualMedia `RDOC1`/`RDOC2` under both `Managers/1` and `Systems/1` (`Inserted`, `ConnectedVia`, `Image`, `WriteProtected`); `RemoteControl.MountImages` (0) | DMTF boot order and options (above) |
+| Manager | `Managers/1`: `FirmwareVersion`, `DateTime`/`DateTimeLocalOffset`/`AutoDSTEnabled`, `Links.ActiveSoftwareImage` + `SoftwareImages` (2), `EthernetInterfaces` (`NIC` dedicated static, `ToHost` 100 Mb/s USB LAN with `OSIPv4Address` and 14 `PortForwardingMap` rows), `HostInterfaces/1` (`CredentialBootstrapping` **enabled with RoleId Administrator**, `ExternallyAccessible` false), `SerialInterfaces/1` (115200 8N1, Lenovo CLI mode), `NetworkProtocol` (§4c), `Oem.Lenovo` scalars `KCSEnabled`, `TrespassMessage`, `release_name`, `ServiceAdvisor` and links `Configuration`, `DateTimeService`, `FoD`, `Recipients`, `RemoteControl`, `SecureKeyLifecycleService`, `Security`, `ServerProfile`, `ServiceData`, `SsoCertificates`, `Watchdogs` | `Managers/1/LogServices` is the same collection as the system's (the link points there); `TimeZoneName`, `LastResetTime`; `RemoteMap`, `AgentlessCapabilities`, `MPFAHealthStatusEnabled` not present in this release |
+| Chassis | `Chassis/1`: type `StandAlone`, `EnvironmentalClass`, `HeightMm`, `Location` (`Placement.Rack/RackOffset/RackOffsetUnits`, `PostalAddress.Building/Location/Name/Room`, `Contacts`), `IndicatorLED`, `Oem.Lenovo` (`FruPartNumber`, `HasSwitchBoard` false, `ProductName`, `SystemBoardSerialNumber`, links `LEDs` (4: BMC Heartbeat, Identify, Power, Fault — colour and state) and `Slots` (6: five M.2 sockets and the PCIe x16, with connector layout and width)), `PCIeSlots` (one slot, `PartLocation.ServiceLabel` "PCIe 6", status, link to its device), `PCIeDevices` (4: the BMC VGA, the two LOMs, the slot-6 NIC; identity strings null on two of them — the function rows carry vendor/device ids), `NetworkAdapters` (3), `Sensors` (89), `Controls` (1: `PowerLimit`, programmable, sensor-backed), `EnvironmentMetrics`, `ThermalSubsystem` (`Fans` 3, `ThermalMetrics`), `PowerSubsystem` (status and the Lenovo power capability flags only) | `PhysicalSecurity` (no DMTF intrusion field — the "Chassis" and "Chassis Movement" discrete sensors carry it), `Chassis/1/Drives`, `PowerSubsystem/PowerSupplies`, `Memory` under Chassis links to the system's collection |
+| Environment | `Thermal` (3 temperatures: Ambient/Intake, CPU Temp, **CPU DTS — a negative margin, not a temperature**; 3 fans in RPM; no redundancy group), `Power` (**no PowerSupplies at all** — the SE350's external adapters are not modelled there —, 4 voltage rails with thresholds, 3 `PowerControl` members with consumed watts for server, CPU and memory, `Oem.Lenovo` `LocalPowerControlEnabled`/`PowerOnPermissionEnabled`/`WakeOnLANEnabled`), `Sensors`: 21 numeric (temperature, voltage, fan tach as `AirFlow`, watts typed `Current`, presence sensors typed `Power`) and **68 discrete** (`ReadingType` null, `Reading` 0, `Status` only) covering DIMM and M.2 slots, drive keys, riser, LOM link, `Lockdown Mode`, `Chassis Movement`, `Low Security Jmp`, TPM, Secure Boot and firmware error latches, SEL fullness, watchdog, utilisation; thresholds only on the environmentals (ambient caution/critical/fatal, rail limits, fan lower critical, CMOS battery) | `PowerControl[].PowerLimit`, `Redundancy`, `PowerSupplyMetrics` |
+| Inventory | `Memory` (4 members: **two `Absent` slots are listed** with null identity), DIMM leaves incl. `AllowedSpeedsMHz`, `RankCount`, `BaseModuleType`, `Location.PartLocation.ServiceLabel`, `Oem.Lenovo` FRU part number / manufacture date / MPFA; `Processors/1` with `ProcessorId` (family/model/step/registers; **`MicrocodeInfo` null**), `TDPWatts`, `MaxSpeedMHz`, `Oem.Lenovo` cache table and current clock, `ProcessorMetrics` (temperature, consumed watts); `PCIeFunctions` per device (6 total) with `DeviceClass`, `ClassCode`, `VendorId`/`DeviceId`, `FunctionType` Physical | — |
+| L1 | `NetworkAdapters/{ob-2,ob-4,slot-6}` with `Controllers[0]` (`FirmwarePackageVersion` "1.2203.0" / "N/A" / "", capabilities counts, location), `NetworkPorts` (`LinkStatus` Down, `CurrentLinkSpeedMbps` null, capable speeds), `Ports` (`LinkStatus` NoLink, `MaxSpeedGbps`, `Ethernet.AssociatedMACAddresses`), `NetworkDeviceFunctions` (permanent and current MAC, MTU, enabled, links to the host EthernetInterface and PCIeFunction); **the slot-6 adapter has zero ports and functions** — the BMC has no sideband to it, and it is the NIC the host actually runs on, which is why every LOM port reads NoLink with the host up; `Systems/1/EthernetInterfaces` (`ToManager` 100 Mb/s plus `NIC1`–`NIC4`, all NoLink, `SpeedMbps` null) | — |
+| Storage | `Storage` has four members `M.2_Slot_2`…`_5`, each one AHCI `StorageControllers[0]` (identity fields null, `SupportedDeviceProtocols` SATA) and one drive (`CapacityBytes`, `MediaType` SSD, `Model`, `PartNumber`, `SerialNumber`, `FailurePredicted`, `HotspareType`, `PhysicalLocation`), empty `Volumes` and `StoragePools`; drive firmware appears in `FirmwareInventory` as `Disk1`–`Disk4` | `Storage/*/Controllers` collection, `EncryptionAbility`/`EncryptionStatus` (null), `Chassis/1/Drives` |
+| Firmware | `FirmwareInventory` 15 members: `BMC-Primary`, `BMC-Primary-Pending` (version null, state Disabled), `BMC-Backup` (StandbySpare), `UEFI`, `UEFI-Pending`, `LXPM`, `LXPMWindowsDriver`, `LXPMLinuxDriver`, `Ob_2.1`/`Ob_2.2` (X722 option ROM and Etrack id), `Ob_4.1` (I350, "N/A"), `Disk1`–`Disk4`; `UpdateService.Oem.Lenovo.XCCBackupAutoPromote`, `FirmwareServices` (1) | `SoftwareInventory` |
+| Logs | `Systems/1/LogServices`: **StandardLog** (2048, WrapsWhenFull, `LogEntryType` Multiple — platform *and* audit entries in one log, told apart by `Oem.Lenovo.LogType` `StardandLogEntry-Platform` / `-Audit` (sic); the service's `Oem.Lenovo` carries `PlatformFirstSeqNum`/`PlatformLastSeqNum`, `AuditFirstSeqNum`/`AuditLastSeqNum`, hidden-entry counters, `EnableSELWrapping`; entry `Id` is the combined `TotalSequenceNumber`, `EventSequenceNumber` counts per type; 311 entries on this unit, every one Severity OK; codes such as FQXSPSD0000I drive added, FQXSPPW0001I supply added, FQXSPPW0008I/2008I host power off/on, FQXSPPP4034I "powered off for an unknown reason", FQXSPEM4009I UEFI definitions changed, FQXSPSE4001I/4032I/4059I login, logoff and password change **with user names and client addresses in the Message**); **ActiveLog** (1024; unresolved conditions; empty here); **MaintenanceLog** (750; firmware-update and configuration history such as "LXPM firmware is updated to … by XCC Web"; no severity or OEM block); **DiagnosticLog** (3 download pointers: FFDC, FailureScreen, MPFA); **SaLog** (5, empty); **SEL** (511, NeverOverWrites, no Entries link) | `PlatformLog` (the name the current collector prefers — its StandardLog fallback is what ran) |
+| Services | `NetworkProtocol` (§4c), `Oem.Lenovo.Security` (`CryptographyManagement` TLS mode NIST / min TLS 1.2, `SSLSettings` HTTPS on / LDAPS off / CIM off, `Configurator.FWRollback` Enabled, `EncapSettings`, capabilities — **no ThinkEdge lockdown/motion properties**), `SecureKeyLifecycleService` (certificate collections only), `Watchdogs` (4: OS boot, OS, BIOS boot, IPMI with timer values and expired flags), `ScheduledPowerActions` (3, not activated) mirrored as `JobService/Jobs` `PowerOff`/`PowerOn`/`Restart` (Suspended, weekday schedule), `Configuration` (backup/restore status), `ServerProfile` (disabled), `ServiceData`, `RemoteControl` (enabled; sessions and mount images empty), `FoD` (Tier1, no keys), `DateTimeService` (NTP sync, servers, UTC offset, DST) | `Recipients` empty, `SsoCertificates` empty, `TaskService/Tasks` empty, `LicenseService/Licenses` empty, `TelemetryService.ServiceEnabled` false (12 report definitions and 6 reports exist, values empty) |
+| Accounts | `AccountService`: lockout 10 / 60 / 60, password length 6–32, `LocalAccountAuth`, `LDAP` (username-and-password auth type, search settings, 16 `RemoteRoleMapping` rows), `OAuth2` link, `Oem.Lenovo` password policy (expiration, reuse cycle, change interval, first-access and next-login flags, complexity, web inactivity timeout) and `CurrentLoggedUsers`; `Accounts` 12 (3 enabled, all three with OEM privilege *Supervisor*, 9 disabled); `Roles` 31 (`Administrator`, `Operator`, `ReadOnly` predefined; `CustomRole1`–`12`, `GroupRole1`–`16`) with `AssignedPrivileges` and `OemPrivileges` (`Supervisor` or `ReadOnly`) | `ActiveDirectory`, `TACACSplus`, `AdditionalExternalAccountProviders` |
+| Alerting, PKI, licences | `EventService` (enabled, retry 3 / 60 s, `SMTP` block with server, from address, port, auth method), `CertificateService/CertificateLocations` → one HTTPS server certificate (PEM, self-signed, validity 2020–2030, key usage; **no fingerprint or signature algorithm on this firmware**), `LicenseService` (enabled, warning days 0) | `Subscriptions` empty, `Recipients` empty, SNMP traps off with empty targets, every other certificate collection empty |
+
+### 4c. `NetworkProtocol` as served
+
+DMTF blocks with `ProtocolEnabled`/`Port`: DHCP (off), DHCPv6 (off), HTTP 80
+(on), HTTPS 443 (on, `Certificates` link), IPMI 623 (off), KVMIP 3900 (on),
+NTP (on, one server), SSDP 1900 (off, with notify scope/interval/TTL), SSH 22
+(on), VirtualMedia 3900 (on). The DMTF `SNMP` block carries **no
+`ProtocolEnabled`** on this firmware (the current collector reads null there);
+the Lenovo block does: `Oem.Lenovo` has `CimOverHTTPS` 5989 (off), `SLP` 427
+(off), `SFTP` 115 (off), `WebOverHTTPS` (on), `OpenPorts` (22, 80, 443, 3389,
+3900, 5900), and links `DNS` (DNS disabled, DDNS, LXCA discovery), `LDAPClient`
+(anonymous binding, pre-configured servers, search attributes), `SMTPClient`
+(enabled, unconfigured server, CRAM-MD5 not required) and `SNMP` (v3 agent
+off, traps off, empty targets, `CommunityNames` present). `NameServers` and
+`StaticNameServers` on the NIC hold placeholder `::` and `0.0.0.0` entries
+for unset slots.
+
+### 4d. What the existing collectors did live
+
+Run through a real `CollectorContext` and `RedfishClient` from this box
+(Appendix C has the per-check table): eleven `ok`, `xcc_security_state`
+`not-present` (the Security resource carries no ThinkEdge properties — the
+rule the check was written with), no failures, 30 GETs, every collection
+answered by one `$expand` GET. Normalizer facts worth carrying into the
+build:
+
+- `xcc_system`: 38 scalars; `xcc_health` reads the Manager's `State`
+  (`Enabled`) because the Manager has no `Status.Health`; the boot override
+  trio, SecureBoot trio and `system_status` (`OSBooted`) all populated;
+  `eth_member_used` `NIC`.
+- `xcc_thermal`: keys `temp|Ambient Temp`, `temp|CPU Temp`, `temp|CPU DTS`
+  (its reading is a negative margin — context only, as designed, but the
+  SEMANTICS should say what DTS is), `fan|Fan N Tach` (RPM, lower critical
+  1552).
+- `xcc_power`: four `voltage|` keys only; no `psu|`, no `redundancy|`;
+  consumed watts in context. The adapters live in `bmc_sensors`.
+- `xcc_inventory`: `dimm|1`–`4` (two Absent with null identity — the
+  behaviour the plan wanted), `cpu|1`, `pcie|ob_1`, `ob_2`, `ob_4`, `slot_6`.
+- `xcc_host_nics`: `nic|NIC1`–`NIC4`, all `NoLink` with the host up (see 4b:
+  the host runs on the slot-6 NIC the BMC cannot see); `ToManager` excluded.
+- `xcc_storage`: four `controller|M.2_Slot_N` (identity null) and four
+  `drive|Drive.Slot_N`; volumes 0.
+- `xcc_firmware`: all 15 members keyed, the `-Pending` ones with version
+  None on both sides.
+- `xcc_event_log`: 0 keyed entries (nothing Warning/Critical), 312 counted
+  by code in context, `log_service_used` StandardLog, `first_seq_num` /
+  `last_seq_num` **null because this firmware spells them
+  `PlatformFirstSeqNum`/`AuditLastSeqNum` etc.**; the newest raw rows carry
+  login, logoff and password-change messages with user names and client
+  addresses — the redaction item in §5a is a real leak today, not a
+  hypothetical one.
+- `xcc_bios`: 20 of 126 attributes selected by the token list; registry
+  `BiosAttributeRegistry.1.0.0`; `@Redfish.Settings.SettingsObject` points at
+  `Systems/1/Bios/Pending` (the full attribute set as it will apply
+  `OnReset`, with the time of the last apply).
+- `xcc_manager_network`: 38 scalars; `dns_servers` reads the `::`
+  placeholders and `static_dns_servers` the `0.0.0.0`/`::` placeholders
+  verbatim (drop unset placeholders), `snmp_enabled` null (read the Lenovo
+  SNMP block), `ipv4_origin` Static, VLAN disabled.
+- `xcc_chassis_location`: 20 scalars; `postal_*` and `placement_*` leaves
+  populated (`placement_rack_offset` 1, units EIA_310); `intrusion_sensor`
+  null (no `PhysicalSecurity`).
 
 ## 5. The catalog
 
@@ -322,15 +367,79 @@ assume `$expand`; the per-member fallback is what the budget sizes for.
 | `bmc_manager_network` (`xcc_manager_network`, split) | 2 | Addressing and time only: the NIC (as today) plus Lenovo `nic_mode` (dedicated/shared), `failover_mode`, `ipv4_assigned_by`, `domain_name`, `hostname_from_dhcp`; DNS (DMTF `NameServers`/`StaticNameServers` plus Lenovo DNS enable, preferred family, servers 1–3, DDNS, LXCA discovery); NTP (`NetworkProtocol.NTP` plus Lenovo `DateTimeService`: setting method, servers, UTC offset, DST); `Manager.DateTime`/`TimeZoneName` in context; `os_ipv4_address` (Lenovo, the host as the BMC sees it) in context; `HostInterfaces` (USB LAN: enabled, externally accessible, address). |
 | `bmc_security` (`xcc_security_state`) | 1 | **Every scalar leaf of the vendor security resource keyed by dotted path** (`security|CryptographyManagement.TLSSecurityMode`, `security|SSLSettings.EnableHttps`, …; lists sorted) so the TLS mode, LDAPS, CIM-over-HTTPS, firmware-rollback and encapsulation settings this firmware serves are all captured; the ThinkEdge names (lockdown, motion, intrusion, SED) stay as optional first-class scalars found by the existing candidate lists, and `context.property_sources` keeps saying which leaf fed which. `sklm|…` leaves from `SecureKeyLifecycleService` (servers, protocol, EKMS polling/cache settings, certificate counts; never a key). `not-present` only when the vendor has no security resource at all. |
 
+Lab notes for §5a (what the walk adds or corrects per check):
+
+- `bmc_system`: the DMTF power-restore, delays, console and last-reset
+  leaves are **absent on XCC 6.10** — emit them None, never assume. The
+  Manager has no `Status.Health`, so name the field `xcc_state` or document
+  the fallback. `SystemStatus` reads `OSBooted` on a Proxmox host, so the
+  SEMANTICS sentence about `BootingOSOrInUndetectedOS` becomes "a value the
+  firmware reports, verbatim".
+- `bmc_chassis`: `PhysicalSecurity` is absent; the tamper facts are the
+  `Chassis` and `Chassis Movement` discrete sensors (`bmc_sensors`). The
+  four LEDs and six Slots collections are served and small.
+- `bmc_inventory`: `PCIeFunctions` need one `$expand` GET per device
+  (`$levels=2` does not inline them); `MicrocodeInfo` is null on this
+  firmware; the BMC VGA and the slot-6 NIC have null `Manufacturer`/`Model`
+  on the device — key the function rows, whose vendor/device ids identify
+  the part.
+- `bmc_host_nics`: SEMANTICS must say that NoLink on every LOM port with
+  the host up is legitimate when the OS runs on an adapter the BMC has no
+  sideband to (the slot-6 Realtek here), and that `Systems/1/NetworkInterfaces`
+  maps 1:1 to `Chassis/1/NetworkAdapters`.
+- `bmc_firmware`: keep the `-Pending` members (a version appearing there is
+  a staged update); `SoftwareInventory` is absent here — optional read.
+- `bmc_event_log`: read `Oem.Lenovo.Platform*/Audit*SeqNum` (the
+  `FirstSeqNum`/`LastSeqNum` spelling the check expects is not served);
+  record each keyed entry's `log_type`; add the **ActiveLog** (unresolved
+  conditions — key every entry whatever its severity, `active|<code>|<Id>`,
+  empty is the healthy state) and the **MaintenanceLog** (firmware-update and
+  configuration history: newest rows in raw, counts and newest timestamp in
+  context — `bmc_firmware` carries the diff); the SEL service has no
+  `Entries` link on this firmware, so it is a probe only; **redact `Login
+  ID: <x>`, `by user <x>` and `User <x> password modified by user <y>` in
+  every Message before raw and trace** — those rows exist on the lab unit.
+- `bmc_bios`: 126 attributes here (`DevicesandIOPorts` 45, `Processors` 18,
+  per-LOM option-ROM families 10 each, `Memory` 10, `NetworkStackSettings`,
+  `Power`, `SecureBootConfiguration`, `SystemRecovery`,
+  `TrustedComputingGroup`, …); the pending set is `Systems/1/Bios/Pending`
+  (full attributes; pending = differs from current; `@Redfish.Settings.Time`
+  in context); `Oem.Lenovo.IsUefiAdminPasswordSet` / `IsUefiPowerOnPasswordSet`
+  are booleans and must survive the secret scrub (§5b hygiene).
+- `bmc_storage`: non-RAID M.2 SATA drives enumerate as one `Storage` member
+  per slot with one AHCI controller (identity null) and one drive; `Volumes`
+  and `StoragePools` are empty collections, `Controllers` is absent,
+  `Chassis/1/Drives` is absent, encryption leaves are null. Drive firmware
+  is in `bmc_firmware` (`Disk1`–`Disk4`), so join by drive model there.
+- `bmc_thermal`: mark `CPU DTS`-style sensors (name contains `DTS`, or a
+  negative reading) as margins in context; `ThermalMetrics.TemperatureSummaryCelsius`
+  gives Ambient/Intake (Exhaust null) — context.
+- `bmc_power`: no supplies on an SE350 — the `psu|` family is legitimately
+  empty and the check must not fail on it (today it succeeds because the
+  voltage rails populate); the external adapters' presence is the two
+  `Power Adapter N` discrete sensors in `bmc_sensors`. `PowerSubsystem` has
+  no `PowerSupplies` collection either.
+- `bmc_manager_network`: drop `::` / `0.0.0.0` placeholders from the DNS
+  lists; the DMTF `SNMP` block has no `ProtocolEnabled` (read the Lenovo
+  block); add the `HostInterfaces/1` facts (`CredentialBootstrapping.Enabled`
+  and its `RoleId` — Administrator on the lab unit — is a security-posture
+  key), `InterfaceNicMode`, `InterfaceFailoverMode`, `DateTimeService`.
+- `bmc_security`: the flatten yields eight leaves on this firmware (TLS
+  mode and minimum level, HTTPS/LDAPS/CIM enablement, firmware rollback,
+  encapsulation mode and whitelist, supported actions);
+  `SecureKeyLifecycleService` has only certificate collections here; the
+  ThinkEdge lockdown/motion facts are discrete sensors (`Lockdown Mode`,
+  `Chassis Movement`) and belong to `bmc_sensors` — say so in SEMANTICS.
+
 ### 5b. New checks
 
 | Id | Tier | Source (GETs) | Normalized view | Context | Why it is worth a check (general value) |
 | --- | --- | --- | --- | --- | --- |
-| `bmc_boot` | 1 | `Systems/<id>` (cached), `Boot.BootOptions` collection expanded (1), Lenovo `Oem.Lenovo.BootSettings` collection expanded (1), `Managers/<id>/VirtualMedia` or `Systems/<id>/VirtualMedia` expanded (1), Lenovo `RemoteMap` mount images (1) | scalars `boot_order` (ordered list), `boot_override` / `_target` / `_mode`, `boot_next`, `automatic_retry_config` / `_attempts`, `stop_boot_on_fault`, `trusted_module_required_to_boot`, `http_boot_uri`, Lenovo `boot_order_current` / `boot_order_next`; `option|<BootOptionReference>` → display_name, enabled, uefi_device_path, alias; `vmedia|<Id>` → inserted, image (userinfo stripped), media_types, connected_via, write_protected; Lenovo `mount|<Id>` → path, mounted, readonly | `boot_order_supported`, `remaining_automatic_retry_attempts` | Consumed by every reload, firmware, disk or defaults-load change; a reordered boot list or a leftover mounted ISO is the classic "came back on the wrong device" cause, invisible from the OS; stable between healthy captures; 4–5 GETs. |
-| `bmc_power_policy` | 1 | `Systems/<id>` (cached), `Chassis/<id>/Power` (cached), `Chassis/<id>/Controls` expanded (1), Lenovo `Systems/<id>.Oem.Lenovo.ScheduledPowerActions` expanded (1), Lenovo `Managers/<id>.Oem.Lenovo.Watchdogs` expanded (1) | scalars `power_restore_policy` (DMTF and Lenovo `Power.Oem.Lenovo.Capabilities`, both), `wake_on_lan`, `power_on_permission`, `local_power_control`, `random_delay`, `host_watchdog_*`, `power_limit_w` / `power_limit_exception` / `power_capping_enabled` / `limit_mode` / `guaranteed_w`, `power_redundancy_policy` / `max_power_limit_w` / `power_failure_limit`; `control|<Id>` → control_type, control_mode, set_point, set_point_units, allowable min/max; `sched|<Id>` → type, activated, interval, time; `watchdog|<Id>` → type, state, timer_s, timeout_interval_s | `watchdog_expired` flags, `non_redundant_available_power_w`, readings of every Control | Consumed by every power event and any change that reboots or re-powers a server: whether the host returns after an AC loss, whether a cap or a scheduled power action can bite, whether a watchdog reset is armed; all configuration, so it diffs to nothing between healthy captures; 3 GETs. |
-| `bmc_sensors` | 1 | `Chassis/<id>/Sensors?$expand=.($levels=1)` (1; per-member fallback needs the budget raised to the collection size, reported by the shakedown), `Chassis/<id>/EnvironmentMetrics` (1) | `sensor|<Id>` → reading_type, physical_context (+ sub-context), state, health, reading_units, thresholds (non-null caution/critical/fatal readings, snake-cased), and `reading` only for ambient/intake/inlet/exhaust-class temperature sensors (8 °C tolerance, the `bmc_thermal` rule) | every reading (`readings` by key, with `ReadingTime`), peak readings, `environment` (chassis power W, energy kWh, temperature, humidity where served), sensor count by reading_type | The modern superset of Thermal/Power with one vocabulary (`ReadingType`): voltage rails, currents, energy, humidity and intrusion sensors that the legacy resources omit, and the view that survives when a firmware drops `Thermal`/`Power`; state/health keys are stable, readings are context; 1–2 GETs. Overlaps `bmc_thermal`/`bmc_power` by design (the legacy checks keep their fixtures and their field-verified semantics; the shakedown says whether both are served). |
+| `bmc_boot` | 1 | `Systems/<id>` (cached), `Boot.BootOptions` collection expanded (1; **absent on XCC 6.10** — optional), Lenovo `Oem.Lenovo.BootSettings` collection expanded (1; five members on the lab unit), `Systems/<id>/VirtualMedia` expanded (1; `Managers/<id>/VirtualMedia` is the same pair), Lenovo `RemoteControl.MountImages` (1) | scalars `boot_order` (ordered list), `boot_override` / `_target` / `_mode`, `boot_next`, `automatic_retry_config` / `_attempts`, `stop_boot_on_fault`, `trusted_module_required_to_boot`, `http_boot_uri`, Lenovo `boot_order_current` / `boot_order_next`; `option|<BootOptionReference>` → display_name, enabled, uefi_device_path, alias; `vmedia|<Id>` → inserted, image (userinfo stripped), media_types, connected_via, write_protected; Lenovo `mount|<Id>` → path, mounted, readonly | `boot_order_supported`, `remaining_automatic_retry_attempts` | Consumed by every reload, firmware, disk or defaults-load change; a reordered boot list or a leftover mounted ISO is the classic "came back on the wrong device" cause, invisible from the OS; stable between healthy captures; 4–5 GETs. |
+| `bmc_power_policy` | 1 | `Systems/<id>` (cached), `Chassis/<id>/Power` (cached), `Chassis/<id>/Controls` expanded (1), Lenovo `Systems/<id>.Oem.Lenovo.ScheduledPowerActions` expanded (1), `JobService/Jobs` expanded (1; the same three actions with their weekday schedule and `JobState`), Lenovo `Managers/<id>.Oem.Lenovo.Watchdogs` expanded (1) | scalars `power_restore_policy` (DMTF and Lenovo `Power.Oem.Lenovo.Capabilities`, both), `wake_on_lan`, `power_on_permission`, `local_power_control`, `random_delay`, `host_watchdog_*`, `power_limit_w` / `power_limit_exception` / `power_capping_enabled` / `limit_mode` / `guaranteed_w`, `power_redundancy_policy` / `max_power_limit_w` / `power_failure_limit`; `control|<Id>` → control_type, control_mode, set_point, set_point_units, allowable min/max; `sched|<Id>` → type, activated, interval, time; `watchdog|<Id>` → type, state, timer_s, timeout_interval_s | `watchdog_expired` flags, `non_redundant_available_power_w`, readings of every Control | Consumed by every power event and any change that reboots or re-powers a server: whether the host returns after an AC loss, whether a cap or a scheduled power action can bite, whether a watchdog reset is armed; all configuration, so it diffs to nothing between healthy captures; 3 GETs. |
+| `bmc_sensors` | 1 | `Chassis/<id>/Sensors?$expand=.($levels=1)` (1; 89 members and ~11 s on the lab unit, so the per-member fallback is refused above the budget rather than walked), `Chassis/<id>/EnvironmentMetrics` (1), `ThermalSubsystem/ThermalMetrics` (1) | `sensor|<Id>` → reading_type, physical_context (+ sub-context), state, health, reading_units, thresholds (non-null caution/critical/fatal readings, snake-cased), and `reading` only for ambient/intake/inlet/exhaust-class temperature sensors (8 °C tolerance, the `bmc_thermal` rule) | every reading (`readings` by key, with `ReadingTime`), peak readings, `environment` (chassis power W, energy kWh, temperature, humidity where served), sensor count by reading_type | The modern superset of Thermal/Power with one vocabulary (`ReadingType`): voltage rails, currents, energy, humidity and intrusion sensors that the legacy resources omit, and the view that survives when a firmware drops `Thermal`/`Power`; state/health keys are stable, readings are context; 1–2 GETs. Overlaps `bmc_thermal`/`bmc_power` by design (the legacy checks keep their fixtures and their field-verified semantics; the shakedown says whether both are served). |
 | `bmc_pcie_slots` | 1 | `Chassis/<id>/PCIeSlots` (1), Lenovo `Chassis/<id>.Oem.Lenovo.Slots` expanded (1) | `slot|<index or Location.ServiceLabel>` → slot_type, pcie_type, lanes, state (Enabled/Absent), hot_pluggable, location, linked_devices (PCIeDevice ids); Lenovo extras connector_layout, max_data_width | slot count, occupied count | Consumed by any hardware swap, riser reseat or transport; an unseated card is an `Absent` slot here even when the device's own row simply vanishes from `bmc_inventory`; stable; 1–2 GETs. |
-| `bmc_network_adapters` | 1 | `Chassis/<id>/NetworkAdapters?$expand=.($levels=2)` (1; fallback: collection + per adapter + its Ports/NetworkPorts + NetworkDeviceFunctions, budget 16) | `adapter|<Id>` → manufacturer, model, serial, part_number, firmware_package_version (Controllers[]), port_count, function_count, lldp_enabled; `port|<adapter>|<port>` → link_status, physical_port_number, active_link_technology, capable speeds (sorted), autoneg, flow_control_configuration; `netfn|<adapter>|<fn>` → net_dev_func_type, permanent_mac (lower-cased), device_enabled, boot_mode, virtual_functions_enabled, max_virtual_functions, assigned port | current_link_speed_mbps per port, Lenovo `port_max_speed_bps`, `physical_port_mac`, host_power_state | The BMC-side L1 view: adapter firmware (which `bmc_firmware` may list only as a bundle), per-port link and negotiated capability, burned-in MACs that join to the hypervisor's physical-NIC MACs (`vmware_pnics.mac`) and to the switch-side MAC table; consumed by every re-cabling, NIC firmware and SR-IOV change; 1–4 GETs. |
+| `bmc_network_adapters` | 1 | `Chassis/<id>/NetworkAdapters?$expand=.($levels=1)` (1) then per adapter one `$expand` GET each on `Ports` (or `NetworkPorts` where `Ports` is absent) and `NetworkDeviceFunctions` (`$levels=2` does not inline them; 1 + 2 per adapter, 7 on the lab unit; budget 24) | `adapter|<Id>` → manufacturer, model, serial, part_number, firmware_package_version (Controllers[]), port_count, function_count, lldp_enabled; `port|<adapter>|<port>` → link_status, physical_port_number, active_link_technology, capable speeds (sorted), autoneg, flow_control_configuration; `netfn|<adapter>|<fn>` → net_dev_func_type, permanent_mac (lower-cased), device_enabled, boot_mode, virtual_functions_enabled, max_virtual_functions, assigned port | current_link_speed_mbps per port, Lenovo `port_max_speed_bps`, `physical_port_mac`, host_power_state | The BMC-side L1 view: adapter firmware (which `bmc_firmware` may list only as a bundle), per-port link and negotiated capability, burned-in MACs that join to the hypervisor's physical-NIC MACs (`vmware_pnics.mac`) and to the switch-side MAC table; consumed by every re-cabling, NIC firmware and SR-IOV change; 1–4 GETs. |
 | `bmc_manager_services` | 2 | `Managers/<id>/NetworkProtocol` (cached) with its `Oem.Lenovo` block, `Managers/<id>` (cached) Oem links: `RemoteControl`, `RemoteMap`, `Configuration`, `ServerProfile` (1 each), `Managers/<id>/SerialInterfaces` expanded (1), NIC `Oem.Lenovo.PortForwarding` (+ maps, 1–2) | scalars per protocol `<protocol>_enabled` / `_port` for every DMTF block (HTTP, HTTPS, SSH, SNMP, IPMI, VirtualMedia, KVMIP, SSDP, DHCP, DHCPv6, RDP, RFB, Proxy) and Lenovo (CIM-over-HTTPS, SLP, Web-over-HTTPS, SFTP), `open_ports` (sorted), SNMP agent (`snmpv3_enabled` / `_port` / `contact` / `location`; community names **scrubbed**, v1 count only), `kcs_enabled`, `mpfa_health_enabled`, `remote_control_enabled`, `remote_map_enabled`, `server_profile_enabled` / `_server` / `_port`, `usb_port_forwarding_enabled` + `pfmap|<Id>` rows, `serial|<Id>` → bit_rate, parity, data/stop bits, flow_control, Lenovo CLI mode | active remote-control session **count** (never who), `trespass_message`, `agentless_capabilities`, `configuration_backup_status` / `restore_status` | The management plane's own attack surface and service set; consumed by every hardening, firmware and BMC-network change; configuration, so stable; 6–10 GETs. |
 | `bmc_accounts` | 1 | `AccountService` (1) with `Oem.Lenovo`, `Accounts` expanded (1), `Roles` expanded (1), `LDAP` / `ActiveDirectory` / `AdditionalExternalAccountProviders` (1–2), Lenovo `NetworkProtocol.Oem.Lenovo.LDAPClient` (cached from the protocol read) | policy scalars (min/max password length, lockout threshold/duration/reset, auth-failure logging threshold, local account auth mode, password expiration days, Lenovo complexity, reuse cycle, change-on-first-access, web inactivity timeout); `account|<UserName>` → role_id, enabled, locked, password_change_required, account_types (sorted), snmpv3_configured, ssh_key_count; `role|<RoleId>` → assigned_privileges (sorted), oem_privileges (sorted), is_predefined; `provider|<type>` → enabled, service_addresses (sorted), base DNs, bind DN, role-mapping count (bind password and any key scrubbed) | `current_logged_users` **count only** (our own session is one of them), `supported_account_types` | Security posture of the management plane; local BMC accounts are configuration and are keyed by name on the `iosxe_config` precedent (a local-user change must diff; nothing about people's sessions is kept); consumed by every credential rotation, hardening and BMC firmware change; stable; 4–6 GETs. |
 | `bmc_alerting` | 1 | `EventService` (1), `Subscriptions` expanded (1), Lenovo `Managers/<id>.Oem.Lenovo.Recipients` expanded (1), Lenovo SNMP traps block (cached), `LogServices/<platform log>` `SyslogFilters` if served | scalars `event_service_enabled`, `delivery_retry_attempts` / `_interval_s`, `smtp_enabled` / `_server` / `_port` / `_from` / `_connection_protocol` / `_auth_method` (credentials scrubbed); `subscription|<Id>` → destination (scheme://host:port, userinfo stripped), protocol, subscription_type, event_format, context, registry_prefixes, resource_types, status, heartbeat; `recipient|<Id>` → name, enabled, alert_type, address, include_event_log, critical/warning/system enabled flags and accepted event lists (sorted); `snmp_trap_enabled` / `_port` / `_v1` / `_v2`, `trap_targets` (sorted; communities scrubbed) | delivery counters if any | "Is anyone still being told": a subscription or recipient that stops resolving after a re-address, a management-server change or a firmware reset is silent otherwise; consumed by every network, addressing and management-tool change; stable; 3–5 GETs. |
@@ -338,6 +447,66 @@ assume `$expand`; the per-member fallback is what the budget sizes for.
 | `bmc_licenses` | 1 | `LicenseService` (1), `Licenses` expanded (1), Lenovo `Managers/<id>.Oem.Lenovo.FoD` (1) and its `Keys` expanded (1) | scalars `license_service_enabled`, `expiration_warning_days`, Lenovo `fod_tier`; `license|<Id>` → license_type, license_origin, removable, manufacturer, sku, part_number, status, authorization_scope, expiration_date, grace_period_days; `fodkey|<Id>` → identifier types, status, expires, use_count / use_limit | install_date, remaining_duration / use count | Feature entitlements (remote KVM, virtual media, XCC tier) are tied to the machine and vanish with a system-board swap or a reset; consumed by hardware and firmware changes; stable; **`LicenseString`, `Bytes` and any key material never stored** (add the tokens to the scrub list); 3–4 GETs. |
 | `bmc_tasks` | 3 (`info_only`) | `TaskService` (1), `Tasks` expanded (1), `JobService` (1), `Jobs` expanded (1) | scalars `task_service_enabled`, `task_auto_delete_minutes`, `job_service_enabled`; `task|<Id>` / `job|<Id>` for **non-terminal** entries only → name, state, percent_complete | counts by terminal state, newest start/end times | The `vmware_recent_tasks` twin: a firmware update or configuration restore still running at capture time explains a half-populated inventory; quiescence evidence; 4 GETs. |
 | `bmc_telemetry` (optional, last) | 3 | `TelemetryService` (1), `MetricReportDefinitions` expanded (1) | `report|<Id>` → type, schedule, metrics (sorted), enabled, report_updates | report count, newest report timestamp | Configuration of what the BMC records; values are never captured (bulky, volatile, `LenovoHistoryMetricValue` too). Low priority; listed so the hole is a decision, not an omission. |
+
+Lab notes for §5b:
+
+- `bmc_boot`: on XCC 6.10 the boot order is only in the Lenovo boot manager
+  (`BootOrderCurrent`/`BootOrderNext`/`BootOrderSupported` per member; the
+  sub-orders' strings embed device model and serial, which the sanitizer
+  must learn). Key `order|<member>` → current list (ordered), `next` list,
+  `supported` in context. Virtual media on both `Managers` and `Systems`
+  are the same two RDOC slots — read one.
+- `bmc_power_policy`: the DMTF `PowerRestorePolicy` and the Lenovo
+  `Capabilities.PowerRestorePolicy` are **both absent** on this firmware —
+  the AC-restore policy is not exposed by Redfish here (§12 keeps it as an
+  open probe: the BIOS `Power_*` attributes carry performance bias and
+  platform control only). What is served: the three Lenovo power flags,
+  `Controls/PowerLimit`, `HostWatchdogTimer`, four Lenovo watchdogs (the
+  IPMI one enabled with a 15 s timer), three scheduled power actions and
+  their `JobService` twins.
+- `bmc_sensors`: 68 of 89 sensors are discrete (`ReadingType` null,
+  `Reading` 0, `ReadingUnits` empty) and their information is
+  `Status.Health`/`State` plus the `Reading` assertion; key them by `Name`
+  with the IPMI id as tiebreak, exactly as `bmc_thermal` keys by Name.
+  Numeric readings go to context except the ambient class. `ReadingType`
+  is not trustworthy for classification (watts typed `Current`, presence
+  sensors typed `Power`, fans typed `AirFlow`): classify numeric-vs-discrete
+  by the presence of `ReadingUnits`. Whether an asserted discrete sensor
+  reads `1` or flips `Health` is still unobserved (§12).
+- `bmc_pcie_slots`: one DMTF slot on the SE350 (PCIe 6) plus the six Lenovo
+  slots (M.2 sockets and the x16) — small and stable.
+- `bmc_network_adapters`: `Controllers[].FirmwarePackageVersion` is the only
+  place the X722 LOM firmware (1.2203.0) appears besides `bmc_firmware`'s
+  `Ob_2.1`; `Ports.LinkStatus` (NoLink) and `NetworkPorts.LinkStatus` (Down)
+  spell the same fact differently — key one (`Ports`, the current schema)
+  and keep the other in context; MACs come from
+  `NetworkDeviceFunctions.Ethernet.PermanentMACAddress`.
+- `bmc_manager_services`: `OpenPorts` is served as a list of strings — sort
+  and key it; `RemoteMap` is not linked on this firmware (mount images hang
+  off `RemoteControl`); `CredentialBootstrapping` on the host interface is a
+  key (an enabled bootstrap with an Administrator role is exactly the kind
+  of posture fact this check exists for).
+- `bmc_accounts`: the lab unit's three enabled accounts all hold the OEM
+  `Supervisor` privilege; `PasswordChangeRequired` reads null once cleared;
+  `AccountTypes` lists eight types. The scrub rule must be **exact-name**
+  (`Password`, `Passphrase`, `Secret`, `PrivateKey`, `AuthenticationKey`,
+  `EncryptionKey`, `CommunityNames`, `TrapCommunity`, `LicenseString`,
+  `CertificateString`, FoD `Bytes`, and any leaf ending in `Password`) rather
+  than the substring test `_looks_secret` applies today, or every password
+  *policy* leaf (`PasswordLength`, `PasswordExpirationPeriodDays`,
+  `PasswordChangeOnFirstAccess`, `ComplexPassword`, `MinPasswordLength`,
+  `IsUefiAdminPasswordSet`, …) is scrubbed with it.
+- `bmc_alerting`: subscriptions, recipients and trap targets are all empty
+  on the lab unit, so the check's fixtures for populated rows stay
+  hand-built from the schema until a configured unit is captured; the
+  `EventService.SMTP` block is populated (server, from address, port, auth
+  method) and is the one live row.
+- `bmc_certificates`: one location on this firmware (the HTTPS server
+  certificate); `Fingerprint` and `SignatureAlgorithm` are absent, so the
+  self-signed flag (issuer equals subject) and validity are the identity.
+- `bmc_licenses` and `bmc_tasks`: empty collections on the lab unit —
+  `not-present` is wrong for them (the services exist and answer), an empty
+  keyed view is right.
 
 Hygiene additions for the family (`_SECRET_TOKENS` and key-aware scrubs):
 `communit` (CommunityNames, TrapCommunity), `licensestring`, `encryptionkey`,
@@ -358,60 +527,65 @@ records the registry *names* once); SMART text beyond a capped raw copy.
 
 ## 6. GET budget and timing
 
-Per BMC, with `$expand` honoured: ~60–100 GETs, at the 1 s pacing 1.5–2
-minutes on top of the host capture; the 3300 s job soft limit is not in
-sight. Per-check budgets stay under `REDFISH_MAX_CHECK_BUDGET = 40`; the two
-checks that could exceed it on a per-member fallback (`bmc_sensors` on a
-chassis with >40 sensors, `bmc_certificates` on a BMC with many locations)
-refuse loudly with the member count, exactly as `xcc_inventory` does today,
-and the shakedown's collection counts (§7) say beforehand whether `$expand`
-makes the fallback moot on this firmware.
+Per BMC, with `$expand` honoured: about 60–90 GETs, so 1.5–2 minutes at the
+1 s pacing on top of the host capture; the 3300 s job soft limit is not in
+sight. The existing catalog measured 30 GETs and ~30 s live (Appendix C).
+Per-check budgets stay under `REDFISH_MAX_CHECK_BUDGET = 40`; `bmc_sensors`
+(89 members here) and `bmc_certificates` refuse loudly with the member count
+when `$expand` is not honoured rather than walking into the wall, exactly as
+`xcc_inventory` does today. The Sensors expansion is the slowest single
+answer (~11 s for 55 KB); everything else answers in 100–250 ms.
 
-**A risk to measure at the first shakedown**: Lenovo writes remote-login
-events into the *platform* log for web and CLI sessions. If Basic-auth
-Redfish GETs also produce one platform-log entry each (rather than an
-AuditLog entry only), a capture would add ~80 informational entries to a
-1024-entry ring, churn `bmc_event_log`'s `informational_by_code` and, over
-many captures, wrap Warning/Critical entries out of the log. Measure: read
-the platform log's `LastSeqNum` before and after one capture. If it moves by
-the GET count, the options are (a) accept and document, (b) fewer GETs
-(`$expand` everywhere, one resolution GET), (c) a Redfish session (one POST
-to `SessionService/Sessions` and one DELETE per capture — a doctrine change
-of the vSphere-carve-out kind, decided by the user, never slipped in).
+**Footprint, measured.** The first draft feared that Basic-auth GETs would
+write one platform-log entry each. They do not on XCC 6.10: across the 779
+GETs of the walk and the 30 of the live run, the StandardLog's platform
+sequence number did not move and its audit sequence number moved once, for
+the user's own web-UI logoff; no session was created. The old option (c),
+a Redfish session per capture, is therefore not needed and the doctrine
+stays GET-only with Basic auth. Re-measure once on any other firmware
+generation (the shakedown's discovery block records the two sequence
+numbers before and after the run).
 
-## 7. Shakedown and fixtures (once the account works)
+## 7. Shakedown and fixtures
 
-1. `tools/redfish_walk.py` (Appendix A) against the lab unit: every resource
-   under `/redfish/v1/` as ReadOnly. Read the index for 403s (which resources
-   the ReadOnly role may not GET — `AccountService`, `LicenseService`,
-   `CertificateService` and the OEM services are the candidates), collection
-   sizes, and the member ids. Keep the crawl outside the repository.
-2. Test Suite Shakedown (dev) on the host Device with the BMC modelled (or
-   `tools/harvest_live.py --platform bmc` from a workstation). The
-   `discovery.bmc` block answers: `RedfishVersion`, `ProtocolFeaturesSupported`,
-   vendor/product, resolved ids and how, the `Oem.<Vendor>` links under the
-   Manager, System and Chassis, LogServices members, member counts of every
-   collection the family walks (memory, processors, PCIe devices, host NICs,
-   network adapters, firmware, software, storage, manager NICs, sensors, boot
-   options, accounts, roles, subscriptions, recipients, licences, FoD keys,
-   certificate locations, tasks, jobs, controls, scheduled actions,
-   watchdogs), whether `$expand=.($levels=2)` inlines functions and ports,
-   which of `Thermal`/`Power` and `ThermalSubsystem`/`PowerSubsystem` are
-   served, the security resource's property names (ThinkEdge or not), the
-   capture account's role and privileges, host power state and `SystemStatus`,
-   and the platform-log `LastSeqNum` delta across the run (§6).
-3. Harvest with `tools/harvest_live.py --platform bmc`, sanitize with
-   `tools/make_fixtures.py` (after the sanitizer additions in §3) into
-   `tests/fixtures/xcc_*_lab.json`, replacing the hand-built Lenovo-doc
-   fixtures where the shapes differ; `tests/test_lab_fixtures.py` pins what
-   every normalizer reads.
-4. Second shakedown with the host **off**, then one with one cable pulled:
-   settles which views are POST-populated on this firmware (`bmc_inventory`,
-   `bmc_pcie_slots`, `bmc_network_adapters`, `bmc_host_nics`, `bmc_storage`)
-   and whether port link state follows a cable with the host off.
-5. Stability: two captures an hour apart must diff to nothing under each
+Done on 2026-09-30 from this box (not through Nautobot): the full walk
+(`tools/redfish_walk.py`, Appendix A) and the live run of every existing
+collector through a real `CollectorContext` (Appendix C). What remains:
+
+1. **Walk again with a ReadOnly-privilege account.** The lab account holds
+   the OEM `Supervisor` privilege, so "what may ReadOnly GET" is unverified.
+   Create (or enable) an account on a role whose `OemPrivileges` is
+   `ReadOnly`, run the walk, and record every 403 by path; those paths
+   become `not-present` with the reason "role" in the collectors, never
+   failures.
+2. **Shakedown through Nautobot** once PR A exists (the host Device with the
+   BMC interface, the Relationship and the Secrets Group modelled on the dev
+   stack): both families in one run, `discovery.bmc` filled (service root
+   and features, resolved ids, OEM links under System/Manager/Chassis, log
+   services, member counts of every collection the family walks, `$expand`
+   depth honoured, legacy versus subsystem thermal/power resources, the
+   security resource's property names, the capture account's role and
+   privileges, host power state and `SystemStatus`, and the platform/audit
+   sequence numbers before and after the run).
+3. **Harvest and sanitize**: `tools/harvest_live.py --platform bmc`, then
+   `tools/make_fixtures.py` (after the sanitizer additions in §3: UUIDs,
+   serial-number leaves of any shape, MACs in the `AssociatedNetworkAddresses`
+   bare-hex spelling and the `AssociatedMACAddresses` colon spelling, boot
+   entry strings that embed drive serials, log messages with user names and
+   client addresses, the `OSIPv4Address` leaf) into
+   `tests/fixtures/xcc_*_lab.json`; `tests/test_lab_fixtures.py` pins what
+   every normalizer reads. The walk's files in this session's scratchpad are
+   unsanitized and stay out of the repository.
+4. **Host off, then one cable pulled**: which views are POST-populated on
+   this firmware (`bmc_inventory`, `bmc_pcie_slots`, `bmc_network_adapters`,
+   `bmc_host_nics`, `bmc_storage`) and whether `Ports.LinkStatus` follows a
+   cable with the host off; on this unit the LOM ports are unused, so plug
+   one to see `LinkUp`. Also assert one discrete sensor (pull an M.2 drive
+   or open the chassis) to learn how an asserted sensor reads.
+5. **Stability**: two captures an hour apart must diff to nothing under each
    check's compare mode; anything else is a normalizer fix (readings to
-   context, volatile ids out of keys).
+   context, volatile ids out of keys). Expect `bmc_event_log` context counts
+   to grow only by what the BMC itself logs.
 
 ## 8. Tests
 
@@ -452,11 +626,10 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
 
 ## 10. Build sequence
 
-0. **Human, before any code runs against the lab**: complete the lab account's
-   first-login password change in the XCC web UI (or clear the flag),
-   confirm it holds the ReadOnly role with Redfish access, and re-run the
-   crawl (Appendix A) — it should print 200 for every resource it visits.
-   Record any 403 by path.
+0. **Done 2026-09-30**: the lab account's first-login password change is
+   cleared and the crawl (Appendix A) printed 200 for all 425 resources.
+   Still to do by a human: an account on a ReadOnly-privilege role for the
+   §7 item 1 walk (the walked account is a Supervisor).
 1. **PR A — framework** (no new checks): `bmc_target.py`, detection and the
    second context in both jobs, `resolve_bmc_credentials`, envelope 1.2,
    probe hints, `checks_xcc.py → checks_bmc.py` with the `bmc_*` rename and
@@ -464,12 +637,17 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    the `bmc` harvest spec, README/docs skeleton. Battery green with the
    existing fixtures renamed. Dry-run against the dev stack with a fake
    device carrying an `xcc` interface proves the ORM glue.
-2. **Shakedown 1** on the lab unit (host on): §7 items 1–3. Fix every
-   "parsed but empty" advisory; commit the `_lab` fixtures.
+2. **Shakedown 1** on the lab unit (host on): §7 items 1–3. The live run of
+   the existing collectors is already green (Appendix C), so this is the
+   ReadOnly walk, the Nautobot-side run and the fixture harvest; fix the
+   normalizer items listed under §5a (sequence-number names, DNS
+   placeholders, SNMP enablement, log-message redaction); commit the `_lab`
+   fixtures.
 3. **PR B — widen the existing checks** (§5a) on the lab fixtures.
 4. **PR C — new checks** (§5b, `bmc_telemetry` optional), coverage-map
    section, prompt updates.
-5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, stability.
+5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
+   discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
    lab facts, `floor-consolidation.md`, the superseded note in
    `nfv-core-move.md`; memory updated.
@@ -501,28 +679,45 @@ three days with fixtures, plus three shakedown half-days.
    *resource* (**yes**: it is the service resource, not its entries; the
    entries stay unread).
 7. `bmc_telemetry` (**later**).
-8. Only if §6's measurement shows platform-log churn per GET: accept,
-   shrink, or a Redfish session (**not decided here**).
+8. ~~A Redfish session per capture if Basic-auth GETs churned the platform
+   log~~ — closed by the §6 measurement: no entry is written; GET-only with
+   Basic auth stays.
 
 ## 12. Open questions the shakedown settles
 
-The SE350 generation and whether it is a Security Pack unit (the security
-resource says); which member ids and collection sizes; whether ReadOnly may
-GET the account, licence, certificate and OEM services; `$expand` depth
-honoured on PCIeDevices and NetworkAdapters; which of the legacy and new
-thermal/power resources are populated; whether host-port link state follows a
-cable with the host off; whether Basic-auth GETs write platform-log entries;
-whether non-RAID M.2 enumerates under `Storage`, `Chassis/Drives` or nowhere;
-what a de-powered external adapter slot reports under `Power`; the log
-services offered under `Systems` and `Managers`; the exact `@Redfish.Settings`
-link for pending BIOS attributes; the attribute registry's name and size.
+Answered by the walk (§4): the SE350 generation (gen-1, 7Z46) and that its
+security resource carries no ThinkEdge properties; member ids (`1` for
+System, Manager and Chassis) and every collection size; `$expand` depth
+(one level inlines, two does not); which thermal/power resources are
+populated (legacy `Thermal`/`Power` plus `ThermalSubsystem/Fans`,
+`ThermalMetrics`, `EnvironmentMetrics`, `Sensors`; no supplies anywhere);
+that non-RAID M.2 SATA drives enumerate under `Storage` one per slot;
+that Basic-auth GETs write no log entry; the log services offered (six, no
+PlatformLog, audit entries inside StandardLog); the pending-BIOS link
+(`Systems/1/Bios/Pending`) and registry (`BiosAttributeRegistry.1.0.0`, 126
+attributes); that the boot order lives only in the Lenovo boot manager;
+that the DMTF and Lenovo power-restore policy leaves are both absent.
+
+Still open: what a ReadOnly-privilege account may GET (§7 item 1); whether
+port link state follows a cable with the host off, and whether an asserted
+discrete sensor reads `1` or changes `Health` (§7 item 4); where, if
+anywhere, this firmware exposes the AC power-restore policy (the XCC web UI
+has the setting; Redfish here does not — probe the BIOS attribute registry
+and the IPMI-only paths before declaring it unobservable); what a
+de-powered external adapter does to the `Power Adapter N` sensors; whether
+`SEL` ever exposes entries; how the `-Pending` firmware members read while
+an update is staged; and, on a unit that has them, the shapes of populated
+`Subscriptions`, `Recipients`, `Licenses`, `Tasks` and `PhysicalSecurity`.
 
 ## Appendix A — `tools/redfish_walk.py` (planning aid used on 2026-09-30)
 
 GET-only, fenced, paced; credentials from the environment; one JSON file per
-resource plus `_index.json`. Promote into `tools/` in PR A (add `--out`
-outside-the-repo enforcement and the `--user-env/--password-env` convention
-of `harvest_live.py`).
+resource plus `_index.json`; a resource whose file already exists is read
+from disk, so an interrupted walk resumes without touching the BMC; per-entry
+log resources are skipped because the `Entries` collection already inlines
+them (the first attempt fetched 318 of them one by one). Promote into
+`tools/` in PR A (add `--out` outside-the-repo enforcement and the
+`--user-env/--password-env` convention of `harvest_live.py`).
 
 ```python
 #!/usr/bin/env python3
@@ -530,8 +725,11 @@ of `harvest_live.py`).
 
 Never sends anything but GET. Follows every @odata.id / nextLink found in any
 payload, fenced to /redfish/v1/, skipping Actions, SessionService, JsonSchemas,
-$metadata and registry files. AuditLog entries are skipped unless AUDIT=1.
-Paced PACE seconds apart (default 1.0). Credentials from the environment only.
+$metadata, registry files and individual log entries (the Entries collection
+already inlines them). AuditLog entries are skipped unless AUDIT=1. A resource
+whose file already exists in the output directory is read from disk, so a
+crawl can be resumed without touching the BMC again. Paced PACE seconds apart
+(default 1.0). Credentials from the environment only.
 """
 
 import collections
@@ -560,7 +758,7 @@ session.verify = False
 session.headers.update({"Accept": "application/json", "OData-Version": "4.0"})
 
 BANNED = ("actions", "sessionservice", "jsonschemas", "$metadata", "odata")
-SKIP_RE = re.compile(r"\.json$|/Registries/[^/]+/.+")
+SKIP_RE = re.compile(r"\.json$|/Registries/[^/]+/.+|/LogServices/[^/]+/Entries/[^/?]+$")
 
 
 def ok_path(path):
@@ -593,34 +791,42 @@ queue = collections.deque(["/redfish/v1/"])
 seen = set(queue)
 index = []
 last = 0.0
+fetched = 0
 while queue and len(index) < max_resources:
     path = queue.popleft()
-    wait = last + pace - time.monotonic()
-    if wait > 0:
-        time.sleep(wait)
-    last = time.monotonic()
-    started = time.monotonic()
-    try:
-        resp = session.get("https://%s%s" % (host, path), timeout=(10, 120))
-        status, body = resp.status_code, resp.content
-    except Exception as exc:  # noqa: BLE001 - planning aid
-        index.append({"path": path, "status": None, "error": str(exc)})
-        print("ERR %s %s" % (path, exc), flush=True)
-        continue
-    elapsed = int((time.monotonic() - started) * 1000)
-    entry = {"path": path, "status": status, "ms": elapsed, "bytes": len(body), "file": file_name(path)}
-    try:
-        payload = resp.json()
-    except Exception:  # noqa: BLE001
-        payload = None
-        entry["nonjson"] = True
-    with open(os.path.join(out, entry["file"]), "w") as handle:
-        json.dump(
-            payload if payload is not None else {"_text": body.decode("utf-8", "replace")[:20000]},
-            handle,
-            indent=1,
-            sort_keys=True,
-        )
+    target = os.path.join(out, file_name(path))
+    entry = {"path": path, "file": file_name(path)}
+    if os.path.exists(target):
+        with open(target) as handle:
+            payload = json.load(handle)
+        entry.update(status=200, from_disk=True, ms=0, bytes=os.path.getsize(target))
+    else:
+        wait = last + pace - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        last = time.monotonic()
+        started = time.monotonic()
+        try:
+            resp = session.get("https://%s%s" % (host, path), timeout=(10, 120))
+            status, body = resp.status_code, resp.content
+        except Exception as exc:  # noqa: BLE001 - planning aid
+            index.append({"path": path, "status": None, "error": str(exc)})
+            print("ERR %s %s" % (path, exc), flush=True)
+            continue
+        fetched += 1
+        entry.update(status=status, ms=int((time.monotonic() - started) * 1000), bytes=len(body))
+        try:
+            payload = resp.json()
+        except Exception:  # noqa: BLE001
+            payload = None
+            entry["nonjson"] = True
+        with open(target, "w") as handle:
+            json.dump(
+                payload if payload is not None else {"_text": body.decode("utf-8", "replace")[:20000]},
+                handle,
+                indent=1,
+                sort_keys=True,
+            )
     if isinstance(payload, dict):
         entry["odata_type"] = payload.get("@odata.type")
         members = payload.get("Members")
@@ -645,13 +851,13 @@ while queue and len(index) < max_resources:
                 queue.append(link)
     index.append(entry)
     print(
-        "%s %s %dms %dB %s" % (status, path, elapsed, len(body), entry.get("odata_type") or ""),
+        "%s %s %s %s" % (entry.get("status"), path, "disk" if entry.get("from_disk") else "%dms" % entry.get("ms", 0), entry.get("odata_type") or ""),
         flush=True,
     )
 
 with open(os.path.join(out, "_index.json"), "w") as handle:
-    json.dump({"index": index, "queued_unvisited": list(queue)}, handle, indent=1)
-print("done: %d resources, %d unvisited" % (len(index), len(queue)), flush=True)
+    json.dump({"index": index, "queued_unvisited": list(queue), "fetched_this_run": fetched}, handle, indent=1)
+print("done: %d resources (%d fetched this run), %d unvisited" % (len(index), fetched, len(queue)), flush=True)
 ```
 
 Run: `set -a; . /opt/stacks/.xcc.env; set +a; PACE=1.0 python3 tools/redfish_walk.py /path/outside/repo/xcc-crawl`.
@@ -695,3 +901,43 @@ From the anonymously served `/redfish/v1/metadata/Lenovo*_v1.xml` files
 - **LenovoMessageRegistry**: MessageID, AlertCategory, TrapType, SeverityCode, Audit, EventID, CallHome, Serviceable, Device, Hidden.
 - **LenovoTask** (Task.Oem.Lenovo): FFDCForDownloading (Path, Port), ServProfData. **LenovoDeviceInfo**: UUID, Location. **LenovoEvent**: SystemUUID, SystemSerialNumber, SystemMachineTypeModel, EventInformation.
 - **LenovoHistoryMetricValueContainer**: ContainerName, TimeScope, Container[] (MetricType, MetricValue, Duration, Timestamp, TimestampWithTZ).
+
+## Appendix C — Live results on the lab unit (2026-09-30)
+
+Existing collectors, run from this box through `RedfishClient` and
+`CollectorContext` with `debug=True` (the harness is the `bmc` platform spec
+`tools/harvest_live.py` gains in PR A). 30 GETs, ~30 s, TLS default.
+
+| Check | Status | Keys | GETs (beyond the cached root/system/manager reads) |
+| --- | --- | --- | --- |
+| `xcc_system` | ok | 38 | `Systems/1/SecureBoot`, `Managers/1/EthernetInterfaces/NIC` |
+| `xcc_security_state` | not-present | 0 | `Managers/1/Oem/Lenovo/Security` (no ThinkEdge properties) |
+| `xcc_thermal` | ok | 6 | `Chassis/1/Thermal` |
+| `xcc_power` | ok | 4 | `Chassis/1/Power` |
+| `xcc_inventory` | ok | 9 | Memory, Processors, PCIeDevices, each one `$expand` |
+| `xcc_host_nics` | ok | 4 | `Systems/1/EthernetInterfaces?$expand` |
+| `xcc_storage` | ok | 8 | `Storage?$expand`, four drives, four `Volumes?$expand` |
+| `xcc_firmware` | ok | 15 | `UpdateService/FirmwareInventory?$expand` |
+| `xcc_event_log` | ok | 0 (312 informational) | `LogServices`, `StandardLog`, `StandardLog/Entries` (one page) |
+| `xcc_bios` | ok | 20 (of 126) | `Systems/1/Bios` |
+| `xcc_manager_network` | ok | 38 | `Managers/1/NetworkProtocol` |
+| `xcc_chassis_location` | ok | 20 | `Chassis/1` |
+
+Resource inventory from the walk (member counts; singletons omitted):
+
+```
+Systems 1 · Managers 1 · Chassis 1 · Registries 11
+AccountService/Accounts 12 · Roles 31 · Oem/Lenovo/GroupProfiles 16 · LDAP/Certificates 0
+EventService/Subscriptions 0 · JobService/Jobs 3 · TaskService/Tasks 0 · LicenseService/Licenses 0
+TelemetryService/MetricDefinitions 2 · MetricReportDefinitions 12 · MetricReports 6
+UpdateService/FirmwareInventory 15 · Oem/Lenovo/FirmwareServices 1 · RemoteServerCertificates 0
+Systems/1/LogServices 6 (StandardLog 311 entries, ActiveLog 0, MaintenanceLog 73, SaLog 0, DiagnosticLog 3, SEL no Entries link)
+Systems/1/Memory 4 · Processors 1 · EthernetInterfaces 5 · NetworkInterfaces 3 · Storage 4 (Volumes 0 and StoragePools 0 each) · VirtualMedia 2
+Systems/1/Oem/Lenovo/BootSettings 5 · ScheduledPowerActions 3 · Metrics 0
+Chassis/1/Sensors 89 · NetworkAdapters 3 (Ports 2/2/0, NetworkPorts 2/2/0, NetworkDeviceFunctions 2/2/0) · PCIeDevices 4 (PCIeFunctions 1/2/2/1) · Controls 1
+Chassis/1/ThermalSubsystem/Fans 3 · Oem/Lenovo/LEDs 4 · Oem/Lenovo/Slots 6
+Managers/1/EthernetInterfaces 2 (ToHost PortForwardingMap 14) · HostInterfaces 1 · SerialInterfaces 1 · VirtualMedia 2
+Managers/1/NetworkProtocol/HTTPS/Certificates 1
+Managers/1/Oem/Lenovo/Watchdogs 4 · Recipients 0 · SsoCertificates 0 · FoD/Keys 0 · RemoteControl/Sessions 0 · RemoteControl/MountImages 0
+Managers/1/Oem/Lenovo/SecureKeyLifecycleService/{ClientCertificate,ServerCertificate} 0 · ServerProfile/Certificates 0
+```
