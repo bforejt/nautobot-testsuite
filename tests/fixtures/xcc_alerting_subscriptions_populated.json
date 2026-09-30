@@ -1,0 +1,102 @@
+{
+  "@odata.type": "#EventDestinationCollection.EventDestinationCollection",
+  "@odata.id": "/redfish/v1/EventService/Subscriptions",
+  "@odata.etag": "\"hand-built\"",
+  "Name": "Subscriptions",
+  "Description": "Hand-built from the DMTF EventDestination schema: the lab unit serves no subscription.",
+  "Members@odata.count": 5,
+  "Members": [
+    {
+      "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+      "@odata.id": "/redfish/v1/EventService/Subscriptions/1",
+      "Id": "1",
+      "Name": "EventSubscription 1",
+      "Destination": "https://collector.example.com:8443/redfish/events?code=hand-built-token",
+      "Protocol": "Redfish",
+      "SubscriptionType": "RedfishEvent",
+      "EventFormatType": "Event",
+      "Context": "noc-collector",
+      "RegistryPrefixes": ["ResourceEvent", "Base"],
+      "ResourceTypes": ["LogService"],
+      "MessageIds": [],
+      "OriginResources": [
+        {"@odata.id": "/redfish/v1/Systems/1"},
+        {"@odata.id": "/redfish/v1/Chassis/1"}
+      ],
+      "SubordinateResources": true,
+      "IncludeOriginOfCondition": true,
+      "DeliveryRetryPolicy": "SuspendRetries",
+      "SendHeartbeat": true,
+      "HeartbeatIntervalMinutes": 10,
+      "VerifyCertificate": true,
+      "HttpHeaders": [],
+      "MetricReportDefinitions": [],
+      "Status": {"State": "Enabled", "Health": "OK"},
+      "Actions": {
+        "#EventDestination.ResumeSubscription": {
+          "target": "/redfish/v1/EventService/Subscriptions/1/Actions/EventDestination.ResumeSubscription"
+        }
+      }
+    },
+    {
+      "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+      "@odata.id": "/redfish/v1/EventService/Subscriptions/2",
+      "Id": "2",
+      "Name": "EventSubscription 2",
+      "Destination": "snmp://hand-built-community@192.0.2.60:162",
+      "Protocol": "SNMPv2c",
+      "SubscriptionType": "SNMPTrap",
+      "EventFormatType": "Event",
+      "Context": "",
+      "RegistryPrefixes": [],
+      "ResourceTypes": [],
+      "DeliveryRetryPolicy": "TerminateAfterRetries",
+      "SNMP": {"TrapCommunity": "hand-built-community"},
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+      "@odata.id": "/redfish/v1/EventService/Subscriptions/3",
+      "Id": "3",
+      "Name": "EventSubscription 3",
+      "Destination": "snmp://192.0.2.61:162",
+      "Protocol": "SNMPv3",
+      "SubscriptionType": "SNMPInform",
+      "EventFormatType": "Event",
+      "RegistryPrefixes": ["EventRegistry"],
+      "DeliveryRetryPolicy": "RetryForeverWithBackoff",
+      "SNMP": {
+        "AuthenticationProtocol": "HMAC_SHA96",
+        "AuthenticationKey": "hand-built-auth-key",
+        "EncryptionProtocol": "CFB128_AES128",
+        "EncryptionKey": "hand-built-privacy-key"
+      },
+      "Status": {"State": "Disabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+      "@odata.id": "/redfish/v1/EventService/Subscriptions/4",
+      "Id": "4",
+      "Name": "EventSubscription 4",
+      "Destination": "mailto:jane.roe@example.com",
+      "Protocol": "SMTP",
+      "EventFormatType": "Event",
+      "Context": "escalation to jane.roe@example.com",
+      "RegistryPrefixes": ["EventRegistry"],
+      "ResourceTypes": [],
+      "DeliveryRetryPolicy": "RetryForever",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    },
+    {
+      "@odata.type": "#EventDestination.v1_11_2.EventDestination",
+      "@odata.id": "/redfish/v1/EventService/Subscriptions/5",
+      "Id": "5",
+      "Name": "EventSubscription 5",
+      "Destination": null,
+      "Protocol": "Redfish",
+      "SubscriptionType": "SSE",
+      "EventFormatType": "Event",
+      "Status": {"State": "Enabled", "Health": "OK"}
+    }
+  ]
+}

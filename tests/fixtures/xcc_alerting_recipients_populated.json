@@ -1,0 +1,45 @@
+{
+  "@odata.type": "#LenovoAlertRecipientCollection.LenovoAlertRecipientCollection",
+  "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Recipients",
+  "@odata.etag": "\"hand-built\"",
+  "Name": "LenovoAlertRecipientCollection",
+  "Description": "Hand-built from the LenovoAlertRecipient property names (handoff Appendix B): the lab unit serves no recipient, and no AlertType or AcceptedEvents member is known offline, so AlertType is null and every AcceptedEvents list is empty, as the lab's SNMP trap filter serves it.",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.type": "#LenovoAlertRecipient.v1_0_0.LenovoAlertRecipient",
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Recipients/1",
+      "Id": "1",
+      "Name": "Jane Roe",
+      "RecipientSettings": {
+        "RecipientName": "Jane Roe",
+        "Enabledstate": true,
+        "AlertType": null,
+        "Address": "jane.roe@example.com",
+        "IncludeEventLog": true,
+        "EnabledAlerts": {
+          "CriticalEvents": {"Enabled": true, "AcceptedEvents": []},
+          "WarningEvents": {"Enabled": false, "AcceptedEvents": []},
+          "SystemEvents": {"Enabled": true, "AcceptedEvents": []}
+        }
+      }
+    },
+    {
+      "@odata.type": "#LenovoAlertRecipient.v1_0_0.LenovoAlertRecipient",
+      "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Recipients/2",
+      "Id": "2",
+      "RecipientSettings": {
+        "RecipientName": "",
+        "Enabledstate": false,
+        "AlertType": null,
+        "Address": "192.0.2.77",
+        "IncludeEventLog": false,
+        "EnabledAlerts": {
+          "CriticalEvents": {"Enabled": false, "AcceptedEvents": []},
+          "WarningEvents": {"Enabled": false, "AcceptedEvents": []},
+          "SystemEvents": {"Enabled": false, "AcceptedEvents": []}
+        }
+      }
+    }
+  ]
+}

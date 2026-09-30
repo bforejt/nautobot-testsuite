@@ -713,7 +713,7 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
    `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
-   `bmc_pcie_slots` and `bmc_accounts` landed. The first four ran live through the dev
+   `bmc_pcie_slots`, `bmc_accounts` and `bmc_alerting` landed. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -942,6 +942,21 @@ Recorded as they were found, each with how it was resolved.
       `OneTimePasscodeDeliveryAddress`, `ClientDN`) moved from a check-local
       redactor into the family scrubber and the fixture sanitizer, so the
       shakedown's reads of the same resources are covered too.
+    - `bmc_alerting`: §4b and the §5b lab note call the EventService SMTP
+      block populated; on the lab unit its server is the `0.0.0.0`
+      placeholder and its from-address null (the relay is unconfigured), so
+      `smtp_server`/`smtp_from` read null. Appendix B gives the Lenovo SNMP
+      traps' `AlertRecipient` as `{EnabledAlert}`; the lab serves per-class
+      `CriticalEvents`/`WarningEvents`/`SystemEvents` blocks (read as
+      served). Recipient names are scrubbed (`name_set` only — a recipient is
+      a person as often as a team) and server-sent-event subscriptions are
+      counted, never keyed (they are client sessions). Resolved at merge: a
+      subscription's `Context` string is scrubbed and keyed as `context_set`
+      (some receivers use it as a shared secret), and a BMC serving nothing
+      alerting-related at all is not-present rather than a view of nulls. A
+      linked Lenovo SNMP resource answering 404 fails this check while
+      `bmc_manager_network` records the same read as not served — left as
+      built, noted for the review.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

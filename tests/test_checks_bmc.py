@@ -228,6 +228,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_network_adapters",
         "bmc_pcie_slots",
         "bmc_accounts",
+        "bmc_alerting",
     }
 
     def test_all_registered_once(self):
@@ -4121,7 +4122,9 @@ class TestHygiene(unittest.TestCase):
         self.assertTrue(ctx.redacted)
         for path, redactor in ctx.redacted:
             self.assertIn(
-                redactor, ("_scrub_payload", "_redact_log_page", "_redact_task_page"), path
+                redactor,
+                ("_scrub_payload", "_redact_log_page", "_redact_task_page", "_alerting_redact"),
+                path,
             )
 
 
@@ -7314,6 +7317,668 @@ class TestAccounts(unittest.TestCase):
                 ("account|ops-admin", "locked", False, True),
                 ("role|ReadOnly", "oem_privileges", ["ReadOnly"], ["Supervisor"]),
             ],
+        )
+
+
+class TestAlerting(unittest.TestCase):
+    """bmc_alerting on hand-built shapes the lab unit lacks — populated subscriptions and
+    recipients, SNMP traps on, a configured mail relay. The fixtures (xcc_alerting_*.json) are
+    hand-built: the subscriptions from the DMTF EventDestination schema (Protocol,
+    SubscriptionType, EventFormatType and DeliveryRetryPolicy members as the lab's own
+    Subscriptions capabilities object allows them, plus the DMTF SSE type and SNMPv3
+    authentication/encryption protocol members); the recipients from the LenovoAlertRecipient
+    names of handoff Appendix B (no AlertType or AcceptedEvents member is known offline, so the
+    fixture serves AlertType null and empty event lists, the spelling the lab's SNMP trap filter
+    serves); the trap block in the lab's LenovoSNMPProtocol shape."""
+
+    ES = "/redfish/v1/EventService"
+    SUBS = ES + "/Subscriptions"
+    RCPT = MGR + "/Oem/Lenovo/Recipients"
+    NP = MGR + "/NetworkProtocol"
+    SNMP = NP + "/Oem/Lenovo/SNMP"
+    SMTP = NP + "/Oem/Lenovo/SMTPClient"
+    LS = SYS + "/LogServices"
+    # what must never leave a read: people's addresses and names, credentials, a webhook token
+    PEOPLE = (
+        "jane",
+        "Jane",
+        "Roe",
+        "xcc-alerts",
+        "smtp-user",
+        "relay-user",
+        "hunter2",
+        "hand-built-token",
+        "hand-built-community",
+        "hand-built-auth-key",
+        "hand-built-privacy-key",
+    )
+    SUBSCRIPTION_FIELDS = {
+        "destination",
+        "protocol",
+        "subscription_type",
+        "event_format",
+        "context_set",
+        "registry_prefixes",
+        "resource_types",
+        "message_ids",
+        "event_types",
+        "origin_resources",
+        "metric_report_definitions",
+        "subordinate_resources",
+        "include_origin_of_condition",
+        "delivery_retry_policy",
+        "send_heartbeat",
+        "heartbeat_interval_min",
+        "verify_certificate",
+        "snmp_authentication_protocol",
+        "snmp_encryption_protocol",
+        "syslog_filters",
+        "state",
+        "health",
+    }
+
+    def _payloads(self, expand=True):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(
+            payloads["/redfish/v1/"], EventService={"@odata.id": self.ES}
+        )
+        payloads[self.ES] = {
+            "@odata.id": self.ES,
+            "@odata.type": "#EventService.v1_7_2.EventService",
+            "Id": "EventService",
+            "Name": "Event Service",
+            "ServiceEnabled": True,
+            "Status": {"State": "Enabled", "Health": "OK"},
+            "DeliveryRetryAttempts": 5,
+            "DeliveryRetryIntervalSeconds": 30,
+            "EventFormatTypes": ["MetricReport", "Event"],
+            "RegistryPrefixes": ["ResourceEvent", "Base"],
+            "ResourceTypes": ["LogService"],
+            "ServerSentEventUri": self.ES + "/ServerSentEvent",
+            "SubordinateResourcesSupported": True,
+            "IncludeOriginOfConditionSupported": True,
+            "Subscriptions": {"@odata.id": self.SUBS},
+            "SMTP": {
+                "ServiceEnabled": True,
+                "ServerAddress": "smtp.example.com",
+                "Port": 587,
+                "FromAddress": "xcc-alerts@example.com",
+                "ConnectionProtocol": "AutoDetect",
+                "Authentication": "Login",
+                "Username": "smtp-user",
+                "Password": "hunter2",
+            },
+            "Actions": {
+                "#EventService.SubmitTestEvent": {
+                    "target": self.ES + "/Actions/EventService.SubmitTestEvent"
+                }
+            },
+        }
+        for path, name in (
+            (self.SUBS, "xcc_alerting_subscriptions_populated.json"),
+            (self.RCPT, "xcc_alerting_recipients_populated.json"),
+        ):
+            expanded = _fx(name)
+            if expand:
+                payloads[path + EXPAND] = expanded
+            plain, members = _split_collection(expanded)
+            payloads[path] = plain
+            payloads.update(members)
+        lenovo = payloads[MGR]["Oem"]["Lenovo"]
+        lenovo["Recipients"] = {"@odata.id": self.RCPT}
+        lenovo["RecipientsSettings"] = {
+            "RetryCount": 3,
+            "RetryInterval": 1.5,
+            "RntryRetryInterval": 2,
+        }
+        payloads[self.NP]["Oem"]["Lenovo"].update(
+            {"SNMP": {"@odata.id": self.SNMP}, "SMTPClient": {"@odata.id": self.SMTP}}
+        )
+        payloads[self.SNMP] = _fx("xcc_alerting_snmp_traps_configured.json")
+        payloads[self.SMTP] = {
+            "@odata.id": self.SMTP,
+            "@odata.type": "#LenovoSMTPClient.v1_0_0.LenovoSMTPClient",
+            "Id": "SMTPClient",
+            "Name": "SMTP Client",
+            "ProtocolEnabled": True,
+            "AccessInfo": "smtp.example.com",
+            "AccessPort": 25,
+            "Reverse-path": "jane.roe@example.com",
+            "Authentication": {
+                "Required": True,
+                "Method": "CRAM_MD5",
+                "UserName": "relay-user",
+                "Password": "hunter2",
+            },
+        }
+        return payloads
+
+    def test_every_scalar_and_row_is_read_from_its_resource(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_alerting(ctx)
+        view, context = result["normalized"], result["context"]
+        scalars = {
+            "event_service_enabled": True,
+            "event_service_state": "Enabled",
+            "event_service_health": "OK",
+            "delivery_retry_attempts": 5,
+            "delivery_retry_interval_s": 30,
+            "smtp_enabled": True,
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 587,
+            "smtp_from": "@example.com",  # the domain only: the local part names a person
+            "smtp_from_set": True,
+            "smtp_connection_protocol": "AutoDetect",
+            "smtp_auth_method": "Login",
+            "recipient_retry_count": 3,
+            "recipient_retry_interval": 1.5,
+            "recipient_entry_retry_interval": 2.0,
+            "snmp_trap_enabled": True,
+            "snmp_trap_port": 162,
+            "snmp_trap_v1": True,
+            "snmp_trap_v2": False,
+            # every target's addresses, sorted, the unset placeholders dropped
+            "trap_targets": ["192.0.2.61", "192.0.2.62", "trap-b.example.com"],
+            "snmp_trap_critical_enabled": True,
+            "snmp_trap_critical_events": [],
+            "snmp_trap_warning_enabled": True,
+            "snmp_trap_warning_events": [],
+            "snmp_trap_system_enabled": False,
+            "snmp_trap_system_events": [],
+            "smtp_client_enabled": True,
+            "smtp_client_server": "smtp.example.com",
+            "smtp_client_port": 25,
+            "smtp_client_reverse_path": "@example.com",
+            "smtp_client_reverse_path_set": True,
+            "smtp_client_auth_required": True,
+            "smtp_client_auth_method": "CRAM_MD5",
+            "platform_log_syslog_filters": None,  # the hand-built platform log serves none
+        }
+        self.assertEqual({key: view[key] for key in scalars}, scalars)
+        rows = sorted(key for key in view if "|" in key)
+        self.assertEqual(set(view), set(scalars) | set(rows))
+        # the SSE stream (subscription 5) is a client session: counted, never keyed
+        self.assertEqual(
+            rows,
+            ["recipient|1", "recipient|2"] + ["subscription|%d" % n for n in (1, 2, 3, 4)],
+        )
+        self.assertEqual(context["sse_subscriptions"], 1)
+        self.assertEqual(
+            view["subscription|1"],
+            {
+                # the webhook's query (its token) is never kept
+                "destination": "https://collector.example.com:8443/redfish/events",
+                "protocol": "Redfish",
+                "subscription_type": "RedfishEvent",
+                "event_format": "Event",
+                "context_set": True,  # the string itself is scrubbed: it can be a secret
+                "registry_prefixes": ["Base", "ResourceEvent"],
+                "resource_types": ["LogService"],
+                "message_ids": [],
+                "event_types": None,  # the deprecated filter, not served here
+                "origin_resources": ["/redfish/v1/Chassis/1", "/redfish/v1/Systems/1"],
+                "metric_report_definitions": [],
+                "subordinate_resources": True,
+                "include_origin_of_condition": True,
+                "delivery_retry_policy": "SuspendRetries",
+                "send_heartbeat": True,
+                "heartbeat_interval_min": 10,
+                "verify_certificate": True,
+                "snmp_authentication_protocol": None,
+                "snmp_encryption_protocol": None,
+                "syslog_filters": None,
+                "state": "Enabled",
+                "health": "OK",
+            },
+        )
+        for key in rows:
+            if key.startswith("subscription|"):
+                self.assertEqual(set(view[key]), self.SUBSCRIPTION_FIELDS, key)
+        # an SNMP URI's userinfo is its community: never kept
+        self.assertEqual(view["subscription|2"]["destination"], "snmp://192.0.2.60:162")
+        self.assertIs(view["subscription|2"]["context_set"], False)  # served ''
+        inform = view["subscription|3"]
+        self.assertEqual(
+            (
+                inform["protocol"],
+                inform["subscription_type"],
+                inform["snmp_authentication_protocol"],
+                inform["snmp_encryption_protocol"],
+                inform["delivery_retry_policy"],
+                inform["state"],
+                inform["registry_prefixes"],
+                inform["resource_types"],  # not served: None, never []
+            ),
+            (
+                "SNMPv3",
+                "SNMPInform",
+                "HMAC_SHA96",
+                "CFB128_AES128",
+                "RetryForeverWithBackoff",
+                "Disabled",
+                ["EventRegistry"],
+                None,
+            ),
+        )
+        mail = view["subscription|4"]
+        self.assertEqual(mail["destination"], "mailto:@example.com")
+        self.assertIs(mail["context_set"], True)
+        self.assertIsNone(mail["subscription_type"])  # not served on this member
+        self.assertEqual(
+            view["recipient|1"],
+            {
+                "name_set": True,  # the name itself is never kept
+                "enabled": True,
+                "alert_type": None,
+                "address": "@example.com",
+                "address_set": True,
+                "include_event_log": True,
+                "critical_enabled": True,
+                "critical_events": [],
+                "warning_enabled": False,
+                "warning_events": [],
+                "system_enabled": True,
+                "system_events": [],
+            },
+        )
+        syslog = view["recipient|2"]
+        self.assertEqual(
+            (syslog["name_set"], syslog["enabled"], syslog["address"], syslog["address_set"]),
+            (False, False, "192.0.2.77", True),  # a host without '@' is verbatim
+        )
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [self.ES, MGR, self.NP, self.SNMP, self.SMTP]
+            + [self.SUBS + EXPAND, self.RCPT + EXPAND]
+            # the platform log service, read the way bmc_event_log reads it
+            + [self.LS + EXPAND, self.LS, self.LS + "/PlatformLog"],
+        )
+        self.assertEqual(
+            context["sources"],
+            {
+                "event_service": self.ES,
+                "subscriptions": self.SUBS,
+                "recipients": self.RCPT,
+                "recipients_settings": MGR + " Oem.Lenovo.RecipientsSettings",
+                "snmp": self.SNMP,
+                "smtp_client": self.SMTP,
+            },
+        )
+        self.assertEqual(
+            (context["subscriptions"]["strategy"], context["subscriptions"]["members"]),
+            ("expand", 5),
+        )
+        self.assertEqual(
+            (context["recipients"]["strategy"], context["recipients"]["members"]), ("expand", 2)
+        )
+        self.assertEqual(
+            context["syslog_filters_source"],
+            {
+                "service": "PlatformLog",
+                "strategy": "members",
+                "expand_refused": "HTTP 404",
+                "note": None,
+            },
+        )
+        self.assertEqual(
+            (context["smtp_username_set"], context["smtp_client_username_set"]), (True, True)
+        )
+        self.assertEqual(
+            context["event_service_capabilities"]["event_format_types"], ["Event", "MetricReport"]
+        )
+        self.assertIsNone(context["vendor_mapping"])
+        self.assertEqual(context["resolution"]["system"], SYS)
+        self.assertEqual(
+            sorted(result["raw"]),
+            sorted([self.ES, self.SUBS + EXPAND, self.RCPT + EXPAND, self.SNMP, self.SMTP]),
+        )
+        self.assertNotIn("Actions", json.dumps(result["raw"]))
+
+    def test_people_and_credentials_never_reach_the_view_raw_or_the_trace(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_alerting(ctx)
+        stored = json.dumps(result)
+        # the per-run cache holds exactly what the debug trace copies
+        cached = json.dumps([payload for payload in ctx._cache.values() if payload])
+        for token in self.PEOPLE:
+            self.assertNotIn(token, stored, token)
+            self.assertNotIn(token, cached, token)
+        raw = result["raw"]
+        members = {member["Id"]: member for member in raw[self.SUBS + EXPAND]["Members"]}
+        self.assertEqual(
+            members["1"]["Destination"],
+            "https://collector.example.com:8443/redfish/events?***scrubbed***",
+        )
+        self.assertEqual(members["2"]["Destination"], "snmp://***scrubbed***@192.0.2.60:162")
+        self.assertEqual(members["4"]["Destination"], "mailto:***scrubbed***@example.com")
+        self.assertEqual(
+            members["3"]["SNMP"],
+            {
+                "AuthenticationProtocol": "HMAC_SHA96",
+                "AuthenticationKey": "***scrubbed***",
+                "EncryptionProtocol": "CFB128_AES128",
+                "EncryptionKey": "***scrubbed***",
+            },
+        )
+        recipient = raw[self.RCPT + EXPAND]["Members"][0]
+        self.assertEqual(recipient["Name"], "***scrubbed***")
+        self.assertEqual(recipient["RecipientSettings"]["RecipientName"], "***scrubbed***")
+        self.assertEqual(recipient["RecipientSettings"]["Address"], "***scrubbed***@example.com")
+        self.assertEqual(
+            raw[self.RCPT + EXPAND]["Members"][1]["RecipientSettings"]["RecipientName"], ""
+        )
+        self.assertEqual(raw[self.ES]["SMTP"]["FromAddress"], "***scrubbed***@example.com")
+        self.assertEqual(raw[self.SMTP]["Reverse-path"], "***scrubbed***@example.com")
+        self.assertEqual(raw[self.SNMP]["CommunityNames"], ["***scrubbed***", None, None])
+        # the alerting reads pass the alerting redactor, the shared ones the family's own
+        redactors = dict(ctx.redacted)
+        for path in (self.ES, self.SMTP, self.SUBS + EXPAND, self.RCPT + EXPAND):
+            self.assertEqual(redactors[path], "_alerting_redact", path)
+        for path in (MGR, self.NP, self.SNMP, self.LS, self.LS + "/PlatformLog"):
+            self.assertEqual(redactors[path], "_scrub_payload", path)
+
+    def test_the_redactor_is_idempotent_and_never_mutates_its_input(self):
+        member = {
+            "@odata.id": self.SUBS + "/9",
+            "Destination": "https://user:pw@collector.example.com:8443/in?code=secret#top",
+            "Context": "ops jane.roe@example.com",
+            "HttpHeaders": [{"Authorization": "Bearer secret"}],
+            "SNMP": {"TrapCommunity": "c"},
+            "Members@odata.count": 1,
+        }
+        original = copy.deepcopy(member)
+        redacted = checks._alerting_redact(member)
+        self.assertEqual(member, original)
+        self.assertEqual(
+            redacted["Destination"],
+            "https://***scrubbed***@collector.example.com:8443/in?***scrubbed***#top",
+        )
+        self.assertEqual(redacted["Context"], checks._SCRUBBED)  # it can be a shared secret
+        self.assertEqual(redacted["HttpHeaders"], ["***scrubbed***"])  # the count survives
+        self.assertEqual(redacted["SNMP"]["TrapCommunity"], "***scrubbed***")
+        self.assertEqual(redacted["@odata.id"], self.SUBS + "/9")
+        self.assertEqual(checks._alerting_redact(redacted), redacted)
+        self.assertNotIn("secret", json.dumps(redacted))
+        self.assertNotIn("jane", json.dumps(redacted))
+        # an address leaf keeps its domain and nothing else: no display name, no bare
+        # local part; a recipient's bare Address is a syslog host and stays
+        addresses = checks._alerting_redact(
+            {
+                "SMTP": {"FromAddress": "Jane Roe <jane.roe@example.com>"},
+                "Reverse-path": "jroe",
+                "RecipientSettings": {"Address": "syslog.example.com:514"},
+                "Other": {"Address": "Jane Roe <jane.roe@example.com>", "Note": "no address"},
+            }
+        )
+        self.assertEqual(
+            addresses,
+            {
+                "SMTP": {"FromAddress": "***scrubbed***@example.com"},
+                "Reverse-path": "***scrubbed***",
+                "RecipientSettings": {"Address": "syslog.example.com:514"},
+                "Other": {"Address": "***scrubbed***@example.com", "Note": "no address"},
+            },
+        )
+        self.assertEqual(checks._alerting_redact(addresses), addresses)
+
+    def test_destination_forms(self):
+        destination = checks._alerting_destination
+        for served, keyed in (
+            (
+                "https://collector.example.com:8443/redfish/events?code=t#frag",
+                "https://collector.example.com:8443/redfish/events",
+            ),
+            ("https://***scrubbed***@collector.example.com/in", "https://collector.example.com/in"),
+            ("https://user:pw@collector.example.com", "https://collector.example.com"),
+            ("snmp://***scrubbed***@192.0.2.60:162", "snmp://192.0.2.60:162"),
+            ("syslog://[2001:db8::10]:514", "syslog://[2001:db8::10]:514"),
+            ("mailto:***scrubbed***@example.com", "mailto:@example.com"),
+            ("mailto:a@example.com,b@example.net?subject=x", "mailto:@example.com,@example.net"),
+            ("192.0.2.77", "192.0.2.77"),
+            ("", None),
+            (None, None),
+        ):
+            self.assertEqual(destination(served), keyed, served)
+
+    def test_email_addresses_are_keyed_as_their_domain_with_a_set_flag(self):
+        for smtp, keyed in (
+            ({"FromAddress": "xcc-alerts@example.com"}, ("@example.com", True)),
+            ({"FromAddress": "<xcc-alerts@Mail.Example.com>"}, ("@Mail.Example.com", True)),
+            ({"FromAddress": "***scrubbed***@example.com"}, ("@example.com", True)),
+            ({"FromAddress": "xcc"}, (None, True)),  # set, but it names no domain
+            ({"FromAddress": ""}, (None, False)),
+            ({"FromAddress": None}, (None, False)),
+            ({}, (None, None)),  # the leaf is not served
+        ):
+            view, _context = checks._normalize_alerting({"SMTP": smtp})
+            self.assertEqual((view["smtp_from"], view["smtp_from_set"]), keyed, smtp)
+        view, _context = checks._normalize_alerting(None)
+        self.assertEqual((view["smtp_from"], view["smtp_from_set"]), (None, None))
+
+    def test_recipient_leaves_are_read_verbatim_and_never_inferred(self):
+        # 'value-b'/'value-a' are placeholder tokens, not Lenovo enum members: the
+        # normalizer never interprets AlertType or AcceptedEvents, it sorts and keeps them
+        row = checks._alerting_recipient(
+            {
+                "RecipientSettings": {
+                    "RecipientName": "***scrubbed***",
+                    "EnabledState": "Enabled",  # the case variant of Lenovo's Enabledstate
+                    "AlertType": "value-a",
+                    "Address": "0.0.0.0",
+                    "EnabledAlerts": {
+                        "CriticalEvents": {
+                            "Enabled": True,
+                            "AcceptedEvents": ["value-b", "value-a"],
+                        }
+                    },
+                }
+            }
+        )
+        self.assertEqual(
+            row,
+            {
+                "name_set": True,
+                "enabled": True,
+                "alert_type": "value-a",
+                "address": None,  # the unset placeholder is no address
+                "address_set": False,
+                "include_event_log": None,
+                "critical_enabled": True,
+                "critical_events": ["value-a", "value-b"],
+                "warning_enabled": None,  # an unserved class stays None, never False
+                "warning_events": None,
+                "system_enabled": None,
+                "system_events": None,
+            },
+        )
+        for served, enabled in ((False, False), ("Disabled", False), (None, None)):
+            settings = {"RecipientSettings": {"Enabledstate": served}}
+            self.assertIs(checks._alerting_recipient(settings)["enabled"], enabled, served)
+        # no settings block at all: every field present, None
+        self.assertEqual(set(checks._alerting_recipient({}).values()), {None})
+
+    def test_syslog_filters_of_the_platform_log_and_of_a_subscription(self):
+        payloads = self._payloads()
+        payloads[self.LS + "/PlatformLog"]["SyslogFilters"] = [
+            {"LogFacilities": ["Local0", "Daemon"], "LowestSeverity": "Warning"},
+            {"LogFacilities": [], "LowestSeverity": "Critical"},
+        ]
+        view = checks._collect_alerting(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(
+            view["platform_log_syslog_filters"],
+            [
+                {"log_facilities": [], "lowest_severity": "Critical"},
+                {"log_facilities": ["Daemon", "Local0"], "lowest_severity": "Warning"},
+            ],
+        )
+        row = checks._alerting_subscription(
+            {"Protocol": "SyslogUDP", "SyslogFilters": [{"LowestSeverity": "Error"}]}
+        )
+        self.assertEqual(
+            row["syslog_filters"], [{"log_facilities": None, "lowest_severity": "Error"}]
+        )
+
+    def test_the_platform_log_is_left_unread_where_the_family_cannot_resolve_one(self):
+        payloads = self._payloads()
+        payloads[self.LS] = {
+            "Members": [{"@odata.id": self.LS + "/Audit"}, {"@odata.id": self.LS + "/Other"}]
+        }
+        result = checks._collect_alerting(_FakeCtx(payloads))
+        source = result["context"]["syslog_filters_source"]
+        self.assertIsNone(source["service"])
+        self.assertIn("neither PlatformLog nor StandardLog", source["note"])
+        self.assertIsNone(result["normalized"]["platform_log_syslog_filters"])
+        del payloads[self.LS]
+        source = checks._collect_alerting(_FakeCtx(payloads))["context"]["syslog_filters_source"]
+        self.assertEqual(source["note"], self.LS + " answered 404")
+        # any other failure of the read fails the check
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_alerting(_FakeCtx(self._payloads(), errors={self.LS: 500}))
+
+    def test_a_refused_expand_is_paid_once_and_the_walk_is_complete(self):
+        expanded = checks._collect_alerting(_FakeCtx(self._payloads()))["normalized"]
+        for payloads, errors in (
+            (self._payloads(expand=False), {}),  # $expand answers 404
+            (self._payloads(), {self.SUBS + EXPAND: 501}),  # $expand refused
+        ):
+            ctx = _FakeCtx(payloads, errors=errors)
+            result = checks._collect_alerting(ctx)
+            self.assertEqual(result["normalized"], expanded)
+            self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + EXPAND])
+            self.assertEqual(result["context"]["subscriptions"]["strategy"], "members")
+            self.assertEqual(result["context"]["recipients"]["strategy"], "members")
+            # resolution 3, five singletons, the attempt + the collection + 5 members,
+            # the collection + 2 members, the LogServices collection + the platform log
+            self.assertEqual(len(ctx.gets), 3 + 5 + 7 + 3 + 2)
+            self.assertLessEqual(len(ctx.gets), checks._BUDGET_ALERTING)
+            # the raw of a walk is every request sent, each member curated and redacted
+            self.assertIn(self.SUBS + "/1", result["raw"])
+            self.assertNotIn("hand-built-token", json.dumps(result["raw"]))
+
+    def test_ignored_expand_is_walked_too(self):
+        payloads = self._payloads()
+        payloads[self.SUBS + EXPAND] = copy.deepcopy(payloads[self.SUBS])  # links only
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_alerting(ctx)
+        self.assertEqual(
+            result["context"]["subscriptions"]["expand_refused"], "members returned as links"
+        )
+        self.assertEqual(len([key for key in result["normalized"] if "subscription|" in key]), 4)
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + EXPAND])
+
+    def test_a_walk_the_budget_cannot_cover_is_refused_before_its_first_member(self):
+        payloads = self._payloads(expand=False)
+        payloads[self.SUBS] = {
+            "@odata.id": self.SUBS,
+            "Members": [{"@odata.id": "%s/%d" % (self.SUBS, n)} for n in range(1, 41)],
+        }
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_alerting(ctx)
+        self.assertIn("bmc_alerting subscriptions: 40 members to fetch", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.SUBS + "/")])
+
+    def test_a_linked_resource_that_answers_404_is_a_failed_read(self):
+        for gone, parent in (
+            ((self.ES,), "the service root"),
+            ((self.SUBS, self.SUBS + EXPAND), self.ES),
+            ((self.RCPT, self.RCPT + EXPAND), MGR),
+            ((self.SNMP,), self.NP),
+            ((self.SMTP,), self.NP),
+        ):
+            payloads = self._payloads()
+            for path in gone:
+                del payloads[path]
+            with self.assertRaises(checks.CollectError) as caught:
+                checks._collect_alerting(_FakeCtx(payloads))
+            self.assertIn(
+                "%s links %s but it answered 404" % (parent, gone[0]), str(caught.exception)
+            )
+        payloads = self._payloads()
+        payloads[self.SMTP] = {}
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_alerting(_FakeCtx(payloads))
+        self.assertIn("answered without a resource body", str(caught.exception))
+
+    def test_a_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[self.ES]["Subscriptions"] = {"@odata.id": self.ES + "/Actions/x"}
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_alerting(_FakeCtx(payloads))
+        self.assertIn("server-supplied link refused", str(caught.exception))
+
+    def test_empty_services_are_an_empty_keyed_view(self):
+        payloads = self._payloads()
+        for path in (self.SUBS, self.RCPT):
+            payloads[path + EXPAND] = {"@odata.id": path, "Members": [], "Members@odata.count": 0}
+        result = checks._collect_alerting(_FakeCtx(payloads))
+        view = result["normalized"]
+        self.assertFalse([key for key in view if "|" in key])
+        self.assertIs(view["event_service_enabled"], True)
+        self.assertEqual(result["context"]["subscriptions"]["members"], 0)
+        self.assertEqual(result["context"]["recipients"]["members"], 0)
+
+    def test_other_vendors_read_the_dmtf_event_service_and_nothing_of_lenovo(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_alerting(ctx)
+        view = result["normalized"]
+        self.assertEqual(
+            sorted(key for key in view if "|" in key),
+            ["subscription|%d" % n for n in (1, 2, 3, 4)],
+        )
+        for field in (
+            "recipient_retry_count",
+            "snmp_trap_enabled",
+            "trap_targets",
+            "smtp_client_enabled",
+            "smtp_client_reverse_path_set",
+        ):
+            self.assertIsNone(view[field], field)
+        self.assertEqual(view["smtp_server"], "smtp.example.com")
+        self.assertFalse([path for path in ctx.gets if "/Oem/Lenovo" in path])
+        self.assertNotIn(MGR, ctx.gets)
+        self.assertIn("no Contoso mapping", result["context"]["vendor_mapping"])
+        # without an EventService there is nothing this family can read there
+        payloads["/redfish/v1/"].pop("EventService")
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_alerting(_FakeCtx(payloads))
+        self.assertIn("no Contoso mapping for the alerting resources", str(caught.exception))
+
+    def test_a_lenovo_bmc_linking_nothing_is_not_present(self):
+        # the hand-built base set: no EventService link, no Lenovo alerting link
+        ctx = _FakeCtx(_base_payloads())
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_alerting(ctx)
+        self.assertIn("links no EventService", str(caught.exception))
+        self.assertNotIn("/redfish/v1/EventService", ctx.gets)
+
+    def test_shared_reads_answer_from_the_cache(self):
+        ctx = _FakeCtx(self._payloads())
+        checks._collect_manager_network(ctx)
+        checks._collect_event_log(ctx)
+        before = len(ctx.gets)
+        checks._collect_alerting(ctx)
+        # the Manager, NetworkProtocol, SNMP and log service reads are the other checks' own
+        self.assertEqual(
+            ctx.gets[before:], [self.ES, self.SMTP, self.SUBS + EXPAND, self.RCPT + EXPAND]
+        )
+
+    def test_the_same_view_twice_diffs_to_nothing_and_a_disabled_recipient_is_one_change(self):
+        compare = registry.CHECKS["bmc_alerting"].compare
+        self.assertEqual(compare, {"mode": "equality_set"})
+        pre = checks._collect_alerting(_FakeCtx(self._payloads()))["normalized"]
+        post = checks._collect_alerting(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        payloads = self._payloads()
+        payloads[self.RCPT + EXPAND]["Members"][0]["RecipientSettings"]["Enabledstate"] = False
+        post = checks._collect_alerting(_FakeCtx(payloads))["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [("recipient|1", "enabled", True, False)],
         )
 
 

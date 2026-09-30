@@ -1749,7 +1749,8 @@ class TestBmcLabFamily(unittest.TestCase):
         # NetworkDeviceFunctions for each of three adapters)
         # (+ bmc_pcie_slots' 2: PCIeSlots and the Lenovo slot table)
         # (+ bmc_accounts' 4: the AccountService, Accounts, Roles and the LDAP client)
-        self.assertLessEqual(len(ctx.gets), 73)
+        # (+ bmc_alerting's 4: the EventService, the SMTP client, Subscriptions, Recipients)
+        self.assertLessEqual(len(ctx.gets), 77)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -2885,6 +2886,122 @@ class TestBmcLabAccounts(unittest.TestCase):
         self.assertEqual(raw[self.SERVICE]["Oem"]["Lenovo"]["CurrentLoggedUsers"], [])
         self.assertIsNone(raw[self.LDAP_CLIENT]["BindingMethod"]["ClientPassword"])
         self.assertNotIn("@odata.etag", json.dumps(raw))
+
+
+class TestBmcLabAlerting(unittest.TestCase):
+    """bmc_alerting on the lab payloads: the EventService with its SMTP block, the Manager's
+    recipient retry settings, the Lenovo SNMP trap block and SMTP client are served; no
+    subscription, no recipient, traps off — empty keyed families, never not-present."""
+
+    ES = "/redfish/v1/EventService"
+    SUBS = ES + "/Subscriptions"
+    MGR = "/redfish/v1/Managers/1"
+    NP = MGR + "/NetworkProtocol"
+    RCPT = MGR + "/Oem/Lenovo/Recipients"
+    SNMP = NP + "/Oem/Lenovo/SNMP"
+    SMTP = NP + "/Oem/Lenovo/SMTPClient"
+    LS = "/redfish/v1/Systems/1/LogServices"
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+
+    def test_alerting(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_alerting(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            view,
+            {
+                "event_service_enabled": True,
+                "event_service_state": "Enabled",
+                "event_service_health": "OK",
+                "delivery_retry_attempts": 3,
+                "delivery_retry_interval_s": 60,
+                "smtp_enabled": True,
+                "smtp_server": None,  # served as the unset placeholder 0.0.0.0
+                "smtp_port": 25,
+                "smtp_from": None,  # served null
+                "smtp_from_set": False,
+                "smtp_connection_protocol": "AutoDetect",
+                "smtp_auth_method": "None",  # the enum member, verbatim
+                "recipient_retry_count": 5,
+                "recipient_retry_interval": 0.5,
+                "recipient_entry_retry_interval": 0.5,  # RntryRetryInterval, sic
+                "snmp_trap_enabled": False,
+                "snmp_trap_port": 162,
+                "snmp_trap_v1": False,
+                "snmp_trap_v2": False,
+                "trap_targets": [],  # one target served, with no address
+                "snmp_trap_critical_enabled": False,
+                "snmp_trap_critical_events": [],
+                "snmp_trap_warning_enabled": False,
+                "snmp_trap_warning_events": [],
+                "snmp_trap_system_enabled": False,
+                "snmp_trap_system_events": [],
+                "smtp_client_enabled": True,
+                "smtp_client_server": None,  # AccessInfo 0.0.0.0: no mail server configured
+                "smtp_client_port": 25,
+                "smtp_client_reverse_path": None,
+                "smtp_client_reverse_path_set": False,
+                "smtp_client_auth_required": False,
+                "smtp_client_auth_method": "CRAM_MD5",
+                "platform_log_syslog_filters": None,  # the StandardLog serves no SyslogFilters
+            },
+        )
+        # one GET per resource, each collection in one $expand GET; the SNMP and log
+        # service reads are the ones bmc_manager_network and bmc_event_log make
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + [self.ES, self.MGR, self.NP, self.SNMP, self.SMTP]
+            + [self.SUBS + _XCC_EXPAND, self.RCPT + _XCC_EXPAND, self.LS + _XCC_EXPAND],
+        )
+        for family in ("subscriptions", "recipients"):
+            self.assertEqual(
+                (context[family]["strategy"], context[family]["members"]), ("expand", 0), family
+            )
+        self.assertEqual(context["sse_subscriptions"], 0)
+        self.assertEqual(
+            (context["smtp_username_set"], context["smtp_client_username_set"]), (False, False)
+        )
+        self.assertEqual(
+            context["syslog_filters_source"],
+            {"service": "StandardLog", "strategy": "expand", "expand_refused": None, "note": None},
+        )
+        self.assertEqual(
+            context["sources"]["recipients_settings"], self.MGR + " Oem.Lenovo.RecipientsSettings"
+        )
+        capabilities = context["event_service_capabilities"]
+        self.assertEqual(capabilities["event_format_types"], ["Event", "MetricReport"])
+        self.assertEqual(capabilities["resource_types"], ["LogService"])
+        self.assertIs(capabilities["server_sent_events"], True)
+        self.assertIsNone(context["vendor_mapping"])
+        raw = result["raw"]
+        self.assertEqual(
+            sorted(raw),
+            sorted(
+                [self.ES, self.SUBS + _XCC_EXPAND, self.RCPT + _XCC_EXPAND, self.SNMP, self.SMTP]
+            ),
+        )
+        # the placeholders stay verbatim in raw; credentials and communities never do
+        self.assertEqual(raw[self.ES]["SMTP"]["ServerAddress"], "0.0.0.0")
+        self.assertEqual(raw[self.SMTP]["AccessInfo"], "0.0.0.0")
+        self.assertEqual(raw[self.ES]["SMTP"]["Username"], "")  # emptiness kept
+        self.assertEqual(raw[self.SNMP]["CommunityNames"], [None])
+        self.assertNotIn("Actions", raw[self.ES])
+
+    def test_the_walk_without_expand_fits_the_budget(self):
+        # resolution 5; the EventService, Manager, NetworkProtocol, SNMP resource and SMTP
+        # client; the Subscriptions $expand attempt (refused) and collection; the Recipients
+        # collection (the refusal is not asked again); the LogServices collection and the
+        # StandardLog
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_alerting(ctx)
+        self.assertEqual(result["normalized"], bmc._collect_alerting(_xcc_lab_ctx())["normalized"])
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.SUBS + _XCC_EXPAND])
+        self.assertEqual(len(ctx.gets), 5 + 5 + 2 + 1 + 2)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_ALERTING)
+        self.assertEqual(result["context"]["subscriptions"]["expand_refused"], "HTTP 501")
+        self.assertEqual(result["context"]["syslog_filters_source"]["strategy"], "members")
 
 
 if __name__ == "__main__":

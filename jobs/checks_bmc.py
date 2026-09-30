@@ -6080,6 +6080,586 @@ def _collect_accounts(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_alerting ------------------------------------------------------------
+# Who the BMC tells about a fault, and how: the DMTF EventService (delivery
+# retries, its SMTP block) and its Subscriptions (Redfish, SNMP, SMTP and syslog
+# event destinations) on every vendor; on Lenovo the Manager's alert Recipients
+# (e-mail and syslog notification targets) with their retry settings, the trap
+# block of the SNMP resource and the SMTP client resource; the platform log
+# service's SyslogFilters where served. The Manager, NetworkProtocol and SNMP
+# reads are the ones bmc_system and bmc_manager_network make, and the log
+# service reads bmc_event_log's (same paths, kwargs and redactors), so the
+# per-run cache answers one check for the other.
+# GETs, the lab SE350 with $expand honoured: the EventService, the Manager,
+# NetworkProtocol, the SNMP resource and the SMTP client, one $expand GET each
+# for the Subscriptions and the Recipients, and the LogServices $expand GET —
+# 8 beyond the id resolution. With every $expand refused (the attempt paid
+# once, on the Subscriptions, never again): those five singletons, the
+# Subscriptions 1 + 1 + its members, the Recipients 1 + its members, the
+# LogServices collection and the platform log service — 10 on the lab layout
+# (both collections empty). _BUDGET_ALERTING = 30 + _TARGET_GETS leaves 20
+# GETs for subscriptions and recipients walked member by member; a walk the
+# budget cannot cover is refused with its member count before its first
+# member is read (_fetch_collection), never recorded partially.
+_BUDGET_ALERTING = 30 + _TARGET_GETS
+# Leaves scrubbed with their emptiness kept wherever an alerting resource
+# carries them: a recipient's name (a person as often as a team, as the family
+# scrubs contact names) and the request headers a subscription was created
+# with (DMTF: null in responses; a firmware echoing them would echo an
+# Authorization header) — a list keeps its element count.
+# A subscription's Context is the subscriber's own string, echoed in every event:
+# some receivers use it as a shared secret, so it is scrubbed (set / unset kept).
+_ALERTING_SCRUB_KEYS = frozenset({"recipientname", "httpheaders", "context"})
+# Leaves that hold one address: the SMTP 'from' address and reverse path (an
+# e-mail address) and a recipient's Address (an e-mail address, or a syslog
+# host). An e-mail address in them is stored as the scrub marker plus its
+# domain, whatever display name surrounds it; a bare value is a host in
+# Address and a local part (a person) in the other two.
+_ALERTING_ADDRESS_KEYS = frozenset({"fromaddress", "reverse-path", "address"})
+# The local part of an e-mail address names a person; its domain is kept.
+_ALERTING_EMAIL_LOCAL = re.compile(r"[^\s@<>()\[\],;:\"'/\\?#&=]+(?=@[A-Za-z0-9])")
+_ALERTING_DOMAIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*")
+_ALERTING_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*")
+# The event classes of a Lenovo alert filter (a recipient's EnabledAlerts, the
+# SNMP trap block's AlertRecipient): (key prefix, block).
+_ALERTING_EVENT_CLASSES = (
+    ("critical", "CriticalEvents"),
+    ("warning", "WarningEvents"),
+    ("system", "SystemEvents"),
+)
+
+
+def _alerting_mask(text):
+    """``text`` with every e-mail address's local part scrubbed (the domain stays)."""
+    return _ALERTING_EMAIL_LOCAL.sub(_SCRUBBED, text)
+
+
+def _alerting_scrub_query(value):
+    """A destination URI with its query scrubbed (a webhook token rides there), the rest kept."""
+    head, sep, tail = value.partition("?")
+    if not sep:
+        return value
+    query, hash_mark, fragment = tail.partition("#")
+    if not query or query == _SCRUBBED:
+        return value
+    return "%s?%s%s%s" % (head, _SCRUBBED, hash_mark, fragment)
+
+
+def _alerting_address_leaf(value, bare_is_host):
+    """An address leaf as stored: an e-mail address becomes the scrub marker plus its domain.
+
+    A value without an '@' is kept when it is a host (a syslog recipient's
+    Address) and scrubbed when it can only be a local part.
+    """
+    if not value.strip():
+        return value
+    if "@" in value:
+        return _SCRUBBED + (_alerting_domain(value) or "")
+    return value if bare_is_host else _SCRUBBED
+
+
+def _alerting_people(node):
+    """The alerting layer of _alerting_redact (a new structure; ``node`` is never mutated)."""
+    if isinstance(node, dict):
+        out = {}
+        for key, value in node.items():
+            name = str(key)
+            if "@odata." in name:
+                out[key] = value  # links and OData control leaves: navigation, never people
+            elif name.lower() in _ALERTING_SCRUB_KEYS:
+                out[key] = _scrub_value(value)
+            elif name.lower() in _ALERTING_ADDRESS_KEYS and isinstance(value, str):
+                out[key] = _alerting_address_leaf(value, name.lower() == "address")
+            elif name == "Destination" and isinstance(value, str):
+                out[key] = _alerting_scrub_query(_alerting_mask(value))
+            else:
+                out[key] = _alerting_people(value)
+        if isinstance(node.get("RecipientSettings"), dict) and "Name" in out:
+            # a recipient resource's own Name may repeat the recipient's name
+            out["Name"] = _scrub_value(out["Name"])
+        return out
+    if isinstance(node, list):
+        return [_alerting_people(item) for item in node]
+    if isinstance(node, str):
+        return _alerting_mask(node)
+    return node
+
+
+def _alerting_redact(node):
+    """The redactor of every alerting read that may name a person: _scrub_payload, then more.
+
+    On top of the family scrub (credentials, community strings, user names,
+    URL userinfo): every e-mail address keeps its domain only (an address
+    leaf keeps nothing else, a display name included), a recipient's name
+    (and its resource's Name) is scrubbed with its emptiness kept, a
+    subscription's request headers keep their count only and its
+    Destination's query string is scrubbed — before the debug trace, the
+    per-run cache or a normalizer sees the payload. Idempotent.
+    """
+    return _alerting_people(_scrub_payload(node))
+
+
+def _alerting_set(node, key):
+    """Whether ``node[key]`` holds a value; None when the leaf is not served.
+
+    A scrub marker counts as a value (something is set); '' and the unset-slot
+    placeholders ('::', '0.0.0.0') do not.
+    """
+    if not isinstance(node, dict) or key not in node:
+        return None
+    return _manager_network_address(node[key]) is not None
+
+
+def _alerting_domain(value):
+    """'@<domain>' of an e-mail address, never its local part; None when it names no domain."""
+    text = _text(value)
+    if text is None or "@" not in text:
+        return None
+    match = _ALERTING_DOMAIN.match(text.rpartition("@")[2])
+    return "@" + match.group(0).rstrip(".-") if match else None
+
+
+def _alerting_text(value):
+    """A free-text leaf verbatim, every e-mail address in it reduced to its '@domain'."""
+    text = _text(value)
+    return _ALERTING_EMAIL_LOCAL.sub("", text) if text is not None else None
+
+
+def _alerting_destination(value):
+    """A subscription's Destination as keyed: never its userinfo, query or fragment.
+
+    scheme://host:port/path for a hierarchical URI (https, snmp:// — whose
+    userinfo is an SNMP community — syslog://); 'mailto:' plus each address's
+    domain for an SMTP destination (RFC 6068, its ?headers dropped); anything
+    else verbatim with every e-mail address reduced to its domain.
+    """
+    text = _text(value)
+    if text is None:
+        return None
+    base = text.partition("#")[0].partition("?")[0]
+    scheme, sep, rest = base.partition("://")
+    if sep and _ALERTING_SCHEME.fullmatch(scheme):
+        authority, slash, path = rest.partition("/")
+        return "%s://%s%s%s" % (scheme, authority.rpartition("@")[2], slash, path)
+    if base.lower().startswith("mailto:"):
+        domains = [_alerting_domain(part) for part in base[len("mailto:") :].split(",")]
+        return "mailto:" + ",".join(domain for domain in domains if domain)
+    return _alerting_text(text)
+
+
+def _alerting_list(value):
+    """A served list's items as sorted text (a firmware's order is not state); None unserved."""
+    if not isinstance(value, list):
+        return None
+    return sorted(item for item in (_text(entry) for entry in value) if item is not None)
+
+
+def _alerting_links(value):
+    """The sorted @odata.id paths of a served link array (recorded, never followed)."""
+    if not isinstance(value, list):
+        return None
+    return sorted(
+        link for link in (_text(_dig(item, "@odata.id")) for item in _dicts(value)) if link
+    )
+
+
+def _alerting_syslog_filters(value):
+    """DMTF SyslogFilters as sorted {log_facilities (sorted), lowest_severity}; None unserved."""
+    if not isinstance(value, list):
+        return None
+    rows = [
+        {
+            "log_facilities": _alerting_list(entry.get("LogFacilities")),
+            "lowest_severity": _text(entry.get("LowestSeverity")),
+        }
+        for entry in _dicts(value)
+    ]
+    return sorted(rows, key=lambda row: (row["lowest_severity"] or "", row["log_facilities"] or []))
+
+
+def _alerting_event_filter(alerts, prefix):
+    """'<prefix><class>_enabled' and '<prefix><class>_events' (sorted, verbatim) per event class."""
+    fields = {}
+    for name, block in _ALERTING_EVENT_CLASSES:
+        node = _dig(alerts, block)
+        fields["%s%s_enabled" % (prefix, name)] = _to_bool(_dig(node, "Enabled"))
+        fields["%s%s_events" % (prefix, name)] = _alerting_list(_dig(node, "AcceptedEvents"))
+    return fields
+
+
+def _alerting_trap_targets(traps):
+    """Every trap target address, sorted, unset placeholders dropped; None when Targets unserved."""
+    targets = _dig(traps, "Targets")
+    if not isinstance(targets, list):
+        return None
+    addresses = []
+    for target in _dicts(targets):
+        for value in _aslist(target.get("Addresses")):
+            address = _manager_network_address(value)
+            if address is not None:
+                addresses.append(address)
+    return sorted(addresses)
+
+
+def _alerting_subscription(member):
+    """One 'subscription|<Id>' row (a DMTF EventDestination); every field present, None unserved."""
+    health, state = _status(member)
+    snmp = _dig(member, "SNMP")
+    return {
+        "destination": _alerting_destination(member.get("Destination")),
+        "protocol": _text(member.get("Protocol")),
+        "subscription_type": _text(member.get("SubscriptionType")),
+        "event_format": _text(member.get("EventFormatType")),
+        "context_set": _alerting_set(member, "Context"),
+        "registry_prefixes": _alerting_list(member.get("RegistryPrefixes")),
+        "resource_types": _alerting_list(member.get("ResourceTypes")),
+        "message_ids": _alerting_list(member.get("MessageIds")),
+        "event_types": _alerting_list(member.get("EventTypes")),  # the v1_0 filter, deprecated
+        "origin_resources": _alerting_links(member.get("OriginResources")),
+        "metric_report_definitions": _alerting_links(member.get("MetricReportDefinitions")),
+        "subordinate_resources": _to_bool(member.get("SubordinateResources")),
+        "include_origin_of_condition": _to_bool(member.get("IncludeOriginOfCondition")),
+        "delivery_retry_policy": _text(member.get("DeliveryRetryPolicy")),
+        "send_heartbeat": _to_bool(member.get("SendHeartbeat")),
+        "heartbeat_interval_min": _to_int(member.get("HeartbeatIntervalMinutes")),
+        "verify_certificate": _to_bool(member.get("VerifyCertificate")),
+        "snmp_authentication_protocol": _text(_dig(snmp, "AuthenticationProtocol")),
+        "snmp_encryption_protocol": _text(_dig(snmp, "EncryptionProtocol")),
+        "syslog_filters": _alerting_syslog_filters(member.get("SyslogFilters")),
+        "state": state,
+        "health": health,
+    }
+
+
+def _alerting_recipient(member):
+    """One 'recipient|<Id>' row (LenovoAlertRecipient.RecipientSettings); None where unserved.
+
+    ``enabled`` is Lenovo's Enabledstate (sic; matched case-insensitively) and
+    nothing else. An address carrying an '@' is an e-mail address, keyed as
+    its domain; one without is a syslog host, verbatim.
+    """
+    settings = _dig(member, "RecipientSettings")
+    address = _text(_dig(settings, "Address"))
+    if address is not None and "@" in address:
+        address = _alerting_domain(address)
+    else:
+        address = _manager_network_address(address)
+    row = {
+        "name_set": _alerting_set(settings, "RecipientName"),
+        "enabled": _to_bool(_manager_network_leaf(settings, "Enabledstate")),
+        "alert_type": _text(_dig(settings, "AlertType")),
+        "address": address,
+        "address_set": _alerting_set(settings, "Address"),
+        "include_event_log": _to_bool(_dig(settings, "IncludeEventLog")),
+    }
+    row.update(_alerting_event_filter(_dig(settings, "EnabledAlerts"), ""))
+    return row
+
+
+def _alerting_capabilities(event_service):
+    """What the EventService says it can send (firmware-defined: context); None when unserved."""
+    if not isinstance(event_service, dict):
+        return None
+    return {
+        "registry_prefixes": _alerting_list(event_service.get("RegistryPrefixes")),
+        "resource_types": _alerting_list(event_service.get("ResourceTypes")),
+        "event_format_types": _alerting_list(event_service.get("EventFormatTypes")),
+        "server_sent_events": _alerting_set(event_service, "ServerSentEventUri"),
+        "subordinate_resources_supported": _to_bool(
+            event_service.get("SubordinateResourcesSupported")
+        ),
+        "include_origin_of_condition_supported": _to_bool(
+            event_service.get("IncludeOriginOfConditionSupported")
+        ),
+    }
+
+
+def _normalize_alerting(
+    event_service,
+    subscriptions=None,
+    recipients=None,
+    *,
+    manager=None,
+    snmp=None,
+    smtp_client=None,
+    platform_log=None,
+):
+    """(normalized, context) of who the BMC tells and how.
+
+    ``event_service`` is the DMTF EventService and ``subscriptions`` its
+    Subscriptions members; ``recipients`` the Lenovo alert recipients,
+    ``manager`` the Manager (its Oem.Lenovo.RecipientsSettings), ``snmp`` the
+    Lenovo SNMP resource (its SNMPTraps block) and ``smtp_client`` the Lenovo
+    SMTP client — None on other vendors and wherever not served — and
+    ``platform_log`` the platform log service (its SyslogFilters). Every
+    scalar is always present, None when unserved; the SMTP server leaves and
+    trap addresses read the unset placeholders ('', '::', '0.0.0.0') as None.
+    Rows are 'subscription|<Id>' (an SSE stream is a client's session: counted
+    in context, never keyed) and 'recipient|<Id>'. An e-mail address is keyed
+    as its '@domain' beside a _set flag; a credential is never keyed (context
+    says whether an SMTP user name is set).
+    """
+    smtp = _dig(event_service, "SMTP")
+    health, state = _status(event_service)
+    settings = _dig(manager, "Oem", "Lenovo", "RecipientsSettings")
+    traps = _dig(snmp, "SNMPTraps")
+    client_auth = _dig(smtp_client, "Authentication")
+    normalized = {
+        "event_service_enabled": _to_bool(_dig(event_service, "ServiceEnabled")),
+        "event_service_state": state,
+        "event_service_health": health,
+        "delivery_retry_attempts": _to_int(_dig(event_service, "DeliveryRetryAttempts")),
+        "delivery_retry_interval_s": _to_int(_dig(event_service, "DeliveryRetryIntervalSeconds")),
+        "smtp_enabled": _to_bool(_dig(smtp, "ServiceEnabled")),
+        "smtp_server": _manager_network_address(_dig(smtp, "ServerAddress")),
+        "smtp_port": _to_int(_dig(smtp, "Port")),
+        "smtp_from": _alerting_domain(_dig(smtp, "FromAddress")),
+        "smtp_from_set": _alerting_set(smtp, "FromAddress"),
+        "smtp_connection_protocol": _text(_dig(smtp, "ConnectionProtocol")),
+        "smtp_auth_method": _text(_dig(smtp, "Authentication")),
+        # Lenovo: the recipients' delivery retries (RntryRetryInterval, sic), verbatim
+        "recipient_retry_count": _to_int(_dig(settings, "RetryCount")),
+        "recipient_retry_interval": _to_float(_dig(settings, "RetryInterval")),
+        "recipient_entry_retry_interval": _to_float(_dig(settings, "RntryRetryInterval")),
+        # Lenovo: the SNMP resource's trap block
+        "snmp_trap_enabled": _to_bool(_dig(traps, "ProtocolEnabled")),
+        "snmp_trap_port": _to_int(_dig(traps, "Port")),
+        "snmp_trap_v1": _to_bool(_dig(traps, "SNMPv1TrapEnabled")),
+        "snmp_trap_v2": _to_bool(_dig(traps, "SNMPv2TrapEnabled")),
+        "trap_targets": _alerting_trap_targets(traps),
+    }
+    normalized.update(_alerting_event_filter(_dig(traps, "AlertRecipient"), "snmp_trap_"))
+    normalized.update(
+        {
+            # Lenovo: the SMTP client resource
+            "smtp_client_enabled": _to_bool(_dig(smtp_client, "ProtocolEnabled")),
+            "smtp_client_server": _manager_network_address(_dig(smtp_client, "AccessInfo")),
+            "smtp_client_port": _to_int(_dig(smtp_client, "AccessPort")),
+            "smtp_client_reverse_path": _alerting_domain(_dig(smtp_client, "Reverse-path")),
+            "smtp_client_reverse_path_set": _alerting_set(smtp_client, "Reverse-path"),
+            "smtp_client_auth_required": _to_bool(_dig(client_auth, "Required")),
+            "smtp_client_auth_method": _text(_dig(client_auth, "Method")),
+            # DMTF: what the platform log service keeps of syslog traffic
+            "platform_log_syslog_filters": _alerting_syslog_filters(
+                _dig(platform_log, "SyslogFilters")
+            ),
+        }
+    )
+    sse = 0
+    for member in _dicts(subscriptions):
+        if (_text(member.get("SubscriptionType")) or "").lower() == "sse":
+            sse += 1
+            continue
+        key = "subscription|%s" % (_member_id(member) or "?",)
+        normalized[key] = _alerting_subscription(member)
+    for member in _dicts(recipients):
+        normalized["recipient|%s" % (_member_id(member) or "?",)] = _alerting_recipient(member)
+    context = {
+        "sse_subscriptions": sse,
+        "smtp_username_set": _alerting_set(smtp, "Username"),
+        "smtp_client_username_set": _alerting_set(client_auth, "UserName"),
+        "event_service_capabilities": _alerting_capabilities(event_service),
+    }
+    return normalized, context
+
+
+def _alerting_linked(ctx, link, parent, redact):
+    """A linked singleton resource; a link that answers 404 or an empty body is a failed read."""
+    payload = _get_optional(ctx, link, redact=redact)
+    if payload is None:
+        raise CollectError("%s links %s but it answered 404" % (parent, link))
+    if not isinstance(payload, dict) or not payload:
+        raise CollectError("%s answered without a resource body" % (link,))
+    return payload
+
+
+def _alerting_collection(ctx, link, parent, label, budget, try_expand):
+    """(members, how it was read, raw) of a linked collection; a link answering 404 fails."""
+    members, meta, raw = _fetch_collection(
+        ctx,
+        link,
+        label,
+        ok_404=True,
+        budget=budget,
+        redact=_alerting_redact,
+        try_expand=try_expand,
+    )
+    if members is None:
+        raise CollectError("%s links %s but it answered 404" % (parent, link))
+    record = {
+        "resource": link,
+        "strategy": meta["strategy"],
+        "members": len(members),
+        "expand_refused": meta.get("expand_refused"),
+    }
+    return members, record, raw
+
+
+def _alerting_platform_log(ctx, targets, try_expand):
+    """(the platform log service or None, how it was found) for its SyslogFilters.
+
+    The reads are bmc_event_log's own (the LogServices $expand GET, else the
+    collection and the platform log service, same kwargs and redactor), so the
+    per-run cache answers one check for the other; ``try_expand`` False (a
+    refusal this check already saw) skips the $expand attempt. A layout the
+    family cannot resolve to a platform log (another vendor's several services,
+    Lenovo without PlatformLog or StandardLog) or a System serving no
+    LogServices leaves the filters unread, said in ``note``; any other failed
+    read fails the check.
+    """
+    services_path = _sub(targets["system"], "LogServices")
+    meta = {"service": None, "strategy": None, "expand_refused": None, "note": None}
+    inline = None
+    attempted = try_expand and _expand_advertised(_get(ctx, _ROOT)) is not False
+    if attempted:
+        try:
+            payload = _get_optional(ctx, services_path + _EXPAND)
+        except Exception as exc:  # transport error class is not importable here
+            if _http_status(exc) is None:
+                raise  # budget, fence or network failure — never a fallback trigger
+            payload, meta["expand_refused"] = None, "HTTP %s" % (_http_status(exc),)
+        if payload is not None and _expanded(_dicts(payload.get("Members"))):
+            inline = {}
+            for member in _dicts(payload.get("Members")):
+                link = _fenced_link(member, "bmc_alerting log service")
+                if link is not None:
+                    inline[link] = member
+        elif payload is not None:
+            meta["expand_refused"] = "members returned as links"
+    if inline is not None:
+        links, meta["strategy"] = list(inline), "expand"
+    else:
+        try:
+            collection = _get(ctx, services_path)
+        except Exception as exc:  # transport error class is not importable here
+            if _http_status(exc) != 404:
+                raise
+            meta["note"] = "%s answered 404" % (services_path,)
+            return None, meta
+        if attempted and meta["expand_refused"] is None:
+            meta["expand_refused"] = "HTTP 404"  # the collection exists; its $expand form not
+        links = _member_links(collection, "bmc_alerting log services")
+        meta["strategy"] = "members"
+    try:
+        link, meta["service"] = _pick_log_service(links, targets)
+    except (SkipCheck, CollectError) as exc:
+        meta["note"] = str(exc)
+        return None, meta
+    return (inline[link] if inline is not None else _get(ctx, link)), meta
+
+
+def _collect_alerting(ctx):
+    raw = {}
+    event_service = subscriptions = recipients = manager = snmp = smtp_client = None
+    event_link = subscriptions_link = recipients_link = snmp_link = smtp_link = None
+    collections = {"subscriptions": None, "recipients": None}
+    try_expand = True
+    with ctx.budget("bmc_alerting", _BUDGET_ALERTING) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        event_link = _fenced_link(
+            _dig(_get(ctx, _ROOT), "EventService"), "bmc_alerting EventService"
+        )
+        if event_link is not None:
+            event_service = _alerting_linked(ctx, event_link, "the service root", _alerting_redact)
+        elif not lenovo:
+            raise _no_mapping(
+                targets, "the alerting resources (and the service root links no EventService)"
+            )
+        subscriptions_link = _fenced_link(
+            _dig(event_service, "Subscriptions"), "bmc_alerting Subscriptions"
+        )
+        if lenovo:
+            # OEM reads follow the links their parents serve: the Manager's
+            # Recipients, NetworkProtocol's SNMP and SMTP client resources.
+            manager = _get(ctx, targets["manager"])
+            protocol_path = _sub(targets["manager"], "NetworkProtocol")
+            protocol = _get(ctx, protocol_path)
+            recipients_link = _fenced_link(
+                _dig(manager, "Oem", "Lenovo", "Recipients"), "bmc_alerting Recipients"
+            )
+            snmp_link = _fenced_link(_dig(protocol, "Oem", "Lenovo", "SNMP"), "bmc_alerting SNMP")
+            smtp_link = _fenced_link(
+                _dig(protocol, "Oem", "Lenovo", "SMTPClient"), "bmc_alerting SMTPClient"
+            )
+            if snmp_link is not None:
+                # bmc_manager_network's own read (path, kwargs and redactor): one GET per run
+                snmp = _alerting_linked(ctx, snmp_link, protocol_path, _scrub_payload)
+            if smtp_link is not None:
+                smtp_client = _alerting_linked(ctx, smtp_link, protocol_path, _alerting_redact)
+        if subscriptions_link is not None:
+            subscriptions, collections["subscriptions"], found = _alerting_collection(
+                ctx,
+                subscriptions_link,
+                event_link,
+                "bmc_alerting subscriptions",
+                budget,
+                try_expand,
+            )
+            raw.update(found)
+            try_expand = try_expand and not collections["subscriptions"]["expand_refused"]
+        if recipients_link is not None:
+            recipients, collections["recipients"], found = _alerting_collection(
+                ctx,
+                recipients_link,
+                targets["manager"],
+                "bmc_alerting recipients",
+                budget,
+                try_expand,
+            )
+            raw.update(found)
+            try_expand = try_expand and not collections["recipients"]["expand_refused"]
+        platform_log, syslog_source = _alerting_platform_log(ctx, targets, try_expand)
+    if all(found is None for found in (event_service, recipients, snmp, smtp_client)):
+        raise SkipCheck(
+            "the service root links no EventService and the Manager and NetworkProtocol link "
+            "no Lenovo alerting resource (recipients, SNMP, SMTP client)"
+        )
+    if event_service is not None:
+        raw[event_link] = _curate(event_service)
+    if snmp is not None:
+        raw[snmp_link] = _curate(_alerting_redact(snmp))
+    if smtp_client is not None:
+        raw[smtp_link] = _curate(smtp_client)
+    normalized, context = _normalize_alerting(
+        event_service,
+        subscriptions,
+        recipients,
+        manager=manager,
+        snmp=snmp,
+        smtp_client=smtp_client,
+        platform_log=platform_log,
+    )
+    settings_served = isinstance(_dig(manager, "Oem", "Lenovo", "RecipientsSettings"), dict)
+    context.update(
+        {
+            "sources": {
+                "event_service": event_link,
+                "subscriptions": subscriptions_link,
+                "recipients": recipients_link,
+                "recipients_settings": (
+                    "%s Oem.Lenovo.RecipientsSettings" % (targets["manager"],)
+                    if settings_served
+                    else None
+                ),
+                "snmp": snmp_link,
+                "smtp_client": smtp_link,
+            },
+            "subscriptions": collections["subscriptions"],
+            "recipients": collections["recipients"],
+            "syslog_filters_source": syslog_source,
+            "vendor_mapping": None
+            if lenovo
+            else (
+                "no %s mapping for the vendor alerting resources (recipients, SNMP traps, SMTP "
+                "client) yet; the DMTF EventService is read"
+                % (targets["vendor"] or "unknown-vendor",)
+            ),
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -6765,5 +7345,26 @@ register(
         ),
         collector=_collect_accounts,
         tags=("platform", "security"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_alerting",
+        platform="bmc",
+        description=(
+            "Who the BMC alerts and how: EventService and SMTP, subscriptions, Lenovo recipients, "
+            "SNMP traps and the SMTP client (e-mail addresses by domain only)."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "An alert path changed — a subscription or recipient added, removed, disabled or "
+            "pointed elsewhere, SNMP traps or the mail relay switched off or moved, an event "
+            "class filtered out, or a subscription the BMC stopped delivering to: nobody may be "
+            "told of the next hardware fault."
+        ),
+        collector=_collect_alerting,
+        tags=("platform", "management", "alerting"),
     )
 )
