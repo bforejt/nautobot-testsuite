@@ -242,10 +242,13 @@ SECRET_NAMES = frozenset(
         "SED_AK",
         "BMU_Credential",
         "OAuthServiceSigningKeys",
+        "CHAPSecret",
+        "MutualCHAPSecret",
     )
 )
 PERSON_KEYS = frozenset(
     {"UserName", "Username", "UserID", "UserId", "LoginID", "LoginId", "LoginName"}
+    | {"CHAPUsername", "MutualCHAPUsername"}
     | {"ContactName", "ContactPerson"}
 )
 EMAIL_KEYS = frozenset({"EmailAddress"})

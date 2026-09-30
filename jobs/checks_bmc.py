@@ -141,12 +141,17 @@ _SECRET_NAMES = frozenset(
         "SED_AK",
         "BMU_Credential",
         "OAuthServiceSigningKeys",
+        # NetworkDeviceFunction.iSCSIBoot: the CHAP secrets an adapter boots with
+        "CHAPSecret",
+        "MutualCHAPSecret",
     )
 )
 # Leaves that name a person's account outside the local-accounts collection
 # (SMTP and image-share logins, server-profile user ids, logged-in users):
 # scrubbed with their emptiness kept, so "set / unset" survives.
-_USER_NAME_KEYS = frozenset({"username", "userid", "loginid", "createdby", "owner"})
+_USER_NAME_KEYS = frozenset(
+    {"username", "userid", "loginid", "createdby", "owner", "chapusername", "mutualchapusername"}
+)
 # Leaves that name a person whatever resource carries them (a chassis
 # location's contacts, the SNMP agent's contact): scrubbed even where account
 # names are kept; emptiness kept.
@@ -4825,6 +4830,567 @@ def _collect_power_policy(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_network_adapters ----------------------------------------------------
+# GETs, the lab SE350 (the X722 and I350 LOMs with two ports and two functions
+# each, the slot-6 add-in NIC with none): the Chassis (the read bmc_chassis
+# makes, cached in a capture), the NetworkAdapters collection with one $expand
+# GET, then per adapter one $expand GET each on Ports (the keyed rows),
+# NetworkPorts (the deprecated twin of the same ports, read for context) and
+# NetworkDeviceFunctions — $levels=2 inlines those collections with their
+# members as bare links on XCC 6.10, so each needs its own read: 1 + 1 + 3 x 3
+# = 11 beyond the id resolution. The per-member fallback, $expand advertised
+# but refused or ignored (the attempt is paid once, on the adapter collection,
+# and never again): the Chassis 1, the adapters 1 + 1 + 3, ob-2 and ob-4 three
+# collections and six members each, slot-6 three empty collections — 1 + 5 +
+# 9 + 9 + 3 = 27 beyond the id resolution, 32 with its full five GETs.
+# _BUDGET_NETWORK_ADAPTERS = 28 + _TARGET_GETS covers that walk with a GET to
+# spare, and eight adapters linking all three collections with $expand
+# honoured even when this check pays the full resolution (5 + 1 + 1 + 8 x 3 =
+# 31); a bigger tree is refused before its first port or function collection
+# is read (those reads are pre-checked), and a member walk the budget cannot
+# cover is refused with its count, never recorded partially.
+_BUDGET_NETWORK_ADAPTERS = 28 + _TARGET_GETS
+
+# DMTF NetworkDeviceFunction.iSCSIBoot carries the iSCSI boot credentials. The
+# family's exact-name list does not name them, so no row or context field reads
+# that block and this check's raw scrubs them on top of _curate.
+_NETWORK_ADAPTERS_CREDENTIALS = frozenset(
+    name.lower()
+    for name in ("CHAPUsername", "CHAPSecret", "MutualCHAPUsername", "MutualCHAPSecret")
+)
+# The leaves naming the port a function is assigned to, per family of port rows,
+# current spelling first: NetworkDeviceFunction v1_8 moved the Port-typed
+# PhysicalNetworkPortAssignment into Links; v1_5 deprecated the NetworkPort-typed
+# Links.PhysicalPortAssignment, whose root form v1_3 had moved into Links. The
+# other family answers only where the preferred one serves no link.
+_NETWORK_ADAPTERS_PORT_LINKS = (
+    ("Links", "PhysicalNetworkPortAssignment"),
+    ("PhysicalNetworkPortAssignment",),
+)
+_NETWORK_ADAPTERS_NETWORK_PORT_LINKS = (
+    ("Links", "PhysicalPortAssignment"),
+    ("PhysicalPortAssignment",),
+)
+
+
+def _network_adapters_scrub_credentials(node):
+    """A payload with the iSCSI boot CHAP user names and secrets scrubbed (emptiness kept)."""
+    if isinstance(node, dict):
+        return {
+            key: (
+                _scrub_value(value)
+                if str(key).lower() in _NETWORK_ADAPTERS_CREDENTIALS
+                else _network_adapters_scrub_credentials(value)
+            )
+            for key, value in node.items()
+        }
+    if isinstance(node, list):
+        return [_network_adapters_scrub_credentials(item) for item in node]
+    return node
+
+
+def _network_adapters_number(value):
+    """A served number verbatim (an int stays an int), a numeric string converted; else None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    return _to_float(value)
+
+
+def _network_adapters_any(values):
+    """True when any served boolean is true, False when every served one is false, else None."""
+    served = [value for value in (_to_bool(item) for item in values) if value is not None]
+    return any(served) if served else None
+
+
+def _network_adapters_speeds(entries, leaf, divisor=1):
+    """Sorted unique numbers of every ``entries[].<leaf>`` list, divided by ``divisor``.
+
+    None when no entry serves the list; a served list without a number reads [].
+    """
+    speeds, served = set(), False
+    for entry in _dicts(entries):
+        values = entry.get(leaf)
+        if not isinstance(values, list):
+            continue
+        served = True
+        for value in values:
+            number = _network_adapters_number(value)
+            if number is not None:
+                speeds.add(number / divisor if divisor != 1 else number)
+    return sorted(speeds) if served else None
+
+
+def _network_adapters_link_speeds_mbps(capabilities):
+    """A NetworkPort's capable speeds in Mbit/s as served, sorted; None when none is served.
+
+    SupportedLinkCapabilities[].CapableLinkSpeedMbps (a list, NetworkPort v1_2)
+    and the single LinkSpeedMbps it replaced (v1_0), whichever the entries carry.
+    """
+    speeds = _network_adapters_speeds(capabilities, "CapableLinkSpeedMbps")
+    singles = [
+        _network_adapters_number(entry.get("LinkSpeedMbps")) for entry in _dicts(capabilities)
+    ]
+    singles = [value for value in singles if value is not None]
+    if speeds is None and not singles:
+        return None
+    return sorted(set(speeds or []) | set(singles))
+
+
+def _network_adapters_link_ids(links, label):
+    """Sorted leaf ids of a served list of links (each fenced); None when the leaf is no list."""
+    if not isinstance(links, list):
+        return None
+    ids = set()
+    for item in _dicts(links):
+        link = _fenced_link(item, label)
+        if link is not None:
+            ids.add(_leaf_id(link))
+    return sorted(ids)
+
+
+def _network_adapters_controller_links(controllers, name):
+    """Sorted leaf ids every controller links under Links.<name>; None when none serves it."""
+    ids = None
+    for controller in controllers:
+        found = _network_adapters_link_ids(
+            _dig(controller, "Links", name), "bmc_network_adapters Controllers Links.%s" % (name,)
+        )
+        if found is not None:
+            ids = sorted(set(ids or []) | set(found))
+    return ids
+
+
+def _network_adapters_capability(controllers, name):
+    """ControllerCapabilities.<name> summed over the controllers; None when none serves it."""
+    counts = [
+        _to_int(_dig(controller, "ControllerCapabilities", name)) for controller in controllers
+    ]
+    counts = [count for count in counts if count is not None]
+    return sum(counts) if counts else None
+
+
+def _network_adapters_expects(controllers, capability, links):
+    """True when the adapter's own controllers say it carries ports (or functions).
+
+    A capability count above zero, or a non-empty controller Links array of that family.
+    """
+    if _network_adapters_capability(controllers, capability):
+        return True
+    return any(_dicts(_dig(c, "Links", name)) for c in controllers for name in links)
+
+
+def _network_adapters_adapter(adapter, port_count, function_count):
+    """One 'adapter|<Id>' row: identity, the first controller's firmware, counts, LLDP, health."""
+    controllers = _dicts(adapter.get("Controllers"))
+    first = controllers[0] if controllers else {}
+    health, state = _status(adapter)
+    return {
+        "manufacturer": _text(adapter.get("Manufacturer")),
+        "model": _text(adapter.get("Model")),
+        "serial": _text(adapter.get("SerialNumber")),
+        "part_number": _text(adapter.get("PartNumber")),
+        "sku": _text(adapter.get("SKU")),
+        "firmware_package_version": _text(first.get("FirmwarePackageVersion")),
+        "location": _service_label(adapter) or _service_label(first),
+        "pcie_devices": _network_adapters_controller_links(controllers, "PCIeDevices"),
+        "port_count": port_count,
+        "function_count": function_count,
+        "controller_port_count": _network_adapters_capability(controllers, "NetworkPortCount"),
+        "controller_function_count": _network_adapters_capability(
+            controllers, "NetworkDeviceFunctionCount"
+        ),
+        "npar_enabled": _network_adapters_any(
+            _dig(controller, "ControllerCapabilities", "NPAR", "NparEnabled")
+            for controller in controllers
+        ),
+        "lldp_enabled": _to_bool(adapter.get("LLDPEnabled")),
+        "health": health,
+        "state": state,
+    }
+
+
+def _network_adapters_port(port, lenovo=False):
+    """One 'port|<adapter>|<Id>' row from a Port resource (the current schema).
+
+    LinkStatus is LinkUp | Starting | Training | LinkDown | NoLink; MaxSpeedGbps
+    is the most the port is configured to negotiate and LinkConfiguration[]
+    lists the speeds it is capable of and whether it autonegotiates. The port
+    number is Lenovo's OEM leaf (the Port schema has none; PortId is its label).
+    """
+    health, state = _status(port)
+    oem = _dig(port, "Oem", "Lenovo") if lenovo else None
+    configurations = _dicts(port.get("LinkConfiguration"))
+    ethernet = port.get("Ethernet") if isinstance(port.get("Ethernet"), dict) else {}
+    return {
+        "link_status": _text(port.get("LinkStatus")),
+        "physical_port_number": _text(_dig(oem, "PhysicalPortNumber")),
+        "port_id": _text(port.get("PortId")),
+        "active_link_technology": _text(port.get("LinkNetworkTechnology")),
+        "max_speed_gbps": _network_adapters_number(port.get("MaxSpeedGbps")),
+        "capable_speeds_gbps": _network_adapters_speeds(configurations, "CapableLinkSpeedGbps"),
+        "autoneg": _network_adapters_any(
+            entry.get("AutoSpeedNegotiationEnabled") for entry in configurations
+        ),
+        "autoneg_capable": _network_adapters_any(
+            entry.get("AutoSpeedNegotiationCapable") for entry in configurations
+        ),
+        "flow_control_configuration": _text(ethernet.get("FlowControlConfiguration")),
+        "lldp_enabled": _to_bool(ethernet.get("LLDPEnabled")),
+        "health": health,
+        "state": state,
+    }
+
+
+def _network_adapters_network_port(port):
+    """The same row from a NetworkPort (the deprecated schema), where no Ports is linked.
+
+    LinkStatus is Up | Down | Starting | Training; the capable speeds are
+    CapableLinkSpeedMbps (and the older single LinkSpeedMbps) in Gbit/s as
+    served; AutoSpeedNegotiation is a capability, so ``autoneg`` (the
+    configured setting), like the other Port-only leaves, reads None.
+    """
+    health, state = _status(port)
+    capabilities = _dicts(port.get("SupportedLinkCapabilities"))
+    speeds = _network_adapters_link_speeds_mbps(capabilities)
+    return {
+        "link_status": _text(port.get("LinkStatus")),
+        "physical_port_number": _text(port.get("PhysicalPortNumber")),
+        "port_id": None,
+        "active_link_technology": _text(port.get("ActiveLinkTechnology")),
+        "max_speed_gbps": None,
+        "capable_speeds_gbps": None if speeds is None else [speed / 1000 for speed in speeds],
+        "autoneg": None,
+        "autoneg_capable": _network_adapters_any(
+            entry.get("AutoSpeedNegotiation") for entry in capabilities
+        ),
+        "flow_control_configuration": _text(port.get("FlowControlConfiguration")),
+        "lldp_enabled": None,
+        "health": health,
+        "state": state,
+    }
+
+
+def _network_adapters_macs(values):
+    """A served list of addresses lower-cased and sorted; None when the leaf is no list."""
+    if not isinstance(values, list):
+        return None
+    return sorted(mac for mac in (_mac(value) for value in values) if mac)
+
+
+def _network_adapters_port_context(port, source, lenovo=False):
+    """The readings and vendor leaves of one keyed port (context only)."""
+    oem = _dig(port, "Oem", "Lenovo") if lenovo else None
+    if source == "NetworkPorts":
+        return {
+            "current_speed_gbps": None,
+            "current_link_speed_mbps": _network_adapters_number(port.get("CurrentLinkSpeedMbps")),
+            "associated_macs": _network_adapters_macs(port.get("AssociatedNetworkAddresses")),
+            "port_maximum_mtu": _to_int(port.get("PortMaximumMTU")),
+            "port_max_speed_bps": _network_adapters_number(_dig(oem, "PortMaxSpeedbps")),
+            "physical_port_mac": _text(_dig(oem, "PhysicalPortMacAddress")),
+        }
+    return {
+        "current_speed_gbps": _network_adapters_number(port.get("CurrentSpeedGbps")),
+        "current_link_speed_mbps": None,
+        "associated_macs": _network_adapters_macs(_dig(port, "Ethernet", "AssociatedMACAddresses")),
+        "port_maximum_mtu": _to_int(_dig(oem, "PortMaximumMTU")),
+        "port_max_speed_bps": _network_adapters_number(_dig(oem, "PortMaxSpeedbps")),
+        "physical_port_mac": _text(_dig(oem, "PhysicalPortMacAddress")),
+    }
+
+
+def _network_adapters_twin(port, lenovo=False):
+    """A NetworkPort read beside a Ports collection: the same port in the older words (context)."""
+    oem = _dig(port, "Oem", "Lenovo") if lenovo else None
+    return {
+        "link_status": _text(port.get("LinkStatus")),
+        "current_link_speed_mbps": _network_adapters_number(port.get("CurrentLinkSpeedMbps")),
+        "capable_link_speeds_mbps": _network_adapters_link_speeds_mbps(
+            port.get("SupportedLinkCapabilities")
+        ),
+        "physical_port_number": _text(port.get("PhysicalPortNumber")),
+        "port_maximum_mtu": _to_int(port.get("PortMaximumMTU")),
+        "port_max_speed_bps": _network_adapters_number(_dig(oem, "PortMaxSpeedbps")),
+        "physical_port_mac": _text(_dig(oem, "PhysicalPortMacAddress")),
+    }
+
+
+def _network_adapters_assigned_port(function, prefer_ports=True):
+    """(port id, the leaf it was read from) of the port a function is assigned to.
+
+    The leaves of the family the port rows came from first (Port: the
+    PhysicalNetworkPortAssignment spellings; NetworkPort: PhysicalPortAssignment),
+    the other family only where those serve no link; (None, None) when none does.
+    """
+    families = (_NETWORK_ADAPTERS_PORT_LINKS, _NETWORK_ADAPTERS_NETWORK_PORT_LINKS)
+    for family in families if prefer_ports else families[::-1]:
+        for path in family:
+            leaf = ".".join(path)
+            link = _fenced_link(_dig(function, *path), "bmc_network_adapters %s" % (leaf,))
+            if link is not None:
+                return _leaf_id(link), leaf
+    return None, None
+
+
+def _network_adapters_ethernet_interfaces(function):
+    """Sorted ids of the host EthernetInterfaces a function links; None when it links none."""
+    label = "bmc_network_adapters Links.EthernetInterface"
+    single = _fenced_link(_dig(function, "Links", "EthernetInterface"), label)
+    several = _network_adapters_link_ids(_dig(function, "Links", "EthernetInterfaces"), label)
+    if single is None and several is None:
+        return None
+    return sorted(set(several or []) | ({_leaf_id(single)} if single is not None else set()))
+
+
+def _network_adapters_function(function, prefer_ports=True):
+    """(one 'netfn|<adapter>|<Id>' row, the leaf its assigned port was read from)."""
+    health, state = _status(function)
+    assigned, source = _network_adapters_assigned_port(function, prefer_ports)
+    pcie_function = _fenced_link(
+        _dig(function, "Links", "PCIeFunction"), "bmc_network_adapters Links.PCIeFunction"
+    )
+    row = {
+        "net_dev_func_type": _text(function.get("NetDevFuncType")),
+        # burned-in, lower-cased: the join to the hypervisor's physical-NIC MAC
+        "permanent_mac": _mac(_dig(function, "Ethernet", "PermanentMACAddress")),
+        "device_enabled": _to_bool(function.get("DeviceEnabled")),
+        "boot_mode": _text(function.get("BootMode")),
+        "virtual_functions_enabled": _to_bool(function.get("VirtualFunctionsEnabled")),
+        "max_virtual_functions": _to_int(function.get("MaxVirtualFunctions")),
+        "assigned_port": assigned,
+        "ethernet_interfaces": _network_adapters_ethernet_interfaces(function),
+        "pcie_function": _leaf_id(pcie_function) if pcie_function is not None else None,
+        "health": health,
+        "state": state,
+    }
+    return row, source
+
+
+def _normalize_network_adapters(adapters, ports=None, functions=None, twins=None, lenovo=False):
+    """(normalized, context) over the adapters and the port and function collections read.
+
+    ``ports`` maps an adapter id to (the collection its port rows came from —
+    "Ports" or "NetworkPorts" — and that collection's members, None when it
+    answered 404); ``functions`` maps an adapter id to its NetworkDeviceFunctions
+    members and ``twins`` to the NetworkPorts members read beside a Ports
+    collection. An adapter missing from a map links no such collection: its
+    count reads None. Keys: 'adapter|<Id>', 'port|<adapter Id>|<port Id>' and
+    'netfn|<adapter Id>|<function Id>', every row carrying every field (None
+    where not served). ``lenovo`` gates the Oem.Lenovo port leaves.
+    """
+    ports, functions, twins = ports or {}, functions or {}, twins or {}
+    normalized = {}
+    context = {
+        "adapters_without_ports": [],
+        "adapters_without_functions": [],
+        "ports": {},
+        "network_ports": {},
+        "functions": {},
+    }
+    for adapter in _dicts(adapters):
+        adapter_id = _member_id(adapter) or "?"
+        source, port_members = ports.get(adapter_id, (None, None))
+        function_members = functions.get(adapter_id)
+        port_rows, function_rows = _dicts(port_members), _dicts(function_members)
+        normalized["adapter|%s" % (adapter_id,)] = _network_adapters_adapter(
+            adapter,
+            len(port_rows) if port_members is not None else None,
+            len(function_rows) if function_members is not None else None,
+        )
+        if not port_rows:
+            context["adapters_without_ports"].append(adapter_id)
+        if not function_rows:
+            context["adapters_without_functions"].append(adapter_id)
+        for port in port_rows:
+            key = "port|%s|%s" % (adapter_id, _member_id(port) or "?")
+            if source == "NetworkPorts":
+                normalized[key] = _network_adapters_network_port(port)
+            else:
+                normalized[key] = _network_adapters_port(port, lenovo)
+            context["ports"][key] = _network_adapters_port_context(port, source, lenovo)
+        for port in _dicts(twins.get(adapter_id)):
+            twin_key = "%s|%s" % (adapter_id, _member_id(port) or "?")
+            context["network_ports"][twin_key] = _network_adapters_twin(port, lenovo)
+        for function in function_rows:
+            key = "netfn|%s|%s" % (adapter_id, _member_id(function) or "?")
+            row, assigned_source = _network_adapters_function(function, source != "NetworkPorts")
+            normalized[key] = row
+            context["functions"][key] = {
+                # the current MAC and MTU can follow the host's configuration: context only
+                "mac": _mac(_dig(function, "Ethernet", "MACAddress")),
+                "mtu": _to_int(_dig(function, "Ethernet", "MTUSize")),
+                "assigned_port_source": assigned_source,
+            }
+    context["adapters_without_ports"].sort()
+    context["adapters_without_functions"].sort()
+    return normalized, context
+
+
+def _network_adapters_plan(adapter):
+    """(adapter id, [(role, fenced link)]) of the collections one adapter links, in read order.
+
+    Roles: "Ports" (the keyed rows), else "NetworkPorts" where no Ports is
+    linked; "twin" (a NetworkPorts collection beside a linked Ports, read for
+    context); "functions" (NetworkDeviceFunctions).
+    """
+    adapter_id = _member_id(adapter) or "?"
+    label = "bmc_network_adapters %s" % (adapter_id,)
+    ports = _fenced_link(adapter.get("Ports"), label + " Ports")
+    network_ports = _fenced_link(adapter.get("NetworkPorts"), label + " NetworkPorts")
+    functions = _fenced_link(
+        adapter.get("NetworkDeviceFunctions"), label + " NetworkDeviceFunctions"
+    )
+    reads = []
+    if ports is not None:
+        reads.append(("Ports", ports))
+        if network_ports is not None:
+            reads.append(("twin", network_ports))
+    elif network_ports is not None:
+        reads.append(("NetworkPorts", network_ports))
+    if functions is not None:
+        reads.append(("functions", functions))
+    return adapter_id, reads
+
+
+def _network_adapters_unmeasured(adapters, ports, functions, twins=None):
+    """The adapters whose port or function rows cannot be recorded, each with the reason.
+
+    A port or function collection the rows come from that answered 404, or one
+    that answered empty while the adapter says otherwise: its own controllers
+    declare ports or functions, or its NetworkPorts twin lists ports. (An adapter
+    the BMC has no sideband to declares none, lists none and is recorded with
+    zero rows; the twin itself is context, so its 404 is recorded, never fatal.)
+    """
+    twins = twins or {}
+    found = []
+    for adapter in _dicts(adapters):
+        adapter_id = _member_id(adapter) or "?"
+        controllers = _dicts(adapter.get("Controllers"))
+        if adapter_id in ports:
+            source, members = ports[adapter_id]
+            if members is None:
+                found.append("%s (%s answered 404)" % (adapter_id, source))
+            elif not members and _network_adapters_expects(
+                controllers, "NetworkPortCount", ("Ports", "NetworkPorts")
+            ):
+                found.append("%s (%s empty, its controllers declare ports)" % (adapter_id, source))
+            elif not members and _dicts(twins.get(adapter_id)):
+                found.append(
+                    "%s (%s empty while its NetworkPorts list %d)"
+                    % (adapter_id, source, len(_dicts(twins[adapter_id])))
+                )
+        if adapter_id in functions:
+            members = functions[adapter_id]
+            if members is None:
+                found.append("%s (NetworkDeviceFunctions answered 404)" % (adapter_id,))
+            elif not members and _network_adapters_expects(
+                controllers, "NetworkDeviceFunctionCount", ("NetworkDeviceFunctions",)
+            ):
+                found.append(
+                    "%s (NetworkDeviceFunctions empty, its controllers declare functions)"
+                    % (adapter_id,)
+                )
+    return found
+
+
+def _collect_network_adapters(ctx):
+    ports, twins, functions, collections = {}, {}, {}, {}
+    with ctx.budget("bmc_network_adapters", _BUDGET_NETWORK_ADAPTERS) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        host_power_state = _text(_dig(_get(ctx, targets["system"]), "PowerState"))
+        chassis = _get(ctx, targets["chassis"])
+        linked = _fenced_link(
+            _dig(chassis, "NetworkAdapters"), "bmc_network_adapters NetworkAdapters"
+        )
+        path = linked or _sub(targets["chassis"], "NetworkAdapters")
+        adapters, meta, raw = _fetch_collection(
+            ctx, path, "bmc_network_adapters", ok_404=True, budget=budget
+        )
+        if adapters is None:
+            if linked is not None:
+                raise CollectError("the Chassis links %s but it answered 404" % (path,))
+            raise SkipCheck(
+                "%s is not served and the Chassis links no NetworkAdapters collection" % (path,)
+            )
+        if not adapters:
+            # Populated at POST (UEFI and the adapters' sideband): an empty collection is
+            # unmeasured whatever the power state says, never "no adapters".
+            raise CollectError(
+                "%s answered with zero members (host PowerState %s) — network adapters are "
+                "populated at POST and an empty collection is unmeasured, never 'no adapters'; "
+                "capture again after the host completes POST" % (path, host_power_state)
+            )
+        plan = [_network_adapters_plan(adapter) for adapter in adapters]
+        # Complete-or-refused: the fewest GETs these reads can take must fit before one is sent.
+        needed = sum(len(reads) for _adapter_id, reads in plan)
+        left = _budget_left(budget)
+        if left is not None and needed > left:
+            raise CollectError(
+                "bmc_network_adapters: the port and function collections of %d adapter(s) take "
+                "at least %d GET(s) but only %d are left in the budget of %d — refused rather "
+                "than recorded partially" % (len(plan), needed, left, budget.max_gets)
+            )
+        # The adapter collection's answer decides, and the first refusal after it turns
+        # $expand off for the rest of the check: a refusal is paid for once, never per read.
+        try_expand = meta["strategy"] == "expand"
+        for adapter_id, reads in plan:
+            report = collections.setdefault(
+                adapter_id, {"ports": None, "network_ports_twin": None, "functions": None}
+            )
+            for role, link in reads:
+                members, fetch, member_raw = _fetch_collection(
+                    ctx,
+                    link,
+                    "bmc_network_adapters %s %s" % (adapter_id, role),
+                    ok_404=True,
+                    budget=budget,
+                    try_expand=try_expand,
+                )
+                raw.update(member_raw)
+                if fetch.get("expand_refused"):
+                    try_expand = False
+                entry = {
+                    "source": link,
+                    "strategy": fetch["strategy"],
+                    "members": len(members) if members is not None else None,
+                }
+                if fetch.get("expand_refused"):
+                    entry["expand_refused"] = fetch["expand_refused"]
+                if role == "twin":
+                    twins[adapter_id] = members
+                    report["network_ports_twin"] = entry
+                elif role == "functions":
+                    functions[adapter_id] = members
+                    report["functions"] = entry
+                else:
+                    ports[adapter_id] = (role, members)
+                    report["ports"] = dict(entry, collection=role)
+    unmeasured = _network_adapters_unmeasured(adapters, ports, functions, twins)
+    if unmeasured:
+        raise CollectError(
+            "bmc_network_adapters: %s (host PowerState %s) — ports and functions are populated "
+            "at POST and through the adapter's sideband, so the read is unmeasured, never 'no "
+            "ports'; capture again after the host completes POST"
+            % ("; ".join(unmeasured), host_power_state)
+        )
+    normalized, context = _normalize_network_adapters(
+        adapters, ports, functions, twins, lenovo=lenovo
+    )
+    context.update(
+        {
+            "host_power_state": host_power_state,
+            "adapters_source": path,
+            "adapters_collection": dict(meta, members=len(adapters)),
+            "collections": collections,
+        }
+    )
+    raw = {request: _network_adapters_scrub_credentials(body) for request, body in raw.items()}
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -5444,5 +6010,27 @@ register(
         ),
         collector=_collect_power_policy,
         tags=("platform", "power"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_network_adapters",
+        platform="bmc",
+        description=(
+            "Network adapters as the BMC sees them: identity and controller firmware, per-port "
+            "link and capability, per-function burned-in MAC, SR-IOV and boot mode."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "An adapter, port or function vanished or changed — a card not reseated or not "
+            "enumerated, a port's link lost (NoLink: no cable or transceiver; LinkDown: cabled, "
+            "no link), its speed, autonegotiation, flow-control or LLDP setting changed, adapter "
+            "firmware updated, or a function's burned-in MAC, SR-IOV or boot mode changed (a "
+            "replaced card, or an edit in UEFI setup)."
+        ),
+        collector=_collect_network_adapters,
+        tags=("platform", "interfaces"),
     )
 )

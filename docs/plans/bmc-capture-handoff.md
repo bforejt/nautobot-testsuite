@@ -710,8 +710,9 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    **State (2026-09-30):** ten builders, one per check, each in its own
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
-   `bmc_sensors`, `bmc_boot` and `bmc_power_policy` landed. What the
-   builders found wrong in §5b is §10a item 13.
+   `bmc_sensors`, `bmc_boot`, `bmc_power_policy` and
+   `bmc_network_adapters` landed. What the builders found wrong in §5b is
+   §10a item 13.
 5. **Shakedown 2 and 3** (§7 items 4–5): host off, cable pull, an asserted
    discrete sensor, stability.
 6. **PR D — docs**: README catalog rows, `coverage.md` walked with the
@@ -902,6 +903,18 @@ Recorded as they were found, each with how it was resolved.
       `JsonBody`) can carry credentials the family scrubber did not see; the
       check reads the Jobs through its own composed redactor (see
       `bmc_tasks`).
+    - `bmc_network_adapters`: 1 + 3 GETs per adapter (10 on the lab unit),
+      not 1 + 2 — the lab note's `Down` spelling and Lenovo's
+      `PortMaxSpeedbps` live only on the `NetworkPorts` twin, which is read
+      for context beside `Ports`. `MaxSpeedGbps` is the port's configured
+      maximum, not its capable speeds, so it is its own field and
+      `capable_speeds_gbps` reads `LinkConfiguration` (unserved on the lab
+      unit: null there). The lab serves a `LenovoPort` OEM type on `Port`
+      that Appendix B does not list. `CapableLinkSpeedMbps` and
+      `PortMaxSpeedbps` read 10 × 2^30 for a 10 Gbit/s port (a binary
+      multiplier in a decimal unit): kept as served, in context. The iSCSI
+      boot CHAP secrets and user names were not in the family scrubber (nor
+      the sanitizer's rule): added to both.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

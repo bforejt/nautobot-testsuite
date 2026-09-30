@@ -1,0 +1,154 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters",
+  "@odata.type": "#NetworkAdapterCollection.NetworkAdapterCollection",
+  "@odata.etag": "\"hand-built\"",
+  "Name": "NetworkAdapterCollection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1",
+      "@odata.type": "#NetworkAdapter.v1_9_0.NetworkAdapter",
+      "@odata.etag": "\"hand-built\"",
+      "Id": "slot-1",
+      "Name": "Slot 1",
+      "Manufacturer": "Contoso",
+      "Model": "25GbE 2-port SFP28 adapter",
+      "SerialNumber": "HBNA00000001",
+      "PartNumber": "HBNA-PN-0001",
+      "SKU": "HBNA-SKU-0001",
+      "LLDPEnabled": true,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Controllers": [
+        {
+          "FirmwarePackageVersion": "26.36.1010",
+          "ControllerCapabilities": {
+            "NetworkPortCount": 2,
+            "NetworkDeviceFunctionCount": 2,
+            "NPAR": {
+              "NparCapable": true,
+              "NparEnabled": false
+            },
+            "VirtualizationOffload": {
+              "SRIOV": {
+                "SRIOVVEPACapable": true
+              },
+              "VirtualFunction": {
+                "DeviceMaxCount": 128,
+                "NetworkPortMaxCount": 64,
+                "MinAssignmentGroupSize": 1
+              }
+            }
+          },
+          "Location": {
+            "PartLocation": {
+              "LocationType": "Slot",
+              "LocationOrdinalValue": 1,
+              "ServiceLabel": "PCIe 1"
+            }
+          },
+          "Links": {
+            "PCIeDevices": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_1"
+              }
+            ],
+            "Ports": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/1"
+              },
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports/2"
+              }
+            ],
+            "NetworkPorts": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/1"
+              },
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/2"
+              }
+            ],
+            "NetworkDeviceFunctions": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions/1.1"
+              },
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions/2.1"
+              }
+            ]
+          }
+        }
+      ],
+      "Ports": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Ports"
+      },
+      "NetworkPorts": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts"
+      },
+      "NetworkDeviceFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkDeviceFunctions"
+      },
+      "Actions": {
+        "#NetworkAdapter.ResetSettingsToDefault": {
+          "target": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/Actions/NetworkAdapter.ResetSettingsToDefault"
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1",
+      "@odata.type": "#NetworkAdapter.v1_4_0.NetworkAdapter",
+      "Id": "ob-1",
+      "Name": "Onboard LOM",
+      "Manufacturer": "Intel",
+      "Model": "N/A",
+      "SerialNumber": "N/A",
+      "PartNumber": "N/A",
+      "SKU": "",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Controllers": [
+        {
+          "FirmwarePackageVersion": "N/A",
+          "ControllerCapabilities": {
+            "NetworkPortCount": 1,
+            "NetworkDeviceFunctionCount": 1
+          },
+          "Location": {
+            "PartLocation": {
+              "LocationType": "Slot",
+              "ServiceLabel": "OnBoard"
+            }
+          },
+          "Links": {
+            "PCIeDevices": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+              }
+            ],
+            "NetworkPorts": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkPorts/1"
+              }
+            ],
+            "NetworkDeviceFunctions": [
+              {
+                "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkDeviceFunctions/1.1"
+              }
+            ]
+          }
+        }
+      ],
+      "NetworkPorts": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkPorts"
+      },
+      "NetworkDeviceFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkDeviceFunctions"
+      }
+    }
+  ]
+}

@@ -1745,7 +1745,9 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_boot's 5: BootSettings, VirtualMedia, RemoteControl and MountImages
         # twice — the harvest kept that collection's plain form only)
         # (+ bmc_power_policy's 4: Controls, ScheduledPowerActions, Watchdogs and Jobs)
-        self.assertLessEqual(len(ctx.gets), 57)
+        # (+ bmc_network_adapters' 10: the collection, then Ports, NetworkPorts and
+        # NetworkDeviceFunctions for each of three adapters)
+        self.assertLessEqual(len(ctx.gets), 67)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -2352,6 +2354,233 @@ class TestBmcLabPowerPolicy(unittest.TestCase):
         del payloads[self.CH + "/Power"]
         with self.assertRaises(_loader.registry.CollectError):
             bmc._collect_power_policy(_FakeCtx(payloads))
+
+
+class TestBmcLabNetworkAdapters(unittest.TestCase):
+    """bmc_network_adapters on the lab payloads: the two LOMs keyed from Ports, the add-in NIC
+    the BMC has no sideband to, the NetworkPorts twin in context, and the joins."""
+
+    NA = "/redfish/v1/Chassis/1/NetworkAdapters"
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    PORTS = ("ob-2|1", "ob-2|2", "ob-4|1", "ob-4|2")
+    FUNCTIONS = ("ob-2|1.1", "ob-2|2.1", "ob-4|1.1", "ob-4|2.1")
+
+    def test_rows(self):
+        view = bmc._collect_network_adapters(_xcc_lab_ctx())["normalized"]
+        self.assertEqual(
+            sorted(view),
+            sorted(
+                ["adapter|ob-2", "adapter|ob-4", "adapter|slot-6"]
+                + ["port|" + port for port in self.PORTS]
+                + ["netfn|" + function for function in self.FUNCTIONS]
+            ),
+        )
+        self.assertEqual(
+            view["adapter|ob-2"],
+            {
+                "manufacturer": "Intel",
+                "model": "N/A",  # verbatim
+                "serial": "N/A",
+                "part_number": "N/A",
+                "sku": "N/A",
+                "firmware_package_version": "1.2203.0",
+                "location": "OnBoard",  # the controller's PartLocation
+                "pcie_devices": ["ob_2"],
+                "port_count": 2,
+                "function_count": 2,
+                "controller_port_count": 2,
+                "controller_function_count": 2,
+                "npar_enabled": None,  # no NPAR block on XCC 6.10
+                "lldp_enabled": None,  # not served on XCC 6.10
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        self.assertEqual(view["adapter|ob-4"]["firmware_package_version"], "N/A")
+        # the add-in NIC in slot 6: listed with '' identity, no ports and no functions, and
+        # declaring none (no sideband to it) — keyed with zero counts, never refused
+        self.assertEqual(
+            view["adapter|slot-6"],
+            {
+                "manufacturer": None,
+                "model": None,
+                "serial": None,
+                "part_number": None,
+                "sku": None,
+                "firmware_package_version": None,  # served ''
+                "location": "PCIe 6",
+                "pcie_devices": ["slot_6"],
+                "port_count": 0,
+                "function_count": 0,
+                "controller_port_count": 0,
+                "controller_function_count": 0,
+                "npar_enabled": None,
+                "lldp_enabled": None,
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        # every LOM port reads NoLink with the host up: the host runs on the slot-6 NIC
+        self.assertEqual(
+            view["port|ob-2|1"],
+            {
+                "link_status": "NoLink",
+                "physical_port_number": "1",  # Lenovo's OEM leaf on the Port
+                "port_id": None,
+                "active_link_technology": "Ethernet",
+                "max_speed_gbps": 10,
+                "capable_speeds_gbps": None,  # no LinkConfiguration on XCC 6.10
+                "autoneg": None,
+                "autoneg_capable": None,
+                "flow_control_configuration": None,
+                "lldp_enabled": None,
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        self.assertEqual({view["port|" + port]["link_status"] for port in self.PORTS}, {"NoLink"})
+        self.assertEqual(
+            {port: view["port|" + port]["max_speed_gbps"] for port in self.PORTS},
+            {"ob-2|1": 10, "ob-2|2": 10, "ob-4|1": 1, "ob-4|2": 1},
+        )
+        self.assertEqual(
+            view["netfn|ob-2|1.1"],
+            {
+                "net_dev_func_type": "Ethernet",
+                "permanent_mac": "bc:18:c3:3f:97:12",
+                "device_enabled": True,
+                "boot_mode": None,  # not served on XCC 6.10
+                "virtual_functions_enabled": None,
+                "max_virtual_functions": None,
+                "assigned_port": "1",
+                "ethernet_interfaces": ["NIC1"],
+                "pcie_function": "ob_2.00",
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        self.assertEqual(
+            {function: view["netfn|" + function]["assigned_port"] for function in self.FUNCTIONS},
+            {"ob-2|1.1": "1", "ob-2|2.1": "2", "ob-4|1.1": "1", "ob-4|2.1": "2"},
+        )
+
+    def test_the_joins_to_host_nics_inventory_and_firmware(self):
+        ctx = _xcc_lab_ctx()
+        view = bmc._collect_network_adapters(ctx)["normalized"]
+        nics = bmc._collect_host_nics(ctx)["normalized"]
+        inventory = bmc._collect_inventory(ctx)["normalized"]
+        firmware = bmc._collect_firmware(ctx)["normalized"]
+        for function in self.FUNCTIONS:
+            row = view["netfn|" + function]
+            adapter = view["adapter|" + function.split("|")[0]]
+            # the host EthernetInterface the function links carries the same burned-in MAC
+            (nic,) = row["ethernet_interfaces"]
+            self.assertEqual(nics["nic|" + nic]["permanent_mac"], row["permanent_mac"], function)
+            # and its PCIe function is a row of the inventory
+            (device,) = adapter["pcie_devices"]
+            self.assertIn("pciefn|%s|%s" % (device, row["pcie_function"]), inventory, function)
+        # the controller firmware string is the LOM's combined option ROM image
+        self.assertEqual(
+            view["adapter|ob-2"]["firmware_package_version"], firmware["fw|Ob_2.1"]["version"]
+        )
+        self.assertEqual(
+            view["adapter|ob-4"]["firmware_package_version"], firmware["fw|Ob_4.1"]["version"]
+        )
+
+    def test_context_carries_the_twin_the_readings_and_the_empty_adapter(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_network_adapters(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(context["adapters_without_ports"], ["slot-6"])
+        self.assertEqual(context["adapters_without_functions"], ["slot-6"])
+        # the NetworkPorts twin spells the same fact Down; it is context, never a key
+        self.assertEqual(sorted(context["network_ports"]), sorted(self.PORTS))
+        self.assertEqual(
+            {entry["link_status"] for entry in context["network_ports"].values()}, {"Down"}
+        )
+        # XCC 6.10 serves the capable speed and PortMaxSpeedbps as one figure, 10 x 2^30
+        # for a 10 Gbit/s port whatever the leaf's unit: kept as served, in context only
+        self.assertEqual(
+            context["network_ports"]["ob-2|1"],
+            {
+                "link_status": "Down",
+                "current_link_speed_mbps": None,
+                "capable_link_speeds_mbps": [10 * 2**30],
+                "physical_port_number": "1",
+                "port_maximum_mtu": 12000,
+                "port_max_speed_bps": 10 * 2**30,
+                "physical_port_mac": "BC18C33F9712",
+            },
+        )
+        self.assertEqual(context["network_ports"]["ob-4|2"]["port_max_speed_bps"], 2**30)
+        for port in self.PORTS:
+            readings = context["ports"]["port|" + port]
+            self.assertIsNone(readings["current_speed_gbps"], port)  # no link, no speed
+            self.assertEqual(readings["port_maximum_mtu"], 12000, port)
+            # Lenovo's bare-hex port MAC is the function's burned-in MAC
+            function = view["netfn|%s.1" % (port,)]
+            self.assertEqual(
+                readings["physical_port_mac"], function["permanent_mac"].replace(":", "").upper()
+            )
+            self.assertEqual(readings["associated_macs"], [function["permanent_mac"]])
+        self.assertEqual(
+            {entry["assigned_port_source"] for entry in context["functions"].values()},
+            {"Links.PhysicalNetworkPortAssignment"},
+        )
+        self.assertEqual({entry["mtu"] for entry in context["functions"].values()}, {12000})
+        # one $expand GET per collection; slot-6's three collections answer empty, and ok
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + ["/redfish/v1/Chassis/1", self.NA + _XCC_EXPAND]
+            + [
+                "%s/%s/%s%s" % (self.NA, adapter, name, _XCC_EXPAND)
+                for adapter in ("ob-2", "ob-4", "slot-6")
+                for name in ("Ports", "NetworkPorts", "NetworkDeviceFunctions")
+            ],
+        )
+        self.assertEqual(
+            context["collections"]["slot-6"],
+            {
+                "ports": {
+                    "source": self.NA + "/slot-6/Ports",
+                    "strategy": "expand",
+                    "members": 0,
+                    "collection": "Ports",
+                },
+                "network_ports_twin": {
+                    "source": self.NA + "/slot-6/NetworkPorts",
+                    "strategy": "expand",
+                    "members": 0,
+                },
+                "functions": {
+                    "source": self.NA + "/slot-6/NetworkDeviceFunctions",
+                    "strategy": "expand",
+                    "members": 0,
+                },
+            },
+        )
+
+    def test_the_budget_covers_the_lab_layout_without_expand(self):
+        # resolution 5, the Chassis, the adapters 1 + 1 + 3 (the $expand refusal is paid there,
+        # once), ob-2 and ob-4 three collections + six members each, slot-6 three empty ones
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        result = bmc._collect_network_adapters(ctx)
+        self.assertEqual(len(ctx.gets), 5 + 1 + 5 + 9 + 9 + 3)
+        self.assertLessEqual(len(ctx.gets), bmc._BUDGET_NETWORK_ADAPTERS)
+        self.assertEqual(
+            result["normalized"], bmc._collect_network_adapters(_xcc_lab_ctx())["normalized"]
+        )
+        self.assertEqual(
+            {
+                entry["strategy"]
+                for report in result["context"]["collections"].values()
+                for entry in report.values()
+            },
+            {"members"},
+        )
 
 
 if __name__ == "__main__":

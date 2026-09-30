@@ -1,0 +1,80 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts",
+  "@odata.type": "#NetworkPortCollection.NetworkPortCollection",
+  "Name": "NetworkPortCollection",
+  "Members@odata.count": 2,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/1",
+      "@odata.type": "#NetworkPort.v1_4_1.NetworkPort",
+      "Id": "1",
+      "Name": "Physical Port 1",
+      "PhysicalPortNumber": "1",
+      "LinkStatus": "Up",
+      "ActiveLinkTechnology": "Ethernet",
+      "CurrentLinkSpeedMbps": 25000,
+      "SupportedLinkCapabilities": [
+        {
+          "CapableLinkSpeedMbps": [
+            10000,
+            25000
+          ],
+          "AutoSpeedNegotiation": true
+        }
+      ],
+      "FlowControlConfiguration": "TX_RX",
+      "PortMaximumMTU": 9600,
+      "AssociatedNetworkAddresses": [
+        "00005E005301"
+      ],
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoNetworkPort.v1_0_0.LenovoNetworkPortProperties",
+          "PortMaxSpeedbps": 25000000000,
+          "PhysicalPortMacAddress": "00005E005301"
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/slot-1/NetworkPorts/2",
+      "@odata.type": "#NetworkPort.v1_4_1.NetworkPort",
+      "Id": "2",
+      "Name": "Physical Port 2",
+      "PhysicalPortNumber": "2",
+      "LinkStatus": "Down",
+      "ActiveLinkTechnology": "Ethernet",
+      "CurrentLinkSpeedMbps": null,
+      "SupportedLinkCapabilities": [
+        {
+          "CapableLinkSpeedMbps": [
+            10000,
+            25000
+          ],
+          "AutoSpeedNegotiation": true
+        }
+      ],
+      "FlowControlConfiguration": "None",
+      "PortMaximumMTU": 9600,
+      "AssociatedNetworkAddresses": [
+        "00005E005302"
+      ],
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK",
+        "HealthRollup": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoNetworkPort.v1_0_0.LenovoNetworkPortProperties",
+          "PortMaxSpeedbps": 25000000000,
+          "PhysicalPortMacAddress": "00005E005302"
+        }
+      }
+    }
+  ]
+}

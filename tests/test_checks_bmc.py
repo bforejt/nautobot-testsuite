@@ -195,6 +195,9 @@ def _base_payloads():
         payloads[expanded_path[: -len(EXPAND)]] = plain
         for member_path, member in members.items():
             payloads.setdefault(member_path, member)
+    # The NetworkAdapters tree the hand-built Chassis links (bmc_network_adapters).
+    for path, payload in _network_adapter_payloads().items():
+        payloads.setdefault(path, payload)
     return payloads
 
 
@@ -220,6 +223,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_sensors",
         "bmc_boot",
         "bmc_power_policy",
+        "bmc_network_adapters",
     }
 
     def test_all_registered_once(self):
@@ -3726,7 +3730,8 @@ class TestWholeFamily(unittest.TestCase):
         self.assertEqual(ctx.gets.count(MGR + "/EthernetInterfaces/NIC"), 1)
         self.assertEqual(ctx.gets.count("/redfish/v1/Systems"), 1)
         # + bmc_sensors' two 404s (the base set serves no Sensors collection)
-        self.assertLessEqual(len(ctx.gets), 32)
+        # + bmc_network_adapters' 6 (its hand-built adapter tree)
+        self.assertLessEqual(len(ctx.gets), 38)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3742,7 +3747,8 @@ class TestWholeFamily(unittest.TestCase):
             self.assertTrue(result["normalized"], check.id)
         # PR B's widened family, every $expand refused: measured, kept tight on purpose
         # (+ bmc_sensors' two 404s: the base set serves no Sensors collection)
-        self.assertLessEqual(len(ctx.gets), 67)
+        # (+ bmc_network_adapters' 17: its hand-built adapter tree walked)
+        self.assertLessEqual(len(ctx.gets), 84)
 
 
 class TestResolution(unittest.TestCase):
@@ -4143,6 +4149,27 @@ class TestStorageWalkBudget(unittest.TestCase):
         # resolution 5, the attempt, the collection, 4 members, 4 drives, 4 Volumes, the Chassis
         self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 4 + 4 + 4 + 1)
         self.assertLessEqual(len(ctx.gets), checks._BUDGET_STORAGE)
+
+
+class TestIscsiBootHygiene(unittest.TestCase):
+    def test_chap_credentials_are_scrubbed_by_the_family_scrubber(self):
+        boot = {
+            "iSCSIBoot": {
+                "AuthenticationMethod": "MutualCHAP",
+                "CHAPUsername": "initiator-login",
+                "CHAPSecret": "not-a-real-secret",
+                "MutualCHAPUsername": "",
+                "MutualCHAPSecret": "not-a-real-secret-either",
+                "TargetInfoViaDHCP": False,
+            }
+        }
+        scrubbed = checks._scrub_payload(boot)["iSCSIBoot"]
+        self.assertEqual(scrubbed["CHAPSecret"], checks._SCRUBBED)
+        self.assertEqual(scrubbed["MutualCHAPSecret"], checks._SCRUBBED)
+        self.assertEqual(scrubbed["CHAPUsername"], checks._SCRUBBED)
+        self.assertEqual(scrubbed["MutualCHAPUsername"], "")  # emptiness kept
+        self.assertEqual(scrubbed["AuthenticationMethod"], "MutualCHAP")
+        self.assertIs(scrubbed["TargetInfoViaDHCP"], False)
 
 
 class TestLogRedaction(unittest.TestCase):
@@ -5738,6 +5765,619 @@ class TestPowerPolicy(unittest.TestCase):
         self.assertTrue(registry.SEMANTICS["bmc_power_policy"].endswith(registry._BMC_RESOLUTION))
         self.assertLessEqual(
             checks._BUDGET_POWER_POLICY, _loader.constants.REDFISH_MAX_CHECK_BUDGET
+        )
+
+
+# --- bmc_network_adapters -----------------------------------------------------
+# A hand-built adapter tree (tests/fixtures/xcc_network_adapters_*.json): the DMTF
+# NetworkAdapter / Port / NetworkPort / NetworkDeviceFunction vocabulary and the
+# Lenovo OEM leaves the lab XCC serves, every value invented (MACs from the IANA
+# documentation range). slot-1 links Ports with a NetworkPorts twin and carries
+# SR-IOV, a boot mode and iSCSI boot credentials; ob-1 links NetworkPorts only,
+# the deprecated schema older firmware serves. The real payloads are pinned in
+# test_lab_fixtures.TestBmcLabNetworkAdapters.
+
+NA = CH + "/NetworkAdapters"
+_NETWORK_ADAPTER_FIXTURES = (
+    "xcc_network_adapters_expanded.json",
+    "xcc_network_adapters_slot_1_ports_expanded.json",
+    "xcc_network_adapters_slot_1_networkports_expanded.json",
+    "xcc_network_adapters_slot_1_networkdevicefunctions_expanded.json",
+    "xcc_network_adapters_ob_1_networkports_expanded.json",
+    "xcc_network_adapters_ob_1_networkdevicefunctions_expanded.json",
+)
+
+
+def _network_adapter_payloads():
+    """The hand-built adapter tree at its own paths: $expand forms, plain forms and members."""
+    payloads = {}
+    for name in _NETWORK_ADAPTER_FIXTURES:
+        expanded = _fx(name)
+        payloads[expanded["@odata.id"] + EXPAND] = expanded
+        plain, members = _split_collection(expanded)
+        payloads[expanded["@odata.id"]] = plain
+        for member_path, member in members.items():
+            payloads.setdefault(member_path, member)
+    return payloads
+
+
+class TestNetworkAdapters(unittest.TestCase):
+    """bmc_network_adapters on the hand-built tree: both port schemas, the functions, the joins."""
+
+    SLOT = NA + "/slot-1"
+    OB = NA + "/ob-1"
+
+    def _run(self, payloads=None, **kwargs):
+        ctx = _FakeCtx(_base_payloads() if payloads is None else payloads, **kwargs)
+        return checks._collect_network_adapters(ctx), ctx
+
+    def test_rows_from_both_port_schemas_carry_every_field(self):
+        view = self._run()[0]["normalized"]
+        self.assertEqual(
+            sorted(view),
+            [
+                "adapter|ob-1",
+                "adapter|slot-1",
+                "netfn|ob-1|1.1",
+                "netfn|slot-1|1.1",
+                "netfn|slot-1|2.1",
+                "port|ob-1|1",
+                "port|slot-1|1",
+                "port|slot-1|2",
+            ],
+        )
+        self.assertEqual(
+            view["adapter|slot-1"],
+            {
+                "manufacturer": "Contoso",
+                "model": "25GbE 2-port SFP28 adapter",
+                "serial": "HBNA00000001",
+                "part_number": "HBNA-PN-0001",
+                "sku": "HBNA-SKU-0001",
+                "firmware_package_version": "26.36.1010",
+                "location": "PCIe 1",
+                "pcie_devices": ["slot_1"],
+                "port_count": 2,
+                "function_count": 2,
+                "controller_port_count": 2,
+                "controller_function_count": 2,
+                "npar_enabled": False,
+                "lldp_enabled": True,
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        onboard = view["adapter|ob-1"]
+        self.assertEqual((onboard["model"], onboard["sku"]), ("N/A", None))  # 'N/A' kept, '' null
+        self.assertEqual((onboard["npar_enabled"], onboard["lldp_enabled"]), (None, None))
+        # a Ports row, in the current schema's words (the port number is Lenovo's OEM leaf)
+        self.assertEqual(
+            view["port|slot-1|1"],
+            {
+                "link_status": "LinkUp",
+                "physical_port_number": "1",
+                "port_id": "P1",
+                "active_link_technology": "Ethernet",
+                "max_speed_gbps": 25,
+                "capable_speeds_gbps": [10, 25],
+                "autoneg": True,
+                "autoneg_capable": True,
+                "flow_control_configuration": "TX_RX",
+                "lldp_enabled": True,
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        second = view["port|slot-1|2"]
+        self.assertEqual(
+            (second["link_status"], second["autoneg"], second["flow_control_configuration"]),
+            ("LinkDown", False, "None"),  # the enum member None, verbatim
+        )
+        # a NetworkPorts row where no Ports is linked: the same fields, the Port-only ones null
+        self.assertEqual(
+            view["port|ob-1|1"],
+            {
+                "link_status": "Up",
+                "physical_port_number": "1",
+                "port_id": None,
+                "active_link_technology": "Ethernet",
+                "max_speed_gbps": None,
+                "capable_speeds_gbps": [0.1, 1.0],  # CapableLinkSpeedMbps / 1000, sorted
+                "autoneg": None,  # the NetworkPort schema serves the capability only
+                "autoneg_capable": True,
+                "flow_control_configuration": "None",
+                "lldp_enabled": None,
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        for prefix in ("adapter|", "port|", "netfn|"):
+            shapes = {tuple(sorted(row)) for key, row in view.items() if key.startswith(prefix)}
+            self.assertEqual(len(shapes), 1, prefix)
+        self.assertNotIn("", [value for row in view.values() for value in row.values()])
+
+    def test_network_port_speeds_in_either_spelling(self):
+        # NetworkPort v1_0 served one LinkSpeedMbps per capability; v1_2 a CapableLinkSpeedMbps list
+        row = checks._network_adapters_network_port
+        older = {"SupportedLinkCapabilities": [{"LinkSpeedMbps": 10000}, {"LinkSpeedMbps": 1000}]}
+        self.assertEqual(row(older)["capable_speeds_gbps"], [1.0, 10.0])
+        speeds = checks._network_adapters_link_speeds_mbps
+        self.assertEqual(speeds(older["SupportedLinkCapabilities"]), [1000, 10000])
+        self.assertEqual(speeds([{"CapableLinkSpeedMbps": []}]), [])  # served, empty
+        self.assertIsNone(speeds([{"AutoSpeedNegotiation": True}]))  # not served
+        self.assertIsNone(row({})["capable_speeds_gbps"])
+        self.assertIsNone(row({})["autoneg_capable"])
+
+    def test_function_rows_sriov_boot_mode_and_joins(self):
+        view = self._run()[0]["normalized"]
+        self.assertEqual(
+            view["netfn|slot-1|1.1"],
+            {
+                "net_dev_func_type": "Ethernet",
+                "permanent_mac": "00:00:5e:00:53:01",  # lower-cased for the pnic join
+                "device_enabled": True,
+                "boot_mode": "PXE",
+                "virtual_functions_enabled": True,
+                "max_virtual_functions": 64,
+                "assigned_port": "1",
+                "ethernet_interfaces": ["NIC5"],
+                "pcie_function": "slot_1.00",
+                "health": "OK",
+                "state": "Enabled",
+            },
+        )
+        second = view["netfn|slot-1|2.1"]
+        self.assertEqual(
+            (second["boot_mode"], second["virtual_functions_enabled"], second["assigned_port"]),
+            ("iSCSI", False, "2"),
+        )
+        self.assertEqual(second["ethernet_interfaces"], ["NIC6"])  # the Links array form
+        onboard = view["netfn|ob-1|1.1"]
+        self.assertEqual(
+            (onboard["assigned_port"], onboard["ethernet_interfaces"], onboard["pcie_function"]),
+            ("1", None, "ob_1.00"),  # the hand-built inventory's pciefn|ob_1|ob_1.00
+        )
+        for field in ("boot_mode", "virtual_functions_enabled", "max_virtual_functions"):
+            self.assertIsNone(onboard[field], field)  # not served: null, never assumed
+
+    def test_the_assigned_port_leaf_follows_the_port_rows(self):
+        functions = self._run()[0]["context"]["functions"]
+        self.assertEqual(
+            functions["netfn|slot-1|1.1"]["assigned_port_source"],
+            "Links.PhysicalNetworkPortAssignment",
+        )
+        # 2.1 serves only the deprecated root NetworkPort link: that family answers
+        self.assertEqual(
+            functions["netfn|slot-1|2.1"]["assigned_port_source"], "PhysicalPortAssignment"
+        )
+        self.assertEqual(
+            functions["netfn|ob-1|1.1"]["assigned_port_source"], "Links.PhysicalPortAssignment"
+        )
+        # the current MAC and MTU can follow the host's configuration: context only
+        self.assertEqual(
+            (functions["netfn|slot-1|2.1"]["mac"], functions["netfn|slot-1|2.1"]["mtu"]),
+            ("00:00:5e:00:53:22", 1500),
+        )
+        both = {
+            "Links": {
+                "PhysicalNetworkPortAssignment": {"@odata.id": NA + "/x/Ports/7"},
+                "PhysicalPortAssignment": {"@odata.id": NA + "/x/NetworkPorts/8"},
+            },
+            "PhysicalNetworkPortAssignment": {"@odata.id": NA + "/x/Ports/9"},
+        }
+        assigned = checks._network_adapters_assigned_port
+        self.assertEqual(assigned(both), ("7", "Links.PhysicalNetworkPortAssignment"))
+        self.assertEqual(assigned(both, False), ("8", "Links.PhysicalPortAssignment"))
+        del both["Links"]
+        self.assertEqual(assigned(both, False), ("9", "PhysicalNetworkPortAssignment"))
+        self.assertEqual(assigned({}), (None, None))
+        with self.assertRaises(checks.CollectError):  # a link into Actions is never trusted
+            assigned({"Links": {"PhysicalNetworkPortAssignment": {"@odata.id": NA + "/Actions/x"}}})
+
+    def test_one_expand_get_per_collection_and_the_twin_rides_in_context(self):
+        result, ctx = self._run()
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [CH, NA + EXPAND]
+            + [self.SLOT + name + EXPAND for name in ("/Ports", "/NetworkPorts")]
+            + [self.SLOT + "/NetworkDeviceFunctions" + EXPAND]
+            + [self.OB + name + EXPAND for name in ("/NetworkPorts", "/NetworkDeviceFunctions")],
+        )
+        context = result["context"]
+        # the NetworkPorts twin of a Ports collection: the same fact in the older words
+        self.assertEqual(result["normalized"]["port|slot-1|1"]["link_status"], "LinkUp")
+        self.assertEqual(
+            context["network_ports"],
+            {
+                "slot-1|1": {
+                    "link_status": "Up",
+                    "current_link_speed_mbps": 25000,
+                    "capable_link_speeds_mbps": [10000, 25000],
+                    "physical_port_number": "1",
+                    "port_maximum_mtu": 9600,
+                    "port_max_speed_bps": 25000000000,
+                    "physical_port_mac": "00005E005301",
+                },
+                "slot-1|2": {
+                    "link_status": "Down",
+                    "current_link_speed_mbps": None,
+                    "capable_link_speeds_mbps": [10000, 25000],
+                    "physical_port_number": "2",
+                    "port_maximum_mtu": 9600,
+                    "port_max_speed_bps": 25000000000,
+                    "physical_port_mac": "00005E005302",
+                },
+            },
+        )  # ob-1's NetworkPorts are its rows, never a twin
+        self.assertEqual(
+            context["ports"]["port|slot-1|1"],
+            {
+                "current_speed_gbps": 25,
+                "current_link_speed_mbps": None,
+                "associated_macs": ["00:00:5e:00:53:01"],
+                "port_maximum_mtu": 9600,
+                "port_max_speed_bps": None,
+                "physical_port_mac": "00005E005301",
+            },
+        )
+        onboard = context["ports"]["port|ob-1|1"]
+        self.assertEqual(
+            (onboard["current_link_speed_mbps"], onboard["port_max_speed_bps"]), (1000, 1000000000)
+        )
+        self.assertEqual(onboard["associated_macs"], ["00005e005311"])  # as served, lower-cased
+        collections = context["collections"]
+        self.assertEqual(
+            collections["slot-1"]["ports"],
+            {
+                "source": self.SLOT + "/Ports",
+                "strategy": "expand",
+                "members": 2,
+                "collection": "Ports",
+            },
+        )
+        self.assertEqual(collections["ob-1"]["ports"]["collection"], "NetworkPorts")
+        self.assertIsNone(collections["ob-1"]["network_ports_twin"])
+        self.assertEqual(context["adapters_collection"]["strategy"], "expand")
+        self.assertEqual(context["adapters_source"], NA)
+        self.assertEqual(context["host_power_state"], "On")
+        self.assertEqual(
+            (context["adapters_without_ports"], context["adapters_without_functions"]), ([], [])
+        )
+        self.assertEqual(context["resolution"]["chassis"], CH)
+        self.assertEqual(set(result["raw"]), {path for path in ctx.gets if path.startswith(NA)})
+
+    def test_an_expand_refusal_is_paid_for_once(self):
+        expected = self._run()[0]["normalized"]
+        result, ctx = self._run(errors={NA + EXPAND: 501})
+        self.assertEqual([path for path in ctx.gets if path.endswith(EXPAND)], [NA + EXPAND])
+        self.assertEqual(result["normalized"], expected)
+        context = result["context"]
+        self.assertEqual(context["adapters_collection"]["expand_refused"], "HTTP 501")
+        self.assertEqual(
+            {
+                entry["strategy"]
+                for report in context["collections"].values()
+                for entry in report.values()
+                if entry is not None
+            },
+            {"members"},
+        )
+        self.assertIn(self.SLOT + "/NetworkDeviceFunctions/2.1", ctx.gets)
+        # the first sub-collection that refuses turns $expand off for every later read
+        result, ctx = self._run(errors={self.SLOT + "/Ports" + EXPAND: 501})
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)],
+            [NA + EXPAND, self.SLOT + "/Ports" + EXPAND],
+        )
+        self.assertEqual(result["normalized"], expected)
+        self.assertEqual(
+            result["context"]["collections"]["slot-1"]["ports"]["expand_refused"], "HTTP 501"
+        )
+        # an $expand answered with bare links is a refusal too
+        payloads = _base_payloads()
+        payloads[self.SLOT + "/NetworkPorts" + EXPAND] = payloads[self.SLOT + "/NetworkPorts"]
+        result, ctx = self._run(payloads)
+        self.assertEqual(
+            result["context"]["collections"]["slot-1"]["network_ports_twin"]["expand_refused"],
+            "members returned as links",
+        )
+        self.assertNotIn(self.SLOT + "/NetworkDeviceFunctions" + EXPAND, ctx.gets)
+        self.assertEqual(result["normalized"], expected)
+
+    def test_without_expand_support_every_collection_is_walked(self):
+        expected = self._run()[0]["normalized"]
+        payloads = _without_expand(_base_payloads())
+        payloads["/redfish/v1/"]["ProtocolFeaturesSupported"]["ExpandQuery"]["ExpandAll"] = False
+        payloads["/redfish/v1/"]["ProtocolFeaturesSupported"]["ExpandQuery"]["NoLinks"] = False
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        result, ctx = self._run(payloads)
+        self.assertFalse([path for path in ctx.gets if EXPAND in path])
+        self.assertEqual(result["normalized"], expected)
+        # resolution 5, the Chassis, the adapters 1 + 2, slot-1 3 + 6, ob-1 2 + 2
+        self.assertEqual(len(ctx.gets), 5 + 1 + 3 + 9 + 4)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_NETWORK_ADAPTERS)
+
+    def test_an_empty_adapter_collection_is_unmeasured(self):
+        payloads = _base_payloads()
+        payloads[NA + EXPAND]["Members"] = []
+        payloads[SYS]["PowerState"] = "Off"
+        with self.assertRaises(checks.CollectError) as caught:
+            self._run(payloads)
+        message = str(caught.exception)
+        self.assertIn(NA + " answered with zero members (host PowerState Off)", message)
+        self.assertIn("unmeasured", message)
+
+    def test_absent_linked_and_unlinked_collections(self):
+        payloads = {path: body for path, body in _base_payloads().items() if NA not in path}
+        with self.assertRaises(checks.CollectError) as caught:  # the Chassis links it
+            self._run(payloads)
+        self.assertIn("the Chassis links %s but it answered 404" % (NA,), str(caught.exception))
+        del payloads[CH]["NetworkAdapters"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            self._run(payloads)
+        self.assertIn("the Chassis links no NetworkAdapters collection", str(caught.exception))
+        # served but not linked: read at its DMTF path
+        payloads = _base_payloads()
+        del payloads[CH]["NetworkAdapters"]
+        result = self._run(payloads)[0]
+        self.assertEqual(result["context"]["adapters_source"], NA)
+        self.assertIn("port|slot-1|1", result["normalized"])
+
+    def test_an_adapter_without_sideband_is_keyed_with_zero_rows(self):
+        # An add-in card the BMC has no sideband path to: listed, identity '', no ports,
+        # no functions, and its controller declares none — recorded, never refused.
+        payloads = _base_payloads()
+        base = NA + "/slot-2"
+        payloads[NA + EXPAND]["Members"].append(
+            {
+                "@odata.id": base,
+                "Id": "slot-2",
+                "Name": "Slot 2",
+                "Manufacturer": "",
+                "Model": "",
+                "SerialNumber": "",
+                "PartNumber": "",
+                "SKU": "",
+                "Status": {"State": "Enabled", "Health": "OK"},
+                "Controllers": [
+                    {
+                        "FirmwarePackageVersion": "",
+                        "ControllerCapabilities": {
+                            "NetworkPortCount": 0,
+                            "NetworkDeviceFunctionCount": 0,
+                        },
+                        "Links": {
+                            "PCIeDevices": [{"@odata.id": CH + "/PCIeDevices/slot_2"}],
+                            "Ports": [],
+                            "NetworkPorts": [],
+                            "NetworkDeviceFunctions": [],
+                        },
+                    }
+                ],
+                "Ports": {"@odata.id": base + "/Ports"},
+                "NetworkPorts": {"@odata.id": base + "/NetworkPorts"},
+                "NetworkDeviceFunctions": {"@odata.id": base + "/NetworkDeviceFunctions"},
+            }
+        )
+        for name in ("/Ports", "/NetworkPorts", "/NetworkDeviceFunctions"):
+            payloads[base + name + EXPAND] = {"@odata.id": base + name, "Members": []}
+        result = self._run(payloads)[0]
+        row = result["normalized"]["adapter|slot-2"]
+        self.assertEqual(
+            (row["port_count"], row["function_count"], row["controller_port_count"]), (0, 0, 0)
+        )
+        for field in ("manufacturer", "model", "serial", "part_number", "sku"):
+            self.assertIsNone(row[field], field)  # served '', read null
+        self.assertIsNone(row["firmware_package_version"])
+        self.assertEqual(row["pcie_devices"], ["slot_2"])
+        self.assertFalse([key for key in result["normalized"] if "|slot-2|" in key])
+        context = result["context"]
+        self.assertEqual(context["adapters_without_ports"], ["slot-2"])
+        self.assertEqual(context["adapters_without_functions"], ["slot-2"])
+        self.assertEqual(context["collections"]["slot-2"]["functions"]["members"], 0)
+        # an adapter that links no collection at all: counts null, named the same way
+        payloads[NA + EXPAND]["Members"][-1] = {"@odata.id": base, "Id": "slot-2"}
+        result = self._run(payloads)[0]
+        row = result["normalized"]["adapter|slot-2"]
+        self.assertEqual((row["port_count"], row["function_count"]), (None, None))
+        self.assertEqual(
+            result["context"]["collections"]["slot-2"],
+            {"ports": None, "network_ports_twin": None, "functions": None},
+        )
+        self.assertEqual(result["context"]["adapters_without_ports"], ["slot-2"])
+
+    def test_declared_ports_or_functions_read_empty_or_404_are_unmeasured(self):
+        for collection, declared in (
+            ("/Ports", "Ports empty, its controllers declare ports"),
+            ("/NetworkDeviceFunctions", "NetworkDeviceFunctions empty, its controllers declare"),
+        ):
+            payloads = _base_payloads()
+            payloads[self.SLOT + collection + EXPAND]["Members"] = []
+            with self.assertRaises(checks.CollectError) as caught:
+                self._run(payloads)
+            message = str(caught.exception)
+            self.assertIn("slot-1 (" + declared, message)
+            self.assertIn("(host PowerState On)", message)
+            self.assertIn("unmeasured", message)
+        # the controller's links alone are a declaration too
+        payloads = _base_payloads()
+        controller = payloads[NA + EXPAND]["Members"][0]["Controllers"][0]
+        del controller["ControllerCapabilities"]
+        payloads[self.SLOT + "/Ports" + EXPAND]["Members"] = []
+        with self.assertRaises(checks.CollectError):
+            self._run(payloads)
+        # ... and so is a NetworkPorts twin that lists the ports the Ports collection lacks
+        del controller["Links"]
+        with self.assertRaises(checks.CollectError) as caught:
+            self._run(payloads)
+        self.assertIn("slot-1 (Ports empty while its NetworkPorts list 2)", str(caught.exception))
+        payloads[self.SLOT + "/NetworkPorts" + EXPAND]["Members"] = []
+        result = self._run(payloads)[0]  # nothing says otherwise: zero rows, named
+        self.assertEqual(result["normalized"]["adapter|slot-1"]["port_count"], 0)
+        self.assertEqual(result["context"]["adapters_without_ports"], ["slot-1"])
+        # a linked collection answering 404 is a failed read, never "no functions"
+        payloads = {
+            path: body
+            for path, body in _base_payloads().items()
+            if not path.startswith(self.OB + "/NetworkDeviceFunctions")
+        }
+        with self.assertRaises(checks.CollectError) as caught:
+            self._run(payloads)
+        self.assertIn("ob-1 (NetworkDeviceFunctions answered 404)", str(caught.exception))
+
+    def test_a_missing_twin_leaves_the_rows_alone(self):
+        expected = self._run()[0]["normalized"]
+        payloads = {
+            path: body
+            for path, body in _base_payloads().items()
+            if not path.startswith(self.SLOT + "/NetworkPorts")
+        }
+        result = self._run(payloads)[0]
+        self.assertEqual(result["normalized"], expected)
+        twin = result["context"]["collections"]["slot-1"]["network_ports_twin"]
+        self.assertEqual((twin["strategy"], twin["members"]), ("absent", None))
+        self.assertEqual(result["context"]["network_ports"], {})
+
+    def test_a_tree_the_budget_cannot_cover_is_refused_before_any_port_is_read(self):
+        payloads = _base_payloads()
+        members = payloads[NA + EXPAND]["Members"]
+        for index in range(12):
+            adapter = copy.deepcopy(members[0])
+            adapter_path = NA + "/extra-%d" % (index,)
+            adapter.update({"@odata.id": adapter_path, "Id": "extra-%d" % (index,)})
+            for name in ("Ports", "NetworkPorts", "NetworkDeviceFunctions"):
+                adapter[name] = {"@odata.id": adapter_path + "/" + name}
+            members.append(adapter)
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_network_adapters(ctx)
+        self.assertIn("collections of 14 adapter(s) take at least 41 GET(s)", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if path.startswith(NA + "/")])
+
+    def test_eight_adapters_fit_even_when_this_check_pays_the_full_resolution(self):
+        payloads = _base_payloads()
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        members = payloads[NA + EXPAND]["Members"]
+        del members[1]  # ob-1: keep slot-1's three collections, add seven more adapters
+        for index in range(7):
+            adapter_path = NA + "/extra-%d" % (index,)
+            adapter = {"@odata.id": adapter_path, "Id": "extra-%d" % (index,)}
+            for name in ("Ports", "NetworkPorts", "NetworkDeviceFunctions"):
+                adapter[name] = {"@odata.id": adapter_path + "/" + name}
+                payloads[adapter_path + "/" + name + EXPAND] = {"Members": []}
+            members.append(adapter)
+        result, ctx = self._run(payloads)
+        self.assertEqual(len(ctx.gets), 5 + 1 + 1 + 8 * 3)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_NETWORK_ADAPTERS)
+        self.assertEqual(
+            len([key for key in result["normalized"] if key.startswith("adapter|")]), 8
+        )
+
+    def test_other_vendors_read_the_dmtf_leaves_only(self):
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        result, ctx = self._run(payloads)
+        view, context = result["normalized"], result["context"]
+        self.assertIsNone(view["port|slot-1|1"]["physical_port_number"])  # Lenovo's leaf
+        self.assertEqual(view["port|slot-1|1"]["port_id"], "P1")
+        self.assertEqual(view["port|ob-1|1"]["physical_port_number"], "1")  # a DMTF leaf there
+        self.assertIsNone(context["ports"]["port|slot-1|1"]["physical_port_mac"])
+        self.assertIsNone(context["network_ports"]["slot-1|1"]["port_max_speed_bps"])
+        self.assertFalse([path for path in ctx.gets if "/Oem/" in path])
+        lenovo = self._run()[0]["normalized"]
+        for key, row in view.items():
+            if not key.startswith("port|"):
+                self.assertEqual(row, lenovo[key], key)
+
+    def test_dell_shaped_paths_are_resolved_not_assumed(self):
+        dell = "System.Embedded.1"
+
+        def dellify(text):
+            text = text.replace(SYS, "/redfish/v1/Systems/" + dell)
+            text = text.replace(MGR, "/redfish/v1/Managers/iDRAC.Embedded.1")
+            return text.replace(CH, "/redfish/v1/Chassis/" + dell)
+
+        payloads = {
+            dellify(path): json.loads(dellify(json.dumps(payload)))
+            for path, payload in _base_payloads().items()
+        }
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Dell")
+        payloads["/redfish/v1/Systems"] = {
+            "Members": [{"@odata.id": "/redfish/v1/Systems/" + dell}]
+        }
+        payloads["/redfish/v1/Systems/" + dell]["Links"] = {
+            "ManagedBy": [{"@odata.id": "/redfish/v1/Managers/iDRAC.Embedded.1"}],
+            "Chassis": [{"@odata.id": "/redfish/v1/Chassis/" + dell}],
+        }
+        result, ctx = self._run(payloads)
+        self.assertEqual(result["context"]["adapters_source"], dellify(NA))
+        self.assertEqual(result["normalized"]["netfn|slot-1|1.1"]["assigned_port"], "1")
+        self.assertEqual(len(result["normalized"]), 8)
+        self.assertFalse(
+            [path for path in ctx.gets if "/Chassis/1" in path or "/Systems/1" in path]
+        )
+
+    def test_iscsi_boot_credentials_never_reach_raw_rows_or_context(self):
+        result = self._run()[0]
+        text = json.dumps(result)
+        for secret in ("hand-built-chap-secret", "hand-built-mutual-secret"):
+            self.assertNotIn(secret, text)
+        for user in ("hand-built-chap-user", "hand-built-mutual-user"):
+            self.assertNotIn(user, text)
+        functions = result["raw"][self.SLOT + "/NetworkDeviceFunctions" + EXPAND]["Members"]
+        iscsi = functions[1]["iSCSIBoot"]
+        self.assertEqual(
+            (iscsi["CHAPSecret"], iscsi["CHAPUsername"], iscsi["MutualCHAPSecret"]),
+            (checks._SCRUBBED,) * 3,
+        )
+        self.assertEqual(iscsi["PrimaryTargetIPAddress"], "192.0.2.62")  # a network fact, kept
+        self.assertNotIn("Actions", json.dumps(result["raw"]))
+        # emptiness survives the scrub
+        empty = {"iSCSIBoot": {"CHAPSecret": None, "MutualCHAPUsername": ""}}
+        self.assertEqual(checks._network_adapters_scrub_credentials(empty), empty)
+
+    def test_stable_between_captures_and_a_lost_link_is_one_changed_field(self):
+        compare = registry.CHECKS["bmc_network_adapters"].compare
+        pre = self._run()[0]["normalized"]
+        # readings and host-driven values move without a diff
+        payloads = _base_payloads()
+        ports = payloads[self.SLOT + "/Ports" + EXPAND]["Members"]
+        ports[0]["CurrentSpeedGbps"] = 10
+        functions = payloads[self.SLOT + "/NetworkDeviceFunctions" + EXPAND]["Members"]
+        functions[1]["Ethernet"].update(MACAddress="00:00:5e:00:53:33", MTUSize=9000)
+        post = self._run(payloads)[0]["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        ports[0]["LinkStatus"] = "NoLink"
+        post = self._run(payloads)[0]["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [("port|slot-1|1", "link_status", "LinkUp", "NoLink")],
+        )
+
+    def test_registration_and_semantics(self):
+        check = registry.CHECKS["bmc_network_adapters"]
+        self.assertEqual((check.platform, check.tier), ("bmc", 1))
+        self.assertEqual(check.compare, {"mode": "equality_set"})
+        self.assertNotIn(registry.EMPTY_OK_TAG, check.tags)  # a healthy unit keys its adapters
+        text = registry.SEMANTICS["bmc_network_adapters"]
+        self.assertTrue(text.endswith(registry._BMC_RESOLUTION))
+        for phrase in (
+            "NoLink",
+            "PhysicalNetworkPortAssignment",
+            "adapters_without_ports",
+            "vmware_pnics.mac",
+            "10 x 2^30",
+            "unmeasured",
+        ):
+            self.assertIn(phrase, text)
+        self.assertLessEqual(
+            checks._BUDGET_NETWORK_ADAPTERS, _loader.constants.REDFISH_MAX_CHECK_BUDGET
         )
 
 

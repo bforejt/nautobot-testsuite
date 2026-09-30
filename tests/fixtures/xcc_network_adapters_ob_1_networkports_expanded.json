@@ -1,0 +1,44 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkPorts",
+  "@odata.type": "#NetworkPortCollection.NetworkPortCollection",
+  "Name": "NetworkPortCollection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/ob-1/NetworkPorts/1",
+      "@odata.type": "#NetworkPort.v1_2_0.NetworkPort",
+      "Id": "1",
+      "Name": "Physical Port 1",
+      "PhysicalPortNumber": "1",
+      "LinkStatus": "Up",
+      "ActiveLinkTechnology": "Ethernet",
+      "CurrentLinkSpeedMbps": 1000,
+      "SupportedLinkCapabilities": [
+        {
+          "LinkNetworkTechnology": "Ethernet",
+          "CapableLinkSpeedMbps": [
+            1000,
+            100
+          ],
+          "AutoSpeedNegotiation": true
+        }
+      ],
+      "FlowControlConfiguration": "None",
+      "PortMaximumMTU": 9000,
+      "AssociatedNetworkAddresses": [
+        "00005E005311"
+      ],
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoNetworkPort.v1_0_0.LenovoNetworkPortProperties",
+          "PortMaxSpeedbps": 1000000000,
+          "PhysicalPortMacAddress": "00005E005311"
+        }
+      }
+    }
+  ]
+}
