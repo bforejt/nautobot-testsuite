@@ -1758,7 +1758,9 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_accounts' 4: the AccountService, Accounts, Roles and the LDAP client)
         # (+ bmc_alerting's 4: the EventService, the SMTP client, Subscriptions, Recipients)
         # (+ bmc_certificates' 2: CertificateLocations and the one certificate it lists)
-        self.assertLessEqual(len(ctx.gets), 79)
+        # (+ bmc_licenses' 5: the LicenseService, FoD, Licenses and FoD Keys twice — the
+        # harvest kept that collection's plain form only)
+        self.assertLessEqual(len(ctx.gets), 84)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -3132,6 +3134,85 @@ class TestBmcLabCertificates(unittest.TestCase):
         self.assertEqual(
             [(row["key"], row["field"]) for row in diff["changed"]],
             [(self.KEY, "valid_not_after"), (self.KEY, "valid_not_before")],
+        )
+
+
+class TestBmcLabLicenses(unittest.TestCase):
+    """bmc_licenses on the lab payloads: the LicenseService and Lenovo's FoD service answer,
+    both collections empty — an empty keyed view (status ok), never not-present."""
+
+    SERVICE = "/redfish/v1/LicenseService"
+    LICENSES = SERVICE + "/Licenses"
+    FOD = "/redfish/v1/Managers/1/Oem/Lenovo/FoD"
+    KEYS = FOD + "/Keys"
+
+    def test_the_lab_unit_holds_no_licence_and_no_key(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_licenses(ctx)
+        view, context = result["normalized"], result["context"]
+        # the four scalars alone: the service is on, it warns 0 days ahead, and both
+        # the LicenseService's Lenovo block and the FoD service name the base tier
+        self.assertEqual(
+            view,
+            {
+                "license_service_enabled": True,
+                "expiration_warning_days": 0,
+                "license_tier": "Tier1",
+                "fod_tier": "Tier1",
+            },
+        )
+        self.assertEqual(context["readings"], {})
+        self.assertEqual(
+            context["license_service"], {"resource": self.SERVICE, "linked": True, "served": True}
+        )
+        self.assertEqual(
+            context["fod_service"], {"resource": self.FOD, "served": True, "note": None}
+        )
+        licenses, keys = context["licenses"], context["fod_keys"]
+        self.assertEqual(
+            (licenses["resource"], licenses["strategy"], licenses["members"]),
+            (self.LICENSES, "expand", 0),
+        )
+        # The harvest kept only the plain form of the FoD Keys collection, so its $expand
+        # form answers 404 in this fixture set and the (empty) collection is read plain.
+        self.assertEqual(
+            (keys["resource"], keys["strategy"], keys["members"], keys["expand_refused"]),
+            (self.KEYS, "members", 0, "HTTP 404"),
+        )
+        self.assertEqual(
+            ctx.gets[-6:],
+            [
+                self.SERVICE,
+                "/redfish/v1/Managers/1",
+                self.FOD,
+                self.LICENSES + _XCC_EXPAND,
+                self.KEYS + _XCC_EXPAND,
+                self.KEYS,
+            ],
+        )
+        self.assertEqual(
+            sorted(result["raw"]),
+            sorted([self.SERVICE, self.FOD, self.LICENSES + _XCC_EXPAND, self.KEYS]),
+        )
+        # the service's own Lenovo block and the FoD resource, as served
+        self.assertEqual(result["raw"][self.SERVICE]["Oem"]["Lenovo"]["Tier"], "Tier1")
+        self.assertEqual(result["raw"][self.FOD]["Keys"], {"@odata.id": self.KEYS})
+
+    def test_empty_collections_are_ok_not_absent(self):
+        # the empty Licenses and Keys collections answer 200 with zero members: the
+        # healthy view of a unit with nothing installed, never a missing service
+        payloads = _xcc_lab_payloads()
+        self.assertEqual(payloads[self.LICENSES + _XCC_EXPAND]["Members"], [])
+        self.assertEqual(payloads[self.KEYS]["Members@odata.count"], 0)
+        result = bmc._collect_licenses(_FakeCtx(payloads))
+        self.assertEqual([key for key in result["normalized"] if "|" in key], [])
+        # the scalars keep the view non-empty: the shakedown reads it as plain ok, so the
+        # check needs no empty-ok tag
+        self.assertEqual(
+            _loader.registry.shakedown_advice("ok", None, len(result["normalized"]), True), "ok"
+        )
+        self.assertNotIn(
+            _loader.registry.EMPTY_OK_TAG, _loader.registry.CHECKS["bmc_licenses"].tags
         )
 
 

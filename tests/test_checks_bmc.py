@@ -230,6 +230,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_accounts",
         "bmc_alerting",
         "bmc_certificates",
+        "bmc_licenses",
     }
 
     def test_all_registered_once(self):
@@ -3739,7 +3740,8 @@ class TestWholeFamily(unittest.TestCase):
         # + bmc_network_adapters' 6 (its hand-built adapter tree)
         # + bmc_pcie_slots' 2 (a PCIeSlots probe the base set answers 404, the Lenovo table)
         # + bmc_accounts' 1 (the AccountService the base set answers 404: not-present)
-        self.assertLessEqual(len(ctx.gets), 41)
+        # + bmc_licenses' 2 (the LicenseService path and the FoD link, both 404 there)
+        self.assertLessEqual(len(ctx.gets), 43)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3758,7 +3760,8 @@ class TestWholeFamily(unittest.TestCase):
         # (+ bmc_network_adapters' 17: its hand-built adapter tree walked)
         # (+ bmc_pcie_slots' 6: the PCIeSlots probe, then the Lenovo table walked)
         # (+ bmc_accounts' 1: the AccountService probe)
-        self.assertLessEqual(len(ctx.gets), 91)
+        # (+ bmc_licenses' 2: the LicenseService path and the FoD link)
+        self.assertLessEqual(len(ctx.gets), 93)
 
 
 class TestResolution(unittest.TestCase):
@@ -4124,7 +4127,14 @@ class TestHygiene(unittest.TestCase):
         for path, redactor in ctx.redacted:
             self.assertIn(
                 redactor,
-                ("_scrub_payload", "_redact_log_page", "_redact_task_page", "_alerting_redact"),
+                (
+                    "_scrub_payload",
+                    "_redact_log_page",
+                    "_redact_task_page",
+                    "_alerting_redact",
+                    "_licenses_redact",
+                    "_certificates_redact",
+                ),
                 path,
             )
 
@@ -8388,6 +8398,578 @@ class TestCertificates(unittest.TestCase):
         )
         self.assertEqual([row["key"] for row in diff["removed"]], ["cert|" + self.LDAP])
         self.assertEqual(diff["added"], [])
+
+
+class TestLicenses(unittest.TestCase):
+    """bmc_licenses on hand-built members held by the lab unit's own LicenseService and FoD
+    resources: xcc_licenses_dmtf_expanded.json (the DMTF License schema) and
+    xcc_licenses_fod_keys_expanded.json (Lenovo's LenovoFoDKey leaves, plan Appendix B) —
+    every value an invention, every Lenovo value this repository has not seen served a
+    <placeholder:...> string. The lab unit's empty collections are pinned in
+    test_lab_fixtures.TestBmcLabLicenses."""
+
+    SERVICE = "/redfish/v1/LicenseService"
+    LICENSES = SERVICE + "/Licenses"
+    FOD = MGR + "/Oem/Lenovo/FoD"
+    KEYS = FOD + "/Keys"
+    SCALARS = ("license_service_enabled", "expiration_warning_days", "license_tier", "fod_tier")
+    LICENSE_FIELDS = (
+        "name",
+        "license_type",
+        "license_origin",
+        "removable",
+        "manufacturer",
+        "sku",
+        "part_number",
+        "state",
+        "health",
+        "authorization_scope",
+        "expiration_date",
+        "grace_period_days",
+        "max_authorized_devices",
+        "authorized_devices",
+    )
+    KEY_FIELDS = (
+        "name",
+        "description",
+        "id_types",
+        "status",
+        "expires",
+        "description_type_code",
+        "use_limit",
+    )
+    # Seeded by the hand-built members; no stored view may hold any of them.
+    NEVER_STORED = (
+        "ENTITLEMENT-INVENTED-0001",
+        "ENTITLEMENT-INVENTED-0003",
+        "IDENTIFIER-INVENTED-0001",
+        "SU5WRU5URUQtTElDRU5DRS0wMDAx",  # the licence string
+        "Example Licensing Desk",
+        "licensing@example.com",
+        "+1-555-0100",
+    )
+
+    def _payloads(self, populated=True):
+        """The hand-built family set plus the licence service and Lenovo's FoD service."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = dict(
+            payloads["/redfish/v1/"], LicenseService={"@odata.id": self.SERVICE}
+        )
+        payloads[self.SERVICE] = _fx("xcc_licenseservice_lab.json")
+        payloads[self.FOD] = _fx("xcc_manager_lenovo_fod_lab.json")
+        if populated:
+            collections = (
+                (self.LICENSES, _fx("xcc_licenses_dmtf_expanded.json")),
+                (self.KEYS, _fx("xcc_licenses_fod_keys_expanded.json")),
+            )
+        else:
+            collections = (
+                (self.LICENSES, _fx("xcc_licenseservice_licenses_expanded_lab.json")),
+                (self.KEYS, _fx("xcc_manager_lenovo_fod_keys_lab.json")),
+            )
+        for path, expanded in collections:
+            payloads[path + EXPAND] = expanded
+            plain, members = _split_collection(expanded)
+            payloads[path] = plain
+            payloads.update(members)
+        return payloads
+
+    @staticmethod
+    def _walkable(payloads):
+        """No $expand anywhere and no System links: the id resolution pays its full five GETs."""
+        payloads = _without_expand(payloads)
+        del payloads[SYS]["Links"]
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        return payloads
+
+    def _unlicensed(self):
+        """The hand-built family set as it stands: no LicenseService, a FoD link that 404s."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"] = _fx("xcc_service_root.json")  # links no LicenseService
+        for path in [path for path in payloads if path.startswith((self.SERVICE, self.FOD))]:
+            del payloads[path]
+        return payloads
+
+    def test_licences_and_keys_keyed_with_every_field(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_licenses(ctx)
+        view = result["normalized"]
+        self.assertEqual(
+            {key: view[key] for key in self.SCALARS},
+            {
+                "license_service_enabled": True,
+                "expiration_warning_days": 0,
+                "license_tier": "Tier1",
+                "fod_tier": "Tier1",
+            },
+        )
+        self.assertEqual(
+            sorted(key for key in view if "|" in key),
+            ["fodkey|1", "fodkey|2", "license|1", "license|2", "license|3"],
+        )
+        self.assertEqual(
+            view["license|1"],
+            {
+                "name": "Example Remote Console Upgrade",
+                "license_type": "Production",
+                "license_origin": "Installed",
+                "removable": True,
+                "manufacturer": "Lenovo",
+                "sku": "SKU-EXAMPLE-0001",
+                "part_number": "PN-EXAMPLE-0001",
+                "state": "Enabled",
+                "health": "OK",
+                "authorization_scope": "Device",
+                "expiration_date": "2027-06-30T00:00:00Z",
+                "grace_period_days": 30,
+                "max_authorized_devices": 1,
+                "authorized_devices": ["/redfish/v1/Managers/1"],
+            },
+        )
+        # a built-in licence without an end date, grace period, part number or links:
+        # every field present, null where not served ('' included)
+        self.assertEqual(
+            view["license|2"],
+            dict(
+                dict.fromkeys(self.LICENSE_FIELDS),
+                name="Example Built-in Licence",
+                license_type="Production",
+                license_origin="BuiltIn",
+                removable=False,
+                manufacturer="Lenovo",
+                state="Enabled",
+                health="OK",
+                authorization_scope="Service",
+            ),
+        )
+        self.assertEqual(
+            (view["license|3"]["license_type"], view["license|3"]["authorization_scope"]),
+            ("Trial", "Capacity"),
+        )
+        self.assertEqual(view["license|3"]["grace_period_days"], 0)  # a 0 is a value
+        self.assertEqual(
+            view["license|3"]["authorized_devices"],
+            ["/redfish/v1/Managers/1", "/redfish/v1/Systems/1"],  # sorted, not served order
+        )
+        # Lenovo's key leaves verbatim (placeholders where no value has been seen served)
+        self.assertEqual(
+            view["fodkey|1"],
+            {
+                "name": "Example Feature Key",
+                "description": "Example feature activation key",
+                "id_types": ["<placeholder:IdTypes 1>", "<placeholder:IdTypes 2>"],
+                "status": "<placeholder:Status>",
+                "expires": "<placeholder:Expires>",
+                "description_type_code": "<placeholder:DescTypeCode>",
+                "use_limit": 5,
+            },
+        )
+        self.assertEqual(view["fodkey|2"], dict.fromkeys(self.KEY_FIELDS))
+        # one GET per resource beyond the id resolution; both collections by $expand
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE + [self.SERVICE, MGR, self.FOD, self.LICENSES + EXPAND, self.KEYS + EXPAND],
+        )
+        self.assertEqual(
+            sorted(result["raw"]),
+            sorted([self.SERVICE, self.FOD, self.LICENSES + EXPAND, self.KEYS + EXPAND]),
+        )
+
+    def test_what_moves_on_its_own_rides_in_context(self):
+        context = checks._collect_licenses(_FakeCtx(self._payloads()))["context"]
+        self.assertEqual(
+            context["readings"],
+            {
+                "license|1": {
+                    "install_date": "2026-03-01T12:00:00Z",
+                    "remaining_duration": "P272DT12H0M0S",
+                    "remaining_use_count": 4,
+                },
+                "license|2": {
+                    "install_date": None,
+                    "remaining_duration": None,
+                    "remaining_use_count": None,
+                },
+                "license|3": {
+                    "install_date": "2026-09-01T08:30:00Z",
+                    "remaining_duration": "P31DT0H0M0S",
+                    "remaining_use_count": None,
+                },
+                "fodkey|1": {"use_count": 1},
+                "fodkey|2": {"use_count": None},
+            },
+        )
+        self.assertEqual(
+            context["license_service"], {"resource": self.SERVICE, "linked": True, "served": True}
+        )
+        self.assertEqual(
+            context["fod_service"], {"resource": self.FOD, "served": True, "note": None}
+        )
+        for read, link, members in (
+            (context["licenses"], self.LICENSES, 3),
+            (context["fod_keys"], self.KEYS, 2),
+        ):
+            self.assertEqual(
+                (read["resource"], read["strategy"], read["members"]), (link, "expand", members)
+            )
+        self.assertEqual(context["resolution"]["system"], SYS)
+
+    def test_empty_collections_are_an_empty_keyed_view(self):
+        # A service that answers with no licence and no key: ok, the four scalars alone.
+        result = checks._collect_licenses(_FakeCtx(self._payloads(populated=False)))
+        self.assertEqual(
+            result["normalized"],
+            {
+                "license_service_enabled": True,
+                "expiration_warning_days": 0,
+                "license_tier": "Tier1",
+                "fod_tier": "Tier1",
+            },
+        )
+        self.assertEqual(result["context"]["readings"], {})
+        self.assertEqual(result["context"]["licenses"]["members"], 0)
+        self.assertEqual(result["context"]["fod_keys"]["members"], 0)
+
+    def test_identifiers_and_key_material_are_never_stored(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_licenses(ctx)
+        stored = json.dumps(result)
+        for text in self.NEVER_STORED:
+            self.assertNotIn(text, stored, text)
+        marker = checks._SCRUBBED
+        licence = result["raw"][self.LICENSES + EXPAND]["Members"][0]
+        self.assertEqual((licence["EntitlementId"], licence["LicenseString"]), (marker, marker))
+        self.assertEqual(licence["Contact"]["ContactName"], marker)
+        self.assertEqual(licence["SKU"], "SKU-EXAMPLE-0001")  # what is not secret stays
+        key = result["raw"][self.KEYS + EXPAND]["Members"][0]
+        self.assertEqual(key["Identifier"], marker)
+        self.assertEqual(key["Bytes"], [marker] * 8)  # the element count survives, never a byte
+        self.assertEqual(key["IdTypes"], ["<placeholder:IdTypes 2>", "<placeholder:IdTypes 1>"])
+        # scrubbed on the read: the per-run cache (what the trace copies) holds none either
+        cached = json.dumps([value for value in ctx._cache.values() if value is not None])
+        for text in self.NEVER_STORED:
+            self.assertNotIn(text, cached, text)
+
+    def test_every_read_of_the_check_passes_its_redactor(self):
+        ctx = _FakeCtx(self._payloads())
+        checks._collect_licenses(ctx)
+        mine = {path: name for path, name in ctx.redacted if path not in RESOLVE + [MGR]}
+        self.assertEqual(
+            mine,
+            dict.fromkeys(
+                (self.SERVICE, self.FOD, self.LICENSES + EXPAND, self.KEYS + EXPAND),
+                "_licenses_redact",
+            ),
+        )
+
+    def test_the_redactor_scrubs_the_identifiers_keeps_emptiness_and_is_idempotent(self):
+        marker = checks._SCRUBBED
+        payload = {
+            "EntitlementId": "ENTITLEMENT-INVENTED-0009",
+            "Identifier": "",
+            "Identifier@odata.count": 2,
+            "Members": [
+                {
+                    "Identifier": ["IDENTIFIER-INVENTED-0009", None],
+                    "LicenseString": "x",
+                    "Bytes": [1, 2],
+                    "IdTypes": ["<placeholder:IdTypes>"],
+                }
+            ],
+        }
+        once = checks._licenses_redact(payload)
+        self.assertEqual(
+            once,
+            {
+                "EntitlementId": marker,
+                "Identifier": "",
+                "Identifier@odata.count": 2,
+                "Members": [
+                    {
+                        "Identifier": [marker, None],
+                        "LicenseString": marker,
+                        "Bytes": [marker, marker],
+                        "IdTypes": ["<placeholder:IdTypes>"],
+                    }
+                ],
+            },
+        )
+        self.assertEqual(checks._licenses_redact(once), once)
+
+    def test_an_expand_refusal_is_paid_once_and_the_lab_layout_walk_fits(self):
+        ctx = _FakeCtx(self._walkable(self._payloads(populated=False)))
+        result = checks._collect_licenses(ctx)
+        self.assertEqual(len(result["normalized"]), 4)
+        # $expand asked once (Licenses, answered 404) and never again (Keys)
+        self.assertEqual([path for path in ctx.gets if "?" in path], [self.LICENSES + EXPAND])
+        self.assertEqual(result["context"]["licenses"]["expand_refused"], "HTTP 404")
+        self.assertEqual(result["context"]["fod_keys"]["strategy"], "members")
+        self.assertNotIn("expand_refused", result["context"]["fod_keys"])
+        # resolution 5, LicenseService, the Manager, FoD, the attempt, Licenses, Keys
+        self.assertEqual(len(ctx.gets), 5 + 6)
+        self.assertLessEqual(len(ctx.gets), checks._BUDGET_LICENSES)
+
+    def test_the_walked_view_is_the_expanded_view(self):
+        expanded = checks._collect_licenses(_FakeCtx(self._payloads()))
+        ctx = _FakeCtx(_without_expand(self._payloads()))
+        walked = checks._collect_licenses(ctx)
+        self.assertEqual(walked["normalized"], expanded["normalized"])
+        self.assertEqual(walked["context"]["readings"], expanded["context"]["readings"])
+        # the members read one by one, each through the check's redactor
+        self.assertIn(self.LICENSES + "/1", walked["raw"])
+        self.assertEqual(walked["raw"][self.KEYS + "/1"]["Identifier"], checks._SCRUBBED)
+        self.assertEqual(len(ctx.gets), 3 + 3 + 1 + (1 + 3) + (1 + 2))
+
+    def test_five_licences_and_five_keys_walk_within_the_budget(self):
+        payloads = self._walkable(self._payloads(populated=False))
+        for base in (self.LICENSES, self.KEYS):
+            links = []
+            for index in range(1, 6):
+                path = "%s/%d" % (base, index)
+                payloads[path] = {"@odata.id": path, "Id": str(index)}
+                links.append({"@odata.id": path})
+            payloads[base] = {"Members": links, "Members@odata.count": len(links)}
+        ctx = _FakeCtx(payloads)
+        view = checks._collect_licenses(ctx)["normalized"]
+        self.assertEqual(len([key for key in view if "|" in key]), 10)
+        # resolution 5, three singletons, the refused attempt, 1 + 5, then 1 + 5
+        self.assertEqual(len(ctx.gets), 5 + 3 + 1 + 6 + 6)
+        self.assertEqual(len(ctx.gets), checks._BUDGET_LICENSES)
+
+    def test_a_walk_the_budget_cannot_fit_is_refused_with_its_member_count(self):
+        payloads = _without_expand(self._payloads(populated=False))
+        links = []
+        for index in range(1, 18):
+            path = "%s/%d" % (self.LICENSES, index)
+            payloads[path] = {"@odata.id": path, "Id": str(index)}
+            links.append({"@odata.id": path})
+        payloads[self.LICENSES] = {"Members": links, "Members@odata.count": len(links)}
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_licenses(ctx)
+        self.assertIn("17 members", str(caught.exception))
+        self.assertIn("budget of %d" % (checks._BUDGET_LICENSES,), str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.LICENSES + "/")])
+
+    def test_another_vendor_reads_the_dmtf_service_only(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_licenses(ctx)
+        view = result["normalized"]
+        self.assertEqual(
+            sorted(key for key in view if "|" in key), ["license|1", "license|2", "license|3"]
+        )
+        # the LicenseService's Lenovo tier is not read on another vendor's service
+        self.assertEqual((view["license_tier"], view["fod_tier"]), (None, None))
+        self.assertIs(view["license_service_enabled"], True)
+        self.assertFalse([path for path in ctx.gets if "/Oem/Lenovo" in path])
+        self.assertNotIn(MGR, ctx.gets)
+        self.assertIn("no Contoso mapping", result["context"]["fod_service"]["note"])
+        self.assertEqual(result["context"]["fod_keys"]["members"], None)
+
+    def test_another_vendor_without_a_licence_service_is_not_present_naming_it(self):
+        payloads = self._unlicensed()
+        payloads["/redfish/v1/"] = dict(payloads["/redfish/v1/"], Vendor="Contoso")
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_licenses(ctx)
+        self.assertIn("no Contoso mapping for licences", str(caught.exception))
+        self.assertIn(self.SERVICE + " answered 404", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE + [self.SERVICE])
+
+    def test_a_lenovo_bmc_serving_neither_service_is_not_present(self):
+        # The hand-built family set: its root links no LicenseService and its Manager
+        # links a FoD resource the set does not serve.
+        ctx = _FakeCtx(self._unlicensed())
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_licenses(ctx)
+        self.assertEqual(
+            str(caught.exception),
+            "neither a DMTF LicenseService (the service root links none and %s answered 404) "
+            "nor Lenovo's FoD service (%s answered 404) is served" % (self.SERVICE, self.FOD),
+        )
+        # the service's standard path is read once, then the Manager and its FoD link
+        self.assertEqual(ctx.gets, RESOLVE + [self.SERVICE, MGR, self.FOD])
+        # a linked service answering 404 with no FoD linked is not-present too
+        payloads = self._payloads()
+        del payloads[self.SERVICE]
+        payloads[MGR] = copy.deepcopy(payloads[MGR])
+        del payloads[MGR]["Oem"]["Lenovo"]["FoD"]
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_licenses(_FakeCtx(payloads))
+        self.assertEqual(
+            str(caught.exception),
+            "neither a DMTF LicenseService (%s answered 404) nor Lenovo's FoD service (the "
+            "Manager links no Oem.Lenovo.FoD) is served" % (self.SERVICE,),
+        )
+
+    def test_the_fod_keys_alone_where_no_licence_service_is_served(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = _fx("xcc_service_root.json")  # links no LicenseService
+        del payloads[self.SERVICE]
+        result = checks._collect_licenses(_FakeCtx(payloads))
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            {key: view[key] for key in self.SCALARS},
+            {
+                "license_service_enabled": None,
+                "expiration_warning_days": None,
+                "license_tier": None,
+                "fod_tier": "Tier1",
+            },
+        )
+        self.assertEqual(sorted(key for key in view if "|" in key), ["fodkey|1", "fodkey|2"])
+        self.assertEqual(
+            context["license_service"], {"resource": self.SERVICE, "linked": False, "served": False}
+        )
+        self.assertEqual(context["licenses"]["note"], "no LicenseService is served")
+
+    def test_the_standard_path_is_read_where_the_root_links_no_service(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"] = _fx("xcc_service_root.json")
+        result = checks._collect_licenses(_FakeCtx(payloads))
+        self.assertEqual(
+            result["context"]["license_service"],
+            {"resource": self.SERVICE, "linked": False, "served": True},
+        )
+        self.assertIn("license|1", result["normalized"])
+
+    def test_a_linked_service_answering_404_beside_the_other_is_a_failed_read(self):
+        # Half a view recorded as ok would read as keys or licences removed: refused instead.
+        payloads = self._payloads()
+        del payloads[self.FOD]
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_licenses(ctx)
+        self.assertIn(
+            "the Manager links %s but it answered 404 — the activation keys are unmeasured"
+            % (self.FOD,),
+            str(caught.exception),
+        )
+        self.assertFalse([path for path in ctx.gets if self.LICENSES in path])  # nothing walked
+        payloads = self._payloads()
+        del payloads[self.SERVICE]
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_licenses(_FakeCtx(payloads))
+        self.assertIn(
+            "the service root links %s but it answered 404 — the licences are unmeasured"
+            % (self.SERVICE,),
+            str(caught.exception),
+        )
+
+    def test_a_manager_linking_no_fod_service_leaves_the_licences_keyed(self):
+        payloads = self._payloads()
+        payloads[MGR] = copy.deepcopy(payloads[MGR])
+        del payloads[MGR]["Oem"]["Lenovo"]["FoD"]
+        result = checks._collect_licenses(_FakeCtx(payloads))
+        view, context = result["normalized"], result["context"]
+        self.assertEqual((view["license_tier"], view["fod_tier"]), ("Tier1", None))
+        self.assertFalse([key for key in view if key.startswith("fodkey|")])
+        self.assertEqual(
+            context["fod_service"],
+            {"resource": None, "served": False, "note": "the Manager links no Oem.Lenovo.FoD"},
+        )
+        self.assertEqual(context["fod_keys"]["note"], "the Manager links no Oem.Lenovo.FoD")
+
+    def test_a_linked_collection_answering_404_is_a_failed_read(self):
+        for path in (self.LICENSES, self.KEYS):
+            payloads = self._payloads()
+            del payloads[path], payloads[path + EXPAND]
+            with self.assertRaises(checks.CollectError) as caught:
+                checks._collect_licenses(_FakeCtx(payloads))
+            self.assertIn(path + " is linked but answered 404", str(caught.exception))
+
+    def test_a_link_outside_the_read_only_surface_is_refused(self):
+        payloads = self._payloads()
+        payloads[self.SERVICE] = dict(
+            payloads[self.SERVICE],
+            Licenses={"@odata.id": self.SERVICE + "/Actions/LicenseService.Install"},
+        )
+        with self.assertRaises(checks.CollectError) as caught:
+            checks._collect_licenses(_FakeCtx(payloads))
+        self.assertIn("server-supplied link refused", str(caught.exception))
+
+    def test_every_field_is_present_and_null_where_not_served(self):
+        view, readings = checks._normalize_licenses(
+            {}, [{"Id": "a"}], {}, [{"Id": "b"}], lenovo=True
+        )
+        self.assertEqual({key: view[key] for key in self.SCALARS}, dict.fromkeys(self.SCALARS))
+        self.assertEqual(view["license|a"], dict.fromkeys(self.LICENSE_FIELDS))
+        self.assertEqual(view["fodkey|b"], dict.fromkeys(self.KEY_FIELDS))
+        self.assertEqual(
+            readings,
+            {
+                "license|a": dict.fromkeys(
+                    ("install_date", "remaining_duration", "remaining_use_count")
+                ),
+                "fodkey|b": {"use_count": None},
+            },
+        )
+        self.assertEqual(checks._normalize_licenses(None), (dict.fromkeys(self.SCALARS), {}))
+        # the two tiers are Lenovo leaves: read only on Lenovo
+        view, _readings = checks._normalize_licenses(
+            {"Oem": {"Lenovo": {"Tier": "Tier1"}}}, fod={"Tier": "Tier1"}
+        )
+        self.assertEqual((view["license_tier"], view["fod_tier"]), (None, None))
+
+    def test_lenovo_key_leaves_are_carried_as_served(self):
+        row = checks._licenses_key_row(
+            {
+                "IdTypes": "<placeholder:IdTypes>",
+                "Status": {"@odata.type": "#x", "State": "<placeholder:State>"},
+                "Expires": " ",
+                "DescTypeCode": 0,
+                "UseLimit": "<placeholder:UseLimit>",
+            }
+        )
+        self.assertEqual(row["id_types"], ["<placeholder:IdTypes>"])  # a lone string, as a list
+        self.assertEqual(row["status"], {"State": "<placeholder:State>"})
+        self.assertIsNone(row["expires"])  # blank reads null
+        self.assertEqual(row["description_type_code"], 0)  # a 0 is a value
+        self.assertEqual(row["use_limit"], "<placeholder:UseLimit>")
+
+    def test_readings_never_diff_while_a_lost_key_or_a_state_change_does(self):
+        compare = registry.CHECKS["bmc_licenses"].compare
+        pre = checks._collect_licenses(_FakeCtx(self._payloads()))["normalized"]
+        payloads = self._payloads()
+        licence = payloads[self.LICENSES + EXPAND]["Members"][0]
+        licence.update(RemainingDuration="P1DT0H0M0S", RemainingUseCount=0)
+        payloads[self.KEYS + EXPAND]["Members"][0]["UseCount"] = 5
+        post = checks._collect_licenses(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(_loader.diffcore.diff_check(pre, post, compare)["result"], "pass")
+        del payloads[self.KEYS + EXPAND]["Members"][0]
+        licence["Status"] = {"State": "Disabled", "Health": "Critical"}
+        post = checks._collect_licenses(_FakeCtx(payloads))["normalized"]
+        diff = _loader.diffcore.diff_check(pre, post, compare)
+        self.assertEqual([row["key"] for row in diff["removed"]], ["fodkey|1"])
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [
+                ("license|1", "health", "OK", "Critical"),
+                ("license|1", "state", "Enabled", "Disabled"),
+            ],
+        )
+
+    def test_registration_and_semantics(self):
+        check = registry.CHECKS["bmc_licenses"]
+        self.assertEqual((check.platform, check.tier), ("bmc", 1))
+        self.assertEqual(check.compare, {"mode": "equality_set"})
+        # the four scalars are always keyed: the view is never empty, so never empty-ok
+        self.assertNotIn(registry.EMPTY_OK_TAG, check.tags)
+        text = registry.SEMANTICS["bmc_licenses"]
+        self.assertTrue(text.endswith(registry._BMC_RESOLUTION))
+        for phrase in (
+            "'license|<Id>'",
+            "'fodkey|<Id>'",
+            "context.readings",
+            "EntitlementId",
+            "Identifier",
+            "EMPTY",
+            "Not-present",
+        ):
+            self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":

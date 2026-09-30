@@ -6981,6 +6981,317 @@ def _collect_certificates(ctx):
     }
 
 
+# --- bmc_licenses ------------------------------------------------------------
+# What the BMC is licensed for: the DMTF LicenseService (every vendor) with its
+# Licenses collection, and on Lenovo the Features-on-Demand activation-key
+# service the Manager links (Oem.Lenovo.FoD) with its Keys collection. Both
+# collections are the BMC's own records, so an empty one on a service that
+# answers is a unit with nothing installed (an empty keyed view, status ok),
+# never not-present and never unmeasured. A service or collection that is
+# linked but answers 404 beside what does answer is a failed read (its rows
+# would otherwise read as removed); with nothing served at all the check is
+# not-present.
+#
+# GETs, the lab SE350 (a LicenseService whose Licenses collection is empty, the
+# FoD service with no key) with $expand honoured: the LicenseService, the
+# Manager (the read every Manager-side check makes, cached for the family) and
+# the FoD service, then one $expand GET each for Licenses and Keys — 5 beyond
+# the id resolution. The per-member fallback with the refusal remembered (the
+# attempt is paid once, on Licenses, and never asked again for Keys): the three
+# singletons, Licenses 1 + 1 + its n members, Keys 1 + its m members — 6 + n + m,
+# so 6 on the lab layout. _BUDGET_LICENSES = 16 + _TARGET_GETS walks five
+# licences and five keys that way; a larger set without $expand is refused
+# loudly with its member count before the first member is read
+# (_fetch_collection), never recorded partially.
+_BUDGET_LICENSES = 16 + _TARGET_GETS
+_LICENSE_SERVICE = "/redfish/v1/LicenseService"
+# The entitlement a licence was bought under (DMTF EntitlementId) and the
+# machine identifier a FoD key is bound to (Lenovo's Identifier): scrubbed on
+# every read of this check, after the family scrubber has taken LicenseString
+# and a key's Bytes, so neither the trace, the cache, raw nor a normalizer ever
+# holds them (emptiness and element counts kept, content never).
+_LICENSES_SCRUBBED_NAMES = frozenset({"entitlementid", "identifier"})
+
+
+def _licenses_scrub_identifying(node):
+    """``node`` with every EntitlementId / Identifier leaf reduced to the scrub marker."""
+    if isinstance(node, dict):
+        return {
+            key: (
+                _scrub_value(value)
+                if str(key).lower() in _LICENSES_SCRUBBED_NAMES
+                else _licenses_scrub_identifying(value)
+            )
+            for key, value in node.items()
+        }
+    if isinstance(node, list):
+        return [_licenses_scrub_identifying(item) for item in node]
+    return node
+
+
+def _licenses_redact(node):
+    """The redactor every bmc_licenses read passes: the family scrubber, then the identifiers.
+
+    _scrub_payload takes LicenseString, a key's Bytes, contact names and URL
+    userinfo; EntitlementId and a key's Identifier follow. Idempotent.
+    """
+    return _licenses_scrub_identifying(_scrub_payload(node))
+
+
+def _licenses_value(value):
+    """A served leaf verbatim: a string stripped ('' reads None), a block its non-annotation
+    leaves in key order, a list item by item — no populated FoD key has been observed, so
+    Lenovo's leaves are carried as they come, never coerced."""
+    if isinstance(value, str):
+        return _text(value)
+    if isinstance(value, dict):
+        return {
+            str(key): _licenses_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            if not str(key).startswith("@")
+        }
+    if isinstance(value, list):
+        return [_licenses_value(item) for item in value]
+    return value
+
+
+def _licenses_sorted_text(value):
+    """A served list's strings sorted (their order is not state), a lone string as a list of
+    one; None when neither is served."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return None
+    return sorted(text for text in (_text(item) for item in value) if text is not None)
+
+
+def _licenses_paths(links):
+    """The sorted resource paths of a Links array (fragment and query dropped); None unserved."""
+    if not isinstance(links, list):
+        return None
+    paths = set()
+    for item in _dicts(links):
+        link = _text(item.get("@odata.id"))
+        if link is not None:
+            paths.add(link.partition("#")[0].partition("?")[0].rstrip("/") or link)
+    return sorted(paths)
+
+
+def _licenses_license_row(license_):
+    """One 'license|<Id>' row (DMTF License): every field present, None where not served."""
+    health, state = _status(license_)
+    return {
+        "name": _text(license_.get("Name")),
+        "license_type": _text(license_.get("LicenseType")),
+        "license_origin": _text(license_.get("LicenseOrigin")),
+        "removable": _to_bool(license_.get("Removable")),
+        "manufacturer": _text(license_.get("Manufacturer")),
+        "sku": _text(license_.get("SKU")),
+        "part_number": _text(license_.get("PartNumber")),
+        "state": state,
+        "health": health,
+        "authorization_scope": _text(license_.get("AuthorizationScope")),
+        # The licence's own end date: fixed, unlike the remaining duration (a reading).
+        "expiration_date": _text(license_.get("ExpirationDate")),
+        "grace_period_days": _to_int(license_.get("GracePeriodDays")),
+        "max_authorized_devices": _to_int(license_.get("MaxAuthorizedDevices")),
+        "authorized_devices": _licenses_paths(_dig(license_, "Links", "AuthorizedDevices")),
+    }
+
+
+def _licenses_license_readings(license_):
+    """What moves on its own for a licence: its install time, remaining term and uses left."""
+    return {
+        "install_date": _text(license_.get("InstallDate")),
+        "remaining_duration": _text(license_.get("RemainingDuration")),
+        "remaining_use_count": _to_int(license_.get("RemainingUseCount")),
+    }
+
+
+def _licenses_key_row(key):
+    """One 'fodkey|<Id>' row (Lenovo LenovoFoDKey): every field present, None where not served.
+
+    A key names no feature by text of its own beyond its Name and Description,
+    so both are kept beside Lenovo's feature code (DescTypeCode); status,
+    expires and use_limit are Lenovo's leaves verbatim (_licenses_value).
+    """
+    return {
+        "name": _text(key.get("Name")),
+        "description": _text(key.get("Description")),
+        "id_types": _licenses_sorted_text(key.get("IdTypes")),
+        "status": _licenses_value(key.get("Status")),
+        "expires": _licenses_value(key.get("Expires")),
+        "description_type_code": _licenses_value(key.get("DescTypeCode")),
+        "use_limit": _licenses_value(key.get("UseLimit")),
+    }
+
+
+def _normalize_licenses(service, licenses=None, fod=None, keys=None, lenovo=False):
+    """(normalized, readings) of the BMC's licences and, on Lenovo, its FoD activation keys.
+
+    ``service`` is the LicenseService (None when not served), ``licenses`` its
+    Licenses members, ``fod`` Lenovo's FoD service and ``keys`` its Keys members
+    — each None when not read. The four scalars are always present (None when
+    unserved; the two Lenovo tiers only when ``lenovo``); every row carries every
+    field. ``readings`` maps each row key to what moves on its own (a licence's
+    install date, remaining duration and remaining uses, a key's use count),
+    which never becomes a key.
+    """
+    normalized = {
+        "license_service_enabled": _to_bool(_dig(service, "ServiceEnabled")),
+        "expiration_warning_days": _to_int(_dig(service, "LicenseExpirationWarningDays")),
+        "license_tier": _text(_dig(service, "Oem", "Lenovo", "Tier")) if lenovo else None,
+        "fod_tier": _text(_dig(fod, "Tier")) if lenovo else None,
+    }
+    readings = {}
+    for member in sorted(_dicts(licenses), key=lambda item: _member_id(item) or ""):
+        row_key = "license|%s" % (_member_id(member) or "?",)
+        normalized[row_key] = _licenses_license_row(member)
+        readings[row_key] = _licenses_license_readings(member)
+    for member in sorted(_dicts(keys), key=lambda item: _member_id(item) or ""):
+        row_key = "fodkey|%s" % (_member_id(member) or "?",)
+        normalized[row_key] = _licenses_key_row(member)
+        readings[row_key] = {"use_count": _licenses_value(member.get("UseCount"))}
+    return normalized, readings
+
+
+def _licenses_source(link, meta=None, members=None, note=None):
+    """How one collection was read, for context: its resource, strategy and member count."""
+    if meta is None:
+        return {"resource": link, "strategy": None, "members": None, "note": note}
+    return dict(meta, resource=link, members=len(members), note=note)
+
+
+def _licenses_collection(ctx, link, label, budget, try_expand):
+    """(members, meta, raw) of a collection a service links: a 404 there is a failed read."""
+    members, meta, raw = _fetch_collection(
+        ctx,
+        link,
+        label,
+        ok_404=True,
+        budget=budget,
+        redact=_licenses_redact,
+        try_expand=try_expand,
+    )
+    if members is None:
+        raise CollectError("%s: %s is linked but answered 404" % (label, link))
+    return members, meta, raw
+
+
+def _licenses_resource(ctx, path):
+    """A service resource read through the check's redactor; None when it answers 404."""
+    payload = _get_optional(ctx, path, redact=_licenses_redact)
+    if payload is not None and (not isinstance(payload, dict) or not payload):
+        raise CollectError("%s answered without a resource body" % (path,))
+    return payload
+
+
+def _licenses_served_or_refused(
+    targets, service, service_link, service_path, fod, fod_link, fod_note
+):
+    """Refuse a capture with nothing to key, or with one half unmeasured beside the other.
+
+    Neither service served (no LicenseService: the root links none and its
+    standard path answers 404, or a linked one answers 404; no FoD service: the
+    vendor has no mapping, the Manager links none, or a linked one answers 404)
+    is not-present, naming the vendor where it has no mapping. A service that is
+    linked but answers 404 while the other one answers is a failed read: its
+    rows would otherwise read as removed, never as unmeasured.
+    """
+    if service_link is None:
+        service_detail = "the service root links none and %s answered 404" % (service_path,)
+    else:
+        service_detail = "%s answered 404" % (service_path,)
+    if service is None and fod is None:
+        if not _is_lenovo(targets):
+            raise _no_mapping(targets, "licences (%s)" % (service_detail,))
+        raise SkipCheck(
+            "neither a DMTF LicenseService (%s) nor Lenovo's FoD service (%s) is served"
+            % (service_detail, fod_note)
+        )
+    if service is None and service_link is not None:
+        raise CollectError(
+            "bmc_licenses LicenseService: the service root links %s but it answered 404 — the "
+            "licences are unmeasured, never recorded as none" % (service_path,)
+        )
+    if fod is None and fod_link is not None:
+        raise CollectError(
+            "bmc_licenses FoD: the Manager links %s but it answered 404 — the activation keys "
+            "are unmeasured, never recorded as none" % (fod_link,)
+        )
+
+
+def _collect_licenses(ctx):
+    raw = {}
+    fod = fod_link = licenses = keys = None
+    try_expand = True  # turned off at the first refusal: a firmware pays for it once
+    with ctx.budget("bmc_licenses", _BUDGET_LICENSES) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        vendor = targets["vendor"] or "unknown-vendor"
+        # The DMTF service, every vendor: the root's link, else its standard path.
+        service_link = _fenced_link(
+            _dig(_get(ctx, _ROOT), "LicenseService"), "bmc_licenses LicenseService"
+        )
+        service_path = service_link or _LICENSE_SERVICE
+        service = _licenses_resource(ctx, service_path)
+        # Lenovo's activation-key service, only through the link the Manager serves.
+        if lenovo:
+            manager = _get(ctx, targets["manager"])
+            fod_link = _fenced_link(_dig(manager, "Oem", "Lenovo", "FoD"), "bmc_licenses FoD")
+            fod_note = "the Manager links no Oem.Lenovo.FoD"
+            if fod_link is not None:
+                fod = _licenses_resource(ctx, fod_link)
+                fod_note = None if fod is not None else "%s answered 404" % (fod_link,)
+        else:
+            fod_note = "no %s mapping for a vendor feature-key service yet" % (vendor,)
+        _licenses_served_or_refused(
+            targets, service, service_link, service_path, fod, fod_link, fod_note
+        )
+        # Both collections, the singletons read first so every walk is pre-checked
+        # against what is really left of the budget.
+        licenses_link = _fenced_link(_dig(service, "Licenses"), "bmc_licenses Licenses")
+        if licenses_link is not None:
+            licenses, meta, part = _licenses_collection(
+                ctx, licenses_link, "bmc_licenses Licenses", budget, try_expand
+            )
+            raw.update(part)
+            try_expand = try_expand and not meta.get("expand_refused")
+            licenses_read = _licenses_source(licenses_link, meta, licenses)
+        elif service is None:
+            licenses_read = _licenses_source(None, note="no LicenseService is served")
+        else:
+            licenses_read = _licenses_source(None, note="the LicenseService links no Licenses")
+        keys_link = _fenced_link(_dig(fod, "Keys"), "bmc_licenses FoD Keys")
+        if keys_link is not None:
+            keys, meta, part = _licenses_collection(
+                ctx, keys_link, "bmc_licenses FoD Keys", budget, try_expand
+            )
+            raw.update(part)
+            keys_read = _licenses_source(keys_link, meta, keys)
+        elif fod is None:
+            keys_read = _licenses_source(None, note=fod_note)
+        else:
+            keys_read = _licenses_source(None, note="the FoD service links no Keys")
+    if service is not None:
+        raw[service_path] = _curate(service)
+    if fod is not None:
+        raw[fod_link] = _curate(fod)
+    normalized, readings = _normalize_licenses(service, licenses, fod, keys, lenovo=lenovo)
+    context = {
+        "license_service": {
+            "resource": service_path,
+            "linked": service_link is not None,
+            "served": service is not None,
+        },
+        "licenses": licenses_read,
+        "fod_service": {"resource": fod_link, "served": fod is not None, "note": fod_note},
+        "fod_keys": keys_read,
+        "readings": readings,
+    }
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -7710,5 +8021,26 @@ register(
         ),
         collector=_collect_certificates,
         tags=("platform", "security"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_licenses",
+        platform="bmc",
+        description=(
+            "Licences and feature keys: the licence service, installed licences, Lenovo FoD "
+            "activation keys and the BMC's feature tier."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "A licence or activation key vanished, expired or changed state, or the BMC's feature "
+            "tier fell back — the features it licensed (on an XClarity Controller, remote console "
+            "and virtual media among them) are withdrawn; keys are tied to the machine and can be "
+            "lost with a system-board replacement or a reset of the BMC."
+        ),
+        collector=_collect_licenses,
+        tags=("platform", "licensing"),
     )
 )

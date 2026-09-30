@@ -713,8 +713,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
    `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
-   `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting` and `bmc_certificates`
-   landed. The first four ran live through the dev
+   `bmc_pcie_slots`, `bmc_accounts`, `bmc_alerting`, `bmc_certificates` and
+   `bmc_licenses` landed. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -969,6 +969,14 @@ Recorded as they were found, each with how it was resolved.
       organisation leaves. Whether CertificateLocations lists the trust
       certificates of LDAP, the key manager, single sign-on and virtual media
       once configured is unverifiable on the lab unit (all empty).
+    - `bmc_licenses`: four GETs beyond the cached Manager (§5b said 3–4).
+      Both collections are empty on the lab unit, so every row is coded from
+      the DMTF License schema and Appendix B; the Lenovo FoD key's status,
+      expiry, id types and type code were never seen served, so the
+      hand-built fixture marks them as placeholders. Whether XCC mirrors a
+      FoD key as a DMTF licence (one entitlement keyed twice) is open. The
+      check scrubs a licence's `EntitlementId` and a key's `Identifier` on
+      top of the family's `LicenseString`/`Bytes`, before the trace sees them.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

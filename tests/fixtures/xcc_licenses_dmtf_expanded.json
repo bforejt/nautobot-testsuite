@@ -1,0 +1,105 @@
+{
+  "@odata.type": "#LicenseCollection.LicenseCollection",
+  "@odata.id": "/redfish/v1/LicenseService/Licenses",
+  "@odata.etag": "\"lic-collection\"",
+  "@odata.context": "/redfish/v1/$metadata#LicenseCollection.LicenseCollection",
+  "Name": "LicenseCollection",
+  "Description": "Hand-built: three licences spelled as the DMTF License schema names them (an installed, removable, device-scoped production licence with an end date and a grace period; a built-in service-scoped one without either; a capacity-scoped trial licence), every value an invention. The lab SE350 serves an empty Licenses collection. LicenseString, EntitlementId and a Contact are seeded to prove they never reach raw, context or a key.",
+  "Members@odata.count": 3,
+  "Members": [
+    {
+      "@odata.type": "#License.v1_1_0.License",
+      "@odata.id": "/redfish/v1/LicenseService/Licenses/1",
+      "@odata.etag": "\"lic-1\"",
+      "Id": "1",
+      "Name": "Example Remote Console Upgrade",
+      "Description": "Hand-built licence.",
+      "LicenseType": "Production",
+      "LicenseOrigin": "Installed",
+      "Removable": true,
+      "Manufacturer": "Lenovo",
+      "SKU": "SKU-EXAMPLE-0001",
+      "PartNumber": "PN-EXAMPLE-0001",
+      "SerialNumber": "SN-EXAMPLE-0001",
+      "AuthorizationScope": "Device",
+      "ExpirationDate": "2027-06-30T00:00:00Z",
+      "GracePeriodDays": 30,
+      "MaxAuthorizedDevices": 1,
+      "InstallDate": "2026-03-01T12:00:00Z",
+      "RemainingDuration": "P272DT12H0M0S",
+      "RemainingUseCount": 4,
+      "EntitlementId": "ENTITLEMENT-INVENTED-0001",
+      "LicenseString": "SU5WRU5URUQtTElDRU5DRS0wMDAx",
+      "LicenseInfoURI": "https://licensing.example.com/licences/0001",
+      "Contact": {
+        "ContactName": "Example Licensing Desk",
+        "EmailAddress": "licensing@example.com",
+        "PhoneNumber": "+1-555-0100"
+      },
+      "Links": {
+        "AuthorizedDevices@odata.count": 1,
+        "AuthorizedDevices": [
+          {
+            "@odata.id": "/redfish/v1/Managers/1"
+          }
+        ]
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#License.v1_1_0.License",
+      "@odata.id": "/redfish/v1/LicenseService/Licenses/2",
+      "@odata.etag": "\"lic-2\"",
+      "Id": "2",
+      "Name": "Example Built-in Licence",
+      "LicenseType": "Production",
+      "LicenseOrigin": "BuiltIn",
+      "Removable": false,
+      "Manufacturer": "Lenovo",
+      "SKU": "",
+      "AuthorizationScope": "Service",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    },
+    {
+      "@odata.type": "#License.v1_1_0.License",
+      "@odata.id": "/redfish/v1/LicenseService/Licenses/3",
+      "@odata.etag": "\"lic-3\"",
+      "Id": "3",
+      "Name": "Example Trial Licence",
+      "LicenseType": "Trial",
+      "LicenseOrigin": "Installed",
+      "Removable": true,
+      "Manufacturer": "Lenovo",
+      "SKU": "SKU-EXAMPLE-0003",
+      "PartNumber": "PN-EXAMPLE-0003",
+      "AuthorizationScope": "Capacity",
+      "ExpirationDate": "2026-10-31T00:00:00Z",
+      "GracePeriodDays": 0,
+      "MaxAuthorizedDevices": 4,
+      "InstallDate": "2026-09-01T08:30:00Z",
+      "RemainingDuration": "P31DT0H0M0S",
+      "EntitlementId": "ENTITLEMENT-INVENTED-0003",
+      "Links": {
+        "AuthorizedDevices@odata.count": 2,
+        "AuthorizedDevices": [
+          {
+            "@odata.id": "/redfish/v1/Systems/1"
+          },
+          {
+            "@odata.id": "/redfish/v1/Managers/1"
+          }
+        ]
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "Warning"
+      }
+    }
+  ]
+}

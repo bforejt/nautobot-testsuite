@@ -1810,6 +1810,42 @@ SEMANTICS = {
         "fence refuses: never recorded partially. Not-present when the service root links no "
         "CertificateService or its CertificateLocations is not served. " + _BMC_RESOLUTION
     ),
+    "bmc_licenses": (
+        "Four scalars, always present and null where not served: license_service_enabled and "
+        "expiration_warning_days (the DMTF LicenseService's ServiceEnabled and "
+        "LicenseExpirationWarningDays — how many days ahead of an expiry the BMC starts warning), "
+        "and on Lenovo license_tier (the LicenseService's Oem.Lenovo.Tier) and fod_tier (the Tier "
+        "of the Manager's Oem.Lenovo.FoD activation-key service), Lenovo's word for the BMC's "
+        "feature level (Tier1 by both on the lab unit). Rows 'license|<Id>', one per member of "
+        "the DMTF Licenses collection -> name, license_type (Production | Prototype | Trial), "
+        "license_origin (BuiltIn | Installed), removable, manufacturer, sku, part_number, state, "
+        "health, authorization_scope (Device | Capacity | Service), expiration_date (the "
+        "licence's own end date, verbatim; null for one without), grace_period_days, "
+        "max_authorized_devices and authorized_devices (the resource paths its "
+        "Links.AuthorizedDevices names, sorted); rows 'fodkey|<Id>', one per Lenovo "
+        "Features-on-Demand activation key -> name, description, id_types (the kinds of machine "
+        "identifier the key is bound to, sorted), status, expires, description_type_code "
+        "(Lenovo's feature code) and use_limit, each verbatim as the firmware serves it ('' reads "
+        "null; no populated key has been observed, so their vocabulary is Lenovo's own). Every "
+        "row carries every field. Both collections are the BMC's own records: EMPTY on a service "
+        "that answers is a unit with nothing installed (no rows, status ok — the lab unit holds "
+        "no licence and no key), a removed row is a licence or key that is gone (keys are tied to "
+        "the machine: a system-board replacement or a reset of the BMC can lose them), and a tier "
+        "that falls back withdraws the features the higher tier licensed (on an XClarity "
+        "Controller, remote console and virtual media among them); a service or collection that "
+        "is linked but answers 404 beside what does answer is a failed read, never an empty view. "
+        "What moves on its own rides in context.readings under the row's key, never in a key: a "
+        "licence's install_date, remaining_duration and remaining_use_count, a key's use_count. "
+        "The licence string (LicenseString), a key's Bytes, a licence's EntitlementId and a key's "
+        "Identifier (the machine identifier it is bound to) are scrubbed on the read — before the "
+        "trace, the cache, raw or the normalizer see them — and never stored, nor are contact "
+        "names. context.license_service says whether the root links the service (else its "
+        "standard path is read) and whether it answered, context.licenses and context.fod_keys "
+        "how each collection was read (one $expand GET, a member walk — an $expand refused once "
+        "is not asked again — or not read, and why) and context.fod_service the FoD resource "
+        "read. Not-present when the BMC serves neither a LicenseService nor, on Lenovo, a FoD "
+        "service (naming the vendor where it has no mapping yet). " + _BMC_RESOLUTION
+    ),
 }
 
 
