@@ -712,8 +712,8 @@ job), power-feed circuit diversity (a facility record, as on IOS-XE).
    **State (2026-09-30):** ten builders, one per check, each in its own
    worktree at the PR B commit, merged one commit per check in the user's
    order, each with its fixtures, tests, SEMANTICS and README row:
-   `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`
-   and `bmc_pcie_slots` landed. The first four ran live through the dev
+   `bmc_sensors`, `bmc_boot`, `bmc_power_policy`, `bmc_network_adapters`,
+   `bmc_pcie_slots` and `bmc_accounts` landed. The first four ran live through the dev
    stack: all sixteen checks ok (68 GETs in 83 s), the shakedown 16/16, and
    two captures five minutes apart diff to nothing. What the builders found
    wrong in §5b is §10a item 13.
@@ -927,6 +927,21 @@ Recorded as they were found, each with how it was resolved.
       constant `LenovoSlot`; the rows are keyed by `Id`. The hand-built
       Chassis's Lenovo slot link was a pre-lab guess of the path; the check
       follows whatever the Chassis links, and the lab tests pin the real one.
+    - `bmc_accounts`: §5b's "our own session is one of them" is wrong (Basic
+      auth opens no session, §4a); `OAuth2` is an inline provider block, not
+      a link (keyed as `provider|oauth2`); `PasswordChangeRequired`,
+      `AuthFailureLoggingThreshold` and `SupportedAccountTypes` are not served
+      on XCC 6.10 (null there). The lab's 31 roles cannot be walked within the
+      40-GET ceiling when `$expand` is refused: refused with the count, never
+      recorded partially. Resolved at merge: the plan kept the bind DN as a
+      service identity, but its DMTF twin is a user-name leaf the family
+      scrubs — both are now scrubbed (a bind can name a person); an absent
+      AccountService is not-present like every family's absent resource; and
+      the account service's own credential and person leaves (`Token`,
+      `KerberosKeytab`, `SecretKey`, `RemoteUser`,
+      `OneTimePasscodeDeliveryAddress`, `ClientDN`) moved from a check-local
+      redactor into the family scrubber and the fixture sanitizer, so the
+      shakedown's reads of the same resources are covered too.
 
 ## 11. Decisions still open (default assumed in parentheses)
 

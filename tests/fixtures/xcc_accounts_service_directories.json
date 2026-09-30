@@ -1,0 +1,152 @@
+{
+  "@odata.type": "#AccountService.v1_10_0.AccountService",
+  "@odata.id": "/redfish/v1/AccountService",
+  "@odata.etag": "\"acct1\"",
+  "Id": "AccountService",
+  "Name": "AccountService",
+  "Description": "This resource is used to represent a management account service for a Redfish implementation.",
+  "ServiceEnabled": true,
+  "LocalAccountAuth": "Fallback",
+  "LocalAccountAuth@Redfish.AllowableValues": [
+    "Enabled",
+    "Disabled",
+    "LocalFirst",
+    "Fallback"
+  ],
+  "MinPasswordLength": 10,
+  "MaxPasswordLength": 32,
+  "AccountLockoutThreshold": 5,
+  "AccountLockoutDuration": 300,
+  "AccountLockoutCounterResetAfter": 120,
+  "AccountLockoutCounterResetEnabled": true,
+  "AuthFailureLoggingThreshold": 3,
+  "PasswordExpirationDays": 90,
+  "SupportedAccountTypes": [
+    "WebUI",
+    "Redfish",
+    "SNMP",
+    "IPMI",
+    "ManagerConsole",
+    "HostConsole",
+    "KVMIP",
+    "VirtualMedia"
+  ],
+  "Accounts": {
+    "@odata.id": "/redfish/v1/AccountService/Accounts"
+  },
+  "Roles": {
+    "@odata.id": "/redfish/v1/AccountService/Roles"
+  },
+  "AdditionalExternalAccountProviders": {
+    "@odata.id": "/redfish/v1/AccountService/ExternalAccountProviders"
+  },
+  "LDAP": {
+    "ServiceEnabled": true,
+    "ServiceAddresses": [
+      "ldaps://ldap-b.example.net:636",
+      "ldaps://ldap-a.example.net:636",
+      ":389",
+      "0.0.0.0:389"
+    ],
+    "PasswordSet": true,
+    "Authentication": {
+      "AuthenticationType": "UsernameAndPassword",
+      "Username": "cn=bmc-bind,ou=Services,dc=example,dc=net",
+      "Password": null
+    },
+    "LDAPService": {
+      "SearchSettings": {
+        "BaseDistinguishedNames": [
+          "ou=Staff,dc=example,dc=net",
+          "ou=Admins,dc=example,dc=net",
+          ""
+        ],
+        "UsernameAttribute": "uid",
+        "GroupNameAttribute": "cn",
+        "GroupsAttribute": "memberOf"
+      }
+    },
+    "RemoteRoleMapping": [
+      {
+        "LocalRole": "GroupRole2",
+        "RemoteGroup": "bmc-operators"
+      },
+      {
+        "LocalRole": "GroupRole1",
+        "RemoteGroup": "bmc-admins"
+      },
+      {
+        "LocalRole": "GroupRole3",
+        "RemoteGroup": null,
+        "RemoteUser": "directory-person-1"
+      },
+      {
+        "LocalRole": "GroupRole4",
+        "RemoteGroup": null
+      }
+    ],
+    "Certificates": {
+      "@odata.id": "/redfish/v1/AccountService/LDAP/Certificates"
+    }
+  },
+  "ActiveDirectory": {
+    "ServiceEnabled": false,
+    "ServiceAddresses": [
+      "dc1.example.net"
+    ],
+    "Authentication": {
+      "AuthenticationType": "KerberosKeytab",
+      "KerberosKeytab": "not-a-real-keytab"
+    },
+    "RemoteRoleMapping": []
+  },
+  "TACACSplus": {
+    "ServiceEnabled": false,
+    "ServiceAddresses": [
+      "203.0.113.49:49"
+    ],
+    "Authentication": {
+      "AuthenticationType": "UsernameAndPassword",
+      "EncryptionKey": "not-a-real-shared-secret",
+      "EncryptionKeySet": true
+    }
+  },
+  "OAuth2": {
+    "ServiceEnabled": true,
+    "OAuth2Service": {
+      "Mode": "Discovery",
+      "Issuer": "https://idp.example.net/realms/bmc",
+      "Audience": [
+        "bmc-lab-audience"
+      ],
+      "OAuthServiceSigningKeys": "not-a-real-signing-key"
+    }
+  },
+  "Oem": {
+    "Lenovo": {
+      "@odata.type": "#LenovoAccountService.v1_0_0.LenovoAccountServiceProperties",
+      "PasswordExpirationPeriodDays": 180,
+      "PasswordExpirationWarningPeriod": 14,
+      "PasswordLength": 10,
+      "MinimumPasswordReuseCycle": 5,
+      "MinimumPasswordChangeIntervalHours": 1,
+      "PasswordChangeOnFirstAccess": true,
+      "PasswordChangeOnNextLogin": false,
+      "WebInactivitySessionTimeout": 10,
+      "ComplexPassword": true,
+      "CurrentLoggedUsers": [
+        {
+          "LoginID": "someone-at-the-console",
+          "IP_Hostname": "192.0.2.77"
+        },
+        {
+          "LoginID": "someone-else",
+          "IP_Hostname": "192.0.2.78"
+        }
+      ],
+      "GroupProfiles": {
+        "@odata.id": "/redfish/v1/AccountService/Oem/Lenovo/GroupProfiles"
+      }
+    }
+  }
+}

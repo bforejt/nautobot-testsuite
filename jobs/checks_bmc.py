@@ -150,6 +150,11 @@ _SECRET_NAMES = frozenset(
         # element counts kept); the operation and the target URI stay.
         "HttpHeaders",
         "JsonBody",
+        # An external account provider's credentials and a multi-factor secret
+        # (DMTF ExternalAccountProvider, AccountService.MultiFactorAuth)
+        "Token",
+        "KerberosKeytab",
+        "SecretKey",
     )
 )
 # Leaves that name a person's account outside the local-accounts collection
@@ -157,11 +162,17 @@ _SECRET_NAMES = frozenset(
 # scrubbed with their emptiness kept, so "set / unset" survives.
 _USER_NAME_KEYS = frozenset(
     {"username", "userid", "loginid", "createdby", "owner", "chapusername", "mutualchapusername"}
+    # a directory bind identity (Lenovo's LDAP client): it can name a person
+    | {"clientdn"}
 )
 # Leaves that name a person whatever resource carries them (a chassis
 # location's contacts, the SNMP agent's contact): scrubbed even where account
 # names are kept; emptiness kept.
-_PERSON_KEYS = frozenset({"contactname", "contactperson", "emailaddress", "phonenumber"})
+_PERSON_KEYS = frozenset(
+    {"contactname", "contactperson", "emailaddress", "phonenumber"}
+    # a directory user in a role mapping; where an account's one-time passcodes go
+    | {"remoteuser", "onetimepasscodedeliveryaddress"}
+)
 # Lists that record who is logged in right now: reduced to their length.
 _COUNT_ONLY_KEYS = frozenset({"currentloggedusers"})
 # A login embedded in a URL (virtual-media Image, an event Destination):
@@ -5585,6 +5596,490 @@ def _collect_pcie_slots(ctx):
     return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
 
 
+# --- bmc_accounts ------------------------------------------------------------
+# The management plane's own accounts: the DMTF AccountService (every vendor:
+# password and lockout policy, local accounts, roles, and the external account
+# providers it serves inline or links) and, on Lenovo, its Oem.Lenovo password
+# policy and the LDAP client resource the NetworkProtocol links. GETs on the
+# lab SE350 (12 account slots, 31 roles): the AccountService, one $expand GET
+# each for Accounts and Roles, the NetworkProtocol (the read
+# bmc_manager_network makes, cached per run) and the LDAPClient it links — 5
+# beyond the id resolution; an AdditionalExternalAccountProviders collection,
+# where one is linked (XCC 6.10 links none), is one more. The per-member
+# fallback ($expand refused or ignored: the attempt is paid once, on Accounts,
+# and never again) is 1 + 1 + 12 for Accounts and 1 + 31 for Roles — 49 beyond
+# the resolution on the lab layout, over the transport's 40-GET ceiling, so
+# there the Roles walk is refused with its member count before any role is
+# read (21 GETs spent with the full resolution; never a partial view).
+# _BUDGET_ACCOUNTS is that ceiling: a vendor-neutral layout of 16 account slots
+# and four roles walks in 5 + 1 + 18 + 5 = 29.
+_BUDGET_ACCOUNTS = 35 + _TARGET_GETS
+_ACCOUNTS_SERVICE = "/redfish/v1/AccountService"
+
+# The AccountService's collections, read in this order with the redactor each
+# needs (account names are kept in the Accounts collection only). The
+# additional providers are read only where the service links them.
+_ACCOUNTS_COLLECTIONS = (
+    ("accounts", "Accounts", _scrub_accounts),
+    ("roles", "Roles", _scrub_payload),
+    ("additional_providers", "AdditionalExternalAccountProviders", _scrub_payload),
+)
+# The DMTF ExternalAccountProvider blocks the AccountService serves inline, by
+# the type their row is keyed with.
+_ACCOUNTS_PROVIDER_BLOCKS = (
+    ("ldap", "LDAP"),
+    ("active_directory", "ActiveDirectory"),
+    ("tacacs_plus", "TACACSplus"),
+    ("oauth2", "OAuth2"),
+)
+# Every 'provider|<type>' row carries every field, None where its provider
+# serves no such leaf: the DMTF ExternalAccountProvider vocabulary, then
+# Lenovo's LDAP client (LenovoLDAPClient), then the DMTF OAuth2 service.
+_ACCOUNTS_PROVIDER_FIELDS = (
+    "enabled",
+    "provider_type",
+    "service_addresses",
+    "authentication_type",
+    "bind_dn",
+    "bind_password_set",
+    "base_dns",
+    "username_attribute",
+    "group_name_attribute",
+    "groups_attribute",
+    "role_mapping_count",
+    "role_mappings",
+    "server_discovery",
+    "search_domain",
+    "authorization",
+    "group_filter",
+    "login_permission_attribute",
+    "role_based_security",
+    "forest_name",
+    "server_target_name",
+    "oauth2_mode",
+    "oauth2_issuer",
+)
+# LenovoLDAPClient.LDAPServers serves four server slots, Server<N>HostName_IPAddress
+# and Server<N>Port.
+_ACCOUNTS_LENOVO_LDAP_SLOTS = (1, 2, 3, 4)
+
+
+def _accounts_texts(value):
+    """A served list's non-empty strings, sorted; None when the leaf is not served as a list."""
+    if not isinstance(value, list):
+        return None
+    return sorted(text for text in (_text(item) for item in value) if text is not None)
+
+
+def _accounts_row_key(kind, name, member_id, counts):
+    """'<kind>|<name>', with '|<Id>' appended only when the name repeats."""
+    if counts.get(name, 0) > 1:
+        return "%s|%s|%s" % (kind, name, member_id)
+    return "%s|%s" % (kind, name)
+
+
+def _accounts_snmpv3(auth_protocol, encryption_protocol):
+    """True when either SNMP protocol leaf names a protocol other than 'None'.
+
+    'None' is the DMTF enum's no-protocol member: False when every served leaf
+    says 'None', None when the account serves neither leaf.
+    """
+    served = [value for value in (auth_protocol, encryption_protocol) if value is not None]
+    if not served:
+        return None
+    return any(value != "None" for value in served)
+
+
+def _accounts_ssh_key_count(account):
+    """How many of Lenovo's SSHPublicKey slots hold a key; None when the leaf is not served.
+
+    The redactor has already replaced every key by the scrub marker (emptiness
+    kept), so the count survives and the keys never reach a normalizer.
+    """
+    keys = _dig(account, "Oem", "Lenovo", "SSHPublicKey")
+    if not isinstance(keys, list):
+        return None
+    return sum(1 for key in keys if key is not None and key not in ("", [], {}))
+
+
+def _accounts_account(account, lenovo=False):
+    """One 'account|<UserName>' row; every field always present (None where unserved)."""
+    snmp = _dig(account, "SNMP")
+    auth_protocol = _text(_dig(snmp, "AuthenticationProtocol"))
+    encryption_protocol = _text(_dig(snmp, "EncryptionProtocol"))
+    return {
+        "account_id": _member_id(account),
+        "role_id": _text(account.get("RoleId")),
+        "enabled": _to_bool(account.get("Enabled")),
+        "locked": _to_bool(account.get("Locked")),
+        "password_change_required": _to_bool(account.get("PasswordChangeRequired")),
+        "account_types": _accounts_texts(account.get("AccountTypes")),
+        "oem_account_types": _accounts_texts(account.get("OEMAccountTypes")),
+        "host_bootstrap_account": _to_bool(account.get("HostBootstrapAccount")),
+        "snmp_auth_protocol": auth_protocol,
+        "snmp_encryption_protocol": encryption_protocol,
+        "snmp_auth_key_set": _to_bool(_dig(snmp, "AuthenticationKeySet")),
+        "snmp_encryption_key_set": _to_bool(_dig(snmp, "EncryptionKeySet")),
+        "snmpv3_configured": _accounts_snmpv3(auth_protocol, encryption_protocol),
+        "ssh_key_count": _accounts_ssh_key_count(account) if lenovo else None,
+    }
+
+
+def _accounts_role(role):
+    """One 'role|<RoleId>' row: its privileges (sorted) and whether the firmware predefines it."""
+    return {
+        "assigned_privileges": _accounts_texts(role.get("AssignedPrivileges")),
+        "oem_privileges": _accounts_texts(role.get("OemPrivileges")),
+        "is_predefined": _to_bool(role.get("IsPredefined")),
+    }
+
+
+def _accounts_address(value):
+    """A provider's server address verbatim; None for an unset slot (no host, 0.0.0.0, ::).
+
+    XCC 6.10 serves its four unset LDAP server slots as '0.0.0.0:389' and ':389'.
+    """
+    text = _text(value)
+    if text is None:
+        return None
+    host = text.split("://", 1)[-1].split("/", 1)[0].rsplit("@", 1)[-1]
+    if host.startswith("["):
+        host = host[1:].partition("]")[0]
+    elif host.count(":") == 1:
+        host = host.partition(":")[0]
+    return None if host in _DNS_PLACEHOLDERS else text
+
+
+def _accounts_addresses(values):
+    """A provider's configured server addresses, sorted; None when the leaf is not served."""
+    if not isinstance(values, list):
+        return None
+    return sorted(address for address in (_accounts_address(value) for value in values) if address)
+
+
+def _accounts_role_mappings(value):
+    """(count, rows) of the RemoteRoleMapping entries that name a remote group or user.
+
+    XCC 6.10 serves 16 fixed slots (GroupRole1-16) with RemoteGroup null: unset,
+    so neither counted nor listed. Rows are {local_role, remote_group,
+    remote_user}, sorted; a RemoteUser (a directory user) arrives scrubbed.
+    (None, None) when the provider serves no mapping list.
+    """
+    if not isinstance(value, list):
+        return None, None
+    rows = []
+    for mapping in _dicts(value):
+        group, user = _text(mapping.get("RemoteGroup")), _text(mapping.get("RemoteUser"))
+        if group is None and user is None:
+            continue
+        rows.append(
+            {
+                "local_role": _text(mapping.get("LocalRole")),
+                "remote_group": group,
+                "remote_user": user,
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            row["local_role"] or "",
+            row["remote_group"] or "",
+            row["remote_user"] or "",
+        )
+    )
+    return len(rows), rows
+
+
+def _accounts_provider_row(**fields):
+    """A 'provider|<type>' row: exactly the _ACCOUNTS_PROVIDER_FIELDS, None unless given."""
+    return {field: fields.get(field) for field in _ACCOUNTS_PROVIDER_FIELDS}
+
+
+def _accounts_dmtf_provider(block):
+    """The row of a DMTF ExternalAccountProvider (an AccountService block, or a member of its
+    AdditionalExternalAccountProviders collection).
+
+    bind_dn is Authentication.Username — a user-name leaf, so the family's
+    redactor has made it the scrub marker when set; bind_password_set is the
+    provider's own PasswordSet; oauth2_mode / oauth2_issuer come from an OAuth2
+    provider's OAuth2Service block.
+    """
+    search = _dig(block, "LDAPService", "SearchSettings")
+    count, mappings = _accounts_role_mappings(block.get("RemoteRoleMapping"))
+    return _accounts_provider_row(
+        enabled=_to_bool(block.get("ServiceEnabled")),
+        provider_type=_text(block.get("AccountProviderType")),
+        service_addresses=_accounts_addresses(block.get("ServiceAddresses")),
+        authentication_type=_text(_dig(block, "Authentication", "AuthenticationType")),
+        bind_dn=_text(_dig(block, "Authentication", "Username")),
+        bind_password_set=_to_bool(block.get("PasswordSet")),
+        base_dns=_accounts_texts(_dig(search, "BaseDistinguishedNames")),
+        username_attribute=_text(_dig(search, "UsernameAttribute")),
+        group_name_attribute=_text(_dig(search, "GroupNameAttribute")),
+        groups_attribute=_text(_dig(search, "GroupsAttribute")),
+        role_mapping_count=count,
+        role_mappings=mappings,
+        oauth2_mode=_text(_dig(block, "OAuth2Service", "Mode")),
+        oauth2_issuer=_text(_dig(block, "OAuth2Service", "Issuer")),
+    )
+
+
+def _accounts_lenovo_server(servers, slot):
+    """'<host>:<port>' of one LenovoLDAPClient server slot; None when the slot is unset."""
+    host = _text(servers.get("Server%dHostName_IPAddress" % (slot,)))
+    if host is None or host in _DNS_PLACEHOLDERS:
+        return None
+    port = _text(servers.get("Server%dPort" % (slot,)))
+    if port is None:
+        return host
+    return ("[%s]:%s" if ":" in host else "%s:%s") % (host, port)
+
+
+def _accounts_lenovo_ldap_client(client):
+    """The 'provider|lenovo_ldap_client' row from Lenovo's LDAPClient resource.
+
+    The same directory settings the DMTF LDAP block carries, in Lenovo's
+    vocabulary: the four server slots (unset ones dropped, sorted), the
+    binding method and its ClientDN (a user-name leaf, scrubbed; ClientPassword is
+    scrubbed before this sees it), RootDN, the search attributes, and the
+    Active Directory role-based-security settings.
+    """
+    servers = _dig(client, "LDAPServers")
+    addresses = None
+    if isinstance(servers, dict):
+        addresses = sorted(
+            address
+            for address in (
+                _accounts_lenovo_server(servers, slot) for slot in _ACCOUNTS_LENOVO_LDAP_SLOTS
+            )
+            if address is not None
+        )
+    base_dns = None
+    if "RootDN" in client:
+        root_dn = _text(client.get("RootDN"))
+        base_dns = [root_dn] if root_dn is not None else []
+    directory = _dig(client, "ActiveDirectory")
+    return _accounts_provider_row(
+        enabled=_to_bool(client.get("ProtocolEnabled")),
+        service_addresses=addresses,
+        authentication_type=_text(_dig(client, "BindingMethod", "Method")),
+        bind_dn=_text(_dig(client, "BindingMethod", "ClientDN")),
+        base_dns=base_dns,
+        username_attribute=_text(client.get("UIDSearchAttribute")),
+        group_name_attribute=_text(client.get("GroupSearchAttribute")),
+        server_discovery=_text(_dig(servers, "Method")),
+        search_domain=_text(_dig(servers, "SearchDomain")),
+        authorization=_text(client.get("Authorization")),
+        group_filter=_text(client.get("GroupFilter")),
+        login_permission_attribute=_text(client.get("LoginPermissionAttribute")),
+        role_based_security=_to_bool(_dig(directory, "RoleBasedSecurity")),
+        forest_name=_text(_dig(directory, "ForestName")),
+        server_target_name=_text(_dig(directory, "ServerTargetName")),
+    )
+
+
+def _accounts_expiration_days(service, oem):
+    """(days, the leaf read): the DMTF PasswordExpirationDays, else Lenovo's
+    PasswordExpirationPeriodDays; (None, None) when neither serves a number."""
+    for source, node, leaf in (
+        ("PasswordExpirationDays", service, "PasswordExpirationDays"),
+        ("Oem.Lenovo.PasswordExpirationPeriodDays", oem, "PasswordExpirationPeriodDays"),
+    ):
+        value = _to_int(_dig(node, leaf))
+        if value is not None:
+            return value, source
+    return None, None
+
+
+def _normalize_accounts(service, accounts, roles, providers=None, ldap_client=None, lenovo=False):
+    """(normalized, context) for the account service, its accounts, roles and providers.
+
+    ``service`` is the AccountService (None reads every scalar None; the
+    collector never records an absent service: not-present); ``accounts``, ``roles`` and
+    ``providers`` are the members of its Accounts, Roles and
+    AdditionalExternalAccountProviders collections (None when not read);
+    ``ldap_client`` is Lenovo's LDAPClient resource; ``lenovo`` gates the
+    Oem.Lenovo leaves. Every scalar is always present. Rows:
+    'account|<UserName>' for every account whose UserName is not empty ('|<Id>'
+    appended only when a name repeats; empty slots are counted in context, never
+    keyed), 'role|<RoleId>' for every role, 'provider|<type>' for every provider
+    served ('provider|additional|<Id>' for the linked collection's members). The
+    password expiry timestamps, the logged-in session count and the service's
+    supported account types ride in context.
+    """
+    service = service if isinstance(service, dict) else {}
+    oem = _dig(service, "Oem", "Lenovo") if lenovo else None
+    expiration_days, expiration_source = _accounts_expiration_days(service, oem)
+    normalized = {
+        "account_service_enabled": _to_bool(service.get("ServiceEnabled")),
+        "local_account_auth": _text(service.get("LocalAccountAuth")),
+        "min_password_length": _to_int(service.get("MinPasswordLength")),
+        "max_password_length": _to_int(service.get("MaxPasswordLength")),
+        "lockout_threshold": _to_int(service.get("AccountLockoutThreshold")),
+        "lockout_duration_s": _to_int(service.get("AccountLockoutDuration")),
+        "lockout_counter_reset_s": _to_int(service.get("AccountLockoutCounterResetAfter")),
+        "lockout_counter_reset_enabled": _to_bool(service.get("AccountLockoutCounterResetEnabled")),
+        "auth_failure_logging_threshold": _to_int(service.get("AuthFailureLoggingThreshold")),
+        "password_expiration_days": expiration_days,
+        # Lenovo's password policy (AccountService.Oem.Lenovo)
+        "password_expiration_warning_days": _to_int(_dig(oem, "PasswordExpirationWarningPeriod")),
+        "password_length": _to_int(_dig(oem, "PasswordLength")),
+        "complex_password": _to_bool(_dig(oem, "ComplexPassword")),
+        "password_reuse_cycle": _to_int(_dig(oem, "MinimumPasswordReuseCycle")),
+        "password_change_interval_h": _to_int(_dig(oem, "MinimumPasswordChangeIntervalHours")),
+        "password_change_on_first_access": _to_bool(_dig(oem, "PasswordChangeOnFirstAccess")),
+        "password_change_on_next_login": _to_bool(_dig(oem, "PasswordChangeOnNextLogin")),
+        "web_inactivity_timeout": _to_int(_dig(oem, "WebInactivitySessionTimeout")),
+    }
+    names = [_text(account.get("UserName")) for account in _dicts(accounts)]
+    counts = {}
+    for name in names:
+        if name is not None:
+            counts[name] = counts.get(name, 0) + 1
+    empty_slots = 0
+    expirations = {}
+    for account in _dicts(accounts):
+        name = _text(account.get("UserName"))
+        if name is None:
+            empty_slots += 1
+            continue
+        key = _accounts_row_key("account", name, _member_id(account) or "?", counts)
+        normalized[key] = _accounts_account(account, lenovo)
+        # a timestamp every password change moves: context, never a key
+        expirations[key] = _text(account.get("PasswordExpiration"))
+    role_ids = [_text(role.get("RoleId")) or _member_id(role) or "?" for role in _dicts(roles)]
+    counts = {}
+    for role_id in role_ids:
+        counts[role_id] = counts.get(role_id, 0) + 1
+    for role_id, role in zip(role_ids, _dicts(roles)):
+        key = _accounts_row_key("role", role_id, _member_id(role) or "?", counts)
+        normalized[key] = _accounts_role(role)
+    for kind, block in _ACCOUNTS_PROVIDER_BLOCKS:
+        if isinstance(service.get(block), dict):
+            normalized["provider|%s" % (kind,)] = _accounts_dmtf_provider(service[block])
+    for provider in _dicts(providers):
+        key = "provider|additional|%s" % (_member_id(provider) or "?",)
+        normalized[key] = _accounts_dmtf_provider(provider)
+    if isinstance(ldap_client, dict):
+        normalized["provider|lenovo_ldap_client"] = _accounts_lenovo_ldap_client(ldap_client)
+    logged_in = _dig(oem, "CurrentLoggedUsers")
+    context = {
+        # a count, never who: the redactor reduced the list before anything saw it
+        "current_logged_users": len(logged_in) if isinstance(logged_in, list) else None,
+        "supported_account_types": _accounts_texts(service.get("SupportedAccountTypes")),
+        "accounts_total": len(_dicts(accounts)) if accounts is not None else None,
+        "empty_account_slots": empty_slots if accounts is not None else None,
+        "roles_total": len(_dicts(roles)) if roles is not None else None,
+        "oauth2_enabled": _to_bool(_dig(service, "OAuth2", "ServiceEnabled")),
+        "password_expiration": expirations,
+        "password_expiration_days_source": expiration_source,
+    }
+    return normalized, context
+
+
+def _accounts_collections(ctx, service, service_path, budget):
+    """({name: members or None}, {name: how it was read}, raw) for the service's collections.
+
+    Each is read at the link the AccountService serves (the DMTF child path when
+    it serves none; the additional providers only where linked) with one
+    $expand GET, else walked member by member — the walk pre-checked against
+    the budget before its first member is read, and an $expand refused or
+    ignored once never asked again. A linked collection that answers 404 is a
+    failed read, never an empty one.
+    """
+    members, reads, raw = {}, {}, {}
+    try_expand = True
+    for name, prop, redact in _ACCOUNTS_COLLECTIONS:
+        label = "bmc_accounts %s" % (prop,)
+        link = _fenced_link(_dig(service, prop), label)
+        members[name] = reads[name] = None
+        if link is None and name == "additional_providers":
+            continue
+        path = link or _sub(service_path, prop)
+        found, meta, got = _fetch_collection(
+            ctx, path, label, ok_404=True, budget=budget, redact=redact, try_expand=try_expand
+        )
+        raw.update(got)
+        if meta.get("expand_refused"):
+            try_expand = False
+        if found is None and link is not None:
+            raise CollectError("%s links %s but it answered 404" % (service_path, path))
+        members[name] = found
+        reads[name] = dict(meta, resource=path, members=len(found) if found is not None else None)
+    return members, reads, raw
+
+
+def _collect_accounts(ctx):
+    raw = {}
+    members = dict.fromkeys(name for name, _prop, _redact in _ACCOUNTS_COLLECTIONS)
+    reads = dict(members)
+    ldap_client = ldap_client_link = None
+    with ctx.budget("bmc_accounts", _BUDGET_ACCOUNTS) as budget:
+        targets = _targets(ctx)
+        lenovo = _is_lenovo(targets)
+        linked = _fenced_link(_dig(_get(ctx, _ROOT), "AccountService"), "bmc_accounts")
+        service_path = linked or _ACCOUNTS_SERVICE
+        service = _get_optional(ctx, service_path, redact=_scrub_payload)
+        if service is None and linked is not None:
+            raise CollectError("the service root links %s but it answered 404" % (service_path,))
+        if service is None:
+            raise SkipCheck(
+                "the service root links no AccountService and %s answered 404" % (service_path,)
+            )
+        if service is not None:
+            if not isinstance(service, dict) or not service:
+                raise CollectError("%s answered without a resource body" % (service_path,))
+            members, reads, collections_raw = _accounts_collections(
+                ctx, service, service_path, budget
+            )
+            raw.update(collections_raw)
+            withheld = [
+                _member_id(account) or "?"
+                for account in _dicts(members["accounts"])
+                if _text(account.get("UserName")) == _SCRUBBED
+            ]
+            if withheld:
+                # An earlier read of the same path cached it with names scrubbed: keying
+                # the marker would compare nothing, so the read is refused, never recorded.
+                raise CollectError(
+                    "the Accounts collection reached this check with its account names "
+                    "withheld (slots %s): read it with the accounts redactor"
+                    % (", ".join(withheld),)
+                )
+        if lenovo:
+            # Lenovo's LDAP client is linked from the NetworkProtocol's OEM block
+            # (the read bmc_manager_network makes, cached per run).
+            protocol = _get(ctx, _sub(targets["manager"], "NetworkProtocol"))
+            ldap_client_link = _fenced_link(
+                _dig(protocol, "Oem", "Lenovo", "LDAPClient"), "bmc_accounts LDAPClient"
+            )
+            if ldap_client_link is not None:
+                ldap_client = _get_optional(ctx, ldap_client_link, redact=_scrub_payload)
+    if service is not None:
+        raw[service_path] = _curate(service)
+    if ldap_client is not None:
+        raw[ldap_client_link] = _curate(ldap_client)
+    normalized, context = _normalize_accounts(
+        service,
+        members["accounts"],
+        members["roles"],
+        members["additional_providers"],
+        ldap_client,
+        lenovo=lenovo,
+    )
+    context.update(
+        {
+            "account_service": {"resource": service_path, "served": service is not None},
+            "collections": reads,
+            "lenovo_ldap_client": (
+                {"resource": ldap_client_link, "served": ldap_client is not None}
+                if lenovo
+                else None
+            ),
+        }
+    )
+    return {"raw": raw, "normalized": normalized, "context": _with_resolution(context, targets)}
+
+
 # --- shakedown discovery (development tooling, never part of a capture) ------
 # The questions a first run against a new BMC vendor or firmware answers
 # (docs/plans/bmc-capture-handoff.md §7): the Test Suite Shakedown reads
@@ -6248,5 +6743,27 @@ register(
         ),
         collector=_collect_pcie_slots,
         tags=("platform", "inventory"),
+    )
+)
+
+register(
+    CheckDef(
+        id="bmc_accounts",
+        platform="bmc",
+        description=(
+            "Local BMC accounts by name, roles and privileges, password/lockout policy and the "
+            "external account providers (LDAP, AD, TACACS+, OAuth2)."
+        ),
+        tier=1,
+        compare={"mode": "equality_set"},
+        miss_meaning=(
+            "Who can administer the server out of band changed: a local BMC account was added, "
+            "removed, renamed, disabled, locked out or given another role, a role's privileges "
+            "changed, the password or lockout policy was relaxed or tightened, or a directory "
+            "provider (LDAP, Active Directory, TACACS+, OAuth2) was switched on or off or "
+            "repointed; an account locked at capture time is a finding in itself."
+        ),
+        collector=_collect_accounts,
+        tags=("platform", "security"),
     )
 )

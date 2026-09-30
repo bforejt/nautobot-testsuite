@@ -1,0 +1,141 @@
+{
+  "@odata.type": "#ManagerAccountCollection.ManagerAccountCollection",
+  "@odata.id": "/redfish/v1/AccountService/Accounts",
+  "Name": "ManagerAccountCollection",
+  "Members@odata.count": 5,
+  "Members": [
+    {
+      "@odata.type": "#ManagerAccount.v1_8_1.ManagerAccount",
+      "@odata.id": "/redfish/v1/AccountService/Accounts/1",
+      "@odata.etag": "\"m1\"",
+      "Id": "1",
+      "Name": "User1",
+      "UserName": "ops-admin",
+      "RoleId": "Administrator",
+      "Enabled": true,
+      "Locked": false,
+      "Password": null,
+      "PasswordChangeRequired": false,
+      "PasswordExpiration": "2027-03-01T00:00:00+00:00",
+      "HostBootstrapAccount": false,
+      "AccountTypes": [
+        "WebUI",
+        "Redfish",
+        "ManagerConsole",
+        "SNMP"
+      ],
+      "SNMP": {
+        "AuthenticationProtocol": "HMAC128_SHA224",
+        "AuthenticationKey": "not-a-real-auth-key",
+        "AuthenticationKeySet": true,
+        "EncryptionProtocol": "CFB128_AES128",
+        "EncryptionKey": "not-a-real-privacy-key",
+        "EncryptionKeySet": true
+      },
+      "Links": {
+        "Role": {
+          "@odata.id": "/redfish/v1/AccountService/Roles/Administrator"
+        }
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoManagerAccount.v1_0_0.LenovoManagerAccount",
+          "SSHPublicKey": [
+            "ssh-ed25519 AAAAnot-a-real-key ops-admin@example.net",
+            null,
+            "ssh-rsa AAAAnot-a-real-key-either",
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "@odata.type": "#ManagerAccount.v1_8_1.ManagerAccount",
+      "@odata.id": "/redfish/v1/AccountService/Accounts/2",
+      "@odata.etag": "\"m2\"",
+      "Id": "2",
+      "Name": "User2",
+      "UserName": "svc-capture",
+      "RoleId": "ReadOnly",
+      "Enabled": true,
+      "Locked": true,
+      "Password": "not-a-real-password",
+      "PasswordChangeRequired": true,
+      "PasswordExpiration": null,
+      "HostBootstrapAccount": false,
+      "AccountTypes": [
+        "Redfish"
+      ],
+      "SNMP": {
+        "AuthenticationProtocol": "None",
+        "EncryptionProtocol": "None",
+        "EncryptionKey": null,
+        "EncryptionKeySet": false
+      },
+      "Links": {
+        "Role": {
+          "@odata.id": "/redfish/v1/AccountService/Roles/ReadOnly"
+        }
+      },
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoManagerAccount.v1_0_0.LenovoManagerAccount",
+          "SSHPublicKey": [
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "@odata.type": "#ManagerAccount.v1_8_1.ManagerAccount",
+      "@odata.id": "/redfish/v1/AccountService/Accounts/3",
+      "@odata.etag": "\"m3\"",
+      "Id": "3",
+      "Name": "User3",
+      "UserName": "",
+      "RoleId": "Operator",
+      "Enabled": false,
+      "Locked": false,
+      "Password": null,
+      "PasswordExpiration": null,
+      "HostBootstrapAccount": false,
+      "AccountTypes": [
+        "Redfish"
+      ]
+    },
+    {
+      "@odata.type": "#ManagerAccount.v1_8_1.ManagerAccount",
+      "@odata.id": "/redfish/v1/AccountService/Accounts/4",
+      "@odata.etag": "\"m4\"",
+      "Id": "4",
+      "Name": "User4",
+      "UserName": "host-bootstrap",
+      "RoleId": "Administrator",
+      "Enabled": true,
+      "Locked": false,
+      "Password": null,
+      "PasswordExpiration": "2026-12-24T12:00:00+00:00",
+      "HostBootstrapAccount": true,
+      "AccountTypes": [
+        "Redfish"
+      ]
+    },
+    {
+      "@odata.type": "#ManagerAccount.v1_8_1.ManagerAccount",
+      "@odata.id": "/redfish/v1/AccountService/Accounts/5",
+      "@odata.etag": "\"m5\"",
+      "Id": "5",
+      "Name": "User5",
+      "UserName": null,
+      "RoleId": "ReadOnly",
+      "Enabled": false,
+      "Locked": false,
+      "Password": null,
+      "PasswordExpiration": null,
+      "HostBootstrapAccount": false
+    }
+  ]
+}

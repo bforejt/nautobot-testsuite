@@ -227,6 +227,7 @@ class TestRegistrations(unittest.TestCase):
         "bmc_power_policy",
         "bmc_network_adapters",
         "bmc_pcie_slots",
+        "bmc_accounts",
     }
 
     def test_all_registered_once(self):
@@ -3735,7 +3736,8 @@ class TestWholeFamily(unittest.TestCase):
         # + bmc_sensors' two 404s (the base set serves no Sensors collection)
         # + bmc_network_adapters' 6 (its hand-built adapter tree)
         # + bmc_pcie_slots' 2 (a PCIeSlots probe the base set answers 404, the Lenovo table)
-        self.assertLessEqual(len(ctx.gets), 40)
+        # + bmc_accounts' 1 (the AccountService the base set answers 404: not-present)
+        self.assertLessEqual(len(ctx.gets), 41)
         # No request ever carried a query other than the allowlisted $expand.
         for path in ctx.gets:
             self.assertIsNone(_loader.redfish_paths.path_refusal(path), path)
@@ -3753,7 +3755,8 @@ class TestWholeFamily(unittest.TestCase):
         # (+ bmc_sensors' two 404s: the base set serves no Sensors collection)
         # (+ bmc_network_adapters' 17: its hand-built adapter tree walked)
         # (+ bmc_pcie_slots' 6: the PCIeSlots probe, then the Lenovo table walked)
-        self.assertLessEqual(len(ctx.gets), 90)
+        # (+ bmc_accounts' 1: the AccountService probe)
+        self.assertLessEqual(len(ctx.gets), 91)
 
 
 class TestResolution(unittest.TestCase):
@@ -6720,6 +6723,596 @@ class TestPcieSlots(unittest.TestCase):
                 ("slot|PCIe 1", "health", "OK", None),
                 ("slot|PCIe 1", "linked_devices", ["slot_1"], []),
                 ("slot|PCIe 1", "state", "Enabled", "Absent"),
+            ],
+        )
+
+
+class TestAccounts(unittest.TestCase):
+    """bmc_accounts on hand-built payloads in the DMTF AccountService / ManagerAccount / Role /
+    ExternalAccountProvider and Lenovo LenovoAccountService / LenovoManagerAccount /
+    LenovoLDAPClient vocabulary (xcc_accounts_*.json): the lab XCC configures no directory,
+    holds no SSH key and locks no account, so those shapes are built here; the lab's own
+    payloads are pinned in test_lab_fixtures.TestBmcLabAccounts."""
+
+    SERVICE = "/redfish/v1/AccountService"
+    ACCOUNTS = SERVICE + "/Accounts"
+    ROLES = SERVICE + "/Roles"
+    PROVIDERS = SERVICE + "/ExternalAccountProviders"
+    PROTOCOL = MGR + "/NetworkProtocol"
+    LDAP_CLIENT = PROTOCOL + "/Oem/Lenovo/LDAPClient"
+    # every seeded credential, key, token, keytab and signing key; the logged-in users and
+    # their client addresses; a role mapping's remote (directory) user
+    NEVER_STORED = ("not-a-real", "someone", "192.0.2.77", "directory-person-1")
+
+    @staticmethod
+    def _roles():
+        """The three predefined roles in the lab's shape (DMTF Role, Lenovo OEM privileges)."""
+
+        def role(role_id, assigned, oem):
+            return {
+                "@odata.id": "/redfish/v1/AccountService/Roles/" + role_id,
+                "Id": role_id,
+                "RoleId": role_id,
+                "IsPredefined": True,
+                "AssignedPrivileges": assigned,
+                "OemPrivileges": oem,
+            }
+
+        return {
+            "@odata.id": "/redfish/v1/AccountService/Roles",
+            "Members@odata.count": 3,
+            "Members": [
+                role(
+                    "Administrator",
+                    ["Login", "ConfigureManager", "ConfigureUsers", "ConfigureSelf"],
+                    ["Supervisor"],
+                ),
+                role("Operator", ["Login", "ConfigureSelf"], ["RemoteServerPowerRestartAccess"]),
+                role("ReadOnly", ["Login", "ConfigureSelf"], ["ReadOnly"]),
+            ],
+        }
+
+    def _payloads(self):
+        """The family's fixture set plus a configured account service at its paths."""
+        payloads = _base_payloads()
+        payloads["/redfish/v1/"]["AccountService"] = {"@odata.id": self.SERVICE}
+        payloads[self.SERVICE] = _fx("xcc_accounts_service_directories.json")
+        payloads[self.ACCOUNTS + EXPAND] = _fx("xcc_accounts_members_populated.json")
+        payloads[self.ROLES + EXPAND] = self._roles()
+        payloads[self.PROVIDERS + EXPAND] = _fx("xcc_accounts_providers_expanded.json")
+        payloads[self.PROTOCOL]["Oem"]["Lenovo"]["LDAPClient"] = {"@odata.id": self.LDAP_CLIENT}
+        payloads[self.LDAP_CLIENT] = _fx("xcc_accounts_ldapclient_configured.json")
+        for path in (self.ACCOUNTS, self.ROLES, self.PROVIDERS):
+            plain, members = _split_collection(payloads[path + EXPAND])
+            payloads[path] = plain
+            for member_path, member in members.items():
+                payloads.setdefault(member_path, member)
+        return payloads
+
+    def test_policy_scalars_every_one_present(self):
+        result = checks._collect_accounts(_FakeCtx(self._payloads()))
+        view, context = result["normalized"], result["context"]
+        expected = {
+            "account_service_enabled": True,
+            "local_account_auth": "Fallback",
+            "min_password_length": 10,
+            "max_password_length": 32,
+            "lockout_threshold": 5,
+            "lockout_duration_s": 300,
+            "lockout_counter_reset_s": 120,
+            "lockout_counter_reset_enabled": True,
+            "auth_failure_logging_threshold": 3,
+            "password_expiration_days": 90,  # the DMTF leaf wins over Lenovo's 180
+            "password_expiration_warning_days": 14,
+            "password_length": 10,
+            "complex_password": True,
+            "password_reuse_cycle": 5,
+            "password_change_interval_h": 1,
+            "password_change_on_first_access": True,
+            "password_change_on_next_login": False,
+            "web_inactivity_timeout": 10,
+        }
+        self.assertEqual({key: value for key, value in view.items() if "|" not in key}, expected)
+        self.assertEqual(context["password_expiration_days_source"], "PasswordExpirationDays")
+        self.assertEqual(
+            context["supported_account_types"],
+            sorted(_fx("xcc_accounts_service_directories.json")["SupportedAccountTypes"]),
+        )
+        self.assertIs(context["oauth2_enabled"], True)
+        # the logged-in users are a count, never who: the list was reduced before the read
+        self.assertEqual(context["current_logged_users"], 2)
+        # without the DMTF leaf, Lenovo's period answers and context names it
+        payloads = self._payloads()
+        del payloads[self.SERVICE]["PasswordExpirationDays"]
+        result = checks._collect_accounts(_FakeCtx(payloads))
+        self.assertEqual(result["normalized"]["password_expiration_days"], 180)
+        self.assertEqual(
+            result["context"]["password_expiration_days_source"],
+            "Oem.Lenovo.PasswordExpirationPeriodDays",
+        )
+
+    def test_every_provider_row_carries_every_field(self):
+        view = checks._collect_accounts(_FakeCtx(self._payloads()))["normalized"]
+        blank = dict.fromkeys(checks._ACCOUNTS_PROVIDER_FIELDS)
+        marker = checks._SCRUBBED
+        self.assertEqual(
+            sorted(key for key in view if key.startswith("provider|")),
+            [
+                "provider|active_directory",
+                "provider|additional|Corp",
+                "provider|ldap",
+                "provider|lenovo_ldap_client",
+                "provider|oauth2",
+                "provider|tacacs_plus",
+            ],
+        )
+        for key in (key for key in view if key.startswith("provider|")):
+            self.assertEqual(list(view[key]), list(checks._ACCOUNTS_PROVIDER_FIELDS), key)
+        self.assertEqual(
+            view["provider|ldap"],
+            dict(
+                blank,
+                enabled=True,
+                # the two unset slots dropped, the rest sorted
+                service_addresses=[
+                    "ldaps://ldap-a.example.net:636",
+                    "ldaps://ldap-b.example.net:636",
+                ],
+                authentication_type="UsernameAndPassword",
+                bind_dn=marker,  # the DMTF bind Username is a user-name leaf: set, never shown
+                bind_password_set=True,
+                base_dns=["ou=Admins,dc=example,dc=net", "ou=Staff,dc=example,dc=net"],
+                username_attribute="uid",
+                group_name_attribute="cn",
+                groups_attribute="memberOf",
+                role_mapping_count=3,
+                role_mappings=[
+                    {"local_role": "GroupRole1", "remote_group": "bmc-admins", "remote_user": None},
+                    {
+                        "local_role": "GroupRole2",
+                        "remote_group": "bmc-operators",
+                        "remote_user": None,
+                    },
+                    {"local_role": "GroupRole3", "remote_group": None, "remote_user": marker},
+                ],
+            ),
+        )
+        self.assertEqual(
+            view["provider|active_directory"],
+            dict(
+                blank,
+                enabled=False,
+                service_addresses=["dc1.example.net"],
+                authentication_type="KerberosKeytab",
+                role_mapping_count=0,
+                role_mappings=[],
+            ),
+        )
+        self.assertEqual(
+            view["provider|tacacs_plus"],
+            dict(
+                blank,
+                enabled=False,
+                service_addresses=["203.0.113.49:49"],
+                authentication_type="UsernameAndPassword",
+            ),
+        )
+        self.assertEqual(
+            view["provider|oauth2"],
+            dict(
+                blank,
+                enabled=True,
+                oauth2_mode="Discovery",
+                oauth2_issuer="https://idp.example.net/realms/bmc",
+            ),
+        )
+        self.assertEqual(
+            view["provider|additional|Corp"],
+            dict(
+                blank,
+                enabled=True,
+                provider_type="LDAPService",
+                service_addresses=["ldaps://ldap-c.example.net:636"],
+                authentication_type="Token",
+                base_dns=["dc=example,dc=net"],
+                username_attribute="uid",
+                group_name_attribute="cn",
+                groups_attribute="memberOf",
+                role_mapping_count=1,
+                role_mappings=[
+                    {
+                        "local_role": "Administrator",
+                        "remote_group": "bmc-admins",
+                        "remote_user": None,
+                    }
+                ],
+            ),
+        )
+        self.assertEqual(
+            view["provider|lenovo_ldap_client"],
+            dict(
+                blank,
+                enabled=True,
+                service_addresses=["198.51.100.41:636", "ldap-b.example.net:636"],
+                authentication_type="Anonymously",
+                bind_dn=checks._SCRUBBED,  # a bind identity can name a person: set, never shown
+                base_dns=["dc=example,dc=net"],
+                username_attribute="uid",
+                group_name_attribute="memberOf",
+                server_discovery="Pre_Configured",
+                authorization="LDAPServer",
+                group_filter="bmc-",
+                login_permission_attribute="bmcLoginPermission",
+                role_based_security=True,
+                forest_name="example.net",
+                server_target_name="bmc-lab-1",
+            ),
+        )
+
+    def test_accounts_keyed_by_name_and_empty_slots_only_counted(self):
+        result = checks._collect_accounts(_FakeCtx(self._payloads()))
+        view, context = result["normalized"], result["context"]
+        self.assertEqual(
+            sorted(key for key in view if key.startswith("account|")),
+            ["account|host-bootstrap", "account|ops-admin", "account|svc-capture"],
+        )
+        self.assertEqual(
+            view["account|ops-admin"],
+            {
+                "account_id": "1",
+                "role_id": "Administrator",
+                "enabled": True,
+                "locked": False,
+                "password_change_required": False,
+                "account_types": ["ManagerConsole", "Redfish", "SNMP", "WebUI"],
+                "oem_account_types": None,
+                "host_bootstrap_account": False,
+                "snmp_auth_protocol": "HMAC128_SHA224",
+                "snmp_encryption_protocol": "CFB128_AES128",
+                "snmp_auth_key_set": True,
+                "snmp_encryption_key_set": True,
+                "snmpv3_configured": True,
+                "ssh_key_count": 2,  # two of four slots hold a key; the keys are never stored
+            },
+        )
+        capture = view["account|svc-capture"]
+        self.assertEqual(
+            (capture["locked"], capture["password_change_required"], capture["role_id"]),
+            (True, True, "ReadOnly"),
+        )
+        self.assertEqual(
+            (capture["snmpv3_configured"], capture["snmp_auth_key_set"], capture["ssh_key_count"]),
+            (False, None, 0),
+        )
+        bootstrap = view["account|host-bootstrap"]
+        self.assertIs(bootstrap["host_bootstrap_account"], True)
+        for field in (
+            "snmp_auth_protocol",
+            "snmp_encryption_protocol",
+            "snmpv3_configured",
+            "ssh_key_count",  # no Oem block served on this one
+            "password_change_required",
+        ):
+            self.assertIsNone(bootstrap[field], field)
+        # slot 3 ('') and slot 5 (null) are counted, never keyed
+        self.assertEqual((context["accounts_total"], context["empty_account_slots"]), (5, 2))
+        self.assertEqual(context["roles_total"], 3)
+        # a timestamp every password change moves: context only
+        self.assertEqual(
+            context["password_expiration"],
+            {
+                "account|ops-admin": "2027-03-01T00:00:00+00:00",
+                "account|svc-capture": None,
+                "account|host-bootstrap": "2026-12-24T12:00:00+00:00",
+            },
+        )
+        self.assertEqual(
+            view["role|Administrator"],
+            {
+                "assigned_privileges": [
+                    "ConfigureManager",
+                    "ConfigureSelf",
+                    "ConfigureUsers",
+                    "Login",
+                ],
+                "oem_privileges": ["Supervisor"],
+                "is_predefined": True,
+            },
+        )
+
+    def test_a_repeated_name_or_role_id_keeps_every_row(self):
+        view, context = checks._normalize_accounts(
+            {},
+            [{"Id": "1", "UserName": "ops"}, {"Id": "7", "UserName": "ops"}, {"Id": "2"}],
+            [{"Id": "a", "RoleId": "X"}, {"Id": "b", "RoleId": "X"}, {"Id": "Operator"}],
+        )
+        self.assertEqual(
+            sorted(key for key in view if "|" in key),
+            ["account|ops|1", "account|ops|7", "role|Operator", "role|X|a", "role|X|b"],
+        )
+        self.assertEqual(context["empty_account_slots"], 1)
+
+    def test_secrets_sessions_and_directory_people_never_reach_raw_context_or_cache(self):
+        ctx = _FakeCtx(self._payloads())
+        result = checks._collect_accounts(ctx)
+        marker = checks._SCRUBBED
+        # the cache holds what the redactors returned: what the trace copy is taken from
+        stored = json.dumps(result) + json.dumps([value for value in ctx._cache.values()])
+        for text in self.NEVER_STORED:
+            self.assertNotIn(text, stored, text)
+        raw = result["raw"]
+        members = raw[self.ACCOUNTS + EXPAND]["Members"]
+        # local account names are configuration: kept in raw as in the keys
+        self.assertEqual(
+            [member["UserName"] for member in members],
+            ["ops-admin", "svc-capture", "", "host-bootstrap", None],
+        )
+        self.assertEqual(members[0]["Oem"]["Lenovo"]["SSHPublicKey"], [marker, None, marker, ""])
+        self.assertEqual(
+            (members[0]["SNMP"]["AuthenticationKey"], members[1]["Password"]), (marker, marker)
+        )
+        service = raw[self.SERVICE]
+        self.assertEqual(service["Oem"]["Lenovo"]["CurrentLoggedUsers"], [marker, marker])
+        self.assertEqual(service["LDAP"]["Authentication"]["Username"], marker)
+        self.assertEqual(service["LDAP"]["RemoteRoleMapping"][2]["RemoteUser"], marker)
+        self.assertEqual(service["ActiveDirectory"]["Authentication"]["KerberosKeytab"], marker)
+        self.assertEqual(service["TACACSplus"]["Authentication"]["EncryptionKey"], marker)
+        self.assertIs(service["TACACSplus"]["Authentication"]["EncryptionKeySet"], True)
+        self.assertEqual(service["OAuth2"]["OAuth2Service"]["OAuthServiceSigningKeys"], marker)
+        provider = raw[self.PROVIDERS + EXPAND]["Members"][0]
+        self.assertEqual(provider["Authentication"]["Token"], marker)
+        client = raw[self.LDAP_CLIENT]
+        self.assertEqual(client["BindingMethod"]["ClientPassword"], marker)
+        self.assertEqual(client["BindingMethod"]["ClientDN"], marker)
+        self.assertNotIn("@odata.etag", json.dumps(raw))
+
+    def test_the_redactors_scrub_what_the_family_rule_does_not_name(self):
+        marker = checks._SCRUBBED
+        service = {
+            "LDAP": {
+                "Authentication": {
+                    "AuthenticationType": "Token",
+                    "Token": "t0k",
+                    "KerberosKeytab": "kt",
+                    "Username": "cn=bind",
+                },
+                "RemoteRoleMapping": [
+                    {"LocalRole": "GroupRole1", "RemoteGroup": "admins", "RemoteUser": "person"},
+                    {"LocalRole": "GroupRole2", "RemoteUser": ""},
+                ],
+            },
+            "MultiFactorAuth": {"GoogleAuthenticator": {"SecretKey": "s3", "SecretKeySet": True}},
+            "Token@Redfish.AllowableValues": ["x"],
+        }
+        scrubbed = checks._scrub_payload(service)
+        authentication = scrubbed["LDAP"]["Authentication"]
+        self.assertEqual(
+            [authentication[key] for key in ("Token", "KerberosKeytab", "Username")], [marker] * 3
+        )
+        self.assertEqual(authentication["AuthenticationType"], "Token")
+        self.assertEqual(
+            scrubbed["LDAP"]["RemoteRoleMapping"],
+            [
+                {"LocalRole": "GroupRole1", "RemoteGroup": "admins", "RemoteUser": marker},
+                {"LocalRole": "GroupRole2", "RemoteUser": ""},  # emptiness kept
+            ],
+        )
+        self.assertEqual(
+            scrubbed["MultiFactorAuth"]["GoogleAuthenticator"],
+            {"SecretKey": marker, "SecretKeySet": True},
+        )
+        self.assertEqual(scrubbed["Token@Redfish.AllowableValues"], ["x"])  # an annotation
+        self.assertEqual(checks._scrub_payload(scrubbed), scrubbed)  # idempotent
+        # the accounts redactor keeps the local account name and nothing else of a person
+        # (DMTF ManagerAccount's one-time-passcode delivery address and contact leaves)
+        account = {
+            "UserName": "ops-admin",
+            "Password": "pw",
+            "OneTimePasscodeDeliveryAddress": "ops@example.net",
+            "EmailAddress": "ops@example.net",
+        }
+        kept = checks._scrub_accounts(account)
+        self.assertEqual(
+            kept,
+            {
+                "UserName": "ops-admin",
+                "Password": marker,
+                "OneTimePasscodeDeliveryAddress": marker,
+                "EmailAddress": marker,
+            },
+        )
+        self.assertEqual(checks._scrub_accounts(kept), kept)
+        self.assertEqual(checks._scrub_payload(account)["UserName"], marker)  # anywhere else
+
+    def test_every_read_passes_its_redactor_and_each_collection_is_one_get(self):
+        ctx = _FakeCtx(self._payloads())
+        checks._collect_accounts(ctx)
+        self.assertEqual(
+            ctx.gets,
+            RESOLVE
+            + [self.SERVICE, self.ACCOUNTS + EXPAND, self.ROLES + EXPAND, self.PROVIDERS + EXPAND]
+            + [self.PROTOCOL, self.LDAP_CLIENT],
+        )
+        self.assertEqual(
+            dict(ctx.redacted),
+            {
+                "/redfish/v1/": "_scrub_payload",
+                "/redfish/v1/Systems": "_scrub_payload",
+                SYS: "_scrub_payload",
+                self.SERVICE: "_scrub_payload",
+                self.ACCOUNTS + EXPAND: "_scrub_accounts",  # names kept here only
+                self.ROLES + EXPAND: "_scrub_payload",
+                self.PROVIDERS + EXPAND: "_scrub_payload",
+                self.PROTOCOL: "_scrub_payload",  # bmc_manager_network's read, shared
+                self.LDAP_CLIENT: "_scrub_payload",
+            },
+        )
+        self.assertEqual(ctx.budgets, [("bmc_accounts", checks._BUDGET_ACCOUNTS)])
+
+    def test_without_expand_a_small_layout_is_walked_and_expand_asked_once(self):
+        expanded = checks._collect_accounts(_FakeCtx(self._payloads()))
+        ctx = _FakeCtx(_without_expand(self._payloads()))
+        walked = checks._collect_accounts(ctx)
+        self.assertEqual(walked["normalized"], expanded["normalized"])
+        self.assertEqual(
+            [path for path in ctx.gets if path.endswith(EXPAND)], [self.ACCOUNTS + EXPAND]
+        )
+        self.assertEqual(
+            {name: read["strategy"] for name, read in walked["context"]["collections"].items()},
+            {"accounts": "members", "roles": "members", "additional_providers": "members"},
+        )
+        # resolution 3, the service, Accounts 1 + 1 + 5, Roles 1 + 3, providers 1 + 1, Lenovo 2
+        self.assertEqual(len(ctx.gets), 3 + 1 + 7 + 4 + 2 + 2)
+
+    def test_a_walk_the_budget_cannot_cover_is_refused_before_its_first_member(self):
+        payloads = _without_expand(self._payloads())
+        del payloads[SYS]["Links"]  # the id resolution then costs its full five GETs
+        payloads["/redfish/v1/Managers"] = {"Members": [{"@odata.id": MGR}]}
+        payloads["/redfish/v1/Chassis"] = {"Members": [{"@odata.id": CH}]}
+        # the lab XCC's 31 roles, served as links only
+        payloads[self.ROLES] = {
+            "Members": [{"@odata.id": "%s/CustomRole%d" % (self.ROLES, n)} for n in range(1, 32)]
+        }
+        ctx = _FakeCtx(payloads)
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_accounts(ctx)
+        self.assertIn("31 members to fetch but only 26 GET(s) left", str(caught.exception))
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.ROLES + "/")])
+        # resolution 5, the service, Accounts 1 + 1 + 5, then the Roles collection
+        self.assertEqual(len(ctx.gets), 5 + 1 + 7 + 1)
+
+    def test_an_unlinked_service_answering_404_is_not_present_and_a_linked_one_fails(self):
+        ctx = _FakeCtx(_base_payloads())  # the hand-built root links no AccountService
+        with self.assertRaises(registry.SkipCheck) as caught:
+            checks._collect_accounts(ctx)
+        self.assertIn("links no AccountService", str(caught.exception))
+        self.assertEqual(ctx.gets, RESOLVE + [self.SERVICE])
+        payloads = self._payloads()
+        del payloads[self.SERVICE]
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_accounts(_FakeCtx(payloads))
+        self.assertIn("links /redfish/v1/AccountService but it answered 404", str(caught.exception))
+        # a refused read is a failed read, never an absent service
+        with self.assertRaises(_FakeRedfishError):
+            checks._collect_accounts(_FakeCtx(self._payloads(), errors={self.SERVICE: 403}))
+
+    def test_a_linked_collection_that_answers_404_is_a_failed_read(self):
+        for path in (self.ACCOUNTS, self.ROLES, self.PROVIDERS):
+            payloads = self._payloads()
+            del payloads[path], payloads[path + EXPAND]
+            with self.assertRaises(registry.CollectError) as caught:
+                checks._collect_accounts(_FakeCtx(payloads))
+            self.assertIn("links %s but it answered 404" % (path,), str(caught.exception))
+        # an unlinked collection whose DMTF path answers 404 is not served: no rows, said so
+        payloads = self._payloads()
+        del payloads[self.SERVICE]["Accounts"]
+        del payloads[self.ACCOUNTS], payloads[self.ACCOUNTS + EXPAND]
+        result = checks._collect_accounts(_FakeCtx(payloads))
+        self.assertFalse([key for key in result["normalized"] if key.startswith("account|")])
+        self.assertEqual(result["context"]["collections"]["accounts"]["strategy"], "absent")
+        self.assertIsNone(result["context"]["empty_account_slots"])
+        # the additional providers are read only where the service links them
+        payloads = self._payloads()
+        del payloads[self.SERVICE]["AdditionalExternalAccountProviders"]
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_accounts(ctx)
+        self.assertFalse([path for path in ctx.gets if "ExternalAccountProviders" in path])
+        self.assertIsNone(result["context"]["collections"]["additional_providers"])
+        self.assertNotIn("provider|additional|Corp", result["normalized"])
+
+    def test_account_names_an_earlier_read_withheld_are_refused_never_keyed(self):
+        payloads = self._payloads()
+        payloads[self.ACCOUNTS + EXPAND]["Members"][0]["UserName"] = checks._SCRUBBED
+        with self.assertRaises(registry.CollectError) as caught:
+            checks._collect_accounts(_FakeCtx(payloads))
+        self.assertIn("withheld (slots 1)", str(caught.exception))
+
+    def test_other_vendors_read_the_dmtf_service_and_nothing_of_lenovo(self):
+        payloads = self._payloads()
+        payloads["/redfish/v1/"]["Vendor"] = "Contoso"
+        ctx = _FakeCtx(payloads)
+        result = checks._collect_accounts(ctx)
+        view, context = result["normalized"], result["context"]
+        self.assertNotIn(self.PROTOCOL, ctx.gets)
+        self.assertFalse([path for path in ctx.gets if "Lenovo" in path])
+        self.assertNotIn("provider|lenovo_ldap_client", view)
+        for field in (
+            "password_expiration_warning_days",
+            "password_length",
+            "complex_password",
+            "password_reuse_cycle",
+            "password_change_interval_h",
+            "password_change_on_first_access",
+            "password_change_on_next_login",
+            "web_inactivity_timeout",
+        ):
+            self.assertIsNone(view[field], field)
+        self.assertEqual(view["password_expiration_days"], 90)  # the DMTF leaf, every vendor
+        self.assertEqual(
+            {view[key]["ssh_key_count"] for key in view if key.startswith("account|")}, {None}
+        )
+        self.assertIsNone(context["current_logged_users"])
+        self.assertIsNone(context["lenovo_ldap_client"])
+        lenovo = checks._collect_accounts(_FakeCtx(self._payloads()))["normalized"]
+        for key in ("provider|ldap", "provider|oauth2", "role|ReadOnly"):
+            self.assertEqual(view[key], lenovo[key], key)
+
+    def test_a_link_into_actions_is_refused(self):
+        payloads = self._payloads()
+        payloads[self.SERVICE]["Roles"] = {"@odata.id": self.SERVICE + "/Actions/Roles.Reset"}
+        with self.assertRaises(registry.CollectError):
+            checks._collect_accounts(_FakeCtx(payloads))
+        payloads = self._payloads()
+        payloads["/redfish/v1/"]["AccountService"] = {"@odata.id": "/redfish/v1/Actions/x"}
+        with self.assertRaises(registry.CollectError):
+            checks._collect_accounts(_FakeCtx(payloads))
+
+    def test_unset_server_slots_are_no_addresses(self):
+        address = checks._accounts_address
+        for unset in (None, "", ":389", "0.0.0.0:389", "::", "[::]:636", "ldap://:389"):
+            self.assertIsNone(address(unset), unset)
+        for kept in (
+            "ldaps://ldap-a.example.net:636",
+            "198.51.100.41",
+            "dc1.example.net",
+            "2001:db8::10",
+            "[2001:db8::10]:636",
+        ):
+            self.assertEqual(address(kept), kept)
+        servers = {"Server1HostName_IPAddress": "2001:db8::10", "Server1Port": "636"}
+        self.assertEqual(checks._accounts_lenovo_server(servers, 1), "[2001:db8::10]:636")
+        self.assertIsNone(checks._accounts_lenovo_server(servers, 2))
+
+    def test_snmpv3_configured_reads_the_two_protocol_leaves_only(self):
+        snmpv3 = checks._accounts_snmpv3
+        self.assertIsNone(snmpv3(None, None))
+        self.assertIs(snmpv3("None", "None"), False)
+        self.assertIs(snmpv3("None", None), False)
+        self.assertIs(snmpv3("HMAC_SHA96", "None"), True)
+        self.assertIs(snmpv3(None, "CFB128_AES128"), True)
+
+    def test_a_lockout_a_new_account_and_a_role_edit_diff_and_a_rotation_does_not(self):
+        compare = registry.CHECKS["bmc_accounts"].compare
+        diff_check = _loader.diffcore.diff_check
+        pre = checks._collect_accounts(_FakeCtx(self._payloads()))["normalized"]
+        self.assertEqual(diff_check(pre, copy.deepcopy(pre), compare)["result"], "pass")
+        payloads = self._payloads()
+        members = payloads[self.ACCOUNTS + EXPAND]["Members"]
+        members[0]["PasswordExpiration"] = "2027-06-01T00:00:00+00:00"  # a password rotation
+        post = checks._collect_accounts(_FakeCtx(payloads))["normalized"]
+        self.assertEqual(diff_check(pre, post, compare)["result"], "pass")
+        members[0]["Locked"] = True
+        members[2]["UserName"] = "new-operator"  # the empty slot 3 gets an account
+        payloads[self.ROLES + EXPAND]["Members"][2]["OemPrivileges"] = ["Supervisor"]
+        post = checks._collect_accounts(_FakeCtx(payloads))["normalized"]
+        diff = diff_check(pre, post, compare)
+        self.assertEqual([row["key"] for row in diff["added"]], ["account|new-operator"])
+        self.assertEqual(diff["removed"], [])
+        self.assertEqual(
+            [(row["key"], row["field"], row["old"], row["new"]) for row in diff["changed"]],
+            [
+                ("account|ops-admin", "locked", False, True),
+                ("role|ReadOnly", "oem_privileges", ["ReadOnly"], ["Supervisor"]),
             ],
         )
 

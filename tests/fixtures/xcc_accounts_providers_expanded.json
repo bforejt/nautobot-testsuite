@@ -1,0 +1,38 @@
+{
+  "@odata.type": "#ExternalAccountProviderCollection.ExternalAccountProviderCollection",
+  "@odata.id": "/redfish/v1/AccountService/ExternalAccountProviders",
+  "Name": "External Account Provider Collection",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/AccountService/ExternalAccountProviders/Corp",
+      "Id": "Corp",
+      "Name": "Corporate directory",
+      "AccountProviderType": "LDAPService",
+      "ServiceEnabled": true,
+      "ServiceAddresses": [
+        "ldaps://ldap-c.example.net:636"
+      ],
+      "Authentication": {
+        "AuthenticationType": "Token",
+        "Token": "not-a-real-token"
+      },
+      "LDAPService": {
+        "SearchSettings": {
+          "BaseDistinguishedNames": [
+            "dc=example,dc=net"
+          ],
+          "UsernameAttribute": "uid",
+          "GroupNameAttribute": "cn",
+          "GroupsAttribute": "memberOf"
+        }
+      },
+      "RemoteRoleMapping": [
+        {
+          "LocalRole": "Administrator",
+          "RemoteGroup": "bmc-admins"
+        }
+      ]
+    }
+  ]
+}

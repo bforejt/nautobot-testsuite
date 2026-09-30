@@ -1748,7 +1748,8 @@ class TestBmcLabFamily(unittest.TestCase):
         # (+ bmc_network_adapters' 10: the collection, then Ports, NetworkPorts and
         # NetworkDeviceFunctions for each of three adapters)
         # (+ bmc_pcie_slots' 2: PCIeSlots and the Lenovo slot table)
-        self.assertLessEqual(len(ctx.gets), 69)
+        # (+ bmc_accounts' 4: the AccountService, Accounts, Roles and the LDAP client)
+        self.assertLessEqual(len(ctx.gets), 73)
 
     def test_normalizers_are_deterministic_and_diff_to_nothing(self):
         for check in _loader.registry.checks_for("bmc"):
@@ -2684,6 +2685,206 @@ class TestBmcLabPcieSlots(unittest.TestCase):
             self.SLOTS + " (no Slots[] entry) and %s (no member)" % (self.TABLE,), message
         )
         self.assertIn("host PowerState On", message)
+
+
+class TestBmcLabAccounts(unittest.TestCase):
+    """bmc_accounts on the lab payloads: three named accounts in twelve slots, 31 roles, and the
+    DMTF LDAP and OAuth2 blocks and Lenovo's LDAP client, none of them configured."""
+
+    SERVICE = "/redfish/v1/AccountService"
+    PROTOCOL = "/redfish/v1/Managers/1/NetworkProtocol"
+    LDAP_CLIENT = PROTOCOL + "/Oem/Lenovo/LDAPClient"
+    RESOLVE = ["/redfish/v1/", "/redfish/v1/Systems", "/redfish/v1/Systems/1"]
+    ACCOUNT_TYPES = ["HostConsole", "IPMI", "KVMIP", "ManagerConsole", "Redfish", "SNMP"]
+    ACCOUNT_TYPES += ["VirtualMedia", "WebUI"]
+
+    def test_accounts_roles_and_policy(self):
+        ctx = _xcc_lab_ctx()
+        result = bmc._collect_accounts(ctx)
+        view, context = result["normalized"], result["context"]
+        # the service, one $expand GET per collection, then Lenovo's LDAP client through
+        # the NetworkProtocol link (the read bmc_manager_network makes)
+        self.assertEqual(
+            ctx.gets,
+            self.RESOLVE
+            + [self.SERVICE]
+            + [self.SERVICE + "/%s%s" % (name, _XCC_EXPAND) for name in ("Accounts", "Roles")]
+            + [self.PROTOCOL, self.LDAP_CLIENT],
+        )
+        # three named accounts; the nine empty slots are counted, never keyed
+        self.assertEqual(
+            sorted(key for key in view if key.startswith("account|")),
+            ["account|netops", "account|user-lab-1", "account|user-lab-2"],
+        )
+        self.assertEqual((context["accounts_total"], context["empty_account_slots"]), (12, 9))
+        self.assertEqual(
+            view["account|netops"],
+            {
+                "account_id": "3",
+                "role_id": "CustomRole3",
+                "enabled": True,
+                "locked": False,
+                "password_change_required": None,  # not served once the first login is done
+                "account_types": self.ACCOUNT_TYPES,
+                "oem_account_types": None,
+                "host_bootstrap_account": False,
+                "snmp_auth_protocol": "HMAC_SHA96",
+                "snmp_encryption_protocol": "CFB128_AES128",
+                "snmp_auth_key_set": None,  # the unit serves EncryptionKeySet only
+                "snmp_encryption_key_set": False,
+                "snmpv3_configured": True,
+                "ssh_key_count": 0,  # four empty SSHPublicKey slots
+            },
+        )
+        for name, slot in (("user-lab-1", "1"), ("user-lab-2", "2")):
+            row = view["account|" + name]
+            self.assertEqual(
+                (row["account_id"], row["role_id"], row["enabled"], row["snmp_auth_protocol"]),
+                (slot, "CustomRole" + slot, True, "None"),
+            )
+            self.assertIs(row["snmpv3_configured"], False)
+        # every slot N has its CustomRoleN, every group-mapping slot N its GroupRoleN: two
+        # named accounts hold Supervisor, the capture account ReadOnly
+        roles = {key: row for key, row in view.items() if key.startswith("role|")}
+        self.assertEqual(len(roles), 31)
+        self.assertEqual(
+            [roles["role|CustomRole%d" % (n,)]["oem_privileges"] for n in (1, 2, 3, 4)],
+            [["Supervisor"], ["Supervisor"], ["ReadOnly"], ["ReadOnly"]],
+        )
+        self.assertEqual(
+            sorted(key for key, row in roles.items() if row["is_predefined"]),
+            ["role|Administrator", "role|Operator", "role|ReadOnly"],
+        )
+        self.assertEqual(
+            roles["role|Administrator"],
+            {
+                "assigned_privileges": [
+                    "ConfigureComponents",
+                    "ConfigureManager",
+                    "ConfigureSelf",
+                    "ConfigureUsers",
+                    "Login",
+                ],
+                "oem_privileges": ["Supervisor"],
+                "is_predefined": True,
+            },
+        )
+        self.assertEqual(context["roles_total"], 31)
+        expected = {
+            "account_service_enabled": True,
+            "local_account_auth": "Enabled",
+            "min_password_length": 6,
+            "max_password_length": 32,
+            "lockout_threshold": 10,
+            "lockout_duration_s": 60,
+            "lockout_counter_reset_s": 60,
+            "lockout_counter_reset_enabled": True,
+            "auth_failure_logging_threshold": None,  # not served on XCC 6.10
+            "password_expiration_days": 365,
+            "password_expiration_warning_days": 5,
+            "password_length": 6,
+            "complex_password": False,
+            "password_reuse_cycle": 2,
+            "password_change_interval_h": 24,
+            "password_change_on_first_access": True,
+            "password_change_on_next_login": True,
+            "web_inactivity_timeout": 20,
+        }
+        self.assertEqual({key: value for key, value in view.items() if "|" not in key}, expected)
+        self.assertEqual(
+            context["password_expiration_days_source"], "Oem.Lenovo.PasswordExpirationPeriodDays"
+        )
+        # only the web session was ever listed there; Basic-auth reads open none
+        self.assertEqual(context["current_logged_users"], 0)
+        self.assertIsNone(context["supported_account_types"])  # not served on XCC 6.10
+        self.assertIs(context["oauth2_enabled"], True)
+        self.assertEqual(
+            context["password_expiration"],
+            {
+                "account|user-lab-1": "2021-11-15T10:25:24-05:00",
+                "account|user-lab-2": "2027-09-05T16:07:43-05:00",
+                "account|netops": "2027-09-29T21:17:59-05:00",
+            },
+        )
+        self.assertEqual(
+            {name: read["strategy"] for name, read in context["collections"].items() if read},
+            {"accounts": "expand", "roles": "expand"},
+        )
+        self.assertIsNone(context["collections"]["additional_providers"])  # not linked
+
+    def test_directory_providers_are_served_and_unconfigured(self):
+        view = bmc._collect_accounts(_xcc_lab_ctx())["normalized"]
+        blank = dict.fromkeys(bmc._ACCOUNTS_PROVIDER_FIELDS)
+        self.assertEqual(
+            sorted(key for key in view if key.startswith("provider|")),
+            ["provider|ldap", "provider|lenovo_ldap_client", "provider|oauth2"],
+        )
+        self.assertEqual(
+            view["provider|ldap"],
+            dict(
+                blank,
+                enabled=True,
+                service_addresses=[],  # '0.0.0.0:389' and three ':389': four unset slots
+                authentication_type="UsernameAndPassword",
+                bind_password_set=False,
+                base_dns=[],  # served as ['']
+                username_attribute="sAMAccountName",
+                group_name_attribute="memberOf",
+                role_mapping_count=0,  # sixteen GroupRole slots, none naming a remote group
+                role_mappings=[],
+            ),
+        )
+        self.assertEqual(
+            view["provider|lenovo_ldap_client"],
+            dict(
+                blank,
+                enabled=True,
+                service_addresses=[],  # Server1 '0.0.0.0', Servers 2-4 null
+                authentication_type="Anonymously",
+                base_dns=[],  # RootDN null
+                username_attribute="sAMAccountName",
+                group_name_attribute="memberOf",
+                server_discovery="Pre_Configured",
+                authorization="LDAPServer",
+                role_based_security=False,
+            ),
+        )
+        self.assertEqual(view["provider|oauth2"], dict(blank, enabled=True, oauth2_mode="Offline"))
+
+    def test_without_expand_the_role_walk_is_refused_before_any_role_is_read(self):
+        payloads, errors = TestBmcLabInventory._walked()
+        ctx = _FakeCtx(payloads, errors=errors)
+        with self.assertRaises(_loader.registry.CollectError) as caught:
+            bmc._collect_accounts(ctx)
+        self.assertIn(
+            "31 members to fetch but only 19 GET(s) left in the budget of 40", str(caught.exception)
+        )
+        self.assertFalse([path for path in ctx.gets if path.startswith(self.SERVICE + "/Roles/")])
+        # resolution 5, the service, Accounts (the refused $expand, the collection, 12
+        # members), then the Roles collection: $expand is not asked twice
+        self.assertEqual(len(ctx.gets), 5 + 1 + 14 + 1)
+        self.assertEqual(len([path for path in ctx.gets if _XCC_EXPAND in path]), 1)
+
+    def test_raw_keeps_the_account_names_and_nothing_secret(self):
+        result = bmc._collect_accounts(_xcc_lab_ctx())
+        raw = result["raw"]
+        accounts = self.SERVICE + "/Accounts" + _XCC_EXPAND
+        self.assertEqual(
+            sorted(raw),
+            sorted(
+                [self.SERVICE, accounts, self.SERVICE + "/Roles" + _XCC_EXPAND, self.LDAP_CLIENT]
+            ),
+        )
+        members = raw[accounts]["Members"]
+        # local account names are configuration: kept (the lab's invented ones)
+        self.assertEqual(
+            sorted(member["UserName"] for member in members if member["UserName"]),
+            ["netops", "user-lab-1", "user-lab-2"],
+        )
+        self.assertEqual({member["Password"] for member in members}, {None})
+        self.assertEqual(raw[self.SERVICE]["Oem"]["Lenovo"]["CurrentLoggedUsers"], [])
+        self.assertIsNone(raw[self.LDAP_CLIENT]["BindingMethod"]["ClientPassword"])
+        self.assertNotIn("@odata.etag", json.dumps(raw))
 
 
 if __name__ == "__main__":

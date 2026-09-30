@@ -246,14 +246,17 @@ SECRET_NAMES = frozenset(
         "MutualCHAPSecret",
         "HttpHeaders",
         "JsonBody",
+        "Token",
+        "KerberosKeytab",
+        "SecretKey",
     )
 )
 PERSON_KEYS = frozenset(
     {"UserName", "Username", "UserID", "UserId", "LoginID", "LoginId", "LoginName"}
-    | {"CHAPUsername", "MutualCHAPUsername"}
+    | {"CHAPUsername", "MutualCHAPUsername", "ClientDN", "RemoteUser"}
     | {"ContactName", "ContactPerson"}
 )
-EMAIL_KEYS = frozenset({"EmailAddress"})
+EMAIL_KEYS = frozenset({"EmailAddress", "OneTimePasscodeDeliveryAddress"})
 PHONE_KEYS = frozenset({"PhoneNumber"})
 HOST_KEYS = frozenset({"HostName", "FQDN"})
 DOMAIN_KEYS = frozenset({"DomainName"})
