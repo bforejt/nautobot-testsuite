@@ -92,8 +92,7 @@ the operator's:
    | Destination type | `dcim \| interface` |
 
    The capture also accepts the reverse orientation (interface as the
-   source). On Nautobot 2.4, check that both types appear in the dropdowns
-   before relying on it; so far this is verified on 3.2.5 only.
+   source). Verified on Nautobot 3.2.5 and, in production, on 2.4.43.
 2. **Create a Secrets Group for the BMCs**, e.g. `bmc-readonly`: a Username and
    a Password secret with access type HTTP(S) (Generic works too). One group
    serves every BMC that shares the account.
