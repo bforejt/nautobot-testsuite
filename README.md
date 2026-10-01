@@ -1,8 +1,8 @@
 # nautobot-testsuite
 
 Pre/post change-validation jobs for Nautobot. Snapshot a device before a change,
-make the change, snapshot again, compare — and get a JSON verdict on the JobResult
-that separates the diffs you *declared* you would cause from the ones you did not.
+make the change, snapshot again, and analyze the files with your test-plan prompt
+to separate the diffs you *declared* you would cause from the ones you did not.
 
 Two jobs, both under the **Test Suite** grouping:
 
@@ -19,6 +19,10 @@ Two jobs, both under the **Test Suite** grouping:
   labelled with its transport — configuration text only in its redacted form,
   BMC and ESXi payloads only after their redactor, so the trace never holds a
   secret that `raw_*` scrubs), so even a FAILED check keeps its evidence.
+  Every run also produces `manifest_<change_id>_<kind>.json`, listing the
+  selected devices, their outcomes and durations, and the byte size and SHA-256
+  of each device artifact. Choose **Separate JSON files** (the default) or
+  **One zip file** under `artifact_format` to download the evidence.
 - *(analysis happens outside Nautobot: download the snapshot files and feed
   them, with your test-plan prompt, to the LLM your organization approves —
   see below. `tools/diff_snapshots.py` builds an optional deterministic diff
@@ -127,8 +131,8 @@ Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 2. **Cut over.** Do the change.
 3. **Capture post.** Same again, `kind = post`, same `change_id` — now
    targeting the active VM-500 as the firewall.
-4. **Analyze.** Download the `snapshot_*.json` files from both capture
-   JobResults and feed them, with your test-plan prompt
+4. **Analyze.** Download the files from both capture JobResults. If you chose
+   zip output, unzip them first, then feed the `snapshot_*.json` files, with your test-plan prompt
    (docs/llm-test-plans.md has a worked example for exactly this change), to
    the LLM your organization approves. Optionally build the deterministic
    diff index first so vanished routes arrive pre-enumerated:
@@ -139,6 +143,39 @@ Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
 
    Devices pair by name; the renamed firewall shows up as pre-only/post-only
    "replacement candidate" sections for the analyst — no mapping input needed.
+
+### Downloading capture evidence
+
+`artifact_format` defaults to `files`: each snapshot, raw bundle and optional
+debug trace is attached as its device finishes, followed by the run manifest.
+The manifest contains names and identifiers, never credentials, and records
+failed devices and devices left `not_visited` after a soft time limit. Its own
+schema is 1; device envelope schema 1.2 is unchanged.
+If two selected device names produce the same sanitized artifact filename,
+the run refuses before connecting. Capture them separately or use distinct names.
+
+Choose `zip` for a compressed download named
+`testsuite_<change_id>_<kind>_<YYYYMMDDTHHMMZ>.zip`. Members keep their existing
+names under a `pre/`, `post/`, `rollback/` or `adhoc/` directory, including the
+manifest and debug trace when enabled. Unzip before attaching snapshots to an
+LLM whose interface does not open archives. The local diff tool can read the
+archives directly:
+
+```sh
+python3 tools/diff_snapshots.py --pre pre.zip --post post.zip -o diff-index.json
+```
+
+Archives exceeding Nautobot's `JOB_CREATE_FILE_MAX_SIZE` (10 MiB by default)
+split into `_part1ofN.zip` downloads at device boundaries; the manifest is in
+part 1. Download every part and pass all pre parts to `--pre` and all post
+parts to `--post`, or unzip every part into the same directory. A device whose
+compressed artifacts cannot fit in one part is omitted with a warning, and
+its manifest files are marked `not_attached`.
+
+Zip output is attached when the run finishes, including failed runs and soft
+timeouts. A hard kill or worker restart before finalization loses the pending
+archive. For very long captures, use separate files to retain each completed
+device's evidence immediately.
 
 ### NFV compute (ESXi + XCC)
 

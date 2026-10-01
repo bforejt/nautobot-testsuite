@@ -19,7 +19,6 @@ baseline must be loud — but its envelope is still attached so partial
 evidence is never lost. One device's failure never stops the batch.
 """
 
-import json
 import time
 
 try:  # celery is present in every Nautobot worker; absent only in bare dev envs
@@ -39,10 +38,11 @@ from nautobot.apps.jobs import (
     ObjectVar,
     StringVar,
 )
+from nautobot.core.utils.config import get_settings_or_config
 from nautobot.dcim.models import Device
 from nautobot.extras.models import SecretsGroup
 
-from . import bmc_target, creds, envelope, registry
+from . import bmc_target, bundle, creds, envelope, registry
 from . import constants as C
 from .context import CollectorContext
 from .panos_xml import PanosParseError
@@ -192,8 +192,8 @@ def _describe_check(check):
     }
 
 
-def _attach_artifact(job, filename, payload):
-    """Attach a JSON artifact to the running job's JobResult; never fatal.
+def _create_file(job, filename, content):
+    """Attach serialized evidence; an attachment failure never fails collection.
 
     create_file raises ValueError past the platform size cap (10MB) — an
     oversized or otherwise unattachable artifact is logged and dropped rather
@@ -203,15 +203,55 @@ def _attach_artifact(job, filename, payload):
         job.logger.warning(
             "This Nautobot has no Job.create_file; artifact %s not attached", filename
         )
-        return
+        return False
     try:
-        job.create_file(filename, json.dumps(payload, indent=1, sort_keys=True))
+        # A soft limit can arrive just after create_file persists a download.
+        # Finalization retries must not attach that same part a second time.
+        if getattr(job, "_artifact_finalizing", False):
+            if job.job_result.files.filter(name=filename).exists():
+                return True
+        job.create_file(filename, content)
+        return True
     except SoftTimeLimitExceeded:
         raise
     except Exception as exc:
         job.logger.warning(
             "Failed to attach artifact %s: %s: %s", filename, type(exc).__name__, exc
         )
+        return False
+
+
+def _attach_artifact(job, filename, payload):
+    """Route capture artifacts to the run sink; Shakedown still attaches directly."""
+    sink = getattr(job, "_artifact_sink", None)
+    if sink is None:
+        try:
+            content = bundle.json_bytes(payload)
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:
+            job.logger.warning(
+                "Failed to serialize artifact %s: %s: %s", filename, type(exc).__name__, exc
+            )
+            return False
+        return _create_file(job, filename, content)
+    row = job._artifact_device
+    metadata = {"name": filename, "bytes": 0, "sha256": None}
+    row["files"].append(metadata)
+    try:
+        sink.add(filename, payload, device=row["id"], metadata=metadata)
+    except SoftTimeLimitExceeded:
+        metadata["not_attached"] = True
+        raise
+    except Exception as exc:
+        metadata["not_attached"] = True
+        job.logger.warning("Failed to stage artifact %s: %s: %s", filename, type(exc).__name__, exc)
+    return not metadata.get("not_attached", False)
+
+
+def _artifact_max_bytes():
+    """The same configured byte limit Job.create_file enforces."""
+    return int(get_settings_or_config("JOB_CREATE_FILE_MAX_SIZE", fallback=C.ARTIFACT_MAX_BYTES))
 
 
 class CaptureSnapshot(Job):
@@ -246,13 +286,19 @@ class CaptureSnapshot(Job):
         default=False,
         description="Attach a full-payload transport trace per device to diagnose a failed check.",
     )
+    artifact_format = ChoiceVar(
+        choices=(("files", "Separate JSON files"), ("zip", "One zip file")),
+        default="files",
+        description="Attach each device's files separately, or all of them in one zip.",
+    )
 
     class Meta:
         name = "Test Suite Capture"
         description = (
             "Collects a read-only operational snapshot from each selected device and "
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
-            "`raw_*.json` evidence bundle per device."
+            "`raw_*.json` evidence bundle per device, with a run manifest "
+            "and optional zip download."
         )
         has_sensitive_variables = False
         read_only = True
@@ -268,6 +314,7 @@ class CaptureSnapshot(Job):
             "change_description",
             "kind",
             "secrets_group",
+            "artifact_format",
             "dryrun",
             "debug",
         ]
@@ -283,6 +330,7 @@ class CaptureSnapshot(Job):
         secrets_group=None,
         dryrun=False,
         debug=False,
+        artifact_format="files",
     ):
         """Snapshot every selected device. Every kwarg defaults (ScheduledJob rule)."""
         self.logger.info("Test Suite Capture starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
@@ -296,6 +344,14 @@ class CaptureSnapshot(Job):
             )
         if kind not in dict(KINDS):
             raise RuntimeError("kind must be one of: %s" % (", ".join(dict(KINDS)),))
+        if artifact_format not in ("files", "zip"):
+            raise RuntimeError("artifact_format must be one of: files, zip")
+        try:
+            bundle.validate_device_names(device.name for device in device_list)
+        except ValueError as exc:
+            raise RuntimeError(
+                "%s — capture them in separate runs or use distinct names." % exc
+            ) from None
         if package not in ("", "full", None):
             # Retired input, kept in the signature so stored ScheduledJob
             # kwargs replay cleanly. Capture is always-everything by doctrine.
@@ -305,60 +361,160 @@ class CaptureSnapshot(Job):
                 package,
             )
 
-        succeeded, failed = [], []
-        for index, device in enumerate(device_list):
-            try:
-                ok = self._capture_device(
-                    device,
-                    change_id=change_id,
-                    change_description=str(change_description or "").strip(),
+        manifest = {
+            "schema": 1,
+            "change_id": change_id,
+            "kind": kind,
+            "job_result_id": str(self.job_result.pk),
+            "user": str(self.user),
+            "job_version": C.JOB_VERSION,
+            "started": envelope.utcnow_iso(),
+            "finished": None,
+            # Only names and actual capture inputs; never a credential or secret value.
+            "inputs": {
+                "devices": [device.name for device in device_list],
+                "artifact_format": artifact_format,
+                "debug": bool(debug),
+                "dryrun": bool(dryrun),
+            },
+            "devices": [
+                {
+                    "name": device.name,
+                    "id": str(device.pk),
+                    "location": str(getattr(device, "location", "") or ""),
+                    "role": str(getattr(device, "role", "") or ""),
+                    "platform": str(getattr(device, "platform", "") or ""),
+                    "source": ["devices"],
+                    "disposition": "capture",
+                    "reason": None,
+                    "outcome": "not_visited",
+                    "duration_s": None,
+                    "files": [],
+                }
+                for device in device_list
+            ],
+            "controllers": [],
+        }
+        attach = lambda filename, content: _create_file(self, filename, content)  # noqa: E731
+        if artifact_format == "zip":
+            self._artifact_sink = bundle.ZipSink(
+                attach,
+                kind=kind,
+                filename=C.ZIP_FILENAME.format(
+                    change_id=envelope.safe_name(change_id),
                     kind=kind,
-                    package=package,
-                    secrets_group=secrets_group,
-                    dryrun=dryrun,
-                    debug=debug,
-                )
-            except SoftTimeLimitExceeded:
-                # The soft/hard gap exists to persist what we have — the current
-                # device's partial envelope is already attached by _capture_device.
-                # Moving on to another device would burn the gap on fresh I/O.
-                not_visited = [dev.name for dev in device_list[index + 1 :]]
-                raise RuntimeError(
-                    "Soft time limit reached during %s — partial artifacts attached; "
-                    "device(s) not visited: %s. Succeeded so far: %s"
-                    % (
+                    timestamp=manifest["started"][:16].replace("-", "").replace(":", "") + "Z",
+                ),
+                max_bytes=_artifact_max_bytes(),
+                warn=self.logger.warning,
+            )
+        else:
+            self._artifact_sink = bundle.FileSink(attach, warn=self.logger.warning)
+        succeeded, failed = [], []
+        try:
+            for index, device in enumerate(device_list):
+                self._artifact_device = manifest["devices"][index]
+                started_device = time.monotonic()
+                ok = False
+                try:
+                    ok = self._capture_device(
+                        device,
+                        change_id=change_id,
+                        change_description=str(change_description or "").strip(),
+                        kind=kind,
+                        package=package,
+                        secrets_group=secrets_group,
+                        dryrun=dryrun,
+                        debug=debug,
+                    )
+                except SoftTimeLimitExceeded:
+                    # Finalize the partial run instead of spending the soft/hard gap on fresh I/O.
+                    not_visited = [dev.name for dev in device_list[index + 1 :]]
+                    raise RuntimeError(
+                        "Soft time limit reached during %s — partial artifacts attached; "
+                        "device(s) not visited: %s. Succeeded so far: %s"
+                        % (
+                            device.name,
+                            ", ".join(not_visited) or "none",
+                            ", ".join(succeeded) or "none",
+                        )
+                    ) from None
+                except Exception as exc:  # one device must never stop the batch
+                    self.logger.error(
+                        "%s: unexpected device-level failure: %s: %s",
                         device.name,
-                        ", ".join(not_visited) or "none",
+                        type(exc).__name__,
+                        exc,
+                        extra={"object": device},
+                    )
+                finally:
+                    self._artifact_device["outcome"] = "succeeded" if ok else "failed"
+                    self._artifact_device["duration_s"] = round(
+                        time.monotonic() - started_device, 3
+                    )
+                (succeeded if ok else failed).append(device.name)
+
+            if failed:
+                raise RuntimeError(
+                    "Snapshot failed for %d of %d device(s) — failed: %s; succeeded: %s"
+                    % (
+                        len(failed),
+                        len(device_list),
+                        ", ".join(failed),
                         ", ".join(succeeded) or "none",
                     )
-                ) from None
-            except Exception as exc:  # one device must never stop the batch
-                self.logger.error(
-                    "%s: unexpected device-level failure: %s: %s",
-                    device.name,
-                    type(exc).__name__,
-                    exc,
-                    extra={"object": device},
                 )
-                ok = False
-            (succeeded if ok else failed).append(device.name)
-
-        if failed:
-            raise RuntimeError(
-                "Snapshot failed for %d of %d device(s) — failed: %s; succeeded: %s"
-                % (
-                    len(failed),
-                    len(device_list),
-                    ", ".join(failed),
-                    ", ".join(succeeded) or "none",
-                )
+            return "Captured %s snapshot for %d device(s) under change %s: %s" % (
+                kind,
+                len(succeeded),
+                change_id,
+                ", ".join(succeeded),
             )
-        return "Captured %s snapshot for %d device(s) under change %s: %s" % (
-            kind,
-            len(succeeded),
-            change_id,
-            ", ".join(succeeded),
-        )
+        finally:
+            manifest["finished"] = envelope.utcnow_iso()
+            manifest_filename = C.MANIFEST_FILENAME.format(
+                change_id=envelope.safe_name(change_id), kind=kind
+            )
+            self._artifact_finalizing = True
+            finalize_timed_out = False
+            try:
+                for attempt in range(2):
+                    try:
+                        if artifact_format == "files":
+                            # A signal can arrive after create_file persists a file but before
+                            # add returns. Reconcile interrupted attachments before the manifest.
+                            attached = set(self.job_result.files.values_list("name", flat=True))
+                            for row in manifest["devices"]:
+                                for item in row["files"]:
+                                    if item["name"] in attached:
+                                        item.pop("not_attached", None)
+                        self._artifact_sink.finish(manifest_filename, manifest)
+                        break
+                    except SoftTimeLimitExceeded:
+                        finalize_timed_out = True
+                        if attempt:
+                            raise
+                        self.logger.warning(
+                            "Soft time limit reached while packaging artifacts — "
+                            "retrying finalization in the cleanup window."
+                        )
+                    except Exception as exc:
+                        self.logger.warning(
+                            "Failed to finalize capture artifacts: %s: %s",
+                            type(exc).__name__,
+                            exc,
+                        )
+                        break
+            finally:
+                self._artifact_sink.close()
+                self._artifact_sink = None
+                self._artifact_device = None
+                self._artifact_finalizing = False
+            if finalize_timed_out:
+                raise RuntimeError(
+                    "Soft time limit reached while packaging artifacts — "
+                    "finalization was retried; check the downloads and warnings."
+                ) from None
 
     def _open_host(self, device, platform, host, secrets_group):
         """(restconf, ssh, api, error): the host platform's transports, opened and probed.
