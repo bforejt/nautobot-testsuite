@@ -27,6 +27,11 @@ FRAMEWORK_NAME = "nautobot-testsuite"
 SNAPSHOT_FILENAME = "snapshot_{device}_{change_id}.json"
 RAW_FILENAME = "raw_{device}_{change_id}.json"
 DEBUG_FILENAME = "debug_{device}_{change_id}.json"
+MANIFEST_FILENAME = "manifest_{change_id}_{kind}.json"
+ZIP_FILENAME = "testsuite_{change_id}_{kind}_{timestamp}.zip"
+# Nautobot's default; ZipSink uses the configured JOB_CREATE_FILE_MAX_SIZE
+# when present, including Constance overrides.
+ARTIFACT_MAX_BYTES = 10 * 1024 * 1024
 SHAKEDOWN_FILENAME = "shakedown_{device}.json"
 SHAKEDOWN_TRACE_FILENAME = "shakedown-trace_{device}.json"
 

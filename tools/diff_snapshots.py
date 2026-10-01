@@ -11,6 +11,11 @@ being rediscovered by eyeball.
 Usage:
     python3 tools/diff_snapshots.py --pre pre/*.json --post post/*.json \
         -o diff-index.json
+    python3 tools/diff_snapshots.py --pre pre.zip --post post.zip -o diff-index.json
+
+Each side accepts snapshot files, zip downloads, or a mixture (including all
+parts of a split download). Zip snapshots are read directly, without extracting
+files. Raw, debug, and manifest siblings are ignored in both formats.
 
 Devices pair by name across the two sides; unpaired devices (a replaced
 firewall appears pre-only and post-only under different names) are listed as
@@ -24,6 +29,8 @@ import json
 import pathlib
 import sys
 import types
+import zipfile
+import zlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # Import the pure jobs modules without executing jobs/__init__ (which needs
@@ -35,31 +42,90 @@ diffcore = importlib.import_module("jobs.diffcore")
 envelope = importlib.import_module("jobs.envelope")
 
 
+def _parse_snapshot(label, source, content):
+    try:
+        env = json.loads(content)
+    except ValueError as exc:
+        sys.exit("%s: unreadable snapshot %s: %s" % (label, source, exc))
+    if not isinstance(env, dict) or "schema_version" not in env:
+        sys.exit("%s: %s is not a snapshot envelope (no schema_version)" % (label, source))
+    for field in ("device", "framework", "checks"):
+        if env.get(field) is not None and not isinstance(env[field], dict):
+            sys.exit("%s: invalid snapshot %s: %s must be an object" % (label, source, field))
+    name = (env.get("device") or {}).get("name")
+    if name is not None and not isinstance(name, str):
+        sys.exit("%s: invalid snapshot %s: device.name must be a string" % (label, source))
+    for check_id, check in (env.get("checks") or {}).items():
+        if not isinstance(check, dict):
+            sys.exit(
+                "%s: invalid snapshot %s: checks.%s must be an object" % (label, source, check_id)
+            )
+        for field in ("normalized", "compare", "describe"):
+            if check.get(field) is not None and not isinstance(check[field], dict):
+                sys.exit(
+                    "%s: invalid snapshot %s: checks.%s.%s must be an object"
+                    % (label, source, check_id, field)
+                )
+    return env
+
+
+def _snapshots(label, path):
+    """Yield source, basename, envelope; archives are never extracted."""
+    path = pathlib.Path(path)
+    if path.suffix.lower() == ".zip":
+        try:
+            with zipfile.ZipFile(path) as archive:
+                for member in sorted(archive.infolist(), key=lambda item: item.filename):
+                    name = pathlib.PurePosixPath(member.filename).name
+                    if member.is_dir() or not (
+                        name.startswith("snapshot_") and name.endswith(".json")
+                    ):
+                        continue
+                    source = "%s!%s" % (path, member.filename)
+                    try:
+                        content = archive.read(member)
+                    except (
+                        OSError,
+                        zipfile.BadZipFile,
+                        RuntimeError,
+                        NotImplementedError,
+                        EOFError,
+                        zlib.error,
+                    ) as exc:
+                        sys.exit("%s: unreadable snapshot %s: %s" % (label, source, exc))
+                    yield source, name, _parse_snapshot(label, source, content)
+        except (OSError, UnicodeError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+            sys.exit("%s: unreadable zip %s: %s" % (label, path, exc))
+    else:
+        if path.suffix == ".json" and path.name.startswith(("raw_", "debug_", "manifest_")):
+            return
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            sys.exit("%s: unreadable snapshot %s: %s" % (label, path, exc))
+        yield str(path), path.name, _parse_snapshot(label, str(path), content)
+
+
 def _load_side(label, paths):
-    """{device_name: envelope} from snapshot files; newest capture wins per device."""
+    """{device_name: envelope} from files/zips; newest capture wins per device."""
     side = {}
     for path in paths:
-        try:
-            env = json.loads(pathlib.Path(path).read_text())
-        except (OSError, ValueError) as exc:
-            sys.exit("%s: unreadable snapshot %s: %s" % (label, path, exc))
-        if not isinstance(env, dict) or "schema_version" not in env:
-            sys.exit("%s: %s is not a snapshot envelope (no schema_version)" % (label, path))
-        major = str(env.get("schema_version", "")).split(".", 1)[0]
-        if major != "1":
-            print(
-                "warning: %s has schema %s; this tool speaks 1.x — results may "
-                "be unreliable" % (path, env.get("schema_version")),
-                file=sys.stderr,
-            )
-        name = (env.get("device") or {}).get("name") or pathlib.Path(path).name
-        held = side.get(name)
-        if held is not None:
-            new_at = envelope.parse_iso(env.get("captured_at"))
-            held_at = envelope.parse_iso(held.get("captured_at"))
-            if new_at is not None and held_at is not None and new_at <= held_at:
-                continue
-        side[name] = env
+        for source, basename, env in _snapshots(label, path):
+            major = str(env.get("schema_version", "")).split(".", 1)[0]
+            if major != "1":
+                print(
+                    "warning: %s has schema %s; this tool speaks 1.x — results may "
+                    "be unreliable" % (source, env.get("schema_version")),
+                    file=sys.stderr,
+                )
+            name = (env.get("device") or {}).get("name") or basename
+            held = side.get(name)
+            if held is not None:
+                new_at = envelope.parse_iso(env.get("captured_at"))
+                held_at = envelope.parse_iso(held.get("captured_at"))
+                if new_at is not None and held_at is not None and new_at <= held_at:
+                    continue
+            side[name] = env
     if not side:
         sys.exit("%s side: no snapshot envelopes loaded" % (label,))
     return side
@@ -109,8 +175,10 @@ def _diff_pair(pre_env, post_env):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--pre", nargs="+", required=True, help="pre-change snapshot files")
-    parser.add_argument("--post", nargs="+", required=True, help="post-change snapshot files")
+    parser.add_argument("--pre", nargs="+", required=True, help="pre-change snapshot files or zips")
+    parser.add_argument(
+        "--post", nargs="+", required=True, help="post-change snapshot files or zips"
+    )
     parser.add_argument("-o", "--out", help="write the index here (default: stdout)")
     args = parser.parse_args(argv)
 
