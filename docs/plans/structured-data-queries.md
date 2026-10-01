@@ -49,18 +49,57 @@ transport:
   data" rather than "parser broken". Several advisories in the shakedown
   exist to catch exactly that.
 
-### 1a. Verbatim documents (decision D5, open)
+### 1a. Design-level exceptions (D5)
 
-Some reads capture a whole document **as the data**, rather than pulling
-fields out of a display: the running and startup configuration, and log
-messages. Storing a document whole and diffing its lines isn't scraping in
-the sense above.
+**Decision D5 (the user, 2026-10-01):** two unstructured reads are
+reasonable, and are called out as exceptions **needed at a design level**.
+**Every other unstructured read needs its own justification** (§4).
 
-**Recommendation:** a verbatim document captured whole is acceptable, and
-declared as such. **Any field values parsed out of it are scraping.**
-Examples are the `show logging` header counters, or the header lines
-stripped out of a config. Those count as unstructured reads and fall under
-§4.
+**Exception A: the running and startup configuration as text**
+(`iosxe_config`: `show running-config`, `show startup-config`).
+
+- *What it does:* it keeps every line, redacted, as one object per config,
+  and compares the two line by line to report unsaved changes. It pulls no
+  values out of the text, apart from a few facts in the header lines
+  ("Last configuration change at …").
+- *Why it is needed:* the text is the device's own input language, the
+  configuration exactly as an operator writes and reads it, so its layout is
+  the syntax rather than a display. It is also the only complete record:
+  - `Cisco-IOS-XE-native` gives the running config as JSON but omits every
+    line it doesn't model;
+  - the startup config has no structured source at all (no startup
+    datastore is advertised, only the `unsaved-config` bool).
+
+**Exception B: the logging buffer** (`iosxe_syslog_errors`: `show logging`).
+
+- *What it does:* it keeps **no line text**, by design, because log lines
+  name users and can carry typed commands. It parses each line's
+  `%FACILITY-SEVERITY-MNEMONIC` tag and counts events by type: every
+  severity 0–3 event, plus a curated set of severity 4–5 transients
+  (err-disable, STP, FHRP, MAC flaps, PoE, 802.1X, duplicate addresses). It
+  also reads the buffer header's facts (counters, size, the oldest line's
+  timestamp and tag).
+- *Why it is needed:* the tag is Cisco's documented message format, not a
+  screen layout. Events that heal before a capture leave no trace in any
+  state model; the buffer is the only record of them. And the buffer has no
+  structured source on cat9k: `openconfig-system/messages` is deviated
+  not-supported, and `CISCO-SYSLOG-MIB`'s history table is a different,
+  smaller table.
+- The header facts ride with the exception as part of the same read.
+
+**What being a design-level exception means:**
+
+- Both are declared like every other unstructured read (§4): in the
+  register, the check context, the envelope and the job log. The README
+  lists them under their own heading, **"Design-level exceptions"**, above
+  the justified list, with the reasons above.
+- They carry **no shrink target**. They are revisited only if a structured
+  source appears that covers the whole of what they capture (for A, a
+  startup datastore and complete native coverage; for B, a modelled
+  buffer). A structured complement may be added beside them (for example
+  native YANG config next to the text), but it doesn't replace them.
+- Adding a third design-level exception takes an explicit user decision,
+  recorded in this section. The register can't grow one quietly.
 
 ## 2. PAN-OS
 
@@ -81,8 +120,10 @@ These reads still pull values out of text:
 
 "None known" is from documentation and the code. The lab firewall the user
 will provide (D3) is where each command's real output is checked, and where
-any structured alternative is tried. Until then these reads are declared
-(§4), not removed.
+any structured alternative is tried. None is a design-level exception (§1a),
+so each needs a `justified` register entry (gap, value, exit) to stay.
+Until the lab firewall settles them, they are declared with provisional
+justifications, not removed.
 
 ## 3. IOS-XE
 
@@ -123,11 +164,11 @@ anything.
 | `show switch stack-ports summary` | iosxe_switch_stack | `stack-oper` port state + `stack-member-oper` cable length and link flaps | link_ok, link_active, sync_ok, loopback |
 | `dir crashinfo-<N>:` and related | iosxe_crash_files | `platform-software-oper` `q-filesystem/partitions/partition-content` | per-member coverage on a stack (the lab showed one location, chassis −1) |
 | `show etherchannel summary` | iosxe_port_channels | `lacp-oper` (per-member state on **17.15+**), `interfaces-oper` `lag-aggregate-state/members`, native `channel-group/mode` | per-member flags for PAgP and static (`on`) bundles; nothing on the 9800 |
-| `show running-config` | iosxe_config | `Cisco-IOS-XE-native:native` (structured config) | a verbatim document (D5); native omits unmodelled lines, so the text stays the complete record |
-| `show startup-config` | iosxe_config | none: no startup datastore is advertised; only the `unsaved-config` bool | a verbatim document (D5) |
-| `show logging` (buffer) | iosxe_syslog_errors | none: `openconfig-system/messages` is deviated not-supported on cat9k | the messages are a verbatim document (D5); the header counters are scraped |
+| `show running-config` | iosxe_config | `Cisco-IOS-XE-native:native` (structured config) | **design-level exception A** (§1a); native omits unmodelled lines, so the text stays the complete record |
+| `show startup-config` | iosxe_config | none: no startup datastore is advertised; only the `unsaved-config` bool | **design-level exception A** (§1a) |
+| `show logging` (buffer) | iosxe_syslog_errors | none: `openconfig-system/messages` is deviated not-supported on cat9k | **design-level exception B** (§1a): event-tag counts and header facts; no line text is kept |
 | `show sdm prefer` | iosxe_persistence | `native/sdm/prefer` (config; the enum lacks most real template names) | **no structured equivalent** for the template in effect |
-| `show privilege` | iosxe_config | none | **no structured equivalent**; possibly unneeded if config comes from native, which needs privilege 15 |
+| `show privilege` | iosxe_config | none | **no structured equivalent.** It is *not* part of exception A: it is a separate scraped read (a lower-privileged session is shown only part of the config, so the check warns), and it needs its own justification, or a structured way to prove the session sees the whole config |
 
 **Bridges to try, both unverified:**
 
@@ -171,16 +212,26 @@ anything.
 No unstructured read happens silently, on any platform or transport.
 
 **The register is the only list.** `C.UNSTRUCTURED_READS` lists every read
-that parses display text or captures a verbatim document. Each entry
-records:
+that doesn't return structured data. Each entry records:
 
 - the platform, the command, and the check ids;
-- its kind: `scraped` (field values parsed out of display text) or
-  `verbatim` (a document kept whole, D5);
-- which fields have no structured source;
-- the models and alternatives checked, and on which release;
-- a revisit condition: "fleet on 17.15+", "SMIv2 bridge proven", or "lab
-  firewall shows an XML form".
+- its class:
+  - **`design`:** one of the two design-level exceptions in §1a. The class
+    is closed: only §1a may add a member;
+  - **`justified`:** everything else, each with a written justification.
+- for `justified` entries, the **justification**. It answers three
+  questions, and an entry missing any of them fails review:
+  1. **Gap:** which fields have no structured source on the fleet's release
+     (17.12), with the models and alternatives checked named;
+  2. **Value:** why those fields are worth keeping, by the capture-general
+     yardstick (the layer of state they cover, how many kinds of change
+     consume them, and that they can't be derived from what is already
+     captured);
+  3. **Exit:** the revisit condition ("fleet on 17.15+", "SMIv2 bridge
+     proven", "lab firewall shows an XML form").
+
+  A read whose justification fails is moved to structured data, narrowed to
+  the fields that pass, or dropped, and the drop is recorded in this plan.
 
 **CI pins it from both directions:**
 
@@ -195,20 +246,22 @@ records:
 **Every use is loud, in four places:**
 
 1. **The check entry.** Its `context` carries
-   `data_form: "structured" | "scraped" | "verbatim"`, plus the register's
-   reason when it isn't structured.
+   `data_form: "structured" | "unstructured"`. An unstructured read adds
+   `exception: "design" | "justified"` and the register's reason.
 2. **The envelope.** A top-level `unstructured_reads` list holds the
-   commands used, their checks, their kind and their reason. An analyst, or
+   commands used, their checks, their class and their reason. An analyst, or
    the LLM, sees it without opening every check. This is schema 1.3,
    additive.
 3. **The job log.** One WARNING per device names every unstructured read
    used, for example "Unstructured read: `show sdm prefer`
-   (iosxe_persistence, scraped): no structured source for the template in
-   effect on 17.12."
-4. **The README.** A "Declared unstructured reads" section is tested against
-   the register, so the docs can't drift.
+   (iosxe_persistence, justified): no structured source for the template
+   in effect on 17.12." Design-level exceptions are logged too, at INFO,
+   since they are expected on every IOS-XE capture.
+4. **The README.** It has two sections, "Design-level exceptions" and
+   "Justified unstructured reads", both tested against the register so the
+   docs can't drift.
 
-**Shrinking means three things:**
+**Shrinking applies to `justified` entries only. It means three things:**
 
 - Justify each exception **per field**, not per command. A check reads
   structured data for everything modelled and keeps the text read only for
@@ -273,5 +326,7 @@ the same code, so they can go in between.
 - **Set aside:** D2 (PAN-OS Basic auth) and the whole PAN-OS XML API
   migration. If either ever returns, it will be for a reason other than
   this rule.
-- **Open:** D5, whether verbatim documents are acceptable when declared
-  (§1a, recommended yes).
+- **D5:** the running and startup config as text (A) and the logging
+  buffer (B) are **design-level exceptions**, called out as such (§1a).
+  **Every other unstructured read needs a justification** (§4), on both
+  platforms.
