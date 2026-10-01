@@ -195,7 +195,10 @@ anything.
   against one production 17.12 device of each.
 - **Before the downgrade:**
   - Harvest one full debug shakedown on 17.15.6 as the 17.15 reference for
-    that revisit.
+    that revisit. **Done 2026-10-01** (19:56 UTC, about ten minutes after a
+    boot, so the AP was up): 45 checks, 30 ok, 15 not-present, 0 failed.
+    `crypto-pki-oper` answered HTTP 500 again (F7). It is kept unsanitized
+    outside the repository, in the lab notes, and is not a fixture.
   - Label the existing `tests/fixtures/*_lab*` captures as 17.15.6. They are
     kept; they're the only record of 17.15 shapes.
 - **After the downgrade:**
