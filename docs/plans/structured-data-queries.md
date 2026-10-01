@@ -170,9 +170,11 @@ anything.
 | `show sdm prefer` | iosxe_persistence | `native/sdm/prefer` (config; the enum lacks most real template names) | **no structured equivalent** for the template in effect |
 | `show privilege` | iosxe_config | none | **no structured equivalent.** It is *not* part of exception A: it is a separate scraped read (a lower-privileged session is shown only part of the config, so the check warns), and it needs its own justification, or a structured way to prove the session sees the whole config |
 
-**Bridges to try, both unverified:**
+**Bridges to try:**
 
-- **SMIv2 MIB modules over RESTCONF.** The yang-sets list `CISCO-VTP-MIB`,
+- **SMIv2 MIB modules over RESTCONF: tried and dropped (§3.5).** All four
+  GETs timed out at 120 s on 17.12.8. The original rationale, kept for the
+  record: The yang-sets list `CISCO-VTP-MIB`,
   `CISCO-SYSLOG-MIB`, `CISCO-RF-MIB` and `CISCO-CONFIG-MAN-MIB` as
   implemented. They would cover the VTP revision, syslog history,
   switchover history and config-change timestamps. Whether RESTCONF serves
@@ -201,13 +203,55 @@ anything.
     outside the repository, in the lab notes, and is not a fixture.
   - Label the existing `tests/fixtures/*_lab*` captures as 17.15.6. They are
     kept; they're the only record of 17.15 shapes.
-- **After the downgrade:**
-  - Confirm RESTCONF, SSH and the VLAN 2 management path came back. A saved
-    configuration from a newer release can lose lines.
-  - Re-run the shakedown on 17.12.
+- **After the downgrade:** done 2026-10-01. The lab came back on
+  **17.12.8** with RESTCONF and SSH working, and was harvested at the same
+  point after boot (§3.5).
 - **A check may need to be release-aware.** It reads the newer model where
   it is served and falls back to the declared read where it isn't, and the
   declaration (§4) says so in the snapshot.
+
+### 3.5 Field results: lab 9300, 17.15.6 vs 17.12.8 (2026-10-01)
+
+Two read-only harvests (`tools/harvest_live.py`, every check plus the
+fixture reads), each about ten minutes after a boot:
+
+- 17.15.6 before the downgrade;
+- 17.12.8 after it;
+- then targeted GETs of the candidates in §3.2 and §3.3, on 17.12.8 only.
+
+The harvests and probe bodies are kept unsanitized in the lab notes, outside
+the repository.
+
+**Harvest comparison:**
+
+- Both releases: 45 checks, 30 ok, 15 not-present, 0 failed.
+- **Every request the harvest made had the same outcome on both releases.**
+  Nothing the checks read today disappears on 17.12.
+- The value differences were mostly state: versions, boot time, reload
+  reason, MAC counts, and boot-time log events. Three are **release-shape**
+  differences, recorded as F8–F10 in §5.
+- The running and startup configs differ by about 50 lines between the
+  releases with no operator change: the version line, one added `platform`
+  line, and the system-generated CoPP class descriptions re-indented and
+  reworded. That is analysis material for an upgrade prompt
+  (`docs/prompts/`), not a collector change.
+
+**Candidate probes on 17.12.8:**
+
+| Candidate (plan row) | Result | Verdict |
+| --- | --- | --- |
+| `crypto-pki-oper` container and `…/crypto-pki-bundle` (§3.2, F7) | **HTTP 500** on both, on 17.12.8 and (container) on 17.15.6 | Not usable on either release. A per-label GET is untried. The CLI read needs a justification. |
+| `stack-oper` (§3.2) | 200: `stack-info`, `stack-node` | Served; the stack-roster move is viable |
+| `stack-member-oper` (§3.3, stack ports) | 200: per port `cable-length-cm`, `nbr-port-num`, `link-flaps`, RAC error counters | Served, and richer than expected; `link_ok`, `sync_ok` and `loopback` are still to be matched |
+| OC `switched-vlan` on the live trunk (Te1/0/47) (§3.3, trunks) | 200: `interface-mode` TRUNK and `native-vlan` 999 only | **No allowed, active or forwarding VLAN sets** on 17.12. The trunk read stays justified for those. |
+| `switchport-oper` (§3.3) | 404 | As predicted: 17.15+ only |
+| LACP per-member state (§3.3) | The harvest's `lag-oper-data` read answers on both releases, but member `state` is `down` on 17.15.6 and **null** on 17.12.8 | Confirms per-member state is 17.15+ (F10) |
+| `ha-oper` (§3.3, `show redundancy`) | 200: `ha-infra` (state, peer state, last switchover time and reason, mode, image version) | Served, with **no switchover count**, as the YANG said |
+| `transceiver-oper` (§3.3, optics) | 204: the lab has no transceivers that report power | Inconclusive; needs a device with optics that report power |
+| native `vtp` and native `sdm` (§3.3) | 204: nothing in native config | **No structured source** for VTP or the SDM template on 17.12; both reads need justifications |
+| `q-filesystem` (§3.3, crashinfo) | 200 (219 KB), one location | Served; per-member coverage can't be tested on a one-member lab |
+| RIB `ietf-ospf` `route-type` (§3.2) | 200; 0 occurrences | Inconclusive: the lab has no OSPF-learned routes. Needs a production 17.12 router or an OSPF neighbour in the lab. |
+| SMIv2 MIB bridges (`CISCO-SYSLOG-MIB`, `CISCO-RF-MIB`, `CISCO-CONFIG-MAN-MIB`, `CISCO-VTP-MIB`) | **All four timed out at 120 s** | **Not viable.** A capture must never wait 4×120 s, so this bridge is dropped. |
 
 ## 4. Declared unstructured reads: shrink them, and make every use loud (D1)
 
@@ -289,7 +333,10 @@ they are bugs, not because of any transport preference.
 | F4 | `checks_panos.py` `_collect_syslog_events` (`:1802`), `_parse_core_files` (`:1502-1506`) | The log window and the `ls` times are built and read as UTC, but PAN-OS works in the firewall's **local** time | On a firewall not set to UTC, the 24-hour window shifts and a crash file can cross the 7-day cut-off. Unverified on a device; check on the lab firewall. |
 | F5 | `tests/fixtures/panos_session_count_xml.txt` | It echoes `… from-zone trust to-zone untrust …`, not the field-proven `from … to …` form | The parser doesn't care, but the fixture is misleading |
 | F6 | `checks_panos.py` panos_bgp_peers, panos_dhcp | `show advanced-routing bgp peer` is probably `… bgp peer status` on ARE, and `show dhcp server lease all` may really be `… lease interface all` | These may already be skipping or failing on real firewalls. Unverified; settle on the lab firewall (`debug cli on` shows the accepted forms). |
-| F7 | iosxe_pki | `crypto-pki-oper-data` answered HTTP 500 on the lab 9300 (17.15.6) | The check depends on its text fallback today; re-test on 17.12 (§3.2) |
+| F7 | iosxe_pki | `crypto-pki-oper-data` answers HTTP 500 on the lab 9300 on **both** 17.15.6 and 17.12.8, and so does the narrower `…/crypto-pki-bundle` (§3.5) | The check depends on its text fallback. A per-label GET is the last structured option; otherwise the read needs a justification. |
+| F8 | iosxe_mac_table | The model reports interface names in **long form on 17.15.6** (`TenGigabitEthernet1/0/47`) and **short form on 17.12.8** (`Te1/0/47`), and the check keys on them | Across an upgrade every MAC entry's key changes, which reads as every MAC moving. Canonicalize interface names in normalization (one shared helper), and audit every check that keys on an interface name taken from a model. |
+| F9 | iosxe_routes_rib | Connected and local routes carry their next-hop interface on 17.12.8 but an **empty `next_hops`** on 17.15.6 | The check misses a leaf that moved on 17.15. Harmless on the 17.12 fleet, but a 17.12 → 17.15 upgrade would show every direct route's next hop vanish. Fix from the 17.15.6 harvest before the fleet upgrades. |
+| F10 | iosxe_port_channels | Member `state` is `down` on 17.15.6 and `null` on 17.12.8 (per-member LACP state is 17.15+) | A null reads as "unknown" with no reason given. Record in context that the release doesn't serve it, so a 17.12 → 17.15 upgrade doesn't look like a state change. |
 
 ## 6. Phasing
 
@@ -299,6 +346,9 @@ text to a model can change its keys.
 
 0. **Defects F1–F3 and F5** (small; no shape change). F4 and F6 wait for the
    lab firewall.
+0b. **Release-shape defects F8–F10.** F8 (interface-name canonicalization)
+   comes first: it changes keys, so it lands between change windows like
+   any shape change.
 1. **IOS-XE §3.1 deletions:** text fallbacks whose structured read is
    already primary. No data loss.
 2. **The register and the loud declarations** (§4), covering every
