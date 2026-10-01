@@ -154,11 +154,12 @@ dropped.
    group. The job also accepts the reverse orientation (interface as source)
    so an operator who created it the other way round is not punished.
    Verified on the 3.2.5 dev stack: both `extras.secretsgroup` and
-   `dcim.interface` are relationship-capable (169 models are). **Verify on
-   production 2.4.40** by opening the Relationship form and checking both
-   appear in the type dropdowns before relying on it (`SecretsGroup` is not
-   decorated with the `relationships` feature explicitly; the capability
-   comes from the model mixin, which 2.4 also has).
+   `dcim.interface` are relationship-capable (169 models are). **Verified in
+   production on 2.4.43** (2026-09-30, by the user): the Relationship was
+   created and a production device's BMC captured through it without issue
+   (`SecretsGroup` is not decorated with the `relationships` feature
+   explicitly; the capability comes from the model mixin, which 2.4 also
+   has).
 5. **The BMC account**: a local XCC user with a **ReadOnly** privilege (the
    built-in ReadOnly role, or a custom role whose OEM privilege is ReadOnly —
    on the lab unit roles CustomRole4–12 are such) and Redfish access
@@ -1085,8 +1086,9 @@ Recorded as they were found, each with how it was resolved.
       power-off delay over Redfish at all (`bmc_system`'s DMTF
       `power_off_delay_s` stays null there).
     - LDAP service addresses stay sorted; the rollout risk (§10a item 9) needs
-      no action; the user checks the Relationship form on 2.4.40 and reports
-      back; `jobs/checks_bmc.py` stays one module while it is functionally
+      no action; the Relationship works on production 2.4.43 (the user ran
+      the capture there against a production device, 2026-09-30);
+      `jobs/checks_bmc.py` stays one module while it is functionally
       complete; the dev stack's `se350-lab-1`, its Secrets Group, the
       Relationship and the deployed jobs stay for now.
 
