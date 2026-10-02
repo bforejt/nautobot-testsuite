@@ -205,6 +205,34 @@ stays at link state, speed/duplex and CDP/LLDP neighbor; VLAN hints, port
 groups, vmknics, routes, services, sensors and VM state are captured. Walk it
 and rank in this shape.
 
+## Proxmox VE — implementation complete, live release walk pending
+
+The platform has 41 checks. Every selected physical node captures both QEMU
+and LXC residents, including stopped guests and templates; shared cluster
+policy/topology is captured without implicitly visiting peer-node inventories.
+The mandatory visibility check reconciles node/guest/storage/pool API lists
+with native parsers and verifies exact audit grants for nodes, guests, storage,
+pools, mappings and configured/applied/pending SDN resources. Permission-filtered
+inventories fail capture.
+Fixture tests and imports in the Nautobot runtime validate the build; installed
+release and live permission/tool compatibility still require a lab shakedown.
+
+| Area | Captured evidence | Limits and recorded gaps |
+| --- | --- | --- |
+| Identity/hardware | Node/version/build, complete lshw tree, PCI/USB/driver/firmware, IOMMU/SR-IOV, CPU/NUMA/hugepages, applied KVM/sysctl/boot settings | Missing required JSON tools or unreadable sources fail; unsupported individual kernel attributes have provenance. BMC health remains in the existing interface capture. |
+| Network | Full configured/pending API network, applied links/addresses/bonds/bridges/VLANs, all-table IPv4/IPv6 routes and policy rules, DNS, LLDP, full neighbor/FDB raw evidence | Native network config/includes retained only for facts absent from the API. Learned neighbors/MACs and counters remain diagnostic evidence rather than stable keys. |
+| Host policy | Complete node/datacenter options, all Debian package states, Proxmox package/update-cache/repositories, services, timezone/sync, time/logging sources, certificates/subscription metadata | No package refresh/install or active probes. Credentials, private key/certificate bodies and personal contacts/operators are scrubbed before trace/cache/raw. |
+| Storage | Every storage definition, local applicability/status/content/volume attributes, disks/partitions/SMART, directory/LVM/thin/ZFS layouts and block JSON | Disabled/inactive stores explicitly lack content observations. Embedded backup-archive config requires write-capable API privileges and has a data-gap record. |
+| Guests | Full current/pending config, every disk/NIC/passthrough slot, tuning, startup/protection, snapshots/saved config, generated cloud-init user/network/meta documents, safe configured agent observations and LXC interfaces | Arbitrary custom cloud-init snippet bodies have explicit data-gap records; their configured references remain. No guest execution/console access. Agent permission failures identify the required read grant. |
+| Cluster | Membership/quorum/resources/Corosync, access users/groups/roles/realms/tokens/ACL, pools/mappings, HA, backup/replication, SDN/firewall including both states, notifications/metric destinations, Ceph topology/config/health and structured CRUSH | Precise absent/unconfigured component evidence becomes `not-present`; other failures remain failures. Detailed peer-node state requires selecting those nodes. |
+| History | Complete day/AVERAGE RRD arrays for node, active storage and every resident guest; all active tasks plus recent retained task detail/logs; structured journal and firewall events in the declared UTC window; retained replication logs | Histories are bounded, timestamped raw evidence. Older verified journal capability gaps use bounded local-time syslog with timezone/DST provenance. Pagination and request budgets are complete-or-refused. |
+| Packaging | Full redacted raw objects and partial evidence on failure, explicit source outcomes, text-read gap/value/exit declarations, indexed JSON parts for large evidence | The diff tool refuses missing indexes/parts or invalid checksums. No per-object truncation is presented as success. |
+
+See [Proxmox setup](../README.md#proxmox-ve-capture-one-time-setup) for the two
+credential pairs, scoped audit privileges and tool prerequisites. API/schema
+research against upstream source establishes candidate reads; it does not
+declare every Proxmox release live-verified.
+
 ## BMC (server baseboard management controllers over Redfish; Lenovo XCC walked)
 
 A server's BMC is modelled as an Interface on its host Device and captured in

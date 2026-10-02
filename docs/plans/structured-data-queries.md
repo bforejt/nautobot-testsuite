@@ -1,7 +1,11 @@
 # Plan: structured data queries to every device
 
-Status: **rule, decisions and field research recorded; implementation not
-started as of 2026-10-02.** This
+Status: **rule, decisions and field research recorded; existing-platform
+migrations not started as of 2026-10-02.** The Proxmox implementation now uses
+structured API/Linux reads with explicit justified native-text declarations.
+Envelope schema 1.3 provides the additive `unstructured_reads` register and
+lossless indexed artifact parts for that platform. This does not mark the
+IOS-XE/PAN-OS migration or their remaining text declarations complete. This
 document records:
 
 - the rule: query every device for structured data, never scrape

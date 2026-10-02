@@ -142,6 +142,23 @@ class TestZipDiff(unittest.TestCase):
         self.assertEqual(zip_index["unpaired"]["pre_only"][0]["device"], "retired")
         self.assertEqual(zip_index["unpaired"]["post_only"][0]["device"], "replacement")
 
+    def test_indexed_snapshot_parts_across_zip_downloads_match_original(self):
+        bundle = _loader.load("bundle")
+        pre = _snapshot("pve-lab", normalized={str(n): "x" * 100 for n in range(120)})
+        post = _snapshot("pve-lab", kind="post", normalized={str(n): "x" * 100 for n in range(121)})
+        pre_file = self._file("snapshot_pre.json", pre)
+        post_file = self._file("snapshot_post.json", post)
+        records = bundle.artifact_parts("snapshot_pve-lab_CHG1.json", pre, 4096)
+        paths = [
+            self._zip("part%d.zip" % number, {"pre/" + name: bundle.json_bytes(payload)})
+            for number, (name, payload) in enumerate(records)
+        ]
+        self.assertEqual(
+            self._index(paths[::-1], [post_file]), self._index([pre_file], [post_file])
+        )
+        with self.assertRaisesRegex(SystemExit, "missing artifact part"):
+            diff_snapshots._load_side("pre", paths[1:])
+
     def test_split_parts_mixed_with_files_use_newest_capture_in_any_order(self):
         old = _snapshot("core-1", normalized={"route": "old"})
         new = _snapshot("core-1", normalized={"route": "new"}, captured_at="2026-10-01T02:00:00Z")
@@ -159,6 +176,33 @@ class TestZipDiff(unittest.TestCase):
             with self.subTest(paths=paths):
                 actual = diff_snapshots._load_side("pre", paths)
                 self.assertEqual(actual, expected)
+
+    def test_orphaned_snapshot_parts_refuse_even_with_other_complete_snapshots(self):
+        bundle = _loader.load("bundle")
+        snapshot = _snapshot("large-node", normalized={"evidence": "x" * 9000})
+        records = bundle.artifact_parts("snapshot_large-node_CHG1.json", snapshot, 4096)
+        archive = self._zip(
+            "missing-index.zip",
+            {name: bundle.json_bytes(payload) for name, payload in records[:-1]},
+        )
+        other = self._file("snapshot_other-node_CHG1.json", _snapshot("other-node"))
+        with self.assertRaisesRegex(SystemExit, "missing multipart index"):
+            diff_snapshots._load_side("pre", [archive, other])
+
+    def test_raw_parts_for_device_named_snapshot_are_ignored(self):
+        bundle = _loader.load("bundle")
+        records = bundle.artifact_parts(
+            "raw_node_snapshot_lab_CHG1.json", {"evidence": "x" * 9000}, 4096
+        )
+        archive = self._zip(
+            "raw-parts.zip", {name: bundle.json_bytes(payload) for name, payload in records}
+        )
+        paths = []
+        for name, payload in records:
+            paths.append(self._file(name, payload))
+        other = self._file("snapshot_other-node_CHG1.json", _snapshot("other-node"))
+        for inputs in ([archive, other], paths + [other]):
+            self.assertEqual(set(diff_snapshots._load_side("pre", inputs)), {"other-node"})
 
     def test_newest_duplicate_member_wins_and_equal_time_keeps_first(self):
         older = _snapshot("core-1")

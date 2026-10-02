@@ -124,8 +124,8 @@ class TestEnvelopeRoundTrip(unittest.TestCase):
 class TestSchema12Targets(unittest.TestCase):
     """Schema 1.2 (additive): per-check target and the device.bmc block."""
 
-    def test_schema_version_is_1_2(self):
-        self.assertEqual(C.SCHEMA_VERSION, "1.2")
+    def test_schema_version_is_1_3(self):
+        self.assertEqual(C.SCHEMA_VERSION, "1.3")
 
     def test_every_entry_carries_its_target(self):
         env = envelope.new_envelope(

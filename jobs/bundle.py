@@ -6,6 +6,7 @@ holds the same objects, so a size-cap or attachment failure can mark evidence as
 ``not_attached`` without changing a device's capture outcome.
 """
 
+import base64
 import copy
 import hashlib
 import json
@@ -39,6 +40,107 @@ def json_bytes(payload):
 
 def _metadata(filename, data):
     return {"name": filename, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def artifact_parts(filename, payload, max_bytes):
+    """Lossless, independently attachable JSON parts plus a checksum index.
+
+    Ordinary artifacts retain their exact legacy serialization and filename.
+    Large native text, tables and snapshots are split as serialized bytes,
+    rather than truncating fields or changing the collector's data model.
+    """
+    if max_bytes < 1024:
+        raise ValueError("artifact part byte limit must be at least 1024")
+    data = json_bytes(payload)
+    reserve = min(4096, max_bytes // 4)
+    ceiling = max_bytes - reserve
+    if len(data) <= ceiling:
+        return [(filename, payload)]
+    checksum = hashlib.sha256(data).hexdigest()
+    # Base64 has a known upper bound and avoids splitting UTF-8 characters.
+    chunk_size = (ceiling - 512) * 3 // 4
+    if chunk_size < 1:
+        raise ValueError("artifact byte limit cannot hold a part header")
+    count = (len(data) + chunk_size - 1) // chunk_size
+    stem = filename[:-5] if filename.endswith(".json") else filename
+    result = []
+    entries = []
+    for offset in range(count):
+        name = "artifactpart_%s_%s_%04d.json" % (checksum[:16], stem, offset + 1)
+        part = {
+            "schema": 1,
+            "artifact": filename,
+            "encoding": "base64",
+            "part": offset + 1,
+            "part_count": count,
+            "artifact_sha256": checksum,
+            "data": base64.b64encode(data[offset * chunk_size : (offset + 1) * chunk_size]).decode(
+                "ascii"
+            ),
+        }
+        encoded = json_bytes(part)
+        if len(encoded) > ceiling:
+            raise ValueError("artifact part header exceeds reserved capacity")
+        entries.append(_metadata(name, encoded))
+        result.append((name, part))
+    index = {
+        "schema": 1,
+        "artifact": filename,
+        "encoding": "base64",
+        "bytes": len(data),
+        "sha256": checksum,
+        "parts": entries,
+    }
+    if len(json_bytes(index)) > ceiling:
+        raise ValueError("artifact part index exceeds attachment capacity")
+    result.append(("%s.%s.parts.json" % (stem, checksum[:16]), index))
+    return result
+
+
+def reassemble(index, parts):
+    """Validate an index and each original serialized part, then return bytes.
+
+    ``parts`` maps a filename to its serialized JSON bytes. No paths in an
+    index are ever opened; callers supply already downloaded evidence.
+    """
+    if not isinstance(index, dict) or index.get("schema") != 1 or index.get("encoding") != "base64":
+        raise ValueError("invalid artifact part index")
+    entries = index.get("parts")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("artifact part index has no parts")
+    chunks = []
+    names = set()
+    for number, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            raise ValueError("invalid artifact part entry")
+        name = entry["name"]
+        if name in names:
+            raise ValueError("duplicate artifact part")
+        names.add(name)
+        if name not in parts:
+            raise ValueError("missing artifact part %s" % name)
+        data = parts[name]
+        if len(data) != entry.get("bytes") or hashlib.sha256(data).hexdigest() != entry.get(
+            "sha256"
+        ):
+            raise ValueError("artifact part checksum mismatch: %s" % name)
+        part = json.loads(data)
+        if (
+            part.get("artifact") != index.get("artifact")
+            or part.get("part") != number
+            or part.get("part_count") != len(entries)
+            or part.get("encoding") != "base64"
+            or part.get("artifact_sha256") != index.get("sha256")
+        ):
+            raise ValueError("artifact part identity mismatch: %s" % name)
+        try:
+            chunks.append(base64.b64decode(part["data"], validate=True))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError("invalid artifact part encoding: %s" % name) from exc
+    data = b"".join(chunks)
+    if len(data) != index.get("bytes") or hashlib.sha256(data).hexdigest() != index.get("sha256"):
+        raise ValueError("reassembled artifact checksum mismatch")
+    return data
 
 
 def _filename_bytes(name):

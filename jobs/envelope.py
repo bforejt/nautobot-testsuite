@@ -57,6 +57,10 @@ INTERPRETATION_GUIDE = [
     "Raw command/API output for every check is preserved in a sibling "
     "raw_<device>_<change_id>.json artifact on the same JobResult, keyed by "
     "check id — the audit trail when the normalized view raises questions.",
+    "Large artifacts may be represented by an indexed .parts.json file and "
+    "numbered JSON parts. Reassemble the original UTF-8 bytes and verify the "
+    "index's byte count and SHA-256 before reading them. unstructured_reads "
+    "lists justified native configuration or log text used by a collector.",
     "change_id tags every capture belonging to one change; kind records which "
     "side of the change (pre/post/rollback/adhoc) this capture was taken on; "
     "change_description is the operator's statement of what the change is.",
@@ -92,6 +96,7 @@ def new_envelope(device_info, change_id, kind, package, check_ids, job_info, cha
         "package": package,
         "requested_checks": sorted(check_ids),
         "checks": {},
+        "unstructured_reads": [],
     }
 
 
@@ -140,6 +145,15 @@ def record_check(
         "context": context or {},
         "normalized": normalized if normalized is not None else {},
     }
+    record_unstructured_reads(envelope, check.id, context, target)
+
+
+def record_unstructured_reads(envelope, check_id, context, target="host"):
+    """Propagate native source declarations, including partially failed reads."""
+    for read in (context or {}).get("unstructured_reads", []):
+        declaration = dict(read, check=check_id, target=target)
+        if declaration not in envelope.setdefault("unstructured_reads", []):
+            envelope["unstructured_reads"].append(declaration)
 
 
 def envelope_summary(envelope):

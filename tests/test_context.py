@@ -88,6 +88,47 @@ class _FakeSsh:
         self.closed = True
 
 
+class TestExecStreamEvidence(unittest.TestCase):
+    def test_stdout_and_stderr_are_redacted_before_evidence_and_trace(self):
+        class Reply(str):
+            stderr = "password=exec-canary warning"
+            exit_status = 0
+
+        class Ssh:
+            def run(self, command):
+                return Reply("password=exec-canary reply")
+
+        ctx = context.CollectorContext("pve-lab", "proxmox", ssh=Ssh(), debug=True)
+
+        def mask(text):
+            return text.replace("exec-canary", "SCRUBBED")
+
+        result = ctx.run_ssh("fixed structured read", redact=mask)
+        self.assertNotIn("exec-canary", result)
+        self.assertNotIn("exec-canary", str(ctx.trace) + str(ctx._last_ssh_result))
+        self.assertEqual(ctx.trace[-1]["exit_status"], 0)
+        self.assertTrue(ctx._last_ssh_result["complete"])
+
+    def test_failed_exec_preserves_only_redacted_partial_streams(self):
+        class Failed(Exception):
+            stdout = "password=exec-canary partial"
+            stderr = "password=exec-canary error"
+            exit_status = 2
+
+        class Ssh:
+            def run(self, command):
+                raise Failed("safe command failure")
+
+        ctx = context.CollectorContext("pve-lab", "proxmox", ssh=Ssh(), debug=True)
+        with self.assertRaises(Failed):
+            ctx.run_ssh(
+                "fixed structured read", redact=lambda text: text.replace("exec-canary", "SCRUBBED")
+            )
+        self.assertNotIn("exec-canary", str(ctx.trace) + str(ctx._last_ssh_result))
+        self.assertEqual(ctx._last_ssh_result["exit_status"], 2)
+        self.assertFalse(ctx._last_ssh_result["complete"])
+
+
 class TestContextTrace(unittest.TestCase):
     def _ctx(self, debug=False):
         return context.CollectorContext(

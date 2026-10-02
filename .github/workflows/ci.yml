@@ -52,6 +52,19 @@ jobs:
             echo "ERROR: expected exactly one self.session.get( call site in $f, found $gets"; exit 1
           fi
 
+      # Proxmox is token-authenticated GET-only. Every request must cross its
+      # exact endpoint/query fence; no redirects, prepared sends or login path.
+      - name: Proxmox fence guard
+        run: |
+          set -e
+          f=jobs/transport_proxmox.py
+          grep -q 'request = fence_path(path)' "$f" || { echo "ERROR: $f no longer fences GET paths"; exit 1; }
+          gets=$(grep -c 'self.session.get(' "$f")
+          if [ "$gets" != "1" ]; then
+            echo "ERROR: expected exactly one self.session.get( call site in $f, found $gets"; exit 1
+          fi
+          grep -q 'allow_redirects=False' "$f" || { echo "ERROR: Proxmox redirects must stay refused"; exit 1; }
+
       # The vSphere transport speaks SOAP, which is HTTP POST by protocol. Its
       # read-only guarantee is an operation allowlist rather than a verb ban,
       # and this step pins every structural part of it:

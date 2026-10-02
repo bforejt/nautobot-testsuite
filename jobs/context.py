@@ -137,7 +137,7 @@ class _ChannelEchoGuard:
                     self.saved.clear()
 
 
-_CHANNEL_ECHO = _ChannelEchoGuard(("netmiko",))
+_CHANNEL_ECHO = _ChannelEchoGuard(("netmiko", "paramiko"))
 
 
 class CollectorContext:
@@ -153,8 +153,8 @@ class CollectorContext:
         debug=False,
     ):
         self.device_name = device_name
-        self.platform = platform  # "iosxe" | "panos" | "vmware" | "bmc"
-        self.restconf = restconf  # RestconfClient / RedfishClient or None
+        self.platform = platform  # "iosxe" | "panos" | "vmware" | "proxmox" | "bmc"
+        self.restconf = restconf  # RestconfClient / RedfishClient / ProxmoxClient or None
         self.ssh = ssh  # SshRunner or None (opened lazily)
         self.api = api  # VsphereClient or None
         self.logger = logger
@@ -178,9 +178,10 @@ class CollectorContext:
         if self.restconf is None:
             raise RuntimeError("no HTTP GET transport for %s" % (self.device_name,))
         label = getattr(self.restconf, "transport_label", "restconf")
+        display = getattr(self.restconf, "public_path", lambda value: value)(path)
         key = (label, path, canonical_kwargs(kwargs))
         if key in self._cache:
-            self.trace.append({"transport": label, "target": path, "outcome": "cache-hit"})
+            self.trace.append({"transport": label, "target": display, "outcome": "cache-hit"})
             cached = self._cache[key]
             if redact is None or cached is None:
                 return cached
@@ -189,12 +190,12 @@ class CollectorContext:
                 raise RuntimeError(
                     "GET %s: answer withheld, its redactor failed with %s"
                     % (
-                        path,
+                        display,
                         failure,
                     )
                 )
             return payload
-        entry = {"transport": label, "target": path}
+        entry = {"transport": label, "target": display}
         if kwargs:
             entry["kwargs"] = dict(kwargs)
         started = time.monotonic()
@@ -214,7 +215,7 @@ class CollectorContext:
                 entry["error"] = "answer withheld: its redactor failed with %s" % (failure,)
                 self.trace.append(entry)
                 raise RuntimeError(
-                    "GET %s: answer withheld, its redactor failed with %s" % (path, failure)
+                    "GET %s: answer withheld, its redactor failed with %s" % (display, failure)
                 )
         # None is the ok_404 "path absent" result — cached like any other answer.
         entry["outcome"] = "ok" if payload is not None else "not-found"
@@ -304,6 +305,7 @@ class CollectorContext:
         if self.ssh is None:
             raise RuntimeError("no SSH transport for %s" % (self.device_name,))
         entry = {"transport": "ssh", "target": command}
+        self._last_ssh_result = None
         started = time.monotonic()
         withheld = _CHANNEL_ECHO.held() if redact is not None else contextlib.nullcontext()
         try:
@@ -313,12 +315,36 @@ class CollectorContext:
             entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
             entry["outcome"] = "error"
             entry["error"] = _traced(redact, "%s: %s" % (type(exc).__name__, exc))
+            if hasattr(exc, "stdout") or hasattr(exc, "stderr"):
+                evidence = {
+                    "stdout": _traced(redact, getattr(exc, "stdout", "")),
+                    "stderr": _traced(redact, getattr(exc, "stderr", "")),
+                    "exit_status": getattr(exc, "exit_status", None),
+                    "complete": False,
+                }
+                self._last_ssh_result = evidence
+                entry["exit_status"] = evidence["exit_status"]
+                if self.debug:
+                    entry["output"] = evidence["stdout"]
+                    entry["stderr"] = evidence["stderr"]
             self.trace.append(entry)
             raise
         entry["elapsed_ms"] = int((time.monotonic() - started) * 1000)
         entry["outcome"] = "ok"
         entry["chars"] = len(output or "")
         redacted, failure = _redacted(redact, output)
+        if hasattr(output, "stderr"):
+            stderr, stderr_failure = _redacted(redact, output.stderr)
+            failure = failure or stderr_failure
+            self._last_ssh_result = {
+                "stdout": redacted,
+                "stderr": stderr,
+                "exit_status": getattr(output, "exit_status", 0),
+                "complete": failure is None,
+            }
+            entry["exit_status"] = self._last_ssh_result["exit_status"]
+            if self.debug:
+                entry["stderr"] = stderr
         if self.debug:
             entry["output"] = redacted
         self.trace.append(entry)
