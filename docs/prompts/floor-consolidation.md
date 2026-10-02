@@ -21,13 +21,21 @@ DEVICES block at the top of the prompt when you paste it.
 | 6th-floor access stacks | iosxe | yes | none | Eliminated. The pre files are the only record of what they fed |
 | VM-Series firewall pair | panos | recommended | recommended | HA, interfaces, ARP, routes, tunnels, and sessions: the only view of whether traffic is handled as before |
 | 5th-floor access stacks | iosxe | recommended | recommended | Their uplinks get re-patched to the moved core, and anything moved onto them is otherwise invisible |
-| Console server (Opengear) | none | none | none | The suite has no Opengear platform. Selecting it marks the run failed. It is judged from the switch side |
+| Console server (Opengear) | none | none | none | A site sweep skips it as unsupported. Picking it explicitly is an error. It is judged from the switch side |
 | SE350 XClarity controllers | bmc, inside each NFV host's file | with the hosts | with the hosts | Not devices of their own: an XCC is captured as the `bmc` family inside its host's own snapshot when the host Device carries an `xcc` interface with the XCC's address, the Secrets Group the `bmc_secrets_group` Relationship associates with that interface, and an XCC the worker can reach. Until those are modelled at a site, the BMC view is absent there |
+
+You can select the Site in Capture's `locations` instead of picking every
+device. The sweep includes its floors, pulls in modelled controllers and records
+unsupported devices as skipped. Model APs with a Wireless Controller-Managed
+Device Group and its Controller device; their data comes from that controller.
+Use the same scope definition for pre and post, and include the manifests when
+building the diff index so intentional exclusions and skips are explained.
 
 Before the pre capture:
 
-- Run a `dryrun` capture of every device a day ahead. It proves platform
-  mapping, credentials, and RESTCONF or SOAP login.
+- Run a `dryrun` capture a day ahead. It previews the scope and checks platform,
+  BMC and credential readiness without device connections. A real capture is
+  still needed to prove RESTCONF or SOAP reachability.
 - The ESXi hosts need a Nautobot platform whose `network_driver` contains
   `vmware` or `esxi`. A bare `lenovo` token maps no platform, so the host's
   own checks would not run. They also need a Secrets Group holding a local
@@ -57,10 +65,11 @@ Download pre and post into separate folders, since the filenames are
 identical per device. Attach every snapshot file and the diff index. If
 context allows, also attach the core switch's `raw_*.json`: its interface
 descriptions name ports whose far end does not speak CDP/LLDP. Glob
-`snapshot_*` only; raw files are not envelopes:
+all JSON files when building the diff index; it reads snapshots and manifests
+and ignores raw/debug siblings:
 
 ```sh
-python3 tools/diff_snapshots.py --pre pre/snapshot_*.json --post post/snapshot_*.json -o diff-index.json
+python3 tools/diff_snapshots.py --pre pre/*.json --post post/*.json -o diff-index.json
 ```
 
 ---

@@ -10,6 +10,13 @@ the firewall-cutover prompt pairs the firewalls). Adapt the specifics — site
 tag, expected switch ports, VLANs — per change; the files explain their own
 format, so the prompt never has to.
 
+A Capture site sweep includes access switches and descendant floors, pulls in
+the Controller device modelled for each AP's Wireless Controller-Managed Device
+Group, and skips unsupported devices automatically. Its manifest names the
+in-scope APs covered by each controller; the controller snapshot itself includes
+every joined AP. Use the same scope definition for pre and post and download
+both manifests for the diff index. Preview with `dryrun` before connecting.
+
 ---
 
 You are a senior wireless engineer performing POST-CHANGE TRIAGE using

@@ -6,6 +6,12 @@ device's pre files, the new device's post files). Adapt the specifics —
 VLANs, expectations, suspicions — per change; the files explain their own
 format, so the prompt never has to.
 
+A Capture site sweep includes descendant floors, pulls in modelled controllers
+and skips unsupported devices automatically. Keep the same location or Dynamic
+Group scope pre and post; add the required firewall explicitly if it falls
+outside that scope. Include both manifests when building the diff index so
+recorded exclusions and skips explain devices without post snapshots.
+
 ---
 
 You are a senior network engineer performing POST-CHANGE TRIAGE using
