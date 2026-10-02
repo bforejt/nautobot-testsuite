@@ -1,6 +1,6 @@
 # Plan: site-scoped device selection and a zip download option
 
-Status: **PR A built and proven 2026-10-01; PR B not started.** Task 1 lets the
+Status: **PR A merged 2026-10-01; PR B accepted for PR 2026-10-02.** Task 1 lets the
 Capture job pick devices by location and other filters, pull in the
 controllers that managed devices depend on, and skip unsupported devices
 gracefully. Task 2 adds a single compressed download. They share one new
@@ -568,8 +568,8 @@ command output, not assertions.
 | Plan and decisions | Done (2026-10-01) |
 | §7 GUI checks on 2.4.43 | Answered (§0, 9–15) |
 | Controller redundancy groups | Deferred (decision 12); a follow-up when production models them |
-| PR A: manifest + zip (branch `codex/zip-artifacts`) | Built and proven (2026-10-01); awaiting PR review/merge |
-| PR B: site scope (branch `feat/site-scope`, from main after A merges) | Not started |
+| PR A: manifest + zip (branch `codex/zip-artifacts`) | Merged in PR #18 (2026-10-01) |
+| PR B: site scope (branch `codex/site-scope`, from main after A merges) | Implemented, reviewed and accepted for PR (2026-10-02), from merged main `c95f546` |
 
 Notes:
 - **One PR per fresh session, in order:** A, then B. Both touch `run()` and
@@ -653,3 +653,89 @@ downloads. Filename collisions refused in both formats before device I/O.
 ```text
 PR A dev proof: PASS (4 live captures, timeout/exit/retry/collision paths)
 ```
+
+### PR B implementation and evidence (2026-10-02)
+
+Implementation starts from PR A's merged main. `scope.py` resolves plain rows
+before any transport opens; the job applies Nautobot's validated
+`DeviceFilterSet` to location descendants and Dynamic Group members, then adds
+explicit devices and controller dependencies before exclusions. The capture
+loop visits only `capture` dispositions. Dry runs use a separate readiness path
+that does not open host or BMC transports; reachability requires a real capture.
+
+Two installed and 2.4.43 source details refine the prior-art summary in §2.1:
+selected tags are conjoined (all must match), while roles and statuses use OR
+within each field. The public `DynamicGroup.members` queryset is its cached
+membership in both releases, matching the Members tab. Capture reads it without
+updating the cache; operators refresh membership outside the read-only job.
+
+The diff tool keeps support for separate runs on one side of a change. It reads
+the newest supplied manifest row per device, correlates snapshots to their
+JobResult, and rejects inconsistent evidence rather than allowing an older
+successful snapshot to hide a later failed capture.
+
+Explicit exclusions are recorded even when a device has fallen outside the
+narrowed scope. They are added after controller expansion and cannot pull in
+extra controllers. Paired diff reports retain manifest outcomes; a failed run
+cannot look successful merely because its persisted snapshot's checks passed.
+Supported devices without snapshots appear in `missing_snapshots`, including
+failures present on both sides. Rollback and adhoc captures remain valid on
+either comparison side; snapshot/manifest run correlation uses their actual kind.
+
+Command output from the reviewed source tree:
+
+```text
+python3 -m unittest discover -s tests -t .
+Ran 1602 tests in 9.181s
+OK
+
+Ruff 0.16.4 check --no-cache .: All checks passed!
+Ruff 0.16.4 format --check .: 79 files already formatted
+python3 -m compileall -q .: exit 0
+Python 3.9 syntax: PASS
+Read-only guard: PASS
+Redfish fence guard: PASS
+SOAP operation guard: PASS
+git diff --check: exit 0
+```
+
+Fresh-context correctness review completed with no remaining source blockers.
+It verified fixes for out-of-filter exclusions, paired failed capture outcomes,
+and rollback/adhoc comparison compatibility. Independent isolated glue checks
+proved 30- and 31-device dry runs do not open transports; a 31-device real run
+refuses before collection or credential lookup and preserves `not_visited`
+outcomes in its manifest.
+
+The deployed job imports and renders all optional scope fields on dev Nautobot
+3.2.5. On 2026-10-02 the user performed a full ad-hoc capture for the actual lab
+site, downloaded and inspected its zip, and accepted the result for commit,
+push and PR. The JobResult completed successfully from 01:15:44 to 01:17:44 UTC,
+with one zip download. The deployed scope, constants, capture and bundle source
+hashes match the reviewed worktree.
+
+The run used `locations=["lab"]`, no explicit devices, default Active statuses,
+`include_controllers=false`, `artifact_format="zip"`, and no dry-run or debug.
+Both devices were location-sourced `capture` dispositions:
+
+| Device | Outcome | Check statuses | Duration |
+| --- | --- | --- | --- |
+| `9300-lab` | succeeded | 30 success, 15 not-present | 17.833 s |
+| `se350-lab-1` | succeeded | 22 BMC checks, all success | 101.242 s |
+
+Read-only verification of the persisted download:
+
+```text
+ZIP bytes: 163879
+ZIP members: 5 (manifest, two snapshots, two raw bundles)
+Archive CRC: PASS
+Exact manifest-to-member set: PASS
+All four file byte sizes and SHA-256: PASS
+Snapshot schema 1.2 and JobResult/kind/change/device correlation: PASS
+Original BMC host location retained; synthetic fixture count: 0
+```
+
+This user-accepted actual site run is the live acceptance evidence for publishing
+PR B in place of §8's proposed synthetic fixture scenario. No fixture objects
+were created and the existing BMC host was not relocated. Synthetic controller,
+unsupported-device and exclusion cases remain covered by the pure tests and
+independent isolated glue checks; they are not claimed as live controller proof.

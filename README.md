@@ -110,9 +110,11 @@ the operator's:
    in the BMC's web UI.
 
 Check the setup with a dry run of **Test Suite Capture** on one such device:
-the log reads `BMC ready` when it is complete, and otherwise names what is
+the log reads `BMC credentials ready` when the model and credentials are ready,
+and otherwise names what is
 missing (for example "no Relationship with key 'bmc_secrets_group' exists —
-create it once …").
+create it once …"). The preview makes no device connections; use a real capture
+to verify reachability and the BMC's account privileges.
 
 **Without this setup, every Device that carries a BMC-named interface with an
 IP address fails its capture**: the BMC checks are recorded as failed with the
@@ -144,6 +146,68 @@ Replacing an HA pair of PA-5250s with VM-500s behind a pair of Catalyst 9500s:
    Devices pair by name; the renamed firewall shows up as pre-only/post-only
    "replacement candidate" sections for the analyst — no mapping input needed.
 
+### Capturing a whole site
+
+In **Test Suite Capture**, select a Site in `locations`. Its devices and every
+descendant floor or room are included. Alternatively, select a Device Dynamic
+Group in `dynamic_group`, or use both to combine their members. At least one of
+`locations`, `dynamic_group` or `devices` is required.
+
+`roles`, `statuses` and `tags` narrow the location and group selections.
+Values within roles or statuses combine with OR; selected tags must all match,
+as in Nautobot's Devices view. Different filters combine with AND.
+Empty `statuses` means **Active**, and the job logs that default. Explicit
+`devices` are added after these filters, so a manually selected device is
+captured even when it is outside the site or has another status. A narrowing
+filter without a location or group never sweeps the inventory. `exclude_devices`
+removes devices last, including explicitly selected or pulled-in controllers.
+
+The job classifies devices from Nautobot data before connecting. Supported
+platforms and hosts with an addressed BMC are captured. Unsupported swept-in
+devices are skipped with a reason; an unsupported explicit selection is an
+error. Whole-word platform deny tokens prevent APs, NX-OS, IOS-XR, ASA and other
+unsupported Cisco families from being sent to IOS-XE collectors. The tokens
+are checked against the platform name and driver, so `cisco_wap` is refused even
+when its driver is `cisco_ios`. IOS-XE switches and 9800 controllers keep the
+`cisco_ios` platform.
+
+`include_controllers` defaults on. Model APs through Nautobot's **Controller**
+and **Controller-Managed Device Group**, with the Wireless capability and a
+**Controller device**. Their AP data is covered by that controller's snapshot;
+the controller is pulled in even from another site and captured first. The
+manifest names its in-scope APs. A controller snapshot still contains every AP
+joined to it, so use the manifest's list to focus the analysis on this site.
+Nautobot and WLC AP names may differ; the job does not reconcile them.
+
+A missing, excluded or unsupported controller produces
+`controller_not_capturable` with a warning naming the fix. Controller redundancy
+groups are deferred; set **Controller device** for this workflow. Supported
+devices managed by non-wireless controllers are captured directly, with their
+controller also pulled in. A supported device's credentials or transport failure
+fails the run and remains in the manifest.
+
+Run with `dryrun` first to preview the full scope and platform/BMC/credential
+readiness. The preview makes no device connections and does not test
+reachability. A real run refuses before connecting when more than 30 devices
+need capture; the preview still shows the scope and warns that the real run
+would refuse. Pick a Site rather than a Company, or split the capture.
+
+Use the same scope definition for pre and post, preferably a Dynamic Group.
+The job reads the group's current cached membership, as shown on its Members
+tab, without updating Nautobot. Refresh that membership outside the capture job
+after changing the group or inventory.
+Download the manifests alongside the snapshots: they record exclusions, skips,
+coverage and devices left unvisited. Inventory or status changes can alter the
+resolved set even when the inputs match.
+
+For a long sweep, adjust **Soft time limit** and **Time limit** on the Job's
+**Edit** page. Defaults remain 3300 s and 3600 s; keep the hard limit at least
+300 s above the soft limit for partial evidence and archive cleanup. Before
+raising a limit above 3600 s, confirm the production worker does not use
+`CELERY_TASK_ACKS_LATE`: with late acknowledgements, a Redis broker's visibility
+timeout can cause a long task to run twice. Use manifest `duration_s` values to
+choose limits from measured captures.
+
 ### Downloading capture evidence
 
 `artifact_format` defaults to `files`: each snapshot, raw bundle and optional
@@ -164,6 +228,18 @@ archives directly:
 ```sh
 python3 tools/diff_snapshots.py --pre pre.zip --post post.zip -o diff-index.json
 ```
+
+Include the manifests when comparing separate JSON files (`pre/*.json` and
+`post/*.json`). The diff explains recorded exclusions, unsupported skips and
+controller coverage in `pre_only`/`post_only` scope notes. Supported captures
+without snapshots are listed in `missing_snapshots`, including failures present
+on both sides. Paired snapshots retain the manifest outcomes, so a partial
+capture cannot look successful solely because its attached checks passed.
+
+Separate runs on one side are supported. For each device, the newest supplied
+manifest row must match its snapshot's JobResult. Conflicting or stale evidence
+is refused with a diagnostic; use the files from the intended run. Dry-run
+manifests describe a scope preview and cannot serve as capture evidence.
 
 Archives exceeding Nautobot's `JOB_CREATE_FILE_MAX_SIZE` (10 MiB by default)
 split into `_part1ofN.zip` downloads at device boundaries; the manifest is in
@@ -256,7 +332,8 @@ for iface in Interface.objects.filter(ip_addresses__isnull=False).distinct():
 
 The per-run `secrets_group` override applies to the host platforms only: a
 BMC always uses the group its interface's Relationship names. A dry run
-probes both planes. A Device
+checks model and credential readiness for both planes without opening device
+transports. A Device
 whose own platform names a BMC (`xcc`, `redfish`, `lenovo`) maps no platform:
 model the BMC as an interface on its host instead (the "cannot map platform"
 error says so).
