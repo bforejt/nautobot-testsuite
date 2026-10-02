@@ -54,7 +54,9 @@ from .snapshot_job import (
     _find_bmc,
     _map_platform,
     _open_bmc,
+    _proxmox_ssh,
 )
+from .transport_proxmox import ProxmoxClient, ProxmoxError
 from .transport_restconf import RestconfClient, probe_hint
 from .transport_ssh import SshRunner
 from .transport_vsphere import VsphereClient, VsphereError
@@ -295,6 +297,7 @@ DISCOVERY_PROBES = {
         ("q_filesystem", _q_filesystem),
     ),
     "panos": (),
+    "proxmox": (("version", lambda ctx: ctx.restconf.discovery()),),
     "vmware": (
         ("lockdown", _esxi_lockdown),
         ("network", _esxi_network_shape),
@@ -470,7 +473,7 @@ class CollectorShakedown(Job):
         total = sum(len(checks) for _target, _ctx, checks in families)
         needs_attention = []
         try:
-            if platform == "vmware":
+            if platform in ("vmware", "proxmox"):
                 # Answered by the SOAP probe itself: which vim25 namespace
                 # versions hostd advertised (or that the fallback SOAPAction
                 # was used), apiType, build/version, TLS mode.
@@ -542,11 +545,17 @@ class CollectorShakedown(Job):
 
         trace = (host_ctx.trace if host_ctx else []) + (bmc_ctx.trace if bmc_ctx else [])
         safe_device = envelope.safe_name(device.name)
-        _attach_artifact(self, C.SHAKEDOWN_FILENAME.format(device=safe_device), report)
+        _attach_artifact(
+            self,
+            C.SHAKEDOWN_FILENAME.format(device=safe_device),
+            report,
+            split=platform == "proxmox",
+        )
         _attach_artifact(
             self,
             C.SHAKEDOWN_TRACE_FILENAME.format(device=safe_device),
             {"schema": 1, "device": device.name, "trace": trace},
+            split=platform == "proxmox",
         )
         ok_count = sum(1 for body in report["checks"].values() if body["advice"].startswith("ok"))
         summary = "%s: %d/%d collectors ok; needs attention: %s%s" % (
@@ -606,7 +615,18 @@ class CollectorShakedown(Job):
                 )
                 return None, None, api, None, error
             return None, None, api, probe_record, None
-        # unreachable: _map_platform returns three names
+        if platform == "proxmox":
+            restconf = None
+            try:
+                restconf = ProxmoxClient(host, username, password, logger=self.logger)
+                probe_record = restconf.probe()
+            except ProxmoxError as exc:
+                if restconf is not None:
+                    restconf.close()
+                return restconf, None, None, None, "Proxmox API at %s unusable — %s" % (host, exc)
+            ssh = _proxmox_ssh(device, host, secrets_group, self.logger)
+            return restconf, ssh, None, probe_record, None
+        # unreachable: only recognized platform families reach here
         return None, None, None, None, "no transport for platform %r" % (platform,)
 
     def _discover(self, into, probes, ctx):
@@ -624,6 +644,8 @@ class CollectorShakedown(Job):
         trace_start = len(ctx.trace)
         started = time.monotonic()
         status, error, normalized = "ok", None, {}
+        ctx._proxmox_capture = None
+        outcome = None
         try:
             outcome = check.collector(ctx)
             normalized = (outcome or {}).get("normalized") or {}
@@ -652,6 +674,21 @@ class CollectorShakedown(Job):
             "sample_keys": sorted(normalized)[:5],
             "advice": advice,
         }
+        if ctx.platform == "proxmox":
+            captured = getattr(ctx, "_proxmox_capture", None)
+            details = (outcome or {}).get("context") if isinstance(outcome, dict) else None
+            if details is None and captured is not None:
+                details = captured.context
+            if details is not None:
+                report["checks"][check.id]["context"] = details
+                for read in details.get("unstructured_reads", []):
+                    self.logger.warning(
+                        "unstructured read %s (%s): %s",
+                        read.get("source", "unknown"),
+                        check.id,
+                        read.get("gap", "source object requires text"),
+                        extra=log_extra,
+                    )
         if advice.startswith("ok"):
             self.logger.info(
                 "%s: %d normalized entries in %.1fs — ok",

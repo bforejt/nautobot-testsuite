@@ -48,15 +48,17 @@ Two jobs, both under the **Test Suite** grouping:
 Platforms today: Catalyst 9500 StackWise Virtual pairs and Catalyst 9300 StackWise
 stacks on IOS-XE 17.x (RESTCONF plus allowlisted read-only SSH commands), PAN-OS
 firewalls (SSH, XML op-command output), standalone VMware ESXi 8.x hosts set up
-as NFV compute (vim25 SOAP, read-only operation allowlist), and a server's
+as NFV compute (vim25 SOAP, read-only operation allowlist), Proxmox VE nodes
+(token-authenticated JSON GETs and exact structured Linux SSH reads), and a server's
 baseboard management controller: modelled as an Interface on its host Device,
 never as a Device of its own, and captured in the host's own snapshot by the
 vendor-neutral `bmc` check family over GET-only Redfish. The Lenovo XClarity
 Controller is the verified one (a gen-1 ThinkSystem SE350 with XCC 6.10); on
 other vendors the DMTF reads run unverified and the OEM-only reads record
-`not-present` naming the vendor. Both server-side families are general —
-`vmware` is "ESXi set up as NFV compute", `bmc` is any Redfish BMC — never a
-host for one particular change: every check is always-on, and a feature that
+`not-present` naming the vendor. The server families are general:
+`vmware` captures ESXi, `proxmox` captures Proxmox VE, and `bmc` captures any
+Redfish BMC. Each captures the platform's complete supported state:
+every check is always-on, and a feature that
 is not in use records loudly as `not-present`.
 
 ## Installation
@@ -70,9 +72,10 @@ as source, never pip-installed:
    under Jobs (jobs arrive disabled by design; the
    shakedown is additionally hidden from the default list).
 
-Worker requirements: `requests` and `netmiko`, both already present on any worker
-running Golden Config or Device Onboarding. Nothing else — every other import is
-stdlib or Nautobot core, and `pyproject.toml` carries dev tooling only. Device
+Worker requirements: `requests`, `netmiko` and its `paramiko` dependency,
+already present on workers running Golden Config or Device Onboarding. The
+remaining imports are stdlib, Nautobot core or those libraries' dependencies;
+`pyproject.toml` carries dev tooling only. Device
 credentials come from the device's assigned Secrets Group (or a per-run override
 group), never from job inputs; a server's BMC takes its credentials from the
 Secrets Group associated with its interface through the `bmc_secrets_group`
@@ -121,6 +124,71 @@ IP address fails its capture**: the BMC checks are recorded as failed with the
 reason, while the host's own checks still run. Before deploying onto a
 Nautobot that already documents BMC addresses, list those devices with the
 query under [NFV compute](#nfv-compute-esxi--xcc).
+
+### Proxmox VE capture: one-time setup
+
+Model each physical node as a Device with Platform driver `proxmox` (a platform
+name containing `Proxmox` also maps explicitly), its management `primary_ip`,
+and a host Secrets Group. Generic Linux devices do not map to this platform.
+The selected endpoint determines the local node; the job records its API
+version and build instead of assuming a release. This implementation is
+fixture-tested and imports in Nautobot; live Proxmox release validation is pending.
+
+The host Secrets Group needs **two separate Username/Password pairs**:
+
+- HTTP(S): Username is the full `user@realm!token` API token ID; Password is
+  its token secret. The transport uses stateless token authentication on port
+  8006. No ticket login or logout occurs. TLS follows `VERIFY_TLS` in
+  `jobs/constants.py`, currently false for the existing self-signed lab setup.
+- SSH: a Linux username and password with read access to the named native
+  configuration, Proxmox policy/inventory parsers, hardware and kernel sources.
+  An API token cannot be reused as the Linux account. SSH connects lazily on
+  the first exact allowed read; no sudo escalation, installation, configuration
+  writes or service changes are performed.
+
+Grant the API user and a privilege-separated token the read visibility required
+for the complete capture. Start with `PVEAuditor` at `/` with propagation, add
+the read privilege `Sys.Syslog` on the selected node for logs, and, on releases
+with granular guest-agent permissions, `VM.GuestAgent.Audit` on configured
+guests. User and token grants intersect. Do not substitute a role with write
+permissions for a refused read. The mandatory visibility check reconciles API
+node/guest/storage/pool inventories against Proxmox's authoritative native parsers
+and proves exact mapping/SDN audit scopes, including pending state;
+filtered successful lists, authorization failures and malformed sources fail
+capture and retain partial evidence.
+
+Shared inventories require audit visibility for peer nodes and guests as well
+as the selected node. The job checks each authoritative resource's effective
+grant, so an inherited root grant cannot conceal a `NoAccess` descendant.
+Grant `Mapping.Audit` and `SDN.Audit` where those configured resources exist;
+SDN native parsers supply full details that would otherwise need `SDN.Allocate`.
+
+Linux supplements use JSON from `ip`, `bridge`, `lshw`, `lsblk`, `lldpcli`,
+`busctl`, `dpkg-query` with an explicit JSON template, and fixed Python/Perl
+readers. Ceph additionally uses `ceph osd crush dump --format json` when
+configured. Required missing tools, privileges or services fail their checks;
+the job does not install tools. Native network/time/logging config files and
+their documented includes, kernel boot arguments and native logs are retained
+as text only where structured sources lack the information. Each such read
+declares its source, gap, value and replacement condition in the envelope and
+job log. Current API capabilities use structured journal JSON; older nodes
+with a precisely identified capability gap use bounded syslog lines.
+
+Every registered Proxmox check runs for each selected node. It captures both
+QEMU and LXC guests, including stopped guests and templates, local hardware,
+applied network/storage state, and shared cluster policy/topology. Detailed
+peer-node inventories require selecting those Devices separately. Optional
+unconfigured components record `not-present`; healthy empty inventories remain
+successful. Generated cloud-init user/network/meta documents are captured with declared
+native-text sources. Arbitrary custom snippet bodies and embedded backup
+archive configuration have explicit data-gap records; the latter API requires
+write-capable privileges. RRD, task and event histories record their bounded
+windows, rather than claiming unlimited retention.
+
+A BMC modelled as an Interface on the Proxmox Device uses the existing BMC
+setup and joins the same envelope with `target: "bmc"`. Run a dry capture to
+check both credential pairs and the model, then a full **Test Suite Shakedown
+(dev)** to validate the installed release and harvest sanitized fixtures.
 
 ## Usage: a firewall cutover
 
@@ -214,7 +282,8 @@ choose limits from measured captures.
 debug trace is attached as its device finishes, followed by the run manifest.
 The manifest contains names and identifiers, never credentials, and records
 failed devices and devices left `not_visited` after a soft time limit. Its own
-schema is 1; device envelope schema 1.2 is unchanged.
+schema is 1; device envelope schema 1.3 adds explicit native-text source
+declarations while remaining compatible with 1.x readers.
 If two selected device names produce the same sanitized artifact filename,
 the run refuses before connecting. Capture them separately or use distinct names.
 
@@ -247,6 +316,17 @@ part 1. Download every part and pass all pre parts to `--pre` and all post
 parts to `--post`, or unzip every part into the same directory. A device whose
 compressed artifacts cannot fit in one part is omitted with a warning, and
 its manifest files are marked `not_attached`.
+
+Proxmox artifacts preserve full redacted source objects without per-check
+truncation. An artifact too large for one attachment is serialized into
+`artifactpart_*.json` chunks and a `.parts.json` index with byte counts and
+SHA-256 checksums. These chunks can span zip downloads from the same node.
+Download the index and every part. The diff tool reconstructs snapshot parts
+across all supplied files/zips and refuses missing indexes, missing parts or
+checksum mismatches. Raw/debug parts use the same format; the pure
+`jobs.bundle.reassemble(index, parts)` helper reconstructs them. A size or read
+budget that cannot preserve the complete object is reported as a refusal,
+never a successful truncated capture.
 
 Zip output is attached when the run finishes, including failed runs and soft
 timeouts. A hard kill or worker restart before finalization loses the pending
@@ -309,7 +389,7 @@ What the capture does with each modelled state:
 | Two interfaces match | The device fails before any transport opens — an ambiguous model never picks one. |
 | The BMC's credentials unresolvable (no Relationship with the key, no association on the interface, several groups, no usable username/password) or the BMC unreachable (TLS, 401, 403, a pending password change, timeout) | Every `bmc_*` check recorded `failed` with the reason; the host checks still run; device FAILED. |
 | The host's credentials or transport failing, an addressed BMC modelled | The BMC is still captured; every host check recorded `failed` with the reason; device FAILED. |
-| The host's platform unsupported (it maps to none of iosxe, panos, vmware), an addressed BMC modelled | The BMC is captured alone: `device.host_captured` and `device.platform_supported` false, a job-log warning, and the device succeeds when its BMC checks do. Without an addressed BMC such a Device fails ("cannot map platform"). |
+| The host's platform unsupported (it maps to none of iosxe, panos, vmware, proxmox), an addressed BMC modelled | The BMC is captured alone: `device.host_captured` and `device.platform_supported` false, a job-log warning, and the device succeeds when its BMC checks do. Without an addressed BMC such a Device fails ("cannot map platform"). |
 
 Before deploying this version onto a Nautobot that already documents BMC
 addresses, list the devices it will start capturing a BMC for — every
@@ -443,6 +523,47 @@ which vendor the BMC reports.
 | `vmware_vms` | vmware | 1 | Registered VMs: identity, hardware, reservations, power state, snapshots |
 | `vmware_vm_nics` | vmware | 1 | VM network adapters and PCI passthrough devices: MAC, backing, slot, state |
 | `vmware_vm_tuning` | vmware | 1 | Per-VM NFV tuning: curated .vmx keys plus the modeled reservation fallbacks |
+| `proxmox_access` | proxmox | 2 | Users/groups/roles/realms/tokens/ACL and effective capture permissions |
+| `proxmox_autostart` | proxmox | 1 | Guest boot ordering, onboot and protection |
+| `proxmox_backup` | proxmox | 2 | Backup schedules, included volumes and uncovered guest evidence |
+| `proxmox_bridge_state` | proxmox | 2 | Applied bridge VLAN policy and complete MAC forwarding evidence |
+| `proxmox_capture_visibility` | proxmox | 1 | Authoritative access policy and proof of complete API inventory visibility |
+| `proxmox_ceph` | proxmox | 2 | Ceph configuration/topology/storage/health and complete local evidence |
+| `proxmox_certificates` | proxmox | 1 | Every node certificate metadata record keyed by filename, including issuer/subject/SAN/validity/fingerprint and public-key type/bits |
+| `proxmox_cluster` | proxmox | 1 | Cluster membership/quorum/resources and persistent Corosync configuration |
+| `proxmox_event_logs` | proxmox | 3 | Complete retained syslog and node/guest firewall event evidence |
+| `proxmox_firewall` | proxmox | 2 | Datacenter/node/guest firewall policy with ordered rules and all sets |
+| `proxmox_guest_agent` | proxmox | 3 | Read-only guest agent observations and LXC interfaces |
+| `proxmox_guest_cloudinit` | proxmox | 2 | Cloud-init current/generated-image and pending configuration |
+| `proxmox_guest_config` | proxmox | 2 | Complete current and pending guest configuration |
+| `proxmox_guest_disks` | proxmox | 1 | All QEMU disks and LXC roots/mount points, including unused volumes |
+| `proxmox_guest_metrics` | proxmox | 3 | Complete resident day RRD history for every local guest |
+| `proxmox_guest_nics` | proxmox | 1 | Guest NICs, PCI and USB passthrough configuration |
+| `proxmox_guest_snapshots` | proxmox | 2 | Every retained guest snapshot and complete saved configuration |
+| `proxmox_guest_tuning` | proxmox | 1 | Guest CPU/memory/boot/security/tuning and unmodelled configuration |
+| `proxmox_guests` | proxmox | 1 | Every local QEMU/LXC guest, including stopped guests and templates |
+| `proxmox_ha` | proxmox | 1 | HA resources/groups/affinity rules and observed cluster states |
+| `proxmox_hardware_inventory` | proxmox | 2 | Every PCI function (empty class blacklist, verbose) and complete lshw hardware tree including CPUs, memory, USB and driver bindings |
+| `proxmox_host_config` | proxmox | 2 | Complete structured node configuration and datacenter options, retaining unknown fields |
+| `proxmox_host_identity` | proxmox | 1 | Node identity, PVE version and complete lshw system metadata; boot mode, kernel and CPU topology from node status |
+| `proxmox_host_routes` | proxmox | 2 | Complete IPv4/IPv6 routes from every table and policy rules, keyed by native route/rule facets, plus API DNS |
+| `proxmox_host_services` | proxmox | 1 | Every API-reported local service and observed state |
+| `proxmox_host_time` | proxmox | 1 | Timezone and live NTP synchronization from node/time and typed D-Bus JSON |
+| `proxmox_mappings` | proxmox | 2 | PCI/USB/directory resource mappings |
+| `proxmox_metric_config` | proxmox | 1 | Configured external metric destinations |
+| `proxmox_metrics` | proxmox | 3 | Complete node and enabled active storage RRD day archives (24 hours, AVERAGE) with timestamps and all served readings in raw |
+| `proxmox_neighbors` | proxmox | 2 | Complete LLDP neighbors from json0 structured output with local-interface and native chassis identity; timers remain raw |
+| `proxmox_network` | proxmox | 1 | Complete API network configuration, including unknown options, keyed by iface; the API top-level changes diff is retained in raw and flags pending changes in context |
+| `proxmox_notifications` | proxmox | 2 | Notification endpoint/matcher/target configuration |
+| `proxmox_packages` | proxmox | 2 | Every Debian package/version/architecture/status record, important Proxmox package records served by apt/versions, the full existing cached update listing, and complete repository definitions/errors |
+| `proxmox_pnics` | proxmox | 1 | Every lshw network device with logical-interface joins to full Linux link state; driver, firmware, capability, speed/duplex, MAC and PCI/USB provenance remain available wherever served |
+| `proxmox_pools` | proxmox | 2 | Complete resource pool definitions and membership |
+| `proxmox_replication` | proxmox | 1 | Replication jobs/configuration and local operational status |
+| `proxmox_sdn` | proxmox | 2 | SDN configured/running/pending state and all subnet/firewall definitions |
+| `proxmox_storage` | proxmox | 1 | Every cluster storage definition and complete per-local-store configuration/status/content metadata |
+| `proxmox_storage_devices` | proxmox | 1 | Every disk/partition, directory filesystem, LVM group/PV, thin pool, ZFS pool/vdev and full Linux block tree with native identity links |
+| `proxmox_subscription` | proxmox | 3 | Subscription status, level, product, socket entitlement and dates; key/signature/server identifier are withheld and last-check time remains raw |
+| `proxmox_tasks` | proxmox | 3 | All active tasks and complete recent retained task logs |
 | `bmc_system` | bmc | 1 | System identity, health, boot override, SecureBoot, power-restore/delay/power-mode, host watchdog and host-console policy, TPM, Lenovo front-panel USB and TPM presence, and the BMC's own consoles, health/state and address (leaves a firmware does not serve read null, never "off") |
 | `bmc_security` | bmc | 1 | The vendor security resource leaf by leaf (`security\|<path>`: TLS mode and minimum, HTTPS/LDAPS/CIM, firmware rollback, encapsulation) and the external key manager (`sklm\|<path>`, certificate collections counted, never read); ThinkEdge tamper state as nullable scalars (not-present only without a security resource or a vendor mapping) |
 | `bmc_thermal` | bmc | 1 | Chassis temperature sensors and fans (Thermal, else ThermalSubsystem fans): health/state, ambient-class readings within 8 °C; DTS margins and the temperature summary in context |
@@ -586,6 +707,17 @@ build if this ever matches anything:
 grep -rniE --include='*.py' 'send_config|config_mode|\.(patch|post|put|delete|request|send)\(|urlopen\(|http\.client|PreparedRequest' jobs/ | grep -v '^jobs/transport_vsphere\.py:'
 ```
 
+Proxmox's HTTPS client (`jobs/transport_proxmox.py`) authenticates with an API
+token and has one `session.get` call site. Every request crosses the exact
+endpoint/query fence in `jobs/proxmox_paths.py`; redirects, console access,
+guest execution and mutation endpoints are refused. CI pins this wiring.
+Linux SSH uses direct exec channels without a PTY, admits only the complete
+commands in `PROXMOX_SSH_COMMANDS`, drains both output streams, and requires
+complete UTF-8 output and a successful exit status. A deadline or failed read
+retains redacted partial evidence and fails the check. The native readers open
+only named files/attributes and follow fenced configuration includes; loops,
+unsafe links, permission failures and exhausted budgets refuse completeness.
+
 **The one declared exception is vSphere.** A standalone ESXi host exposes
 its complete read-only state only through the vim25 SOAP API, and SOAP is
 HTTP POST by protocol — so `jobs/transport_vsphere.py` is excluded from the
@@ -624,7 +756,7 @@ builder/parser (`vsphere_soap`, including its refusal corpus), and every
 `_normalize_*` / `_parse_*` function run against fixture captures without
 Nautobot, netmiko, requests, or a network. CI (`.github/workflows/ci.yml`)
 runs the same commands plus `python -m compileall -q .` as an import smoke test,
-the read-only grep guard and the SOAP operation guard.
+the read-only grep guard, both HTTPS path guards and the SOAP operation guard.
 
 ### Bringing a collector up against a real device
 

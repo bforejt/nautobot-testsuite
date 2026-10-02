@@ -1,15 +1,15 @@
 # Plan: site-scoped device selection and a zip download option
 
-Status: **PR A merged 2026-10-01; PR B accepted for PR 2026-10-02.** Task 1 lets the
+Status: **complete: PR A merged 2026-10-01; PR B merged 2026-10-02.** Task 1 lets the
 Capture job pick devices by location and other filters, pull in the
 controllers that managed devices depend on, and skip unsupported devices
 gracefully. Task 2 adds a single compressed download. They share one new
 artifact, the run manifest (§3).
 
 - §0 records the decisions, including the production GUI results.
-- §7 lists what is still the user's to do.
+- §7 records the answered production GUI checks.
 - §8 is the pass/fail list each PR must meet.
-- §9 tracks build status. Implementing sessions update it as they go.
+- §9 records implementation, validation, merge and branch-cleanup results.
 
 ## 0. Decisions (2026-10-01)
 
@@ -103,7 +103,7 @@ Verified while writing (2026-10-01, dev stack Nautobot 3.2.5; production is
 
 ---
 
-## 1. Where the job is today
+## 1. Baseline before PR A and PR B
 
 - `devices` is a required `MultiObjectVar`. You build a site's capture by
   picking devices one at a time from a type-ahead list.
@@ -470,6 +470,11 @@ it stays an optional follow-up rather than the answer.
 
 ## 6. Proving it live (dev stack, 3.2.5)
 
+This section records the proposed fixture scenario. On 2026-10-02 the user
+accepted an actual full lab-site capture and inspected zip in its place (§9).
+No synthetic fixtures were created; controller paths have test coverage but
+were not exercised by that live run.
+
 The job glue imports Nautobot, so CI can't exercise it (house limit). Proof
 follows the BMC pattern: deploy to the dev stack and run it. The dev DB
 holds one device (`se350-lab-1`), so B needs fixtures **created in dev
@@ -499,6 +504,10 @@ groups are deferred by decision, not waiting on anyone (decision 12).
 The implementing session states its approach against this plan before
 editing, and shows evidence for every item before calling the PR done:
 command output, not assertions.
+
+PR B's proposed synthetic live fixture requirement below was superseded by the
+user-accepted actual lab-site run on 2026-10-02. Its verified results and coverage
+limits are recorded in §9; the other validation gates passed.
 
 **Both PRs:**
 - `python3 -m unittest discover -s tests -t .` passes, with new tests for
@@ -568,8 +577,9 @@ command output, not assertions.
 | Plan and decisions | Done (2026-10-01) |
 | §7 GUI checks on 2.4.43 | Answered (§0, 9–15) |
 | Controller redundancy groups | Deferred (decision 12); a follow-up when production models them |
-| PR A: manifest + zip (branch `codex/zip-artifacts`) | Merged in PR #18 (2026-10-01) |
-| PR B: site scope (branch `codex/site-scope`, from main after A merges) | Implemented, reviewed and accepted for PR (2026-10-02), from merged main `c95f546` |
+| PR A: manifest + zip (former branch `codex/zip-artifacts`) | Merged in [PR #18](https://github.com/bforejt/nautobot-testsuite/pull/18) (2026-10-01), merge `c95f546` |
+| PR B: site scope (former branch `codex/site-scope`) | Merged in [PR #19](https://github.com/bforejt/nautobot-testsuite/pull/19) (2026-10-02), merge `f420019` |
+| GitHub branch cleanup | Complete (2026-10-02); only `main` remains remotely |
 
 Notes:
 - **One PR per fresh session, in order:** A, then B. Both touch `run()` and
@@ -600,11 +610,11 @@ The zip sink spools on disk and streams repacking; only attachment-sized output
 is read into memory. The configured size cap comes from the same
 `get_settings_or_config` utility as `Job.create_file`.
 
-The manifest records the current inputs (`devices`, `artifact_format`, `debug`
-and `dryrun`); the location/group/controller fields arrive in PR B. Dry runs
-produce a manifest without device snapshots. `diff_snapshots.py` reads all zip
-parts directly and ignores raw/debug/manifest siblings in unzipped globs;
-disposition-aware analysis remains PR B.
+At PR A, the manifest recorded `devices`, `artifact_format`, `debug` and
+`dryrun`; PR B subsequently added location/group/controller inputs and scope
+dispositions. PR A dry runs produced a manifest without device snapshots.
+`diff_snapshots.py` gained direct zip-part loading and ignored raw/debug/manifest
+siblings in unzipped globs; PR B then added disposition-aware analysis.
 
 Command output from the final source tree:
 
@@ -739,3 +749,32 @@ PR B in place of §8's proposed synthetic fixture scenario. No fixture objects
 were created and the existing BMC host was not relocated. Synthetic controller,
 unsupported-device and exclusion cases remain covered by the pure tests and
 independent isolated glue checks; they are not claimed as live controller proof.
+
+### Merged delivery and branch cleanup (2026-10-02)
+
+| Delivery | Implementation commit | Merge commit | GitHub CI |
+| --- | --- | --- | --- |
+| [PR #18](https://github.com/bforejt/nautobot-testsuite/pull/18), manifest and zip | `71af601` | `c95f546` | [Push](https://github.com/bforejt/nautobot-testsuite/actions/runs/36938709541) and [PR](https://github.com/bforejt/nautobot-testsuite/actions/runs/36939187481) passed |
+| [PR #19](https://github.com/bforejt/nautobot-testsuite/pull/19), site scope | `7e113d9` | `f420019` | [Push](https://github.com/bforejt/nautobot-testsuite/actions/runs/36951289682) and [PR](https://github.com/bforejt/nautobot-testsuite/actions/runs/36951411058) passed |
+
+The user merged both PRs. PR B's actual lab-site evidence is JobResult
+`7d5b5446-278a-4577-a4d2-9a1201d71d3a`; its persisted zip and source hashes were
+verified read-only. The capture selected both devices from `lab`, with controller
+inclusion off: 52 checks succeeded and 15 were legitimately not-present. No
+device-model or fixture changes were made for that validation.
+
+After the merges, no PRs were open. The user requested deletion of the three
+remaining GitHub branches: `codex/zip-artifacts`, `codex/site-scope` and
+`docs/site-scope-and-structured-data-plans`. All three were deleted; a remote-head
+check confirmed that only `main` remained at `f420019`.
+
+The old docs branch had four historical commits outside main's ancestry, but
+its useful plan content was already incorporated in PR A. Its structured-data
+plan was identical to main and its site-scope statuses were stale. The local
+docs branch is retained and synchronized with merged main for this results
+record; no GitHub docs branch is recreated.
+
+Both deliveries are complete. Controller redundancy groups remain deferred by
+decision. Structured-data-query implementation remains separate, unstarted work
+in [its plan](structured-data-queries.md); these PRs added scope and evidence
+packaging without adding device reads or changing transports.

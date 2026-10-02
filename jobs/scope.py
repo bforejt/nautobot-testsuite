@@ -41,6 +41,9 @@ def map_platform(driver, name="", slug=""):
         return "panos", selected
     if "vmware" in selected or "esxi" in selected:
         return "vmware", selected
+    # Linux is too broad: only explicit VE platform metadata opts in.
+    if any("proxmox" in str(value or "").lower() for value in (driver, name, slug)):
+        return "proxmox", selected
     if "cisco" in selected:
         return "iosxe", selected
     return None, selected

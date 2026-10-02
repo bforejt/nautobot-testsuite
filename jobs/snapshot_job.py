@@ -47,7 +47,9 @@ from . import bmc_target, bundle, creds, envelope, registry, scope
 from . import constants as C
 from .context import CollectorContext
 from .panos_xml import PanosParseError
+from .proxmox_ssh import LazySsh
 from .registry import CollectError, SkipCheck
+from .transport_proxmox import ProxmoxClient, ProxmoxError
 from .transport_redfish import RedfishClient, RedfishError
 from .transport_redfish import probe_hint as redfish_probe_hint
 from .transport_restconf import RestconfClient, RestconfError, probe_hint
@@ -61,9 +63,9 @@ name = C.UI_GROUP
 KINDS = (("pre", "pre"), ("post", "post"), ("rollback", "rollback"), ("adhoc", "adhoc"))
 
 
-PLATFORM_NAMES = "iosxe, panos or vmware"
+PLATFORM_NAMES = "iosxe, panos, vmware or proxmox"
 PLATFORM_HINT = (
-    "set the device platform's network_driver to a cisco, panos/paloalto or vmware/esxi "
+    "set the device platform's network_driver to a cisco, panos/paloalto, vmware/esxi or proxmox "
     "value; a server's BMC is captured through an interface on the host device whose name "
     "starts with %s and carries the BMC's address, never through a Device of its own"
     % ("/".join(C.BMC_INTERFACE_NAMES),)
@@ -246,6 +248,14 @@ def _describe_check(check):
     }
 
 
+def _proxmox_ssh(device, host, secrets_group, logger):
+    """API tokens are never reused for SSH; resolve Linux credentials lazily."""
+    return LazySsh(
+        lambda: creds.resolve_credentials(device, "ssh", override_group=secrets_group),
+        lambda username, password: SshRunner("linux", host, username, password, logger=logger),
+    )
+
+
 def _create_file(job, filename, content):
     """Attach serialized evidence; an attachment failure never fails collection.
 
@@ -275,8 +285,29 @@ def _create_file(job, filename, content):
         return False
 
 
-def _attach_artifact(job, filename, payload):
+def _attach_artifact(job, filename, payload, *, split=False):
     """Route capture artifacts to the run sink; Shakedown still attaches directly."""
+    if split:
+        try:
+            parts = bundle.artifact_parts(filename, payload, _artifact_max_bytes())
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:
+            job.logger.warning("Cannot preserve complete artifact %s: %s", filename, exc)
+            row = getattr(job, "_artifact_device", None)
+            if row is not None:
+                row["files"].append(
+                    {"name": filename, "bytes": 0, "sha256": None, "not_attached": True}
+                )
+            return False
+        outcomes = [
+            _attach_artifact_part(job, name, body, independent=True) for name, body in parts
+        ]
+        return all(outcomes)
+    return _attach_artifact_part(job, filename, payload)
+
+
+def _attach_artifact_part(job, filename, payload, *, independent=False):
     sink = getattr(job, "_artifact_sink", None)
     if sink is None:
         try:
@@ -293,7 +324,7 @@ def _attach_artifact(job, filename, payload):
     metadata = {"name": filename, "bytes": 0, "sha256": None}
     row["files"].append(metadata)
     try:
-        sink.add(filename, payload, device=row["id"], metadata=metadata)
+        sink.add(filename, payload, device=None if independent else row["id"], metadata=metadata)
     except SoftTimeLimitExceeded:
         metadata["not_attached"] = True
         raise
@@ -764,6 +795,15 @@ class CaptureSnapshot(Job):
                 creds.resolve_credentials(
                     device, C.TRANSPORT_FOR[platform], override_group=secrets_group
                 )
+                if platform == "proxmox":
+                    ssh_user, _ = creds.resolve_credentials(
+                        device, "ssh", override_group=secrets_group
+                    )
+                    if "!" in ssh_user:
+                        raise creds.CredentialsError(
+                            "Separate Linux SSH credentials are required "
+                            "for Proxmox host observations"
+                        )
                 host_state = "credentials ready"
             except creds.CredentialsError as exc:
                 ok = False
@@ -869,7 +909,21 @@ class CaptureSnapshot(Job):
                         exc,
                     ),
                 )
-        else:  # unreachable: _map_platform only returns the three names above
+        elif platform == "proxmox":
+            try:
+                restconf = ProxmoxClient(host, username, password, logger=self.logger)
+                restconf.probe()
+            except ProxmoxError as exc:
+                if restconf is not None:
+                    restconf.close()
+                return (
+                    restconf,
+                    None,
+                    None,
+                    "Proxmox API at %s:%s unusable — %s" % (host, C.PROXMOX_PORT, exc),
+                )
+            ssh = _proxmox_ssh(device, host, secrets_group, self.logger)
+        else:  # unreachable: only recognized platform families reach here
             return None, None, None, "no transport for platform %r" % (platform,)
         return restconf, ssh, api, None
 
@@ -897,6 +951,7 @@ class CaptureSnapshot(Job):
                 extra=log_extra,
             )
             started = time.monotonic()
+            ctx._proxmox_capture = None
             try:
                 outcome = check.collector(ctx)
                 if not isinstance(outcome, dict):
@@ -914,6 +969,15 @@ class CaptureSnapshot(Job):
                     target=target,
                 )
                 raw_bundle[check.id] = outcome.get("raw")
+                for read in (outcome.get("context") or {}).get("unstructured_reads", []):
+                    self.logger.warning(
+                        "%s: unstructured read %s (%s): %s",
+                        device.name,
+                        read.get("source", read.get("command", "unknown")),
+                        check.id,
+                        read.get("gap", read.get("reason", "source object requires text")),
+                        extra=log_extra,
+                    )
                 self.logger.info(
                     "%s: [%d/%d] %s ok — %d normalized entr%s in %.1fs",
                     device.name,
@@ -967,6 +1031,7 @@ class CaptureSnapshot(Job):
                 RestconfError,
                 RedfishError,
                 VsphereError,
+                ProxmoxError,
                 SshCommandRefused,
                 PanosParseError,
             ) as exc:
@@ -1006,6 +1071,24 @@ class CaptureSnapshot(Job):
                     extra=log_extra,
                 )
                 failed_checks += 1
+            finally:
+                evidence = getattr(ctx, "_proxmox_capture", None)
+                if ctx.platform == "proxmox" and evidence is not None:
+                    if check.id not in raw_bundle:
+                        raw_bundle[check.id] = evidence.raw
+                        body = env["checks"].get(check.id)
+                        if body is not None:
+                            body["context"] = evidence.context
+                        envelope.record_unstructured_reads(env, check.id, evidence.context, target)
+                        for read in evidence.context.get("unstructured_reads", []):
+                            self.logger.warning(
+                                "%s: unstructured read %s (%s): %s",
+                                device.name,
+                                read.get("source", "unknown"),
+                                check.id,
+                                read.get("gap", "source object requires text"),
+                                extra=log_extra,
+                            )
         return failed_checks, False
 
     def _capture_device(
@@ -1237,12 +1320,14 @@ class CaptureSnapshot(Job):
             self,
             C.SNAPSHOT_FILENAME.format(device=safe_device, change_id=safe_change),
             env,
+            split=platform == "proxmox",
         )
         if raw_bundle:
             _attach_artifact(
                 self,
                 C.RAW_FILENAME.format(device=safe_device, change_id=safe_change),
                 raw_bundle,
+                split=platform == "proxmox",
             )
         trace = (host_ctx.trace if host_ctx else []) + (bmc_ctx.trace if bmc_ctx else [])
         if debug and trace:
@@ -1253,6 +1338,7 @@ class CaptureSnapshot(Job):
                 self,
                 C.DEBUG_FILENAME.format(device=safe_device, change_id=safe_change),
                 {"schema": 1, "device": device.name, "trace": trace},
+                split=platform == "proxmox",
             )
 
         counts = envelope.envelope_summary(env)

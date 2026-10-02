@@ -28,6 +28,7 @@ import argparse
 import importlib
 import json
 import pathlib
+import re
 import sys
 import types
 import zipfile
@@ -41,6 +42,7 @@ _pkg.__path__ = [str(ROOT / "jobs")]
 sys.modules.setdefault("jobs", _pkg)
 diffcore = importlib.import_module("jobs.diffcore")
 envelope = importlib.import_module("jobs.envelope")
+bundle = importlib.import_module("jobs.bundle")
 
 
 def _parse_snapshot(label, source, content):
@@ -153,6 +155,22 @@ def _artifacts(label, path):
             with zipfile.ZipFile(path) as archive:
                 for member in sorted(archive.infolist(), key=lambda item: item.filename):
                     name = pathlib.PurePosixPath(member.filename).name
+                    if (
+                        not member.is_dir()
+                        and name.endswith(".json")
+                        and (name.endswith(".parts.json") or name.startswith("artifactpart_"))
+                    ):
+                        if name.startswith(("raw_", "debug_")) or (
+                            name.startswith("artifactpart_") and not _snapshot_part(name)
+                        ):
+                            continue
+                        source = "%s!%s" % (path, member.filename)
+                        content = archive.read(member)
+                        if name.endswith(".parts.json"):
+                            yield source, name, "parts", json.loads(content)
+                        else:
+                            yield source, name, "part", content
+                        continue
                     artifact_type = "snapshot" if name.startswith("snapshot_") else "manifest"
                     if (
                         member.is_dir()
@@ -179,6 +197,13 @@ def _artifacts(label, path):
     else:
         if path.suffix == ".json" and path.name.startswith(("raw_", "debug_")):
             return
+        if path.name.startswith("artifactpart_"):
+            if _snapshot_part(path.name):
+                yield str(path), path.name, "part", path.read_bytes()
+            return
+        if path.name.endswith(".parts.json"):
+            yield str(path), path.name, "parts", json.loads(path.read_bytes())
+            return
         artifact_type = "manifest" if path.name.startswith("manifest_") else "snapshot"
         try:
             content = path.read_text(encoding="utf-8")
@@ -188,38 +213,73 @@ def _artifacts(label, path):
         yield str(path), path.name, artifact_type, parse(label, str(path), content)
 
 
+def _snapshot_part(name):
+    return re.match(r"^artifactpart_[0-9a-f]{16}_snapshot_", name) is not None
+
+
+def _reassembled_artifacts(label, paths):
+    """Collect snapshot chunks across all zip/file inputs before verifying indexes."""
+    parts, indexes = {}, []
+    for path in paths:
+        try:
+            for source, name, kind, payload in _artifacts(label, path):
+                if kind == "part":
+                    if name in parts and parts[name] != payload:
+                        sys.exit("%s: conflicting artifact part %s" % (label, name))
+                    parts[name] = payload
+                elif kind == "parts":
+                    indexes.append((source, payload))
+                else:
+                    yield source, name, kind, payload
+        except (OSError, ValueError, UnicodeError, zipfile.BadZipFile) as exc:
+            sys.exit("%s: unreadable artifact %s: %s" % (label, path, exc))
+    referenced = set()
+    for source, index in indexes:
+        try:
+            name = index.get("artifact", "")
+            if not isinstance(name, str) or not name.startswith("snapshot_"):
+                continue
+            data = bundle.reassemble(index, parts)
+            referenced.update(part["name"] for part in index["parts"])
+            yield source, name, "snapshot", _parse_snapshot(label, source, data)
+        except (ValueError, TypeError, AttributeError, KeyError) as exc:
+            sys.exit("%s: incomplete artifact %s: %s" % (label, source, exc))
+    orphaned = sorted(set(parts) - referenced)
+    if orphaned:
+        sys.exit("%s: missing multipart index for artifact part %s" % (label, orphaned[0]))
+
+
 def _load_side_data(label, paths, prefer_manifest=False):
     """Load newest snapshots and all run manifests independently."""
     side = {}
     manifests = {}
     tied = {}
-    for path in paths:
-        for source, basename, artifact_type, env in _artifacts(label, path):
-            if artifact_type == "manifest":
-                run_id = env["job_result_id"]
-                held = manifests.get(run_id)
-                if held is not None and held[1] != env:
-                    sys.exit("%s: conflicting manifests for job result %s" % (label, run_id))
-                manifests[run_id] = (source, env)
+    for source, basename, artifact_type, env in _reassembled_artifacts(label, paths):
+        if artifact_type == "manifest":
+            run_id = env["job_result_id"]
+            held = manifests.get(run_id)
+            if held is not None and held[1] != env:
+                sys.exit("%s: conflicting manifests for job result %s" % (label, run_id))
+            manifests[run_id] = (source, env)
+            continue
+        major = str(env.get("schema_version", "")).split(".", 1)[0]
+        if major != "1":
+            print(
+                "warning: %s has schema %s; this tool speaks 1.x — results may "
+                "be unreliable" % (source, env.get("schema_version")),
+                file=sys.stderr,
+            )
+        name = (env.get("device") or {}).get("name") or basename
+        held = side.get(name)
+        if held is not None:
+            new_at = envelope.parse_iso(env.get("captured_at"))
+            held_at = envelope.parse_iso(held.get("captured_at"))
+            if new_at is not None and held_at is not None and new_at <= held_at:
+                if new_at == held_at:
+                    tied.setdefault(name, [held]).append(env)
                 continue
-            major = str(env.get("schema_version", "")).split(".", 1)[0]
-            if major != "1":
-                print(
-                    "warning: %s has schema %s; this tool speaks 1.x — results may "
-                    "be unreliable" % (source, env.get("schema_version")),
-                    file=sys.stderr,
-                )
-            name = (env.get("device") or {}).get("name") or basename
-            held = side.get(name)
-            if held is not None:
-                new_at = envelope.parse_iso(env.get("captured_at"))
-                held_at = envelope.parse_iso(held.get("captured_at"))
-                if new_at is not None and held_at is not None and new_at <= held_at:
-                    if new_at == held_at:
-                        tied.setdefault(name, [held]).append(env)
-                    continue
-            side[name] = env
-            tied.pop(name, None)
+        side[name] = env
+        tied.pop(name, None)
     if not side and not manifests:
         sys.exit("%s side: no snapshot envelopes loaded" % (label,))
     manifests = {run_id: held[1] for run_id, held in manifests.items()}

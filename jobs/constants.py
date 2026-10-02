@@ -6,6 +6,11 @@ which code produced it. Keep the ``-dev`` suffix on main; release trains drop
 it (see the sister repo's RELEASING.md model).
 """
 
+from .proxmox_sources import ACCESS_COMMAND as PROXMOX_ACCESS_COMMAND
+from .proxmox_sources import CONFIG_COMMAND as PROXMOX_CONFIG_COMMAND
+from .proxmox_sources import HARDWARE_COMMAND as PROXMOX_HARDWARE_COMMAND
+from .proxmox_sources import PACKAGES_COMMAND as PROXMOX_PACKAGES_COMMAND
+
 JOB_VERSION = "0.1.0-dev"
 
 # Jobs-UI grouping header. Each job module sets ``name = C.UI_GROUP``.
@@ -17,9 +22,10 @@ UI_GROUP = "Test Suite"
 # 1.1: additive — embedded interpretation guide, per-check describe/context,
 # change_description, device role/location. 1.2: additive — per-check
 # ``target`` ("host" | "bmc") and the ``device.bmc`` block, so one envelope
-# carries a server's host checks and its BMC checks. 1.x readers remain
+# carries a server's host checks and its BMC checks. 1.3 adds explicit text
+# source declarations and indexed artifact parts. 1.x readers remain
 # compatible.
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 FRAMEWORK_NAME = "nautobot-testsuite"
 
 # Artifact filenames attached to the JobResult, one set per device.
@@ -136,7 +142,43 @@ VSPHERE_MAX_PAGES = 50
 # GENERIC, so the HTTPS platforms need no creds.py change. ``bmc`` is the
 # check family a modelled BMC interface runs (its credentials come from the
 # bmc_secrets_group Relationship, never from the host's own Secrets Group).
-TRANSPORT_FOR = {"iosxe": "restconf", "panos": "ssh", "vmware": "https", "bmc": "https"}
+TRANSPORT_FOR = {
+    "iosxe": "restconf",
+    "panos": "ssh",
+    "vmware": "https",
+    "bmc": "https",
+    "proxmox": "https",
+}
+
+# Proxmox VE: stateless API-token authentication, fenced JSON GETs only.
+PROXMOX_PORT = 8006
+PROXMOX_GET_TIMEOUT = 60
+PROXMOX_MAX_PAGES = 100
+PROXMOX_PAGE_SIZE = 500
+PROXMOX_MAX_CHECK_BUDGET = 2000
+
+# Exact structured Linux reads used to complement the VE API. No shell
+# operators, command substitutions, broad command prefixes or active probes.
+PROXMOX_SSH_COMMANDS = (
+    "ip -j -s -d link show",
+    "ip -j address show",
+    "ip -j -4 route show table all",
+    "ip -j -6 route show table all",
+    "ip -j rule show",
+    "ip -j neighbor show",
+    "bridge -j -s vlan show",
+    "bridge -j -s fdb show",
+    "lshw -json",
+    "lsblk --json --bytes --output-all",
+    "ceph osd crush dump --format json",
+    "lldpcli -f json0 show neighbors details hidden",
+    "busctl --json=short get-property org.freedesktop.timedate1 "
+    "/org/freedesktop/timedate1 org.freedesktop.timedate1 NTPSynchronized",
+    PROXMOX_CONFIG_COMMAND,
+    PROXMOX_HARDWARE_COMMAND,
+    PROXMOX_ACCESS_COMMAND,
+    PROXMOX_PACKAGES_COMMAND,
+)
 # --- wireless (Catalyst 9800 controllers) -----------------------------------
 # Per-client rows kept in the NORMALIZED client table. Clients that are not
 # in the run state (stuck in auth / IP-learn / webauth — the migration

@@ -26,7 +26,7 @@ class SkipCheck(Exception):
 @dataclass(frozen=True)
 class CheckDef:
     id: str
-    platform: str  # "iosxe" | "panos" | "vmware" | "bmc" (a server's BMC, run beside its host)
+    platform: str  # iosxe, panos, vmware, proxmox, or bmc (run beside its host)
     description: str
     tier: int  # 1 keyed assertions, 2 full-table diffs, 3 context
     compare: dict
