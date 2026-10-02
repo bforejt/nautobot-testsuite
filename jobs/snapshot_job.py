@@ -19,7 +19,6 @@ baseline must be loud — but its envelope is still attached so partial
 evidence is never lost. One device's failure never stops the batch.
 """
 
-import json
 import time
 
 try:  # celery is present in every Nautobot worker; absent only in bare dev envs
@@ -39,10 +38,12 @@ from nautobot.apps.jobs import (
     ObjectVar,
     StringVar,
 )
-from nautobot.dcim.models import Device
-from nautobot.extras.models import SecretsGroup
+from nautobot.core.utils.config import get_settings_or_config
+from nautobot.dcim.filters import DeviceFilterSet
+from nautobot.dcim.models import Device, Location
+from nautobot.extras.models import DynamicGroup, Role, SecretsGroup, Status, Tag
 
-from . import bmc_target, creds, envelope, registry
+from . import bmc_target, bundle, creds, envelope, registry, scope
 from . import constants as C
 from .context import CollectorContext
 from .panos_xml import PanosParseError
@@ -70,34 +71,13 @@ PLATFORM_HINT = (
 
 
 def _map_platform(device):
-    """Map a Device to ("iosxe"|"panos"|"vmware"|None, driver_string).
-
-    Uses platform.network_driver, falling back to slug/name (older records),
-    lowercased. None means the host's own platform is not supported — the
-    device can still be captured when a BMC is modelled on it (decision 2 of
-    the BMC handoff). Order matters — panos > vmware/esxi > cisco: "PAN-OS
-    VM-Series on VMware" stays panos, and the hypervisor is tested before the
-    bare "cisco" substring, so "Cisco UCS ESXi" maps to vmware. BMC vendor
-    tokens (xcc, redfish, lenovo) map nothing: a BMC is an interface on the
-    host Device, never a platform.
-    """
+    """Read model metadata; the pure mapper checks every field for deny words."""
     platform = getattr(device, "platform", None)
-    driver = ""
-    if platform is not None:
-        driver = (
-            getattr(platform, "network_driver", None)
-            or getattr(platform, "slug", None)
-            or getattr(platform, "name", None)
-            or ""
-        )
-    driver = str(driver).lower()
-    if "panos" in driver or "paloalto" in driver:
-        return "panos", driver
-    if "vmware" in driver or "esxi" in driver:
-        return "vmware", driver
-    if "cisco" in driver:
-        return "iosxe", driver
-    return None, driver
+    return scope.map_platform(
+        getattr(platform, "network_driver", ""),
+        getattr(platform, "name", ""),
+        getattr(platform, "slug", ""),
+    )
 
 
 def _find_bmc(device):
@@ -183,6 +163,80 @@ def _device_host(device):
     return device.name
 
 
+def _filtered_devices(queryset, filters):
+    """Use the same validated filter semantics as Nautobot's Devices view."""
+    filterset = DeviceFilterSet(data=filters, queryset=queryset)
+    if not filterset.is_valid():
+        raise RuntimeError("Invalid device scope filters: %s" % filterset.errors.as_text())
+    return filterset.qs.select_related(
+        "platform", "location", "role", "status", "controller_managed_device_group__controller"
+    )
+
+
+def _scope_inventory(selected):
+    """Build plain rows and controller dependencies using model reads only.
+
+    ``selected`` contains (Device, source-list) pairs. The controller chain is
+    walked once per device, including central controllers outside the anchor.
+    Ambiguous BMCs remain capture candidates so collection fails loudly.
+    """
+    device_rows, controller_rows, devices = {}, {}, {}
+    pending = list(selected)
+    while pending:
+        device, sources = pending.pop(0)
+        identifier = str(device.pk)
+        if identifier in device_rows:
+            device_rows[identifier]["source"] = sorted(
+                set(device_rows[identifier]["source"]) | set(sources)
+            )
+            continue
+        devices[identifier] = device
+        platform = getattr(device, "platform", None)
+        try:
+            bmc, _ = _find_bmc(device)
+            has_bmc = bmc is not None and bmc.address is not None
+        except bmc_target.AmbiguousBmc:
+            has_bmc = True
+        group = getattr(device, "controller_managed_device_group", None)
+        controller = getattr(group, "controller", None) if group is not None else None
+        device_rows[identifier] = {
+            "pk": identifier,
+            "name": device.name,
+            "platform_driver": getattr(platform, "network_driver", ""),
+            "platform_slug": getattr(platform, "slug", ""),
+            "platform": str(platform or ""),
+            "has_bmc": has_bmc,
+            "address": _device_host(device),
+            "location": str(getattr(device, "location", "") or ""),
+            "role": str(getattr(device, "role", "") or ""),
+            "status": str(getattr(device, "status", "") or ""),
+            "source": list(sources),
+            "managed_group": {
+                "controller_pk": str(controller.pk) if controller is not None else None,
+                "capabilities": list(getattr(group, "capabilities", None) or ()),
+            }
+            if group is not None
+            else None,
+        }
+        if controller is None or str(controller.pk) in controller_rows:
+            continue
+        target = getattr(controller, "controller_device", None)
+        controller_rows[str(controller.pk)] = {
+            "pk": str(controller.pk),
+            "name": controller.name,
+            "capabilities": list(getattr(controller, "capabilities", None) or ()),
+            "has_redundancy_group": bool(
+                getattr(controller, "controller_device_redundancy_group_id", None)
+            ),
+            "device_id": str(target.pk) if target is not None else None,
+        }
+        if target is not None:
+            pending.append((target, []))
+    for controller in controller_rows.values():
+        controller["device"] = device_rows.get(controller.pop("device_id"))
+    return device_rows, list(controller_rows.values()), devices
+
+
 def _describe_check(check):
     """Self-description embedded with every check entry (schema 1.1)."""
     return {
@@ -192,8 +246,8 @@ def _describe_check(check):
     }
 
 
-def _attach_artifact(job, filename, payload):
-    """Attach a JSON artifact to the running job's JobResult; never fatal.
+def _create_file(job, filename, content):
+    """Attach serialized evidence; an attachment failure never fails collection.
 
     create_file raises ValueError past the platform size cap (10MB) — an
     oversized or otherwise unattachable artifact is logged and dropped rather
@@ -203,15 +257,55 @@ def _attach_artifact(job, filename, payload):
         job.logger.warning(
             "This Nautobot has no Job.create_file; artifact %s not attached", filename
         )
-        return
+        return False
     try:
-        job.create_file(filename, json.dumps(payload, indent=1, sort_keys=True))
+        # A soft limit can arrive just after create_file persists a download.
+        # Finalization retries must not attach that same part a second time.
+        if getattr(job, "_artifact_finalizing", False):
+            if job.job_result.files.filter(name=filename).exists():
+                return True
+        job.create_file(filename, content)
+        return True
     except SoftTimeLimitExceeded:
         raise
     except Exception as exc:
         job.logger.warning(
             "Failed to attach artifact %s: %s: %s", filename, type(exc).__name__, exc
         )
+        return False
+
+
+def _attach_artifact(job, filename, payload):
+    """Route capture artifacts to the run sink; Shakedown still attaches directly."""
+    sink = getattr(job, "_artifact_sink", None)
+    if sink is None:
+        try:
+            content = bundle.json_bytes(payload)
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:
+            job.logger.warning(
+                "Failed to serialize artifact %s: %s: %s", filename, type(exc).__name__, exc
+            )
+            return False
+        return _create_file(job, filename, content)
+    row = job._artifact_device
+    metadata = {"name": filename, "bytes": 0, "sha256": None}
+    row["files"].append(metadata)
+    try:
+        sink.add(filename, payload, device=row["id"], metadata=metadata)
+    except SoftTimeLimitExceeded:
+        metadata["not_attached"] = True
+        raise
+    except Exception as exc:
+        metadata["not_attached"] = True
+        job.logger.warning("Failed to stage artifact %s: %s: %s", filename, type(exc).__name__, exc)
+    return not metadata.get("not_attached", False)
+
+
+def _artifact_max_bytes():
+    """The same configured byte limit Job.create_file enforces."""
+    return int(get_settings_or_config("JOB_CREATE_FILE_MAX_SIZE", fallback=C.ARTIFACT_MAX_BYTES))
 
 
 class CaptureSnapshot(Job):
@@ -219,7 +313,47 @@ class CaptureSnapshot(Job):
 
     devices = MultiObjectVar(
         model=Device,
-        description="The devices to snapshot, captured one at a time.",
+        required=False,
+        description="Explicit devices added after scope filters, captured one at a time.",
+    )
+    locations = MultiObjectVar(
+        model=Location,
+        required=False,
+        description="Devices at these locations and all descendant floors or rooms.",
+    )
+    dynamic_group = ObjectVar(
+        model=DynamicGroup,
+        required=False,
+        query_params={"content_type": "dcim.device"},
+        description="Add the current members of a saved Device Dynamic Group.",
+    )
+    roles = MultiObjectVar(
+        model=Role,
+        required=False,
+        query_params={"content_types": "dcim.device"},
+        description="Narrow location and group members to these device roles.",
+    )
+    statuses = MultiObjectVar(
+        model=Status,
+        required=False,
+        query_params={"content_types": "dcim.device"},
+        description="Narrow location and group members by status. Empty means Active.",
+    )
+    tags = MultiObjectVar(
+        model=Tag,
+        required=False,
+        query_params={"content_types": "dcim.device"},
+        description="Narrow location and group members to devices with all selected tags.",
+    )
+    exclude_devices = MultiObjectVar(
+        model=Device,
+        required=False,
+        description="Remove these devices last, including pulled-in controllers.",
+    )
+    include_controllers = BooleanVar(
+        required=False,
+        default=True,
+        description="Pull in the controller devices of in-scope managed devices.",
     )
     change_id = StringVar(
         description="The change or ticket ID that names the artifacts and pairs pre with post.",
@@ -239,20 +373,27 @@ class CaptureSnapshot(Job):
         description="A Secrets Group to use for the hosts instead of each device's own.",
     )
     dryrun = DryRunVar(
-        description="Check platform mapping, credentials and reachability; collect nothing.",
+        description="Preview scope and model/credential readiness without device connections.",
     )
     debug = BooleanVar(
         required=False,
         default=False,
         description="Attach a full-payload transport trace per device to diagnose a failed check.",
     )
+    artifact_format = ChoiceVar(
+        choices=(("files", "Separate JSON files"), ("zip", "One zip file")),
+        default="files",
+        description="Attach each device's files separately, or all of them in one zip.",
+    )
 
     class Meta:
         name = "Test Suite Capture"
         description = (
-            "Collects a read-only operational snapshot from each selected device and "
+            "Resolves devices, sites and Dynamic Groups, then collects a read-only "
+            "operational snapshot from each capturable device and "
             "attaches it to this JobResult as one `snapshot_*.json` envelope plus one "
-            "`raw_*.json` evidence bundle per device."
+            "`raw_*.json` evidence bundle per device, with a run manifest "
+            "and optional zip download."
         )
         has_sensitive_variables = False
         read_only = True
@@ -263,11 +404,19 @@ class CaptureSnapshot(Job):
         soft_time_limit = 3300
         time_limit = 3600
         field_order = [
-            "devices",
             "change_id",
             "change_description",
             "kind",
+            "locations",
+            "dynamic_group",
+            "devices",
+            "roles",
+            "statuses",
+            "tags",
+            "exclude_devices",
+            "include_controllers",
             "secrets_group",
+            "artifact_format",
             "dryrun",
             "debug",
         ]
@@ -283,12 +432,23 @@ class CaptureSnapshot(Job):
         secrets_group=None,
         dryrun=False,
         debug=False,
+        artifact_format="files",
+        locations=None,
+        dynamic_group=None,
+        roles=None,
+        statuses=None,
+        tags=None,
+        exclude_devices=None,
+        include_controllers=True,
     ):
-        """Snapshot every selected device. Every kwarg defaults (ScheduledJob rule)."""
+        """Resolve modelled scope, then capture. Every kwarg defaults for schedules."""
         self.logger.info("Test Suite Capture starting — %s v%s", C.FRAMEWORK_NAME, C.JOB_VERSION)
-        device_list = list(devices) if devices is not None else []
-        if not device_list:
-            raise RuntimeError("No devices selected — pick at least one device.")
+        explicit_devices = list(devices) if devices is not None else []
+        locations = list(locations) if locations is not None else []
+        roles = list(roles) if roles is not None else []
+        statuses = list(statuses) if statuses is not None else []
+        tags = list(tags) if tags is not None else []
+        exclude_devices = list(exclude_devices) if exclude_devices is not None else []
         change_id = str(change_id or "").strip()
         if not change_id:
             raise RuntimeError(
@@ -296,6 +456,8 @@ class CaptureSnapshot(Job):
             )
         if kind not in dict(KINDS):
             raise RuntimeError("kind must be one of: %s" % (", ".join(dict(KINDS)),))
+        if artifact_format not in ("files", "zip"):
+            raise RuntimeError("artifact_format must be one of: files, zip")
         if package not in ("", "full", None):
             # Retired input, kept in the signature so stored ScheduledJob
             # kwargs replay cleanly. Capture is always-everything by doctrine.
@@ -305,60 +467,332 @@ class CaptureSnapshot(Job):
                 package,
             )
 
-        succeeded, failed = [], []
-        for index, device in enumerate(device_list):
-            try:
-                ok = self._capture_device(
-                    device,
-                    change_id=change_id,
-                    change_description=str(change_description or "").strip(),
-                    kind=kind,
-                    package=package,
-                    secrets_group=secrets_group,
-                    dryrun=dryrun,
-                    debug=debug,
-                )
-            except SoftTimeLimitExceeded:
-                # The soft/hard gap exists to persist what we have — the current
-                # device's partial envelope is already attached by _capture_device.
-                # Moving on to another device would burn the gap on fresh I/O.
-                not_visited = [dev.name for dev in device_list[index + 1 :]]
-                raise RuntimeError(
-                    "Soft time limit reached during %s — partial artifacts attached; "
-                    "device(s) not visited: %s. Succeeded so far: %s"
-                    % (
-                        device.name,
-                        ", ".join(not_visited) or "none",
-                        ", ".join(succeeded) or "none",
-                    )
-                ) from None
-            except Exception as exc:  # one device must never stop the batch
-                self.logger.error(
-                    "%s: unexpected device-level failure: %s: %s",
-                    device.name,
-                    type(exc).__name__,
-                    exc,
-                    extra={"object": device},
-                )
-                ok = False
-            (succeeded if ok else failed).append(device.name)
-
-        if failed:
-            raise RuntimeError(
-                "Snapshot failed for %d of %d device(s) — failed: %s; succeeded: %s"
-                % (
-                    len(failed),
-                    len(device_list),
-                    ", ".join(failed),
-                    ", ".join(succeeded) or "none",
-                )
+        filters = {
+            "status": [str(status.pk) for status in statuses]
+            if statuses
+            else list(C.SCOPE_DEFAULT_STATUSES),
+        }
+        if not statuses:
+            self.logger.info(
+                "Scope statuses left empty — using %s for location and group members; "
+                "explicit devices are added without these filters.",
+                ", ".join(C.SCOPE_DEFAULT_STATUSES),
             )
-        return "Captured %s snapshot for %d device(s) under change %s: %s" % (
-            kind,
-            len(succeeded),
-            change_id,
-            ", ".join(succeeded),
+        if roles:
+            filters["role"] = [str(role.pk) for role in roles]
+        if tags:
+            filters["tags"] = [str(tag.pk) for tag in tags]
+        selected = []
+        if locations:
+            location_filters = {**filters, "location": [str(location.pk) for location in locations]}
+            selected.extend(
+                (device, ["location"])
+                for device in _filtered_devices(Device.objects.all(), location_filters)
+            )
+        if dynamic_group is not None:
+            if dynamic_group.content_type.model_class() is not Device:
+                raise RuntimeError("dynamic_group must contain Devices.")
+            # Public membership is shared with the Members tab. Refresh a
+            # Dynamic Group outside this read-only job when its cache is stale.
+            selected.extend(
+                (device, ["dynamic_group"])
+                for device in _filtered_devices(dynamic_group.members, filters)
+            )
+        selected.extend((device, ["explicit"]) for device in explicit_devices)
+        selected.extend((device, ["exclude_devices"]) for device in exclude_devices)
+        rows, controllers, devices_by_id = _scope_inventory(selected)
+        resolution = scope.resolve(
+            [row for row in rows.values() if {"location", "dynamic_group"} & set(row["source"])],
+            controllers,
+            locations=[location.name for location in locations],
+            dynamic_group=dynamic_group.name if dynamic_group is not None else None,
+            explicit_devices=[rows[str(device.pk)] for device in explicit_devices],
+            exclude_devices=[rows[str(device.pk)] for device in exclude_devices],
+            roles=[role.name for role in roles],
+            statuses=[status.name for status in statuses] or list(C.SCOPE_DEFAULT_STATUSES),
+            tags=[tag.name for tag in tags],
+            include_controllers=include_controllers,
+            dryrun=dryrun,
         )
+        device_list = [devices_by_id[identifier] for identifier in resolution["capture_ids"]]
+        try:
+            bundle.validate_device_names(device.name for device in device_list)
+        except ValueError as exc:
+            resolution["errors"].append(
+                "%s — capture them in separate runs or use distinct names." % exc
+            )
+        manifest_devices = resolution["devices"]
+        for row in manifest_devices:
+            row.pop("pk", None)
+            if dryrun:
+                row["outcome"] = None
+        manifest_by_id = {row["id"]: row for row in manifest_devices}
+
+        manifest = {
+            "schema": 1,
+            "change_id": change_id,
+            "kind": kind,
+            "job_result_id": str(self.job_result.pk),
+            "user": str(self.user),
+            "job_version": C.JOB_VERSION,
+            "started": envelope.utcnow_iso(),
+            "finished": None,
+            # Only names and actual capture inputs; never a credential or secret value.
+            "inputs": {
+                "locations": [location.name for location in locations],
+                "dynamic_group": dynamic_group.name if dynamic_group is not None else None,
+                "devices": [device.name for device in explicit_devices],
+                "roles": [role.name for role in roles],
+                "statuses": [status.name for status in statuses] or list(C.SCOPE_DEFAULT_STATUSES),
+                "tags": [tag.name for tag in tags],
+                "exclude_devices": [device.name for device in exclude_devices],
+                "include_controllers": bool(include_controllers),
+                "artifact_format": artifact_format,
+                "debug": bool(debug),
+                "dryrun": bool(dryrun),
+            },
+            "devices": manifest_devices,
+            "controllers": resolution["controllers"],
+        }
+        attach = lambda filename, content: _create_file(self, filename, content)  # noqa: E731
+        if artifact_format == "zip":
+            self._artifact_sink = bundle.ZipSink(
+                attach,
+                kind=kind,
+                filename=C.ZIP_FILENAME.format(
+                    change_id=envelope.safe_name(change_id),
+                    kind=kind,
+                    timestamp=manifest["started"][:16].replace("-", "").replace(":", "") + "Z",
+                ),
+                max_bytes=_artifact_max_bytes(),
+                warn=self.logger.warning,
+            )
+        else:
+            self._artifact_sink = bundle.FileSink(attach, warn=self.logger.warning)
+        succeeded, failed = [], []
+        try:
+            self._log_scope(resolution, devices_by_id)
+            if resolution["errors"]:
+                raise RuntimeError(
+                    "Scope refused before device I/O: %s" % "; ".join(resolution["errors"])
+                )
+            if dryrun:
+                for device in device_list:
+                    ok = self._preview_device(device, secrets_group)
+                    (succeeded if ok else failed).append(device.name)
+                if failed:
+                    raise RuntimeError(
+                        "Scope preview: %d device(s) need readiness fixes: %s; "
+                        "no device connections made." % (len(failed), ", ".join(failed))
+                    )
+                return (
+                    "Scope preview: %d capture, %d covered, %d skipped, %d excluded; "
+                    "no device connections made."
+                ) % (
+                    len(device_list),
+                    resolution["counts"].get("covered_by_controller", 0),
+                    self._scope_skipped(resolution),
+                    resolution["counts"].get("excluded", 0),
+                )
+            for index, device in enumerate(device_list):
+                self._artifact_device = manifest_by_id[str(device.pk)]
+                started_device = time.monotonic()
+                ok = False
+                try:
+                    ok = self._capture_device(
+                        device,
+                        change_id=change_id,
+                        change_description=str(change_description or "").strip(),
+                        kind=kind,
+                        package=package,
+                        secrets_group=secrets_group,
+                        dryrun=dryrun,
+                        debug=debug,
+                    )
+                except SoftTimeLimitExceeded:
+                    # Finalize the partial run instead of spending the soft/hard gap on fresh I/O.
+                    not_visited = [dev.name for dev in device_list[index + 1 :]]
+                    raise RuntimeError(
+                        "Soft time limit reached during %s — partial artifacts attached; "
+                        "device(s) not visited: %s. Succeeded so far: %s"
+                        % (
+                            device.name,
+                            ", ".join(not_visited) or "none",
+                            ", ".join(succeeded) or "none",
+                        )
+                    ) from None
+                except Exception as exc:  # one device must never stop the batch
+                    self.logger.error(
+                        "%s: unexpected device-level failure: %s: %s",
+                        device.name,
+                        type(exc).__name__,
+                        exc,
+                        extra={"object": device},
+                    )
+                finally:
+                    self._artifact_device["outcome"] = "succeeded" if ok else "failed"
+                    self._artifact_device["duration_s"] = round(
+                        time.monotonic() - started_device, 3
+                    )
+                (succeeded if ok else failed).append(device.name)
+
+            if failed:
+                raise RuntimeError(
+                    "Snapshot failed for %d of %d device(s) — failed: %s; succeeded: %s; "
+                    "skipped: %d; covered: %d"
+                    % (
+                        len(failed),
+                        len(device_list),
+                        ", ".join(failed),
+                        ", ".join(succeeded) or "none",
+                        self._scope_skipped(resolution),
+                        resolution["counts"].get("covered_by_controller", 0),
+                    )
+                )
+            return (
+                "Captured %s snapshot for %d device(s) under change %s: %s; "
+                "skipped: %d; covered: %d"
+            ) % (
+                kind,
+                len(succeeded),
+                change_id,
+                ", ".join(succeeded),
+                self._scope_skipped(resolution),
+                resolution["counts"].get("covered_by_controller", 0),
+            )
+        finally:
+            manifest["finished"] = envelope.utcnow_iso()
+            manifest_filename = C.MANIFEST_FILENAME.format(
+                change_id=envelope.safe_name(change_id), kind=kind
+            )
+            self._artifact_finalizing = True
+            finalize_timed_out = False
+            try:
+                for attempt in range(2):
+                    try:
+                        if artifact_format == "files":
+                            # A signal can arrive after create_file persists a file but before
+                            # add returns. Reconcile interrupted attachments before the manifest.
+                            attached = set(self.job_result.files.values_list("name", flat=True))
+                            for row in manifest["devices"]:
+                                for item in row["files"]:
+                                    if item["name"] in attached:
+                                        item.pop("not_attached", None)
+                        self._artifact_sink.finish(manifest_filename, manifest)
+                        break
+                    except SoftTimeLimitExceeded:
+                        finalize_timed_out = True
+                        if attempt:
+                            raise
+                        self.logger.warning(
+                            "Soft time limit reached while packaging artifacts — "
+                            "retrying finalization in the cleanup window."
+                        )
+                    except Exception as exc:
+                        self.logger.warning(
+                            "Failed to finalize capture artifacts: %s: %s",
+                            type(exc).__name__,
+                            exc,
+                        )
+                        break
+            finally:
+                self._artifact_sink.close()
+                self._artifact_sink = None
+                self._artifact_device = None
+                self._artifact_finalizing = False
+            if finalize_timed_out:
+                raise RuntimeError(
+                    "Soft time limit reached while packaging artifacts — "
+                    "finalization was retried; check the downloads and warnings."
+                ) from None
+
+    @staticmethod
+    def _scope_skipped(resolution):
+        return sum(
+            resolution["counts"].get(disposition, 0)
+            for disposition in ("skipped_unsupported", "controller_not_capturable")
+        )
+
+    def _log_scope(self, resolution, devices):
+        """Summarize resolution and link every non-captured inventory object."""
+        counts = resolution["counts"]
+        pulled = [row["name"] for row in resolution["devices"] if "controller_of" in row["source"]]
+        self.logger.info(
+            "%d resolved: %d capture, %d covered by controller, %d unsupported, "
+            "%d controller not capturable, %d excluded; %d controller dependencies (%s).",
+            len(resolution["devices"]),
+            counts.get("capture", 0),
+            counts.get("covered_by_controller", 0),
+            counts.get("skipped_unsupported", 0),
+            counts.get("controller_not_capturable", 0),
+            counts.get("excluded", 0),
+            len(pulled),
+            ", ".join(pulled) or "none",
+        )
+        for row in resolution["devices"]:
+            if row["disposition"] == "capture":
+                continue
+            log = (
+                self.logger.warning
+                if row["disposition"] == "controller_not_capturable"
+                else self.logger.info
+            )
+            log(
+                "%s: %s — %s",
+                row["name"],
+                row["disposition"],
+                row["reason"],
+                extra={"object": devices[row["id"]]},
+            )
+        for warning in resolution["warnings"]:
+            self.logger.warning("Scope: %s", warning)
+
+    def _preview_device(self, device, secrets_group):
+        """Check model and credential readiness without opening a transport."""
+        log_extra = {"object": device}
+        platform, _ = _map_platform(device)
+        try:
+            bmc, interface = _find_bmc(device)
+        except bmc_target.AmbiguousBmc as exc:
+            self.logger.error("%s: DRY-RUN %s", device.name, exc, extra=log_extra)
+            return False
+        addressed = bmc is not None and bmc.address is not None
+        ok = True
+        host_state = "not captured"
+        if platform is not None:
+            try:
+                creds.resolve_credentials(
+                    device, C.TRANSPORT_FOR[platform], override_group=secrets_group
+                )
+                host_state = "credentials ready"
+            except creds.CredentialsError as exc:
+                ok = False
+                host_state = "credentials unusable"
+                self.logger.error("%s: DRY-RUN host: %s", device.name, exc, extra=log_extra)
+        bmc_state = "not modelled" if bmc is None else "no address assigned"
+        if addressed:
+            try:
+                creds.resolve_bmc_credentials(interface, device)
+                bmc_state = "credentials ready"
+            except creds.CredentialsError as exc:
+                ok = False
+                bmc_state = "credentials unusable"
+                self.logger.error("%s: DRY-RUN BMC: %s", device.name, exc, extra=log_extra)
+        host_checks = len(registry.checks_for(platform)) if platform is not None else 0
+        bmc_checks = len(registry.checks_for("bmc")) if addressed else 0
+        self.logger.info(
+            "%s: DRY-RUN %s: host %s (%s), would run %d check(s); BMC %s, "
+            "would run %d check(s). Reachability not checked; no device connections made.",
+            device.name,
+            "ready" if ok else "needs fixes",
+            platform or "unsupported",
+            host_state,
+            host_checks,
+            bmc_state,
+            bmc_checks,
+            extra=log_extra,
+        )
+        return ok
 
     def _open_host(self, device, platform, host, secrets_group):
         """(restconf, ssh, api, error): the host platform's transports, opened and probed.

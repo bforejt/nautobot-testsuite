@@ -27,8 +27,35 @@ FRAMEWORK_NAME = "nautobot-testsuite"
 SNAPSHOT_FILENAME = "snapshot_{device}_{change_id}.json"
 RAW_FILENAME = "raw_{device}_{change_id}.json"
 DEBUG_FILENAME = "debug_{device}_{change_id}.json"
+MANIFEST_FILENAME = "manifest_{change_id}_{kind}.json"
+ZIP_FILENAME = "testsuite_{change_id}_{kind}_{timestamp}.zip"
+# Nautobot's default; ZipSink uses the configured JOB_CREATE_FILE_MAX_SIZE
+# when present, including Constance overrides.
+ARTIFACT_MAX_BYTES = 10 * 1024 * 1024
 SHAKEDOWN_FILENAME = "shakedown_{device}.json"
 SHAKEDOWN_TRACE_FILENAME = "shakedown-trace_{device}.json"
+
+# --- inventory scope -------------------------------------------------------
+# Runtime defaults use names because Status primary keys differ per install.
+SCOPE_DEFAULT_STATUSES = ("Active",)
+# Refuse an accidental company-wide sweep before opening any transport.
+# Dry runs still show the whole resolution so operators can narrow it.
+SCOPE_MAX_CAPTURE = 30
+# Whole words in any platform driver, name or legacy slug override the broad
+# cisco -> iosxe mapping. Managed wireless devices are covered by their
+# controller before this backstop is applied.
+PLATFORM_DENY_TOKENS = (
+    "nxos",
+    "wap",
+    "ap",
+    "xr",
+    "asa",
+    "ftd",
+    "aireos",
+    "meraki",
+    "apic",
+    "viptela",
+)
 
 # --- RESTCONF (Catalyst 9500 / IOS-XE 17.12) --------------------------------
 RESTCONF_PORT = 443

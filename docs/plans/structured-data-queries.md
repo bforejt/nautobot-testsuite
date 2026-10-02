@@ -1,6 +1,7 @@
 # Plan: structured data queries to every device
 
-Status: **rule and decisions recorded 2026-10-01; nothing built.** This
+Status: **rule, decisions and field research recorded; implementation not
+started as of 2026-10-02.** This
 document records:
 
 - the rule: query every device for structured data, never scrape
@@ -11,8 +12,12 @@ document records:
 - how the reads that can't move are declared;
 - defects found during the research.
 
-The site-scope plan (`docs/plans/site-scope-and-zip.md`, decision 10) points
-here.
+The [site-scope plan](site-scope-and-zip.md), decision 10, points here.
+Its manifest/zip and site-scope deliveries are complete and merged in
+[PR #18](https://github.com/bforejt/nautobot-testsuite/pull/18) and
+[PR #19](https://github.com/bforejt/nautobot-testsuite/pull/19). Those changes
+provide scope selection and evidence packaging; they do not implement this
+plan's structured-read migrations, exception declarations or defect fixes.
 
 ## 1. The rule
 
@@ -362,8 +367,10 @@ text to a model can change its keys.
 5. **Revisit on events:** a fleet upgrade to 17.15 or later, or a proven
    bridge.
 
-The site-scope work (PR A and PR B) goes first. Phases 0 and 1 don't touch
-the same code, so they can go in between.
+The prerequisite site-scope work is complete: PR A (#18) and PR B (#19) are
+merged, with validation recorded in [the scope plan](site-scope-and-zip.md#9-build-status-and-notes-for-the-implementing-session).
+No phase above has been implemented by those PRs. Phases 0, 0b and 1 remain the
+next proposed work; F4, F6 and the PAN-OS field checks still need the lab firewall.
 
 ## 7. Decisions (the user, 2026-10-01)
 

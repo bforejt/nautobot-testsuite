@@ -1,15 +1,15 @@
 # Plan: site-scoped device selection and a zip download option
 
-Status: **decisions taken 2026-10-01; nothing built yet.** Task 1 lets the
+Status: **complete: PR A merged 2026-10-01; PR B merged 2026-10-02.** Task 1 lets the
 Capture job pick devices by location and other filters, pull in the
 controllers that managed devices depend on, and skip unsupported devices
 gracefully. Task 2 adds a single compressed download. They share one new
 artifact, the run manifest (§3).
 
 - §0 records the decisions, including the production GUI results.
-- §7 lists what is still the user's to do.
+- §7 records the answered production GUI checks.
 - §8 is the pass/fail list each PR must meet.
-- §9 tracks build status. Implementing sessions update it as they go.
+- §9 records implementation, validation, merge and branch-cleanup results.
 
 ## 0. Decisions (2026-10-01)
 
@@ -103,7 +103,7 @@ Verified while writing (2026-10-01, dev stack Nautobot 3.2.5; production is
 
 ---
 
-## 1. Where the job is today
+## 1. Baseline before PR A and PR B
 
 - `devices` is a required `MultiObjectVar`. You build a site's capture by
   picking devices one at a time from a type-ahead list.
@@ -470,6 +470,11 @@ it stays an optional follow-up rather than the answer.
 
 ## 6. Proving it live (dev stack, 3.2.5)
 
+This section records the proposed fixture scenario. On 2026-10-02 the user
+accepted an actual full lab-site capture and inspected zip in its place (§9).
+No synthetic fixtures were created; controller paths have test coverage but
+were not exercised by that live run.
+
 The job glue imports Nautobot, so CI can't exercise it (house limit). Proof
 follows the BMC pattern: deploy to the dev stack and run it. The dev DB
 holds one device (`se350-lab-1`), so B needs fixtures **created in dev
@@ -499,6 +504,10 @@ groups are deferred by decision, not waiting on anyone (decision 12).
 The implementing session states its approach against this plan before
 editing, and shows evidence for every item before calling the PR done:
 command output, not assertions.
+
+PR B's proposed synthetic live fixture requirement below was superseded by the
+user-accepted actual lab-site run on 2026-10-02. Its verified results and coverage
+limits are recorded in §9; the other validation gates passed.
 
 **Both PRs:**
 - `python3 -m unittest discover -s tests -t .` passes, with new tests for
@@ -568,8 +577,9 @@ command output, not assertions.
 | Plan and decisions | Done (2026-10-01) |
 | §7 GUI checks on 2.4.43 | Answered (§0, 9–15) |
 | Controller redundancy groups | Deferred (decision 12); a follow-up when production models them |
-| PR A: manifest + zip (branch `feat/zip-artifacts`) | Not started |
-| PR B: site scope (branch `feat/site-scope`, from main after A merges) | Not started |
+| PR A: manifest + zip (former branch `codex/zip-artifacts`) | Merged in [PR #18](https://github.com/bforejt/nautobot-testsuite/pull/18) (2026-10-01), merge `c95f546` |
+| PR B: site scope (former branch `codex/site-scope`) | Merged in [PR #19](https://github.com/bforejt/nautobot-testsuite/pull/19) (2026-10-02), merge `f420019` |
+| GitHub branch cleanup | Complete (2026-10-02); only `main` remains remotely |
 
 Notes:
 - **One PR per fresh session, in order:** A, then B. Both touch `run()` and
@@ -590,3 +600,181 @@ Notes:
   - always-everything: no check filtering, and no change-specific logic in
     `jobs/`;
   - names, not credentials, in the manifest.
+
+### PR A implementation and evidence (2026-10-01)
+
+`jobs/bundle.py` provides the pure sinks, file metadata and whole-device size
+splitting. Capture defaults to separate files, adds a manifest in either format,
+and finalizes evidence on failed devices, soft limits and unexpected exits.
+The zip sink spools on disk and streams repacking; only attachment-sized output
+is read into memory. The configured size cap comes from the same
+`get_settings_or_config` utility as `Job.create_file`.
+
+At PR A, the manifest recorded `devices`, `artifact_format`, `debug` and
+`dryrun`; PR B subsequently added location/group/controller inputs and scope
+dispositions. PR A dry runs produced a manifest without device snapshots.
+`diff_snapshots.py` gained direct zip-part loading and ignored raw/debug/manifest
+siblings in unzipped globs; PR B then added disposition-aware analysis.
+
+Command output from the final source tree:
+
+```text
+python3 -m unittest discover -s tests -t .
+Ran 1519 tests in 9.678s
+OK
+
+Ruff 0.16.4 check --no-cache .: All checks passed!
+Ruff 0.16.4 format --check .: 77 files already formatted
+python3 -m compileall -q .: exit 0
+Python 3.9 syntax: PASS
+Read-only guard: PASS
+Redfish fence guard: PASS
+SOAP operation guard: PASS
+```
+
+A fresh-context correctness review found and verified fixes for a first soft
+limit during packaging, sanitized device-name collisions, manifest growth after
+a failed part, retry flag consistency, malformed zip-name diagnostics and
+interrupted cleanup. Its final review had no correctness blockers; it also ran
+274 source-line timeout scenarios and 2,000 randomized size/integrity trials.
+Colliding device names now refuse before transports open, preserving the existing
+artifact filenames. Finalization retries use confirmed downloads and persisted
+FileProxy names to avoid duplicate attachments.
+
+Dev proof used actual `CaptureSnapshot` instances and JobResults in a fresh
+Nautobot 3.2.5 `nbshell`, after deploying the final job sources. The unsupported
+explicit selection was an existing device with its platform cleared only in
+memory; no fixture objects or device-model changes were needed.
+
+| Proof | Device outcomes | Downloads | Members | BMC checks | Download bytes |
+| --- | --- | --- | --- | --- | --- |
+| Default `files` (argument omitted) | succeeded | 3 | 3 | 22 successful | 653191 |
+| `zip` | succeeded | 1 | 3 | 22 successful | 86814 |
+| `zip`, debug on | succeeded | 1 | 4 | 22 successful | 150299 |
+| Unsupported explicit device + BMC host | failed, succeeded | 1 | 3 | 22 successful | 86959 |
+
+All four verified schema 1.2 envelopes, the manifest's exact file list, every
+byte size and SHA-256, archive CRCs, and the debug member when enabled. Injected
+collection soft limits and unexpected exits preserved partial evidence with
+`not_visited` devices. First packaging timeouts and timeouts immediately after
+archive, device-file and manifest persistence recovered without duplicate
+downloads. Filename collisions refused in both formats before device I/O.
+
+```text
+PR A dev proof: PASS (4 live captures, timeout/exit/retry/collision paths)
+```
+
+### PR B implementation and evidence (2026-10-02)
+
+Implementation starts from PR A's merged main. `scope.py` resolves plain rows
+before any transport opens; the job applies Nautobot's validated
+`DeviceFilterSet` to location descendants and Dynamic Group members, then adds
+explicit devices and controller dependencies before exclusions. The capture
+loop visits only `capture` dispositions. Dry runs use a separate readiness path
+that does not open host or BMC transports; reachability requires a real capture.
+
+Two installed and 2.4.43 source details refine the prior-art summary in §2.1:
+selected tags are conjoined (all must match), while roles and statuses use OR
+within each field. The public `DynamicGroup.members` queryset is its cached
+membership in both releases, matching the Members tab. Capture reads it without
+updating the cache; operators refresh membership outside the read-only job.
+
+The diff tool keeps support for separate runs on one side of a change. It reads
+the newest supplied manifest row per device, correlates snapshots to their
+JobResult, and rejects inconsistent evidence rather than allowing an older
+successful snapshot to hide a later failed capture.
+
+Explicit exclusions are recorded even when a device has fallen outside the
+narrowed scope. They are added after controller expansion and cannot pull in
+extra controllers. Paired diff reports retain manifest outcomes; a failed run
+cannot look successful merely because its persisted snapshot's checks passed.
+Supported devices without snapshots appear in `missing_snapshots`, including
+failures present on both sides. Rollback and adhoc captures remain valid on
+either comparison side; snapshot/manifest run correlation uses their actual kind.
+
+Command output from the reviewed source tree:
+
+```text
+python3 -m unittest discover -s tests -t .
+Ran 1602 tests in 9.181s
+OK
+
+Ruff 0.16.4 check --no-cache .: All checks passed!
+Ruff 0.16.4 format --check .: 79 files already formatted
+python3 -m compileall -q .: exit 0
+Python 3.9 syntax: PASS
+Read-only guard: PASS
+Redfish fence guard: PASS
+SOAP operation guard: PASS
+git diff --check: exit 0
+```
+
+Fresh-context correctness review completed with no remaining source blockers.
+It verified fixes for out-of-filter exclusions, paired failed capture outcomes,
+and rollback/adhoc comparison compatibility. Independent isolated glue checks
+proved 30- and 31-device dry runs do not open transports; a 31-device real run
+refuses before collection or credential lookup and preserves `not_visited`
+outcomes in its manifest.
+
+The deployed job imports and renders all optional scope fields on dev Nautobot
+3.2.5. On 2026-10-02 the user performed a full ad-hoc capture for the actual lab
+site, downloaded and inspected its zip, and accepted the result for commit,
+push and PR. The JobResult completed successfully from 01:15:44 to 01:17:44 UTC,
+with one zip download. The deployed scope, constants, capture and bundle source
+hashes match the reviewed worktree.
+
+The run used `locations=["lab"]`, no explicit devices, default Active statuses,
+`include_controllers=false`, `artifact_format="zip"`, and no dry-run or debug.
+Both devices were location-sourced `capture` dispositions:
+
+| Device | Outcome | Check statuses | Duration |
+| --- | --- | --- | --- |
+| `9300-lab` | succeeded | 30 success, 15 not-present | 17.833 s |
+| `se350-lab-1` | succeeded | 22 BMC checks, all success | 101.242 s |
+
+Read-only verification of the persisted download:
+
+```text
+ZIP bytes: 163879
+ZIP members: 5 (manifest, two snapshots, two raw bundles)
+Archive CRC: PASS
+Exact manifest-to-member set: PASS
+All four file byte sizes and SHA-256: PASS
+Snapshot schema 1.2 and JobResult/kind/change/device correlation: PASS
+Original BMC host location retained; synthetic fixture count: 0
+```
+
+This user-accepted actual site run is the live acceptance evidence for publishing
+PR B in place of §8's proposed synthetic fixture scenario. No fixture objects
+were created and the existing BMC host was not relocated. Synthetic controller,
+unsupported-device and exclusion cases remain covered by the pure tests and
+independent isolated glue checks; they are not claimed as live controller proof.
+
+### Merged delivery and branch cleanup (2026-10-02)
+
+| Delivery | Implementation commit | Merge commit | GitHub CI |
+| --- | --- | --- | --- |
+| [PR #18](https://github.com/bforejt/nautobot-testsuite/pull/18), manifest and zip | `71af601` | `c95f546` | [Push](https://github.com/bforejt/nautobot-testsuite/actions/runs/36938709541) and [PR](https://github.com/bforejt/nautobot-testsuite/actions/runs/36939187481) passed |
+| [PR #19](https://github.com/bforejt/nautobot-testsuite/pull/19), site scope | `7e113d9` | `f420019` | [Push](https://github.com/bforejt/nautobot-testsuite/actions/runs/36951289682) and [PR](https://github.com/bforejt/nautobot-testsuite/actions/runs/36951411058) passed |
+
+The user merged both PRs. PR B's actual lab-site evidence is JobResult
+`7d5b5446-278a-4577-a4d2-9a1201d71d3a`; its persisted zip and source hashes were
+verified read-only. The capture selected both devices from `lab`, with controller
+inclusion off: 52 checks succeeded and 15 were legitimately not-present. No
+device-model or fixture changes were made for that validation.
+
+After the merges, no PRs were open. The user requested deletion of the three
+remaining GitHub branches: `codex/zip-artifacts`, `codex/site-scope` and
+`docs/site-scope-and-structured-data-plans`. All three were deleted; a remote-head
+check confirmed that only `main` remained at `f420019`.
+
+The old docs branch had four historical commits outside main's ancestry, but
+its useful plan content was already incorporated in PR A. Its structured-data
+plan was identical to main and its site-scope statuses were stale. The local
+docs branch is retained and synchronized with merged main for this results
+record; no GitHub docs branch is recreated.
+
+Both deliveries are complete. Controller redundancy groups remain deferred by
+decision. Structured-data-query implementation remains separate, unstarted work
+in [its plan](structured-data-queries.md); these PRs added scope and evidence
+packaging without adding device reads or changing transports.
